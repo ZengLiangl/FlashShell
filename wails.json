@@ -1,0 +1,23 @@
+{
+    "$schema": "https://wails.io/schemas/config.v2.json",
+    "name": "quick-cmd",
+    "outputfilename": "quick-cmd",
+    "frontend:install": "npm install",
+    "frontend:build": "npm run build",
+    "frontend:dev:watcher": "npm run dev",
+    "frontend:dev:serverUrl": "http://localhost:3000",
+    "author": {
+        "name": "Quick Cmd Developer",
+        "email": "developer@example.com"
+    },
+    "info": {
+        "companyName": "Quick Cmd",
+        "productName": "Quick Cmd",
+        "productVersion": "1.0.0",
+        "copyright": "Copyright © 2024, Quick Cmd Developer",
+        "comments": "A cross-platform command management tool"
+    },
+    "nsisType": "multiple",
+    "obfuscated": false,
+    "garbleargs": ""
+}
