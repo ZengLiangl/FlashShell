@@ -1,5 +1,15 @@
 <template>
   <div class="app-container">
+    <!-- 全局加载遮罩 -->
+    <div v-if="isReloading" class="global-loading">
+      <div class="loading-content">
+        <el-icon class="loading-icon">
+          <Loading />
+        </el-icon>
+        <div class="loading-text">正在重新加载...</div>
+      </div>
+    </div>
+
     <el-container class="main-container">
       <!-- 左侧面板 -->
       <el-aside width="400px" class="left-panel">
@@ -226,6 +236,7 @@ export default {
     const outputLines = ref([]);
     const selectedProject = ref(null);
     const selectedSubProject = ref(null);
+    const isReloading = ref(false);
     const status = reactive({
       isRunning: false,
       command: "",
@@ -260,6 +271,8 @@ export default {
 
         if (projects.value.length > 0) {
           console.log("第一个项目:", projects.value[0]);
+          // 默认选中第一个项目
+          selectProject(projects.value[0]);
         }
       } catch (error) {
         console.error("加载配置失败:", error);
@@ -270,10 +283,11 @@ export default {
     // 刷新配置
     const refreshConfig = async () => {
       try {
-        // ElMessage.info("正在重新加载配置...");
-        // 重新加载配置
-        await loadConfig();
-        // ElMessage.success("配置已重新加载");
+        isReloading.value = true;
+        setTimeout(() => {
+          // await loadConfig();
+          window.location.reload();
+        }, 200);
       } catch (error) {
         console.error("刷新配置失败:", error);
         ElMessage.error("刷新配置失败: " + error.message);
@@ -544,7 +558,12 @@ export default {
       // 监听配置变更事件
       EventsOn("config:changed", async (data) => {
         console.log("收到 config:changed 事件:", data);
-        window.location.reload();
+        // 显示全局加载状态
+        isReloading.value = true;
+        // 延迟一下再重新加载，让用户看到加载效果
+        setTimeout(() => {
+          window.location.reload();
+        }, 200);
       });
     });
 
@@ -559,6 +578,7 @@ export default {
       outputLines,
       selectedProject,
       selectedSubProject,
+      isReloading,
       status,
       terminalOutput,
       progressPercentage,
@@ -591,6 +611,54 @@ export default {
   height: 100vh;
   display: flex;
   flex-direction: column;
+  position: relative;
+}
+
+/* 全局加载遮罩 */
+.global-loading {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.loading-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  background: white;
+  padding: 32px;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.loading-icon {
+  font-size: 32px;
+  color: #409eff;
+  animation: spin 1s linear infinite;
+}
+
+.loading-text {
+  font-size: 16px;
+  color: #606266;
+  font-weight: 500;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .main-container {
