@@ -102,12 +102,12 @@ func (spr *SubProjectRunner) ExecuteSubProject(projectName, subProjectName strin
 		spr.updateStatus(command.Name, i, true)
 
 		output <- fmt.Sprintf("执行命令 %d/%d: %s", i+1, len(subProject.Commands), command.Name)
-		output <- fmt.Sprintf("命令描述: %s", command.Description)
+		// output <- fmt.Sprintf("命令描述: %s", command.Description)
 		output <- fmt.Sprintf("命令类型: %s", command.Type)
 
 		// 执行当前命令
 		if err := spr.executeCommand(command, ctx, output); err != nil {
-			output <- fmt.Sprintf("命令执行失败: %s", err.Error())
+			// output <- fmt.Sprintf("命令执行失败: %s", err.Error())
 			spr.updateStatus(command.Name, i, false)
 			return fmt.Errorf("命令 '%s' 执行失败: %w", command.Name, err)
 		}
@@ -119,7 +119,7 @@ func (spr *SubProjectRunner) ExecuteSubProject(projectName, subProjectName strin
 	}
 
 	// 所有命令执行完成
-	output <- fmt.Sprintf("SubProject '%s' 执行完成！", subProjectName)
+	output <- fmt.Sprintf("'%s' 执行完成！", subProjectName)
 	spr.updateStatus("", len(subProject.Commands), false)
 
 	return nil

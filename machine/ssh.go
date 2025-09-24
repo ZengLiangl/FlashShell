@@ -128,7 +128,7 @@ func (sc *SSHClient) executeStep(command string, output chan<- string) error {
 
 	// 等待命令完成
 	if err := session.Wait(); err != nil {
-		output <- fmt.Sprintf("命令执行失败: %s", err.Error())
+		// output <- fmt.Sprintf("命令执行失败: %s", err.Error())
 		return err
 	}
 

@@ -84,7 +84,7 @@ func (a *App) ExecuteSubProject(projectName, subProjectName string) error {
 	// 异步执行 SubProject
 	go func() {
 		if err := a.subProjectRunner.ExecuteSubProject(projectName, subProjectName, a.outputChannel); err != nil {
-			a.outputChannel <- fmt.Sprintf("SubProject 执行失败: %s", err.Error())
+			a.outputChannel <- fmt.Sprintf("执行失败: %s", err.Error())
 		}
 	}()
 
