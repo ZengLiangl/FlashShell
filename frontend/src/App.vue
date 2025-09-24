@@ -53,10 +53,10 @@
                     <div class="subproject-title">
                       <div class="subproject-name">{{ subProject.name }}</div>
                       <div class="subproject-desc">{{ subProject.description }}</div>
+                      <div class="subproject-meta">
+                        <el-tag size="small" type="info">{{ subProject.commandCount }} 个命令</el-tag>
+                      </div>
                     </div>
-                  </div>
-                  <div class="subproject-meta">
-                    <el-tag size="small" type="info">{{ subProject.commandCount }} 个命令</el-tag>
                   </div>
                 </div>
                 <div class="subproject-actions">
@@ -652,6 +652,7 @@ export default {
   display: flex;
   gap: 6px;
   align-items: center;
+  margin-top: 6px;
 }
 
 .subproject-actions {
