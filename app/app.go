@@ -13,27 +13,28 @@ import (
 
 // App struct
 type App struct {
-	ctx           context.Context
-	configManager *data.ConfigManager
-	runners       map[string]define.Runner
-	runnerMutex   sync.RWMutex
-	outputChannel chan string
-	isRunning     bool
-	currentCmd    string
+	ctx              context.Context
+	configManager    *data.ConfigManager
+	subProjectRunner *machine.SubProjectRunner
+	outputChannel    chan string
+	executionMutex   sync.RWMutex
 }
 
 // NewApp creates a new App application struct
 func NewApp() *App {
-	return &App{
-		runners:       make(map[string]define.Runner),
+	app := &App{
 		outputChannel: make(chan string, 1000),
 	}
+	return app
 }
 
 // Startup is called when the app starts up
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 	a.configManager = data.NewConfigManager("config.yaml")
+
+	// 创建 SubProjectRunner
+	a.subProjectRunner = machine.NewSubProjectRunner(a.configManager)
 
 	// 尝试加载配置文件，如果不存在则创建默认配置
 	if _, err := a.configManager.LoadConfig(); err != nil {
@@ -56,7 +57,7 @@ func (a *App) DomReady(ctx context.Context) {
 
 // BeforeClose is called when the application is about to quit
 func (a *App) BeforeClose(ctx context.Context) (prevent bool) {
-	a.StopAllCommands()
+	a.StopAllSubProjects()
 	return false
 }
 
@@ -75,119 +76,51 @@ func (a *App) SaveConfig(root *define.Root) error {
 	return a.configManager.SaveConfig(root)
 }
 
-// ExecuteCommand 执行命令
-func (a *App) ExecuteCommand(projectName, subProjectName, commandName string) error {
-	root := a.configManager.GetRoot()
-	if root == nil {
-		return fmt.Errorf("配置未加载")
-	}
+// ExecuteSubProject 执行 SubProject
+func (a *App) ExecuteSubProject(projectName, subProjectName string) error {
+	a.executionMutex.Lock()
+	defer a.executionMutex.Unlock()
 
-	// 查找命令
-	var targetCmd *define.Command
-	var project *define.Project
-
-	for _, p := range root.Projects {
-		if p.Name == projectName {
-			project = &p
-			for _, sp := range p.SubProjects {
-				if sp.Name == subProjectName {
-					for _, cmd := range sp.Commands {
-						if cmd.Name == commandName {
-							targetCmd = &cmd
-							break
-						}
-					}
-					break
-				}
-			}
-			break
-		}
-	}
-
-	if targetCmd == nil {
-		return fmt.Errorf("未找到命令: %s/%s/%s", projectName, subProjectName, commandName)
-	}
-
-	// 创建执行器
-	var runner define.Runner
-
-	switch targetCmd.Type {
-	case "batch":
-		workDir := project.WorkDir
-		if targetCmd.WorkDir != "" {
-			workDir = targetCmd.WorkDir
-		}
-		runner = machine.NewLocalRunner(workDir)
-	case "remote":
-		if targetCmd.Machine == "" {
-			return fmt.Errorf("远程命令未指定机器")
-		}
-		machineConfig := a.configManager.GetMachine(targetCmd.Machine)
-		if machineConfig == nil {
-			return fmt.Errorf("未找到机器配置: %s", targetCmd.Machine)
-		}
-		sshClient := machine.NewSSHClient(machineConfig)
-		if err := sshClient.Connect(); err != nil {
-			return fmt.Errorf("连接远程机器失败: %w", err)
-		}
-		runner = sshClient
-	default:
-		return fmt.Errorf("不支持的命令类型: %s", targetCmd.Type)
-	}
-
-	// 存储执行器
-	runnerKey := fmt.Sprintf("%s/%s/%s", projectName, subProjectName, commandName)
-	a.runnerMutex.Lock()
-	a.runners[runnerKey] = runner
-	a.isRunning = true
-	a.currentCmd = runnerKey
-	a.runnerMutex.Unlock()
-
-	// 异步执行命令
+	// 异步执行 SubProject
 	go func() {
-		defer func() {
-			a.runnerMutex.Lock()
-			delete(a.runners, runnerKey)
-			a.isRunning = false
-			a.currentCmd = ""
-			a.runnerMutex.Unlock()
-		}()
-
-		if err := runner.Execute(*targetCmd, a.outputChannel); err != nil {
-			a.outputChannel <- fmt.Sprintf("执行失败: %s", err.Error())
+		if err := a.subProjectRunner.ExecuteSubProject(projectName, subProjectName, a.outputChannel); err != nil {
+			a.outputChannel <- fmt.Sprintf("SubProject 执行失败: %s", err.Error())
 		}
 	}()
 
 	return nil
 }
 
-// StopCommand 停止命令
-func (a *App) StopCommand(projectName, subProjectName, commandName string) error {
-	runnerKey := fmt.Sprintf("%s/%s/%s", projectName, subProjectName, commandName)
-
-	a.runnerMutex.RLock()
-	runner, exists := a.runners[runnerKey]
-	a.runnerMutex.RUnlock()
-
-	if !exists {
-		return fmt.Errorf("命令未在运行")
-	}
-
-	return runner.Stop()
+// ExecuteCommand 执行命令 (保持向后兼容，但现在不推荐使用)
+func (a *App) ExecuteCommand(projectName, subProjectName, commandName string) error {
+	// 为了向后兼容，我们仍然保留这个方法，但它现在会执行整个 SubProject
+	return a.ExecuteSubProject(projectName, subProjectName)
 }
 
-// StopAllCommands 停止所有命令
-func (a *App) StopAllCommands() {
-	a.runnerMutex.RLock()
-	runners := make([]define.Runner, 0, len(a.runners))
-	for _, runner := range a.runners {
-		runners = append(runners, runner)
-	}
-	a.runnerMutex.RUnlock()
+// StopSubProject 停止 SubProject
+func (a *App) StopSubProject(projectName, subProjectName string) error {
+	return a.subProjectRunner.StopSubProject(projectName, subProjectName)
+}
 
-	for _, runner := range runners {
-		runner.Stop()
+// StopCommand 停止命令 (保持向后兼容)
+func (a *App) StopCommand(projectName, subProjectName, commandName string) error {
+	// 为了向后兼容，停止整个 SubProject
+	return a.StopSubProject(projectName, subProjectName)
+}
+
+// StopAllSubProjects 停止所有 SubProjects
+func (a *App) StopAllSubProjects() error {
+	// 获取当前执行状态
+	status := a.subProjectRunner.GetExecutionStatus()
+	if status.IsRunning {
+		return a.StopSubProject(status.ProjectName, status.SubProjectName)
 	}
+	return nil
+}
+
+// StopAllCommands 停止所有命令 (保持向后兼容)
+func (a *App) StopAllCommands() {
+	a.StopAllSubProjects()
 }
 
 // GetOutput 获取输出
@@ -217,14 +150,25 @@ func (a *App) ClearOutput() {
 	}
 }
 
-// GetStatus 获取状态
+// GetSubProjectStatus 获取 SubProject 状态
+func (a *App) GetSubProjectStatus() *define.SubProjectStatus {
+	return a.subProjectRunner.GetExecutionStatus()
+}
+
+// GetStatus 获取状态 (保持向后兼容)
 func (a *App) GetStatus() *define.CommandStatus {
-	a.runnerMutex.RLock()
-	defer a.runnerMutex.RUnlock()
+	subStatus := a.subProjectRunner.GetExecutionStatus()
+
+	// 转换为旧的 CommandStatus 格式
+	command := ""
+	if subStatus.IsRunning {
+		command = fmt.Sprintf("%s/%s/%s", subStatus.ProjectName, subStatus.SubProjectName, subStatus.CurrentCommand)
+	}
 
 	return &define.CommandStatus{
-		IsRunning: a.isRunning,
-		Command:   a.currentCmd,
+		IsRunning: subStatus.IsRunning,
+		Command:   command,
+		Output:    subStatus.Output,
 	}
 }
 

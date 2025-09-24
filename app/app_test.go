@@ -7,6 +7,7 @@ import (
 
 	"quick-cmd/data"
 	"quick-cmd/define"
+	"quick-cmd/machine"
 )
 
 func TestApp_GetConfig(t *testing.T) {
@@ -83,15 +84,18 @@ func TestApp_ExecuteLocalCommand(t *testing.T) {
 	app := NewApp()
 	app.configManager = configManager
 
+	// 手动初始化 SubProjectRunner（因为测试中不会调用 Startup）
+	app.subProjectRunner = machine.NewSubProjectRunner(configManager)
+
 	// 加载配置
 	if _, err := app.GetConfig(); err != nil {
 		t.Fatalf("加载配置失败: %v", err)
 	}
 
-	// 执行命令
-	err := app.ExecuteCommand("测试项目", "测试子项目", "测试命令")
+	// 执行 SubProject
+	err := app.ExecuteSubProject("测试项目", "测试子项目")
 	if err != nil {
-		t.Fatalf("执行命令失败: %v", err)
+		t.Fatalf("执行 SubProject 失败: %v", err)
 	}
 
 	// 等待命令执行完成
@@ -104,7 +108,7 @@ func TestApp_ExecuteLocalCommand(t *testing.T) {
 	}
 
 	// 检查状态
-	status := app.GetStatus()
+	status := app.GetSubProjectStatus()
 	if status == nil {
 		t.Fatal("状态为空")
 	}

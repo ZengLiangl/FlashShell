@@ -34,51 +34,45 @@
           </div>
         </div>
 
-        <!-- 命令列表 -->
+        <!-- SubProject 列表 -->
         <div class="panel-section">
           <div class="section-header">
-            <h3>命令列表</h3>
+            <h3>可执行项目</h3>
             <el-tag v-if="selectedProject" size="small">{{
               selectedProject.name
             }}</el-tag>
           </div>
-          <div v-if="commands.length > 0" class="command-list">
-            <div v-for="cmd in commands" :key="`${cmd.subprojectName}-${cmd.name}`" class="command-item">
-              <div class="command-info">
-                <div class="command-name">{{ cmd.name }}</div>
-                <div class="command-desc">{{ cmd.description }}</div>
-                <div class="command-meta">
-                  <el-tag size="small" type="info">{{ cmd.subprojectName }}</el-tag>
-                  <el-tag
-                    size="small"
-                    :type="cmd.type === 'batch' ? 'success' : 'warning'"
-                  >
-                    {{ cmd.type }}
-                  </el-tag>
+          <div v-if="subProjects.length > 0" class="subproject-list">
+            <div v-for="subProject in subProjects" :key="subProject.name" class="subproject-item">
+              <div class="subproject-info">
+                <div class="subproject-name">{{ subProject.name }}</div>
+                <div class="subproject-desc">{{ subProject.description }}</div>
+                <div class="subproject-meta">
+                  <el-tag size="small" type="info">{{ subProject.commandCount }} 个命令</el-tag>
                 </div>
               </div>
-              <div class="command-actions">
+              <div class="subproject-actions">
                 <el-button
                   size="small"
                   type="primary"
-                  @click="executeCommand(cmd)"
-                  :loading="isCommandRunning(cmd)"
-                  :disabled="status.isRunning && !isCommandRunning(cmd)"
+                  @click="executeSubProject(subProject)"
+                  :loading="isSubProjectRunning(subProject)"
+                  :disabled="status.isRunning && !isSubProjectRunning(subProject)"
                 >
-                  {{ isCommandRunning(cmd) ? "运行中" : "执行" }}
+                  {{ isSubProjectRunning(subProject) ? "运行中" : "执行" }}
                 </el-button>
                 <el-button
-                  v-if="isCommandRunning(cmd)"
+                  v-if="isSubProjectRunning(subProject)"
                   size="small"
                   type="danger"
-                  @click="stopCommand(cmd)"
+                  @click="stopSubProject(subProject)"
                 >
                   停止
                 </el-button>
               </div>
             </div>
           </div>
-          <el-empty v-else description="请选择项目查看命令" />
+          <el-empty v-else description="请选择项目查看可执行项目" />
         </div>
       </el-aside>
 
@@ -121,11 +115,15 @@
       <div class="status-info">
         <el-tag v-if="status.isRunning" type="warning" size="small">
           <el-icon><Loading /></el-icon>
-          运行中: {{ status.command }}
+          执行中: {{ status.subProjectName }}
+          <span v-if="status.currentCommand"> - {{ status.currentCommand }}</span>
         </el-tag>
         <el-tag v-else type="success" size="small">
           <el-icon><Check /></el-icon>
           就绪
+        </el-tag>
+        <el-tag v-if="status.isRunning && status.totalCommands > 0" size="small" type="info">
+          进度: {{ status.completedCommands }}/{{ status.totalCommands }}
         </el-tag>
       </div>
       <div class="status-actions">
@@ -135,7 +133,7 @@
           type="danger"
           @click="stopAllCommands"
         >
-          停止所有
+          停止执行
         </el-button>
       </div>
     </div>
@@ -151,7 +149,7 @@ export default {
   name: "App",
   setup() {
     const projects = ref([]);
-    const commands = ref([]);
+    const subProjects = ref([]);
     const outputLines = ref([]);
     const selectedProject = ref(null);
     const selectedSubProject = ref(null);
@@ -220,59 +218,68 @@ export default {
       selectedProject.value = project;
       selectedSubProject.value = null;
       
-      // 收集该项目下所有子项目的命令
-      const allCommands = [];
+      // 显示该项目下的所有 SubProjects
       if (project.subprojects) {
-        project.subprojects.forEach(subproject => {
-          if (subproject.commands) {
-            subproject.commands.forEach(cmd => {
-              allCommands.push({
-                ...cmd,
-                subprojectName: subproject.name,
-                projectName: project.name
-              });
-            });
-          }
-        });
+        subProjects.value = project.subprojects.map(subproject => ({
+          ...subproject,
+          projectName: project.name,
+          commandCount: subproject.commands ? subproject.commands.length : 0
+        }));
+      } else {
+        subProjects.value = [];
       }
-      commands.value = allCommands;
       
-      console.log(`选择项目: ${project.name}, 找到 ${allCommands.length} 个命令`);
+      console.log(`选择项目: ${project.name}, 找到 ${subProjects.value.length} 个 SubProjects`);
     };
 
-    // 执行命令
-    const executeCommand = async (cmd) => {
+    // 执行 SubProject
+    const executeSubProject = async (subProject) => {
       if (!selectedProject.value) {
         return;
       }
 
       try {
-        await App.ExecuteCommand(
-          cmd.projectName,
-          cmd.subprojectName,
-          cmd.name
+        await App.ExecuteSubProject(
+          subProject.projectName,
+          subProject.name
         );
         // 开始轮询输出
         startOutputPolling();
       } catch (error) {
-        console.error("执行命令失败:", error);
+        console.error("执行 SubProject 失败:", error);
       }
     };
 
-    // 停止命令
-    const stopCommand = async (cmd) => {
+    // 停止 SubProject
+    const stopSubProject = async (subProject) => {
       if (!selectedProject.value) {
         return;
       }
 
       try {
-        await App.StopCommand(
-          cmd.projectName,
-          cmd.subprojectName,
-          cmd.name
+        await App.StopSubProject(
+          subProject.projectName,
+          subProject.name
         );
       } catch (error) {
-        console.error("停止命令失败:", error);
+        console.error("停止 SubProject 失败:", error);
+      }
+    };
+
+    // 执行命令 (保持向后兼容)
+    const executeCommand = async (cmd) => {
+      // 为了向后兼容，如果有人调用这个方法，我们执行对应的 SubProject
+      if (cmd.subprojectName && cmd.projectName) {
+        const subProject = { name: cmd.subprojectName, projectName: cmd.projectName };
+        return executeSubProject(subProject);
+      }
+    };
+
+    // 停止命令 (保持向后兼容)
+    const stopCommand = async (cmd) => {
+      if (cmd.subprojectName && cmd.projectName) {
+        const subProject = { name: cmd.subprojectName, projectName: cmd.projectName };
+        return stopSubProject(subProject);
       }
     };
 
@@ -285,13 +292,23 @@ export default {
       }
     };
 
-    // 检查命令是否正在运行
-    const isCommandRunning = (cmd) => {
+    // 检查 SubProject 是否正在运行
+    const isSubProjectRunning = (subProject) => {
       if (!selectedProject.value) {
         return false;
       }
-      const cmdKey = `${cmd.projectName}/${cmd.subprojectName}/${cmd.name}`;
-      return status.isRunning && status.command === cmdKey;
+      return status.isRunning && 
+             status.projectName === subProject.projectName && 
+             status.subProjectName === subProject.name;
+    };
+
+    // 检查命令是否正在运行 (保持向后兼容)
+    const isCommandRunning = (cmd) => {
+      if (!selectedProject.value || !cmd.subprojectName) {
+        return false;
+      }
+      const subProject = { name: cmd.subprojectName, projectName: cmd.projectName };
+      return isSubProjectRunning(subProject);
     };
 
     // 处理 ANSI 转义序列
@@ -335,7 +352,7 @@ export default {
     // 获取状态
     const getStatus = async () => {
       try {
-        const currentStatus = await App.GetStatus();
+        const currentStatus = await App.GetSubProjectStatus();
         Object.assign(status, currentStatus);
       } catch (error) {
         console.error("获取状态失败:", error);
@@ -390,7 +407,7 @@ export default {
 
     return {
       projects,
-      commands,
+      subProjects,
       outputLines,
       selectedProject,
       selectedSubProject,
@@ -399,9 +416,12 @@ export default {
       refreshConfig,
       debugConfig,
       selectProject,
+      executeSubProject,
+      stopSubProject,
       executeCommand,
       stopCommand,
       stopAllCommands,
+      isSubProjectRunning,
       isCommandRunning,
       clearOutput,
       refreshOutput,
@@ -484,6 +504,50 @@ export default {
   color: #909399;
 }
 
+.subproject-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.subproject-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  margin-bottom: 8px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e4e7ed;
+}
+
+.subproject-info {
+  flex: 1;
+}
+
+.subproject-name {
+  font-weight: 600;
+  color: #303133;
+  margin-bottom: 4px;
+}
+
+.subproject-desc {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 6px;
+}
+
+.subproject-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.subproject-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 保持向后兼容的样式 */
 .command-list {
   max-height: 300px;
   overflow-y: auto;

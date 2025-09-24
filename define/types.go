@@ -47,6 +47,13 @@ type Runner interface {
 	Stop() error
 }
 
+// SubProjectExecutor SubProject 执行器接口
+type SubProjectExecutor interface {
+	ExecuteSubProject(projectName, subProjectName string, output chan<- string) error
+	StopSubProject(projectName, subProjectName string) error
+	GetExecutionStatus() *SubProjectStatus
+}
+
 // ExecutionResult 执行结果
 type ExecutionResult struct {
 	Success bool   `json:"success"`
@@ -54,7 +61,28 @@ type ExecutionResult struct {
 	Error   string `json:"error,omitempty"`
 }
 
-// CommandStatus 命令状态
+// SubProjectStatus SubProject 执行状态
+type SubProjectStatus struct {
+	ProjectName       string `json:"projectName"`
+	SubProjectName    string `json:"subProjectName"`
+	IsRunning         bool   `json:"isRunning"`
+	CurrentCommand    string `json:"currentCommand"`
+	CompletedCommands int    `json:"completedCommands"`
+	TotalCommands     int    `json:"totalCommands"`
+	Output            string `json:"output"`
+}
+
+// ExecutionContext 执行上下文
+type ExecutionContext struct {
+	ProjectName    string
+	SubProjectName string
+	Commands       []Command
+	CurrentIndex   int
+	OutputChannel  chan<- string
+	WorkDir        string
+}
+
+// CommandStatus 命令状态 (保持向后兼容)
 type CommandStatus struct {
 	IsRunning bool   `json:"isRunning"`
 	Command   string `json:"command"`

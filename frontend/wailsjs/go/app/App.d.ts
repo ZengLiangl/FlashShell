@@ -10,6 +10,8 @@ export function DeleteMachine(arg1:string):Promise<void>;
 
 export function ExecuteCommand(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function ExecuteSubProject(arg1:string,arg2:string):Promise<void>;
+
 export function GetConfig():Promise<define.Root>;
 
 export function GetMachines():Promise<Array<define.Machine>>;
@@ -18,11 +20,17 @@ export function GetOutput():Promise<Array<string>>;
 
 export function GetStatus():Promise<define.CommandStatus>;
 
+export function GetSubProjectStatus():Promise<define.SubProjectStatus>;
+
 export function SaveConfig(arg1:define.Root):Promise<void>;
 
 export function StopAllCommands():Promise<void>;
 
+export function StopAllSubProjects():Promise<void>;
+
 export function StopCommand(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function StopSubProject(arg1:string,arg2:string):Promise<void>;
 
 export function TestMachineConnection(arg1:string):Promise<void>;
 

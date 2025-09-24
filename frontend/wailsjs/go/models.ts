@@ -162,6 +162,31 @@ export namespace define {
 		    return a;
 		}
 	}
+	
+	export class SubProjectStatus {
+	    projectName: string;
+	    subProjectName: string;
+	    isRunning: boolean;
+	    currentCommand: string;
+	    completedCommands: number;
+	    totalCommands: number;
+	    output: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SubProjectStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.projectName = source["projectName"];
+	        this.subProjectName = source["subProjectName"];
+	        this.isRunning = source["isRunning"];
+	        this.currentCommand = source["currentCommand"];
+	        this.completedCommands = source["completedCommands"];
+	        this.totalCommands = source["totalCommands"];
+	        this.output = source["output"];
+	    }
+	}
 
 }
 

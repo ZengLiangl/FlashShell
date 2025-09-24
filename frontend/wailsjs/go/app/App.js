@@ -18,6 +18,10 @@ export function ExecuteCommand(arg1, arg2, arg3) {
   return window['go']['app']['App']['ExecuteCommand'](arg1, arg2, arg3);
 }
 
+export function ExecuteSubProject(arg1, arg2) {
+  return window['go']['app']['App']['ExecuteSubProject'](arg1, arg2);
+}
+
 export function GetConfig() {
   return window['go']['app']['App']['GetConfig']();
 }
@@ -34,6 +38,10 @@ export function GetStatus() {
   return window['go']['app']['App']['GetStatus']();
 }
 
+export function GetSubProjectStatus() {
+  return window['go']['app']['App']['GetSubProjectStatus']();
+}
+
 export function SaveConfig(arg1) {
   return window['go']['app']['App']['SaveConfig'](arg1);
 }
@@ -42,8 +50,16 @@ export function StopAllCommands() {
   return window['go']['app']['App']['StopAllCommands']();
 }
 
+export function StopAllSubProjects() {
+  return window['go']['app']['App']['StopAllSubProjects']();
+}
+
 export function StopCommand(arg1, arg2, arg3) {
   return window['go']['app']['App']['StopCommand'](arg1, arg2, arg3);
+}
+
+export function StopSubProject(arg1, arg2) {
+  return window['go']['app']['App']['StopSubProject'](arg1, arg2);
 }
 
 export function TestMachineConnection(arg1) {
