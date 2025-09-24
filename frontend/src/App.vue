@@ -37,7 +37,7 @@
             <h3>可执行项目</h3>
             <el-tag v-if="selectedProject" size="small">{{
               selectedProject.name
-            }}</el-tag>
+              }}</el-tag>
           </div>
           <div v-if="subProjects.length > 0" class="subproject-list">
             <div v-for="subProject in subProjects" :key="subProject.name" class="subproject-container">
@@ -85,12 +85,23 @@
                         </el-icon>
                       </el-button>
                       <div class="command-info">
-                        <div class="command-name">{{ command.name }}</div>
-                        <div class="command-desc">{{ command.description }}</div>
+                        <div class="command-name">
+                          <!-- <el-icon class="command-type-icon">
+                            <Connection v-if="command.type === 'remote'" />
+                            <Setting v-else />
+                          </el-icon> -->
+                          {{ command.name }}
+                        </div>
+                        <!-- <div class="command-desc">{{ command.description }}</div> -->
                       </div>
                     </div>
                     <div class="command-meta">
-                      <el-tag size="small" type="success">{{ command.steps?.length || 0 }} 个步骤</el-tag>
+                      <el-tag size="small" :type="getCommandTagType(command.type)" effect="light">
+                        {{ getCommandTypeText(command.type) }}
+                      </el-tag>
+                      <el-tag size="small" type="info" effect="plain">
+                        {{ command.steps?.length || 0 }} 步骤
+                      </el-tag>
                     </div>
                   </div>
 
@@ -311,6 +322,30 @@ export default {
       expandedCommands.value[key] = !expandedCommands.value[key];
     };
 
+    // 获取命令类型对应的标签类型
+    const getCommandTagType = (type) => {
+      switch (type) {
+        case 'remote':
+          return 'warning';
+        case 'batch':
+          return 'success';
+        default:
+          return 'info';
+      }
+    };
+
+    // 获取命令类型文本
+    const getCommandTypeText = (type) => {
+      switch (type) {
+        case 'remote':
+          return 'remote';
+        case 'batch':
+          return 'batch';
+        default:
+          return 'batch';
+      }
+    };
+
     // 执行 SubProject
     const executeSubProject = async (subProject) => {
       if (!selectedProject.value) {
@@ -409,7 +444,7 @@ export default {
           const processedOutput = output.map(line => ({
             raw: line,
             html: processAnsiOutput(line),
-            isError: line.includes('STDERR') || line.includes('失败') || line.includes('错误'),
+            isError: line.includes('STDERR') || line.includes('失败') || line.includes('错误') || line.includes('Error'),
             isSuccess: line.includes('完成') || line.includes('成功')
           }));
 
@@ -479,7 +514,8 @@ export default {
         return 0;
       }
       // 将进度映射到1-100的范围内
-      const completedRatio = Math.max(1, status.completedCommands + 1) / status.totalCommands;
+      const temp = (Math.max(1, status.completedCommands + 1) == status.totalCommands) ? status.completedCommands : Math.max(1, status.completedCommands + 1)
+      const completedRatio = temp / status.totalCommands;
       return Math.round(completedRatio * 99);
     });
 
@@ -522,6 +558,8 @@ export default {
       selectProject,
       toggleSubProject,
       toggleCommand,
+      getCommandTagType,
+      getCommandTypeText,
       executeSubProject,
       stopSubProject,
       executeCommand,
@@ -714,10 +752,18 @@ export default {
 }
 
 .command-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
   font-weight: 500;
   color: #606266;
   font-size: 13px;
   margin-bottom: 2px;
+}
+
+.command-type-icon {
+  font-size: 14px;
+  color: #409eff;
 }
 
 .command-desc {
