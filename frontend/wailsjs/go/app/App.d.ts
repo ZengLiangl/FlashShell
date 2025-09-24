@@ -6,6 +6,8 @@ import {data} from '../models';
 
 export function AddMachine(arg1:define.Machine):Promise<void>;
 
+export function ClearMachineSensitiveData(arg1:string):Promise<void>;
+
 export function ClearOutput():Promise<void>;
 
 export function DeleteMachine(arg1:string):Promise<void>;
@@ -22,6 +24,8 @@ export function GetCtx():Promise<context.Context>;
 
 export function GetGlobalConfig():Promise<data.GlobalConfig>;
 
+export function GetMachineSensitiveData(arg1:string):Promise<define.SensitiveData>;
+
 export function GetMachines():Promise<Array<define.Machine>>;
 
 export function GetOutput():Promise<Array<string>>;
@@ -35,6 +39,10 @@ export function RefreshUI():Promise<void>;
 export function SaveConfig(arg1:define.Root):Promise<void>;
 
 export function SaveGlobalConfig(arg1:data.GlobalConfig):Promise<void>;
+
+export function SelectKeyFile():Promise<string>;
+
+export function SetMachineSensitiveData(arg1:string,arg2:define.SensitiveData):Promise<void>;
 
 export function StopAllCommands():Promise<void>;
 

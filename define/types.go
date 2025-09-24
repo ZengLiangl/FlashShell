@@ -39,7 +39,7 @@ type Command struct {
 type Machine struct {
 	EncryptedData string `yaml:"encrypted_data,omitempty" json:"encrypted_data,omitempty"` // 加密后内容
 	Name          string `yaml:"name" json:"name"`
-	KeyFile       string `yaml:"keyfile,omitempty" json:"keyfile,omitempty"`
+	KeyFile       string `yaml:"key_file,omitempty" json:"key_file,omitempty"`
 	// 运行时数据（不序列化）
 	sensitiveData *SensitiveData `yaml:"-"`
 }

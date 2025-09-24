@@ -86,7 +86,7 @@ export namespace define {
 	export class Machine {
 	    encrypted_data?: string;
 	    name: string;
-	    keyfile?: string;
+	    key_file?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Machine(source);
@@ -96,7 +96,7 @@ export namespace define {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.encrypted_data = source["encrypted_data"];
 	        this.name = source["name"];
-	        this.keyfile = source["keyfile"];
+	        this.key_file = source["key_file"];
 	    }
 	}
 	export class SubProject {
@@ -200,6 +200,24 @@ export namespace define {
 		    }
 		    return a;
 		}
+	}
+	export class SensitiveData {
+	    host: string;
+	    port: number;
+	    user: string;
+	    password?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SensitiveData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.host = source["host"];
+	        this.port = source["port"];
+	        this.user = source["user"];
+	        this.password = source["password"];
+	    }
 	}
 	
 	export class SubProjectStatus {

@@ -6,6 +6,10 @@ export function AddMachine(arg1) {
   return window['go']['app']['App']['AddMachine'](arg1);
 }
 
+export function ClearMachineSensitiveData(arg1) {
+  return window['go']['app']['App']['ClearMachineSensitiveData'](arg1);
+}
+
 export function ClearOutput() {
   return window['go']['app']['App']['ClearOutput']();
 }
@@ -38,6 +42,10 @@ export function GetGlobalConfig() {
   return window['go']['app']['App']['GetGlobalConfig']();
 }
 
+export function GetMachineSensitiveData(arg1) {
+  return window['go']['app']['App']['GetMachineSensitiveData'](arg1);
+}
+
 export function GetMachines() {
   return window['go']['app']['App']['GetMachines']();
 }
@@ -64,6 +72,14 @@ export function SaveConfig(arg1) {
 
 export function SaveGlobalConfig(arg1) {
   return window['go']['app']['App']['SaveGlobalConfig'](arg1);
+}
+
+export function SelectKeyFile() {
+  return window['go']['app']['App']['SelectKeyFile']();
+}
+
+export function SetMachineSensitiveData(arg1, arg2) {
+  return window['go']['app']['App']['SetMachineSensitiveData'](arg1, arg2);
 }
 
 export function StopAllCommands() {

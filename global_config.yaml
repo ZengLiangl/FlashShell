@@ -14,4 +14,4 @@ workPaths:
 machines:
     - encrypted_data: AqmCXKWPbbJ0sadelljJ3uKG0Hqp1l7RMWCYemxARvFFZdpO91dUyNRgd8rMSjrM5jxIxYinGEx9S6wPAFEDzyk2TUpGM18zPSLXe+bcxbRWWPTHkElpV8b1OXtfXioai/mtk5Oru8f1WEXmQOXDLp88CxHoo52OMPsHgvfwDoJ8QiKs11wHqQ==
       name: jz
-      keyfile: /Users/ll/.ssh/id_rsa
+      key_file: /Users/ll/.ssh/id_rsa

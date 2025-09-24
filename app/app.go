@@ -189,58 +189,30 @@ func (a *App) TestMachineConnection(machineName string) error {
 	return sshClient.TestConnection()
 }
 
-// GetMachines 获取所有机器配置
+// GetMachines 获取所有机器配置（从全局配置）
 func (a *App) GetMachines() []define.Machine {
-	root := a.configManager.GetRoot()
-	if root == nil {
-		return nil
-	}
-	return root.Machines
+	return a.configManager.GetAllMachinesFromGlobal()
 }
 
-// AddMachine 添加机器配置
+// AddMachine 添加机器配置（到全局配置）
 func (a *App) AddMachine(machine define.Machine) error {
-	root := a.configManager.GetRoot()
-	if root == nil {
-		return fmt.Errorf("配置未加载")
-	}
-
-	root.Machines = append(root.Machines, machine)
-	return a.configManager.SaveConfig(root)
+	return a.configManager.AddMachineToGlobal(&machine)
 }
 
-// UpdateMachine 更新机器配置
+// UpdateMachine 更新机器配置（在全局配置中）
 func (a *App) UpdateMachine(machineName string, machine define.Machine) error {
-	root := a.configManager.GetRoot()
-	if root == nil {
-		return fmt.Errorf("配置未加载")
+	// 先删除旧配置
+	if err := a.configManager.RemoveMachineFromGlobal(machineName); err != nil {
+		return fmt.Errorf("删除旧配置失败: %w", err)
 	}
 
-	for i, m := range root.Machines {
-		if m.Name == machineName {
-			root.Machines[i] = machine
-			return a.configManager.SaveConfig(root)
-		}
-	}
-
-	return fmt.Errorf("未找到机器: %s", machineName)
+	// 添加新配置
+	return a.configManager.AddMachineToGlobal(&machine)
 }
 
-// DeleteMachine 删除机器配置
+// DeleteMachine 删除机器配置（从全局配置）
 func (a *App) DeleteMachine(machineName string) error {
-	root := a.configManager.GetRoot()
-	if root == nil {
-		return fmt.Errorf("配置未加载")
-	}
-
-	for i, m := range root.Machines {
-		if m.Name == machineName {
-			root.Machines = append(root.Machines[:i], root.Machines[i+1:]...)
-			return a.configManager.SaveConfig(root)
-		}
-	}
-
-	return fmt.Errorf("未找到机器: %s", machineName)
+	return a.configManager.RemoveMachineFromGlobal(machineName)
 }
 
 // GetGlobalConfig 获取全局配置
@@ -301,4 +273,48 @@ func (a *App) RefreshUI() {
 
 func (a *App) GetCtx() context.Context {
 	return a.ctx
+}
+
+// SetMachineSensitiveData 设置机器敏感数据
+func (a *App) SetMachineSensitiveData(machineName string, sensitiveData define.SensitiveData) error {
+	machine := a.configManager.GetMachineFromGlobal(machineName)
+	if machine == nil {
+		return fmt.Errorf("未找到机器: %s", machineName)
+	}
+
+	return machine.SetSensitiveData(&sensitiveData)
+}
+
+// GetMachineSensitiveData 获取机器敏感数据
+func (a *App) GetMachineSensitiveData(machineName string) (*define.SensitiveData, error) {
+	machine := a.configManager.GetMachineFromGlobal(machineName)
+	if machine == nil {
+		return nil, fmt.Errorf("未找到机器: %s", machineName)
+	}
+
+	return machine.GetSensitiveData()
+}
+
+// ClearMachineSensitiveData 清除机器敏感数据缓存
+func (a *App) ClearMachineSensitiveData(machineName string) error {
+	machine := a.configManager.GetMachineFromGlobal(machineName)
+	if machine == nil {
+		return fmt.Errorf("未找到机器: %s", machineName)
+	}
+
+	machine.ClearSensitiveData()
+	return nil
+}
+
+// SelectKeyFile 选择密钥文件
+func (a *App) SelectKeyFile() (string, error) {
+	filePath, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+		Title:           "选择SSH密钥文件",
+		ShowHiddenFiles: true,
+	})
+	if err != nil {
+		return "", fmt.Errorf("选择文件失败: %w", err)
+	}
+
+	return filePath, nil
 }
