@@ -37,7 +37,7 @@
             <h3>可执行项目</h3>
             <el-tag v-if="selectedProject" size="small">{{
               selectedProject.name
-              }}</el-tag>
+            }}</el-tag>
           </div>
           <div v-if="subProjects.length > 0" class="subproject-list">
             <div v-for="subProject in subProjects" :key="subProject.name" class="subproject-container">

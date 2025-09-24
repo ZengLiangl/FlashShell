@@ -30,6 +30,10 @@ export function GetConfigFiles() {
   return window['go']['app']['App']['GetConfigFiles']();
 }
 
+export function GetCtx() {
+  return window['go']['app']['App']['GetCtx']();
+}
+
 export function GetGlobalConfig() {
   return window['go']['app']['App']['GetGlobalConfig']();
 }

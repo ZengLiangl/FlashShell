@@ -27,6 +27,7 @@ type App struct {
 func NewApp() *App {
 	app := &App{
 		outputChannel: make(chan string, 1000),
+		configManager: data.NewConfigManager(""),
 	}
 	return app
 }
@@ -34,9 +35,6 @@ func NewApp() *App {
 // Startup is called when the app starts up
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
-	// 使用空字符串让 ConfigManager 自动从全局配置获取最后打开的文件
-	a.configManager = data.NewConfigManager("")
-
 	// 创建 SubProjectRunner
 	a.subProjectRunner = machine.NewSubProjectRunner(a.configManager)
 
@@ -299,4 +297,8 @@ func (a *App) SwitchConfigFile(configPath string) error {
 func (a *App) RefreshUI() {
 	// 这个方法可以被前端调用来刷新界面
 	// 前端可以监听这个调用或者定期检查配置变化
+}
+
+func (a *App) GetCtx() context.Context {
+	return a.ctx
 }

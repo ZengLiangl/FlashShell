@@ -2,6 +2,9 @@ package main
 
 import (
 	"embed"
+	"fmt"
+	"github.com/wailsapp/wails/v2/pkg/runtime"
+	"time"
 
 	"quick-cmd/app"
 
@@ -14,46 +17,6 @@ import (
 
 //go:embed all:frontend/dist
 var assets embed.FS
-
-// createMenu 创建应用菜单
-func createMenu(appInstance *app.App) *menu.Menu {
-	appMenu := menu.NewMenu()
-
-	// 文件菜单
-	fileMenu := appMenu.AddSubmenu("文件")
-
-	// 配置菜单
-	configMenu := fileMenu.AddSubmenu("配置文件")
-
-	// 添加默认配置文件选项
-	configMenu.AddText("config.yaml", nil, func(data *menu.CallbackData) {
-		switchConfigFile(appInstance, "config.yaml")
-	})
-
-	configMenu.AddText("xyj.yaml", nil, func(data *menu.CallbackData) {
-		switchConfigFile(appInstance, "xyj.yaml")
-	})
-
-	// 添加分隔符和刷新选项
-	configMenu.AddSeparator()
-	configMenu.AddText("刷新配置列表", keys.CmdOrCtrl("r"), func(_ *menu.CallbackData) {
-		refreshConfigMenu(configMenu, appInstance)
-	})
-
-	// 添加退出菜单
-	fileMenu.AddSeparator()
-	fileMenu.AddText("退出", keys.CmdOrCtrl("q"), func(_ *menu.CallbackData) {
-		// 退出应用
-	})
-
-	// 帮助菜单
-	helpMenu := appMenu.AddSubmenu("帮助")
-	helpMenu.AddText("关于", nil, func(_ *menu.CallbackData) {
-		// 显示关于信息
-	})
-
-	return appMenu
-}
 
 // getFileName 获取文件名（去掉路径）
 func getFileName(filePath string) string {
@@ -83,18 +46,88 @@ func switchConfigFile(appInstance *app.App, configFile string) {
 }
 
 // refreshConfigMenu 刷新配置菜单
-func refreshConfigMenu(configMenu *menu.Menu, appInstance *app.App) {
+func refreshConfigMenu(configMenu *menu.Menu, a *app.App) {
 	// 清空现有菜单项
 	// 注意：Wails v2 的菜单 API 可能不支持动态修改
 	// 这里只是示例，实际可能需要重新创建整个菜单
 	println("刷新配置菜单")
+	// 发送事件到前端通知配置文件已切换
+	if a.GetCtx() != nil {
+		// 使用 Wails 的事件系统通知前端
+		config, _ := a.GetGlobalConfig()
+		runtime.EventsEmit(a.GetCtx(), "config:changed", map[string]interface{}{
+			"configPath": config.LastOpenedFile,
+			"timestamp":  time.Now().Unix(),
+		})
+		fmt.Println("事件发送完成")
+	} else {
+		fmt.Println("警告: ctx 为 nil，无法发送事件")
+	}
+}
+
+// createMenu 创建应用菜单
+func createMenu(appInstance *app.App) *menu.Menu {
+
+	appMenu := menu.NewMenu()
+
+	// 文件菜单
+	fileMenu := appMenu.AddSubmenu("文件")
+
+	// 配置菜单
+	configMenu := fileMenu.AddSubmenu("配置文件")
+	// 动态加载配置文件列表
+	configFiles, err := appInstance.GetConfigFiles()
+	if err != nil {
+		// 如果获取失败，添加默认项
+		configMenu.AddText("无法加载配置文件", keys.CmdOrCtrl("r"), func(_ *menu.CallbackData) {
+			refreshConfigMenu(configMenu, appInstance)
+		})
+	} else {
+		// 获取当前配置文件
+		globalConfig, _ := appInstance.GetGlobalConfig()
+		currentConfig := ""
+		if globalConfig != nil {
+			currentConfig = globalConfig.LastOpenedFile
+		}
+
+		// 为每个配置文件添加菜单项
+		for _, configFile := range configFiles {
+			// 获取文件名（去掉路径）
+			fileName := getFileName(configFile)
+			// 创建菜单项
+			_ = configMenu.AddRadio(fileName, configFile == currentConfig, nil, func(data *menu.CallbackData) {
+				// 切换配置文件
+				switchConfigFile(appInstance, configFile)
+			})
+		}
+
+		// 添加分隔符和刷新选项
+		configMenu.AddSeparator()
+		configMenu.AddText("刷新配置列表", keys.CmdOrCtrl("r"), func(_ *menu.CallbackData) {
+			refreshConfigMenu(configMenu, appInstance)
+		})
+
+		// 添加退出菜单
+		fileMenu.AddSeparator()
+		fileMenu.AddText("退出", keys.CmdOrCtrl("q"), func(_ *menu.CallbackData) {
+			// 退出应用
+			runtime.Quit(appInstance.GetCtx())
+		})
+
+		// 帮助菜单
+		helpMenu := appMenu.AddSubmenu("帮助")
+		helpMenu.AddText("关于", nil, func(_ *menu.CallbackData) {
+			// 显示关于信息
+		})
+
+	}
+	return appMenu
 }
 
 // main is the entry point for the application
 func main() {
 	// Create an instance of the app structure
 	appInstance := app.NewApp()
-
 	// 创建菜单
 	appMenu := createMenu(appInstance)
 
