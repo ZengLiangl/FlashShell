@@ -37,27 +37,73 @@
             <h3>可执行项目</h3>
             <el-tag v-if="selectedProject" size="small">{{
               selectedProject.name
-              }}</el-tag>
+            }}</el-tag>
           </div>
           <div v-if="subProjects.length > 0" class="subproject-list">
-            <div v-for="subProject in subProjects" :key="subProject.name" class="subproject-item">
-              <div class="subproject-info">
-                <div class="subproject-name">{{ subProject.name }}</div>
-                <div class="subproject-desc">{{ subProject.description }}</div>
-                <div class="subproject-meta">
-                  <el-tag size="small" type="info">{{ subProject.commandCount }} 个命令</el-tag>
+            <div v-for="subProject in subProjects" :key="subProject.name" class="subproject-container">
+              <div class="subproject-item">
+                <div class="subproject-info">
+                  <div class="subproject-header">
+                    <el-button size="small" text @click="toggleSubProject(subProject.name)" class="expand-button">
+                      <el-icon>
+                        <ArrowRight v-if="!expandedSubProjects[subProject.name]" />
+                        <ArrowDown v-else />
+                      </el-icon>
+                    </el-button>
+                    <div class="subproject-title">
+                      <div class="subproject-name">{{ subProject.name }}</div>
+                      <div class="subproject-desc">{{ subProject.description }}</div>
+                    </div>
+                  </div>
+                  <div class="subproject-meta">
+                    <el-tag size="small" type="info">{{ subProject.commandCount }} 个命令</el-tag>
+                  </div>
+                </div>
+                <div class="subproject-actions">
+                  <el-button size="small" type="primary" @click="executeSubProject(subProject)"
+                    :loading="isSubProjectRunning(subProject)"
+                    :disabled="status.isRunning && !isSubProjectRunning(subProject)">
+                    {{ isSubProjectRunning(subProject) ? "运行中" : "执行" }}
+                  </el-button>
+                  <el-button v-if="isSubProjectRunning(subProject)" size="small" type="danger"
+                    @click="stopSubProject(subProject)">
+                    停止
+                  </el-button>
                 </div>
               </div>
-              <div class="subproject-actions">
-                <el-button size="small" type="primary" @click="executeSubProject(subProject)"
-                  :loading="isSubProjectRunning(subProject)"
-                  :disabled="status.isRunning && !isSubProjectRunning(subProject)">
-                  {{ isSubProjectRunning(subProject) ? "运行中" : "执行" }}
-                </el-button>
-                <el-button v-if="isSubProjectRunning(subProject)" size="small" type="danger"
-                  @click="stopSubProject(subProject)">
-                  停止
-                </el-button>
+
+              <!-- Commands 展开区域 -->
+              <div v-if="expandedSubProjects[subProject.name]" class="commands-container">
+                <div v-for="command in subProject.commands" :key="command.name" class="command-container">
+                  <div class="command-item">
+                    <div class="command-header">
+                      <el-button size="small" text @click="toggleCommand(subProject.name, command.name)"
+                        class="expand-button">
+                        <el-icon>
+                          <ArrowRight v-if="!expandedCommands[`${subProject.name}-${command.name}`]" />
+                          <ArrowDown v-else />
+                        </el-icon>
+                      </el-button>
+                      <div class="command-info">
+                        <div class="command-name">{{ command.name }}</div>
+                        <div class="command-desc">{{ command.description }}</div>
+                      </div>
+                    </div>
+                    <div class="command-meta">
+                      <el-tag size="small" type="success">{{ command.steps?.length || 0 }} 个步骤</el-tag>
+                    </div>
+                  </div>
+
+                  <!-- Steps 展开区域 -->
+                  <div v-if="expandedCommands[`${subProject.name}-${command.name}`]" class="steps-container">
+                    <div v-for="(step, index) in command.steps" :key="index" class="step-item">
+                      <div class="step-number">{{ index + 1 }}</div>
+                      <div class="step-content">
+                        <div class="step-command">{{ step }}</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -173,6 +219,10 @@ export default {
     });
     const terminalOutput = ref(null);
 
+    // 展开状态管理
+    const expandedSubProjects = ref({});
+    const expandedCommands = ref({});
+
     // 创建 ANSI 转换器
     const convert = new Convert({
       fg: '#d4d4d4',
@@ -243,7 +293,22 @@ export default {
         subProjects.value = [];
       }
 
+      // 重置展开状态
+      expandedSubProjects.value = {};
+      expandedCommands.value = {};
+
       console.log(`选择项目: ${project.name}, 找到 ${subProjects.value.length} 个 SubProjects`);
+    };
+
+    // 切换 SubProject 展开状态
+    const toggleSubProject = (subProjectName) => {
+      expandedSubProjects.value[subProjectName] = !expandedSubProjects.value[subProjectName];
+    };
+
+    // 切换 Command 展开状态
+    const toggleCommand = (subProjectName, commandName) => {
+      const key = `${subProjectName}-${commandName}`;
+      expandedCommands.value[key] = !expandedCommands.value[key];
     };
 
     // 执行 SubProject
@@ -450,9 +515,13 @@ export default {
       terminalOutput,
       progressPercentage,
       progressStatus,
+      expandedSubProjects,
+      expandedCommands,
       refreshConfig,
       debugConfig,
       selectProject,
+      toggleSubProject,
+      toggleCommand,
       executeSubProject,
       stopSubProject,
       executeCommand,
@@ -588,6 +657,131 @@ export default {
 .subproject-actions {
   display: flex;
   gap: 8px;
+}
+
+.subproject-container {
+  margin-bottom: 8px;
+}
+
+.subproject-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.expand-button {
+  padding: 4px !important;
+  min-width: auto !important;
+  width: 24px;
+  height: 24px;
+}
+
+.subproject-title {
+  flex: 1;
+}
+
+.commands-container {
+  margin-left: 32px;
+  margin-top: 8px;
+  border-left: 2px solid #e4e7ed;
+  padding-left: 12px;
+}
+
+.command-container {
+  margin-bottom: 8px;
+}
+
+.command-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  background: #fafafa;
+  border-radius: 4px;
+  border: 1px solid #f0f0f0;
+}
+
+.command-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.command-info {
+  flex: 1;
+}
+
+.command-name {
+  font-weight: 500;
+  color: #606266;
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+.command-desc {
+  font-size: 11px;
+  color: #909399;
+}
+
+.command-meta {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.steps-container {
+  margin-left: 32px;
+  margin-top: 6px;
+  border-left: 2px solid #f0f0f0;
+  padding-left: 12px;
+}
+
+.step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid #f5f5f5;
+}
+
+.step-item:last-child {
+  border-bottom: none;
+}
+
+.step-number {
+  background: #409eff;
+  color: white;
+  border-radius: 50%;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 500;
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+
+.step-content {
+  flex: 1;
+}
+
+.step-command {
+  font-family: "Consolas", "Monaco", "Courier New", monospace;
+  font-size: 12px;
+  color: #303133;
+  background: #f8f9fa;
+  padding: 4px 8px;
+  border-radius: 3px;
+  border: 1px solid #e9ecef;
+  margin-bottom: 4px;
+}
+
+.step-desc {
+  font-size: 11px;
+  color: #909399;
 }
 
 /* 保持向后兼容的样式 */
