@@ -1,6 +1,6 @@
 <template>
   <div class="app-container">
-    <el-container style="height: 100vh">
+    <el-container class="main-container">
       <!-- 左侧面板 -->
       <el-aside width="400px" class="left-panel">
         <!-- 项目列表 -->
@@ -9,7 +9,9 @@
             <h3>项目列表</h3>
             <div>
               <el-button size="small" @click="refreshConfig">
-                <el-icon><Refresh /></el-icon>
+                <el-icon>
+                  <Refresh />
+                </el-icon>
               </el-button>
               <el-button size="small" @click="debugConfig" type="warning">
                 调试
@@ -21,13 +23,8 @@
             <p>项目数量: {{ projects.length }}</p>
           </div>
           <div v-else class="project-list">
-            <div
-              v-for="project in projects"
-              :key="project.name"
-              class="project-item"
-              :class="{ active: selectedProject?.name === project.name }"
-              @click="selectProject(project)"
-            >
+            <div v-for="project in projects" :key="project.name" class="project-item"
+              :class="{ active: selectedProject?.name === project.name }" @click="selectProject(project)">
               <div class="project-name">{{ project.name }}</div>
               <div class="project-desc">{{ project.description }}</div>
             </div>
@@ -40,7 +37,7 @@
             <h3>可执行项目</h3>
             <el-tag v-if="selectedProject" size="small">{{
               selectedProject.name
-            }}</el-tag>
+              }}</el-tag>
           </div>
           <div v-if="subProjects.length > 0" class="subproject-list">
             <div v-for="subProject in subProjects" :key="subProject.name" class="subproject-item">
@@ -52,21 +49,13 @@
                 </div>
               </div>
               <div class="subproject-actions">
-                <el-button
-                  size="small"
-                  type="primary"
-                  @click="executeSubProject(subProject)"
+                <el-button size="small" type="primary" @click="executeSubProject(subProject)"
                   :loading="isSubProjectRunning(subProject)"
-                  :disabled="status.isRunning && !isSubProjectRunning(subProject)"
-                >
+                  :disabled="status.isRunning && !isSubProjectRunning(subProject)">
                   {{ isSubProjectRunning(subProject) ? "运行中" : "执行" }}
                 </el-button>
-                <el-button
-                  v-if="isSubProjectRunning(subProject)"
-                  size="small"
-                  type="danger"
-                  @click="stopSubProject(subProject)"
-                >
+                <el-button v-if="isSubProjectRunning(subProject)" size="small" type="danger"
+                  @click="stopSubProject(subProject)">
                   停止
                 </el-button>
               </div>
@@ -82,26 +71,42 @@
           <h3>终端输出</h3>
           <div class="terminal-actions">
             <el-button size="small" @click="clearOutput">
-              <el-icon><Delete /></el-icon>
+              <el-icon>
+                <Delete />
+              </el-icon>
               清空
             </el-button>
             <el-button size="small" @click="refreshOutput">
-              <el-icon><Refresh /></el-icon>
+              <el-icon>
+                <Refresh />
+              </el-icon>
               刷新
             </el-button>
           </div>
         </div>
+
+        <!-- 进度条区域 -->
+        <div v-if="status.isRunning" class="progress-section">
+          <div class="progress-info">
+            <div class="progress-text">
+              <span class="project-name">{{ status.subProjectName }}</span>
+              <span v-if="status.currentCommand" class="current-command">
+                正在执行: {{ status.currentCommand }}
+              </span>
+            </div>
+            <div class="progress-stats">
+              {{ Math.max(1, status.completedCommands + 1) }}/{{ status.totalCommands }} 命令
+            </div>
+          </div>
+          <el-progress :percentage="progressPercentage" :status="progressStatus" :stroke-width="8" :show-text="false"
+            class="execution-progress" />
+        </div>
+
         <div class="terminal-output" ref="terminalOutput">
-          <div
-            v-for="(line, index) in outputLines"
-            :key="index"
-            class="output-line"
-            :class="{
-              'error-line': line.isError,
-              'success-line': line.isSuccess,
-            }"
-            v-html="line.html"
-          >
+          <div v-for="(line, index) in outputLines" :key="index" class="output-line" :class="{
+            'error-line': line.isError,
+            'success-line': line.isSuccess,
+          }" v-html="line.html">
           </div>
           <div v-if="outputLines.length === 0" class="empty-output">
             等待命令输出...
@@ -110,38 +115,47 @@
       </el-main>
     </el-container>
 
-    <!-- 状态栏 -->
+    <!-- 状态栏 - 始终显示在底部 -->
     <div class="status-bar">
       <div class="status-info">
+        <!-- 执行状态 -->
         <el-tag v-if="status.isRunning" type="warning" size="small">
-          <el-icon><Loading /></el-icon>
+          <el-icon>
+            <Loading />
+          </el-icon>
           执行中: {{ status.subProjectName }}
           <span v-if="status.currentCommand"> - {{ status.currentCommand }}</span>
         </el-tag>
         <el-tag v-else type="success" size="small">
-          <el-icon><Check /></el-icon>
+          <el-icon>
+            <Check />
+          </el-icon>
           就绪
         </el-tag>
-        <el-tag v-if="status.isRunning && status.totalCommands > 0" size="small" type="info">
-          进度: {{ status.completedCommands }}/{{ status.totalCommands }}
+
+
+
+        <!-- 项目信息 - 显示当前选中的项目 -->
+        <el-tag v-if="selectedProject && !status.isRunning" size="small" type="info">
+          项目: {{ selectedProject.name }}
         </el-tag>
       </div>
+
       <div class="status-actions">
-        <el-button
-          v-if="status.isRunning"
-          size="small"
-          type="danger"
-          @click="stopAllCommands"
-        >
+        <!-- 执行控制按钮 -->
+        <el-button v-if="status.isRunning" size="small" type="danger" @click="stopAllCommands">
           停止执行
         </el-button>
+
+        <!-- 应用信息 -->
+        <span class="app-info">Quick Cmd v1.2.0</span>
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, reactive, onMounted, onUnmounted, nextTick } from "vue";
+import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from "vue";
 import * as App from "../wailsjs/go/app/App";
 import Convert from "ansi-to-html";
 
@@ -217,7 +231,7 @@ export default {
     const selectProject = (project) => {
       selectedProject.value = project;
       selectedSubProject.value = null;
-      
+
       // 显示该项目下的所有 SubProjects
       if (project.subprojects) {
         subProjects.value = project.subprojects.map(subproject => ({
@@ -228,7 +242,7 @@ export default {
       } else {
         subProjects.value = [];
       }
-      
+
       console.log(`选择项目: ${project.name}, 找到 ${subProjects.value.length} 个 SubProjects`);
     };
 
@@ -297,9 +311,9 @@ export default {
       if (!selectedProject.value) {
         return false;
       }
-      return status.isRunning && 
-             status.projectName === subProject.projectName && 
-             status.subProjectName === subProject.name;
+      return status.isRunning &&
+        status.projectName === subProject.projectName &&
+        status.subProjectName === subProject.name;
     };
 
     // 检查命令是否正在运行 (保持向后兼容)
@@ -333,9 +347,9 @@ export default {
             isError: line.includes('STDERR') || line.includes('失败') || line.includes('错误'),
             isSuccess: line.includes('完成') || line.includes('成功')
           }));
-          
+
           outputLines.value.push(...processedOutput);
-          
+
           // 滚动到底部
           nextTick(() => {
             if (terminalOutput.value) {
@@ -394,6 +408,27 @@ export default {
       }
     };
 
+    // 计算进度百分比
+    const progressPercentage = computed(() => {
+      if (!status.isRunning || status.totalCommands === 0) {
+        return 0;
+      }
+      // 将进度映射到1-100的范围内
+      const completedRatio = Math.max(1, status.completedCommands + 1) / status.totalCommands;
+      return Math.round(completedRatio * 99);
+    });
+
+    // 计算进度状态
+    const progressStatus = computed(() => {
+      if (!status.isRunning) {
+        return '';
+      }
+      if (progressPercentage.value === 100) {
+        return 'success';
+      }
+      return '';
+    });
+
     onMounted(() => {
       console.log("组件已挂载，开始加载配置...");
       loadConfig();
@@ -413,6 +448,8 @@ export default {
       selectedSubProject,
       status,
       terminalOutput,
+      progressPercentage,
+      progressStatus,
       refreshConfig,
       debugConfig,
       selectProject,
@@ -435,6 +472,12 @@ export default {
   height: 100vh;
   display: flex;
   flex-direction: column;
+}
+
+.main-container {
+  flex: 1;
+  height: calc(100vh - 40px);
+  /* 减去状态栏的高度 */
 }
 
 .left-panel {
@@ -618,6 +661,46 @@ export default {
   gap: 8px;
 }
 
+.progress-section {
+  padding: 12px 16px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e4e7ed;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.progress-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.project-name {
+  font-weight: 600;
+  color: #303133;
+  font-size: 14px;
+}
+
+.current-command {
+  font-size: 12px;
+  color: #606266;
+}
+
+.progress-stats {
+  font-size: 12px;
+  color: #909399;
+  font-weight: 500;
+}
+
+.execution-progress {
+  margin: 0;
+}
+
 .terminal-output {
   flex: 1;
   padding: 16px;
@@ -653,21 +736,42 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 8px 16px;
+  padding: 0 16px;
   background: #f5f7fa;
   border-top: 1px solid #e4e7ed;
   height: 40px;
+  flex-shrink: 0;
+  box-sizing: border-box;
 }
 
 .status-info {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 1;
+  height: 100%;
 }
 
 .status-actions {
   display: flex;
-  gap: 8px;
+  align-items: center;
+  gap: 12px;
+  height: 100%;
+}
+
+/* 确保状态栏内的所有元素垂直居中 */
+.status-bar .el-tag {
+  margin: 0;
+}
+
+.status-bar .el-button {
+  margin: 0;
+}
+
+.app-info {
+  font-size: 12px;
+  color: #909399;
+  font-weight: 500;
 }
 
 .no-projects {
@@ -677,37 +781,121 @@ export default {
 }
 
 /* ANSI 颜色支持 */
-.terminal-output :deep(.ansi-black-fg) { color: #000000; }
-.terminal-output :deep(.ansi-red-fg) { color: #cd3131; }
-.terminal-output :deep(.ansi-green-fg) { color: #0dbc79; }
-.terminal-output :deep(.ansi-yellow-fg) { color: #e5e510; }
-.terminal-output :deep(.ansi-blue-fg) { color: #2472c8; }
-.terminal-output :deep(.ansi-magenta-fg) { color: #bc3fbc; }
-.terminal-output :deep(.ansi-cyan-fg) { color: #11a8cd; }
-.terminal-output :deep(.ansi-white-fg) { color: #e5e5e5; }
-.terminal-output :deep(.ansi-bright-black-fg) { color: #666666; }
-.terminal-output :deep(.ansi-bright-red-fg) { color: #f14c4c; }
-.terminal-output :deep(.ansi-bright-green-fg) { color: #23d18b; }
-.terminal-output :deep(.ansi-bright-yellow-fg) { color: #f5f543; }
-.terminal-output :deep(.ansi-bright-blue-fg) { color: #3b8eea; }
-.terminal-output :deep(.ansi-bright-magenta-fg) { color: #d670d6; }
-.terminal-output :deep(.ansi-bright-cyan-fg) { color: #29b8db; }
-.terminal-output :deep(.ansi-bright-white-fg) { color: #ffffff; }
+.terminal-output :deep(.ansi-black-fg) {
+  color: #000000;
+}
+
+.terminal-output :deep(.ansi-red-fg) {
+  color: #cd3131;
+}
+
+.terminal-output :deep(.ansi-green-fg) {
+  color: #0dbc79;
+}
+
+.terminal-output :deep(.ansi-yellow-fg) {
+  color: #e5e510;
+}
+
+.terminal-output :deep(.ansi-blue-fg) {
+  color: #2472c8;
+}
+
+.terminal-output :deep(.ansi-magenta-fg) {
+  color: #bc3fbc;
+}
+
+.terminal-output :deep(.ansi-cyan-fg) {
+  color: #11a8cd;
+}
+
+.terminal-output :deep(.ansi-white-fg) {
+  color: #e5e5e5;
+}
+
+.terminal-output :deep(.ansi-bright-black-fg) {
+  color: #666666;
+}
+
+.terminal-output :deep(.ansi-bright-red-fg) {
+  color: #f14c4c;
+}
+
+.terminal-output :deep(.ansi-bright-green-fg) {
+  color: #23d18b;
+}
+
+.terminal-output :deep(.ansi-bright-yellow-fg) {
+  color: #f5f543;
+}
+
+.terminal-output :deep(.ansi-bright-blue-fg) {
+  color: #3b8eea;
+}
+
+.terminal-output :deep(.ansi-bright-magenta-fg) {
+  color: #d670d6;
+}
+
+.terminal-output :deep(.ansi-bright-cyan-fg) {
+  color: #29b8db;
+}
+
+.terminal-output :deep(.ansi-bright-white-fg) {
+  color: #ffffff;
+}
 
 /* ANSI 背景颜色 */
-.terminal-output :deep(.ansi-black-bg) { background-color: #000000; }
-.terminal-output :deep(.ansi-red-bg) { background-color: #cd3131; }
-.terminal-output :deep(.ansi-green-bg) { background-color: #0dbc79; }
-.terminal-output :deep(.ansi-yellow-bg) { background-color: #e5e510; }
-.terminal-output :deep(.ansi-blue-bg) { background-color: #2472c8; }
-.terminal-output :deep(.ansi-magenta-bg) { background-color: #bc3fbc; }
-.terminal-output :deep(.ansi-cyan-bg) { background-color: #11a8cd; }
-.terminal-output :deep(.ansi-white-bg) { background-color: #e5e5e5; }
+.terminal-output :deep(.ansi-black-bg) {
+  background-color: #000000;
+}
+
+.terminal-output :deep(.ansi-red-bg) {
+  background-color: #cd3131;
+}
+
+.terminal-output :deep(.ansi-green-bg) {
+  background-color: #0dbc79;
+}
+
+.terminal-output :deep(.ansi-yellow-bg) {
+  background-color: #e5e510;
+}
+
+.terminal-output :deep(.ansi-blue-bg) {
+  background-color: #2472c8;
+}
+
+.terminal-output :deep(.ansi-magenta-bg) {
+  background-color: #bc3fbc;
+}
+
+.terminal-output :deep(.ansi-cyan-bg) {
+  background-color: #11a8cd;
+}
+
+.terminal-output :deep(.ansi-white-bg) {
+  background-color: #e5e5e5;
+}
 
 /* ANSI 样式 */
-.terminal-output :deep(.ansi-bold) { font-weight: bold; }
-.terminal-output :deep(.ansi-dim) { opacity: 0.5; }
-.terminal-output :deep(.ansi-italic) { font-style: italic; }
-.terminal-output :deep(.ansi-underline) { text-decoration: underline; }
-.terminal-output :deep(.ansi-strikethrough) { text-decoration: line-through; }
+.terminal-output :deep(.ansi-bold) {
+  font-weight: bold;
+}
+
+.terminal-output :deep(.ansi-dim) {
+  opacity: 0.5;
+}
+
+.terminal-output :deep(.ansi-italic) {
+  font-style: italic;
+}
+
+.terminal-output :deep(.ansi-underline) {
+  text-decoration: underline;
+}
+
+.terminal-output :deep(.ansi-strikethrough) {
+  text-decoration: line-through;
+}
 </style>
