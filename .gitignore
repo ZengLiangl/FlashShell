@@ -25,6 +25,7 @@ frontend/.vite/
 # IDE
 .vscode/
 .idea/
+.kiro/
 *.swp
 *.swo
 
