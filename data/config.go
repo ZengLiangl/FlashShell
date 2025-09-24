@@ -287,3 +287,23 @@ func CreateDefaultConfig(path string) error {
 
 	return nil
 }
+
+// GetAllWorkPathsFromGlobal 获取所有工作路径
+func (cm *ConfigManager) GetAllWorkPathsFromGlobal() map[string]string {
+	return cm.globalConfigManager.GetAllWorkPaths()
+}
+
+// AddWorkPathToGlobal 添加工作路径
+func (cm *ConfigManager) AddWorkPathToGlobal(key, value string) error {
+	return cm.globalConfigManager.AddWorkPath(key, value)
+}
+
+// UpdateWorkPathInGlobal 更新工作路径
+func (cm *ConfigManager) UpdateWorkPathInGlobal(key, value string) error {
+	return cm.globalConfigManager.UpdateWorkPath(key, value)
+}
+
+// RemoveWorkPathFromGlobal 移除工作路径
+func (cm *ConfigManager) RemoveWorkPathFromGlobal(key string) error {
+	return cm.globalConfigManager.RemoveWorkPath(key)
+}

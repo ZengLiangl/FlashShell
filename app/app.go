@@ -11,7 +11,7 @@ import (
 	"quick-cmd/define"
 	"quick-cmd/machine"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App struct
@@ -253,7 +253,7 @@ func (a *App) SwitchConfigFile(configPath string) error {
 	if a.ctx != nil {
 		// 使用 Wails 的事件系统通知前端
 		fmt.Printf("发送 config:changed 事件，配置文件: %s\n", configPath)
-		runtime.EventsEmit(a.ctx, "config:changed", map[string]interface{}{
+		wailsRuntime.EventsEmit(a.ctx, "config:changed", map[string]interface{}{
 			"configPath": configPath,
 			"timestamp":  time.Now().Unix(),
 		})
@@ -308,7 +308,7 @@ func (a *App) ClearMachineSensitiveData(machineName string) error {
 
 // SelectKeyFile 选择密钥文件
 func (a *App) SelectKeyFile() (string, error) {
-	filePath, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+	filePath, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
 		Title:           "选择SSH密钥文件",
 		ShowHiddenFiles: true,
 	})
@@ -317,4 +317,70 @@ func (a *App) SelectKeyFile() (string, error) {
 	}
 
 	return filePath, nil
+}
+
+// OpenMachineConfig 打开机器配置对话框（供菜单调用）
+func (a *App) OpenMachineConfig() {
+	// 发送事件到前端打开机器配置对话框
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "open:machine-config", map[string]interface{}{
+			"timestamp": time.Now().Unix(),
+		})
+		fmt.Println("发送打开机器配置事件")
+	} else {
+		fmt.Println("警告: ctx 为 nil，无法发送事件")
+	}
+}
+
+// RefreshConfigMenu 刷新配置菜单
+func (a *App) RefreshConfigMenu() {
+	// 清空现有菜单项
+	// 注意：Wails v2 的菜单 API 可能不支持动态修改
+	// 这里只是示例，实际可能需要重新创建整个菜单
+	println("刷新配置菜单")
+	// 发送事件到前端通知配置文件已切换
+	if a.GetCtx() != nil {
+		// 使用 Wails 的事件系统通知前端
+		config, _ := a.GetGlobalConfig()
+		wailsRuntime.EventsEmit(a.GetCtx(), "config:changed", map[string]interface{}{
+			"configPath": config.LastOpenedFile,
+			"timestamp":  time.Now().Unix(),
+		})
+		fmt.Println("事件发送完成")
+	} else {
+		fmt.Println("警告: ctx 为 nil，无法发送事件")
+	}
+}
+
+// GetWorkPaths 获取所有工作路径
+func (a *App) GetWorkPaths() map[string]string {
+	return a.configManager.GetAllWorkPathsFromGlobal()
+}
+
+// AddWorkPath 添加工作路径
+func (a *App) AddWorkPath(key, value string) error {
+	return a.configManager.AddWorkPathToGlobal(key, value)
+}
+
+// UpdateWorkPath 更新工作路径
+func (a *App) UpdateWorkPath(key, value string) error {
+	return a.configManager.UpdateWorkPathInGlobal(key, value)
+}
+
+// DeleteWorkPath 删除工作路径
+func (a *App) DeleteWorkPath(key string) error {
+	return a.configManager.RemoveWorkPathFromGlobal(key)
+}
+
+// OpenWorkPathConfig 打开工作路径配置对话框（供菜单调用）
+func (a *App) OpenWorkPathConfig() {
+	// 发送事件到前端打开工作路径配置对话框
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "open:workpath-config", map[string]interface{}{
+			"timestamp": time.Now().Unix(),
+		})
+		fmt.Println("发送打开工作路径配置事件")
+	} else {
+		fmt.Println("警告: ctx 为 nil，无法发送事件")
+	}
 }

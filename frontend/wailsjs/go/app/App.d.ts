@@ -6,11 +6,15 @@ import {data} from '../models';
 
 export function AddMachine(arg1:define.Machine):Promise<void>;
 
+export function AddWorkPath(arg1:string,arg2:string):Promise<void>;
+
 export function ClearMachineSensitiveData(arg1:string):Promise<void>;
 
 export function ClearOutput():Promise<void>;
 
 export function DeleteMachine(arg1:string):Promise<void>;
+
+export function DeleteWorkPath(arg1:string):Promise<void>;
 
 export function ExecuteCommand(arg1:string,arg2:string,arg3:string):Promise<void>;
 
@@ -33,6 +37,14 @@ export function GetOutput():Promise<Array<string>>;
 export function GetStatus():Promise<define.CommandStatus>;
 
 export function GetSubProjectStatus():Promise<define.SubProjectStatus>;
+
+export function GetWorkPaths():Promise<Record<string, string>>;
+
+export function OpenMachineConfig():Promise<void>;
+
+export function OpenWorkPathConfig():Promise<void>;
+
+export function RefreshConfigMenu():Promise<void>;
 
 export function RefreshUI():Promise<void>;
 
@@ -57,3 +69,5 @@ export function SwitchConfigFile(arg1:string):Promise<void>;
 export function TestMachineConnection(arg1:string):Promise<void>;
 
 export function UpdateMachine(arg1:string,arg2:define.Machine):Promise<void>;
+
+export function UpdateWorkPath(arg1:string,arg2:string):Promise<void>;

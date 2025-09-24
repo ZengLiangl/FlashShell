@@ -6,6 +6,10 @@ export function AddMachine(arg1) {
   return window['go']['app']['App']['AddMachine'](arg1);
 }
 
+export function AddWorkPath(arg1, arg2) {
+  return window['go']['app']['App']['AddWorkPath'](arg1, arg2);
+}
+
 export function ClearMachineSensitiveData(arg1) {
   return window['go']['app']['App']['ClearMachineSensitiveData'](arg1);
 }
@@ -16,6 +20,10 @@ export function ClearOutput() {
 
 export function DeleteMachine(arg1) {
   return window['go']['app']['App']['DeleteMachine'](arg1);
+}
+
+export function DeleteWorkPath(arg1) {
+  return window['go']['app']['App']['DeleteWorkPath'](arg1);
 }
 
 export function ExecuteCommand(arg1, arg2, arg3) {
@@ -60,6 +68,22 @@ export function GetStatus() {
 
 export function GetSubProjectStatus() {
   return window['go']['app']['App']['GetSubProjectStatus']();
+}
+
+export function GetWorkPaths() {
+  return window['go']['app']['App']['GetWorkPaths']();
+}
+
+export function OpenMachineConfig() {
+  return window['go']['app']['App']['OpenMachineConfig']();
+}
+
+export function OpenWorkPathConfig() {
+  return window['go']['app']['App']['OpenWorkPathConfig']();
+}
+
+export function RefreshConfigMenu() {
+  return window['go']['app']['App']['RefreshConfigMenu']();
 }
 
 export function RefreshUI() {
@@ -108,4 +132,8 @@ export function TestMachineConnection(arg1) {
 
 export function UpdateMachine(arg1, arg2) {
   return window['go']['app']['App']['UpdateMachine'](arg1, arg2);
+}
+
+export function UpdateWorkPath(arg1, arg2) {
+  return window['go']['app']['App']['UpdateWorkPath'](arg1, arg2);
 }

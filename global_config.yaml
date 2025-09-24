@@ -4,7 +4,8 @@ configFile:
     - /Users/ll/Documents/workspace/quick_cmd/ui/xyj.yaml
     - config.yaml
     - xyj.yaml
-lastOpenedFile: config.yaml
+    - xyj2.yaml
+lastOpenedFile: /Users/ll/Documents/workspace/quick_cmd/ui/xyj.yaml
 workPaths:
     ACC-CLOUD: /Users/ll/Documents/workspace/xyj-acc-cloud
     HOME: ""

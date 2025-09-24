@@ -233,3 +233,73 @@ func (gcm *GlobalConfigManager) GetAllMachines() []define.Machine {
 
 	return gcm.config.Machines
 }
+
+// AddWorkPath 添加工作路径
+func (gcm *GlobalConfigManager) AddWorkPath(key, value string) error {
+	if gcm.config == nil {
+		if _, err := gcm.LoadGlobalConfig(); err != nil {
+			return err
+		}
+	}
+
+	if gcm.config.WorkPaths == nil {
+		gcm.config.WorkPaths = make(map[string]string)
+	}
+
+	gcm.config.WorkPaths[key] = value
+	return gcm.SaveGlobalConfig(gcm.config)
+}
+
+// UpdateWorkPath 更新工作路径
+func (gcm *GlobalConfigManager) UpdateWorkPath(key, value string) error {
+	return gcm.AddWorkPath(key, value) // 添加和更新逻辑相同
+}
+
+// RemoveWorkPath 移除工作路径
+func (gcm *GlobalConfigManager) RemoveWorkPath(key string) error {
+	if gcm.config == nil {
+		if _, err := gcm.LoadGlobalConfig(); err != nil {
+			return err
+		}
+	}
+
+	if gcm.config.WorkPaths == nil {
+		return fmt.Errorf("工作路径 '%s' 不存在", key)
+	}
+
+	if _, exists := gcm.config.WorkPaths[key]; !exists {
+		return fmt.Errorf("工作路径 '%s' 不存在", key)
+	}
+
+	delete(gcm.config.WorkPaths, key)
+	return gcm.SaveGlobalConfig(gcm.config)
+}
+
+// GetWorkPath 获取工作路径
+func (gcm *GlobalConfigManager) GetWorkPath(key string) (string, bool) {
+	if gcm.config == nil || gcm.config.WorkPaths == nil {
+		return "", false
+	}
+
+	value, exists := gcm.config.WorkPaths[key]
+	return value, exists
+}
+
+// GetAllWorkPaths 获取所有工作路径
+func (gcm *GlobalConfigManager) GetAllWorkPaths() map[string]string {
+	if gcm.config == nil {
+		return make(map[string]string)
+	}
+
+	if gcm.config.WorkPaths == nil {
+		return make(map[string]string)
+	}
+
+	// 返回副本，避免外部修改
+	result := make(map[string]string)
+	for k, v := range gcm.config.WorkPaths {
+		result[k] = v
+	}
+
+	return result
+}

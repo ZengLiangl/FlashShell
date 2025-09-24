@@ -23,12 +23,6 @@
                   <Refresh />
                 </el-icon>
               </el-button>
-              <el-button size="small" @click="openMachineConfig" type="primary">
-                <el-icon>
-                  <Setting />
-                </el-icon>
-                机器配置
-              </el-button>
               <el-button size="small" @click="debugConfig" type="warning">
                 调试
               </el-button>
@@ -301,6 +295,69 @@
         </div>
       </template>
     </el-dialog>
+
+    <!-- 环境变量配置弹框 -->
+    <el-dialog v-model="workPathConfigVisible" title="环境变量配置管理" width="80%" :before-close="handleWorkPathConfigClose">
+      <div class="workpath-config-container">
+        <!-- 环境变量列表 -->
+        <div class="workpath-list">
+          <div class="list-header">
+            <h4>环境变量列表</h4>
+            <el-button type="primary" @click="addWorkPath">
+              <el-icon>
+                <Plus />
+              </el-icon>
+              添加环境变量
+            </el-button>
+          </div>
+
+          <el-table :data="Object.entries(workPaths).map(([key, value]) => ({ key, value }))" style="width: 100%"
+            v-loading="workPathsLoading">
+            <el-table-column prop="key" label="变量名" width="200" />
+            <el-table-column prop="value" label="变量值" overflow-tooltip />
+            <el-table-column label="操作" width="200">
+              <template #default="scope">
+                <el-button size="small" @click="editWorkPath(scope.row.key)">编辑</el-button>
+                <el-button size="small" type="danger" @click="deleteWorkPath(scope.row.key)">
+                  删除
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+      </div>
+    </el-dialog>
+
+    <!-- 环境变量编辑弹框 -->
+    <el-dialog v-model="workPathEditVisible" :title="editingWorkPath ? '编辑环境变量' : '添加环境变量'" width="500px">
+      <el-form :model="workPathForm" :rules="workPathRules" ref="workPathFormRef" label-width="100px">
+        <el-form-item label="变量名" prop="key">
+          <el-input v-model="workPathForm.key" placeholder="请输入变量名（如：PROJECT_HOME）" :disabled="!!editingWorkPath" />
+        </el-form-item>
+
+        <el-form-item label="变量值" prop="value">
+          <el-input v-model="workPathForm.value" placeholder="请输入变量值（如：/home/user/projects）" />
+        </el-form-item>
+
+        <el-form-item label="使用说明">
+          <div class="usage-info">
+            <p>• 变量名只能包含大写字母、数字和下划线</p>
+            <p>• 变量名必须以字母或下划线开头</p>
+            <p>• 在配置文件中可以使用 ${变量名} 来引用这些环境变量</p>
+            <p>• 例如：workdir: "${PROJECT_HOME}/my-project"</p>
+          </div>
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <div class="dialog-footer">
+          <el-button @click="workPathEditVisible = false">取消</el-button>
+          <el-button type="primary" @click="saveWorkPath" :loading="savingWorkPath">
+            {{ editingWorkPath ? '更新' : '添加' }}
+          </el-button>
+        </div>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -339,6 +396,15 @@ export default {
     const editingMachine = ref(null);
     const machineFormRef = ref(null);
 
+    // 环境变量配置相关
+    const workPathConfigVisible = ref(false);
+    const workPathEditVisible = ref(false);
+    const workPaths = ref({});
+    const workPathsLoading = ref(false);
+    const savingWorkPath = ref(false);
+    const editingWorkPath = ref(null);
+    const workPathFormRef = ref(null);
+
     const machineForm = reactive({
       name: '',
       key_file: '',
@@ -360,6 +426,21 @@ export default {
       ],
       user: [
         { required: true, message: '请输入用户名', trigger: 'blur' }
+      ]
+    };
+
+    const workPathForm = reactive({
+      key: '',
+      value: ''
+    });
+
+    const workPathRules = {
+      key: [
+        { required: true, message: '请输入变量名', trigger: 'blur' },
+        { pattern: /^[A-Z_][A-Z0-9_]*$/, message: '变量名只能包含大写字母、数字和下划线，且必须以字母或下划线开头', trigger: 'blur' }
+      ],
+      value: [
+        { required: true, message: '请输入变量值', trigger: 'blur' }
       ]
     };
 
@@ -681,6 +762,18 @@ export default {
           window.location.reload();
         }, 200);
       });
+
+      // 监听打开机器配置事件
+      EventsOn("open:machine-config", async (data) => {
+        console.log("收到 open:machine-config 事件:", data);
+        await openMachineConfig();
+      });
+
+      // 监听打开环境变量配置事件
+      EventsOn("open:workpath-config", async (data) => {
+        console.log("收到 open:workpath-config 事件:", data);
+        await openWorkPathConfig();
+      });
     });
 
     // 机器配置相关方法
@@ -820,6 +913,86 @@ export default {
       }
     };
 
+    // 环境变量配置相关方法
+    const loadWorkPaths = async () => {
+      try {
+        workPathsLoading.value = true;
+        const workPathsData = await App.GetWorkPaths();
+        workPaths.value = workPathsData || {};
+      } catch (error) {
+        console.error('加载环境变量配置失败:', error);
+        ElMessage.error('加载环境变量配置失败: ' + error.message);
+      } finally {
+        workPathsLoading.value = false;
+      }
+    };
+
+    const openWorkPathConfig = async () => {
+      workPathConfigVisible.value = true;
+      await loadWorkPaths();
+    };
+
+    const handleWorkPathConfigClose = () => {
+      workPathConfigVisible.value = false;
+    };
+
+    const addWorkPath = () => {
+      editingWorkPath.value = null;
+      resetWorkPathForm();
+      workPathEditVisible.value = true;
+    };
+
+    const editWorkPath = (key) => {
+      editingWorkPath.value = key;
+      workPathForm.key = key;
+      workPathForm.value = workPaths.value[key] || '';
+      workPathEditVisible.value = true;
+    };
+
+    const resetWorkPathForm = () => {
+      workPathForm.key = '';
+      workPathForm.value = '';
+    };
+
+    const saveWorkPath = async () => {
+      if (!workPathFormRef.value) return;
+
+      try {
+        await workPathFormRef.value.validate();
+        savingWorkPath.value = true;
+
+        if (editingWorkPath.value) {
+          // 更新环境变量
+          await App.UpdateWorkPath(workPathForm.key, workPathForm.value);
+          ElMessage.success('环境变量更新成功');
+        } else {
+          // 添加环境变量
+          await App.AddWorkPath(workPathForm.key, workPathForm.value);
+          ElMessage.success('环境变量添加成功');
+        }
+
+        workPathEditVisible.value = false;
+        await loadWorkPaths();
+
+      } catch (error) {
+        console.error('保存环境变量失败:', error);
+        ElMessage.error('保存环境变量失败: ' + error.message);
+      } finally {
+        savingWorkPath.value = false;
+      }
+    };
+
+    const deleteWorkPath = async (key) => {
+      try {
+        await App.DeleteWorkPath(key);
+        ElMessage.success('环境变量删除成功');
+        await loadWorkPaths();
+      } catch (error) {
+        console.error('删除环境变量失败:', error);
+        ElMessage.error('删除环境变量失败: ' + error.message);
+      }
+    };
+
     // 组件卸载时清理定时器
     onUnmounted(() => {
       stopOutputPolling();
@@ -872,6 +1045,22 @@ export default {
       deleteMachine,
       testConnection,
       selectKeyFile,
+      // 环境变量配置相关
+      workPathConfigVisible,
+      workPathEditVisible,
+      workPaths,
+      workPathsLoading,
+      savingWorkPath,
+      editingWorkPath,
+      workPathFormRef,
+      workPathForm,
+      workPathRules,
+      openWorkPathConfig,
+      handleWorkPathConfigClose,
+      addWorkPath,
+      editWorkPath,
+      saveWorkPath,
+      deleteWorkPath,
     };
   },
 };
@@ -1572,5 +1761,53 @@ export default {
 
 .key-file-input .el-button {
   flex-shrink: 0;
+}
+
+/* 环境变量配置相关样式 */
+.workpath-config-container {
+  padding: 20px;
+}
+
+.workpath-list {
+  margin-bottom: 20px;
+}
+
+.workpath-config-container .el-table {
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.workpath-config-container .el-table th {
+  background-color: #f5f7fa;
+  color: #606266;
+  font-weight: 600;
+}
+
+.workpath-config-container .el-table td {
+  padding: 12px 0;
+}
+
+/* 使用说明样式 */
+.usage-info {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 12px;
+  margin-top: 8px;
+}
+
+.usage-info p {
+  margin: 4px 0;
+  font-size: 12px;
+  color: #606266;
+  line-height: 1.4;
+}
+
+.usage-info p:first-child {
+  margin-top: 0;
+}
+
+.usage-info p:last-child {
+  margin-bottom: 0;
 }
 </style>
