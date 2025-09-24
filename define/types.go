@@ -1,5 +1,9 @@
 package define
 
+import (
+	"quick-cmd/crypto"
+)
+
 // Root 配置根结构
 type Root struct {
 	Projects []Project `yaml:"projects" json:"projects"`
@@ -33,12 +37,83 @@ type Command struct {
 
 // Machine 远程机器配置
 type Machine struct {
-	Name     string `yaml:"name" json:"name"`
+	EncryptedData string `yaml:"encrypted_data,omitempty" json:"encrypted_data,omitempty"` // 加密后内容
+	Name          string `yaml:"name" json:"name"`
+	KeyFile       string `yaml:"keyfile,omitempty" json:"keyfile,omitempty"`
+	// 运行时数据（不序列化）
+	sensitiveData *SensitiveData `yaml:"-"`
+}
+
+// SensitiveData 敏感数据
+type SensitiveData struct {
 	Host     string `yaml:"host" json:"host"`
 	Port     int    `yaml:"port" json:"port"`
 	User     string `yaml:"user" json:"user"`
 	Password string `yaml:"password,omitempty" json:"password,omitempty"`
-	KeyFile  string `yaml:"keyfile,omitempty" json:"keyfile,omitempty"`
+}
+
+// SetSensitiveData 设置敏感数据并加密
+func (m *Machine) SetSensitiveData(data *SensitiveData) error {
+	if data == nil {
+		return nil
+	}
+
+	// 创建加密用的数据结构
+	cryptoData := &crypto.SensitiveData{
+		Name:     m.Name,
+		Host:     data.Host,
+		Port:     data.Port,
+		Username: data.User,
+		Password: data.Password,
+		KeyData:  []byte{}, // 密钥文件内容暂时为空
+	}
+
+	// 加密敏感数据
+	encryptedStr, err := crypto.EncryptSensitiveData(cryptoData)
+	if err != nil {
+		return err
+	}
+
+	// 设置加密数据和敏感数据
+	m.EncryptedData = encryptedStr
+	m.sensitiveData = data
+
+	return nil
+}
+
+// GetSensitiveData 获取敏感数据（解密）
+func (m *Machine) GetSensitiveData() (*SensitiveData, error) {
+	if m.sensitiveData != nil {
+		return m.sensitiveData, nil
+	}
+
+	if m.EncryptedData == "" {
+		return &SensitiveData{}, nil
+	}
+
+	// 解密数据
+	cryptoData, err := crypto.DecryptSensitiveData(m.EncryptedData)
+	if err != nil {
+		return nil, err
+	}
+
+	// 转换为内部数据结构
+	data := &SensitiveData{
+		Host:     cryptoData.Host,
+		Port:     cryptoData.Port,
+		User:     cryptoData.Username,
+		Password: cryptoData.Password,
+	}
+
+	// 缓存解密后的数据
+	m.sensitiveData = data
+
+	return data, nil
+}
+
+// ClearSensitiveData 清除敏感数据缓存
+func (m *Machine) ClearSensitiveData() {
+	m.sensitiveData = nil
 }
 
 // Runner 命令执行器接口

@@ -136,10 +136,19 @@ func TestApp_MachineManagement(t *testing.T) {
 	// 测试添加机器
 	newMachine := define.Machine{
 		Name:    "测试机器",
-		Host:    "test.example.com",
-		Port:    22,
-		User:    "testuser",
 		KeyFile: "~/.ssh/id_rsa",
+	}
+
+	// 设置敏感数据
+	sensitiveData := &define.SensitiveData{
+		Host:     "test.example.com",
+		Port:     22,
+		User:     "testuser",
+		Password: "testpass",
+	}
+
+	if err := newMachine.SetSensitiveData(sensitiveData); err != nil {
+		t.Fatalf("设置敏感数据失败: %v", err)
 	}
 
 	if err := app.AddMachine(newMachine); err != nil {
@@ -161,7 +170,17 @@ func TestApp_MachineManagement(t *testing.T) {
 	}
 
 	// 测试更新机器
-	newMachine.Host = "updated.example.com"
+	updatedSensitiveData := &define.SensitiveData{
+		Host:     "updated.example.com",
+		Port:     22,
+		User:     "testuser",
+		Password: "testpass",
+	}
+
+	if err := newMachine.SetSensitiveData(updatedSensitiveData); err != nil {
+		t.Fatalf("更新敏感数据失败: %v", err)
+	}
+
 	if err := app.UpdateMachine("测试机器", newMachine); err != nil {
 		t.Fatalf("更新机器失败: %v", err)
 	}

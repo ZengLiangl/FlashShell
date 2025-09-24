@@ -90,9 +90,6 @@ func TestConfigManager_SaveConfig(t *testing.T) {
 		Machines: []define.Machine{
 			{
 				Name:    "测试机器",
-				Host:    "test.com",
-				Port:    22,
-				User:    "test",
 				KeyFile: "~/.ssh/id_rsa",
 			},
 		},

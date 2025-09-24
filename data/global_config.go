@@ -5,6 +5,8 @@ import (
 	"os"
 	"strings"
 
+	"quick-cmd/define"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -15,6 +17,7 @@ type GlobalConfig struct {
 	ConfigFiles    []string          `yaml:"configFile" json:"configFile"`
 	LastOpenedFile string            `yaml:"lastOpenedFile" json:"lastOpenedFile"`
 	WorkPaths      map[string]string `yaml:"workPaths" json:"workPaths"`
+	Machines       []define.Machine  `yaml:"machines,omitempty" json:"machines,omitempty"`
 }
 
 // GlobalConfigManager 全局配置管理器
@@ -166,4 +169,67 @@ func (gcm *GlobalConfigManager) createDefaultGlobalConfig() error {
 	}
 
 	return gcm.SaveGlobalConfig(defaultConfig)
+}
+
+// AddMachine 添加机器配置
+func (gcm *GlobalConfigManager) AddMachine(machine *define.Machine) error {
+	if gcm.config == nil {
+		if _, err := gcm.LoadGlobalConfig(); err != nil {
+			return err
+		}
+	}
+
+	// 检查是否已存在同名机器
+	for i, existing := range gcm.config.Machines {
+		if existing.Name == machine.Name {
+			// 更新现有机器配置
+			gcm.config.Machines[i] = *machine
+			return gcm.SaveGlobalConfig(gcm.config)
+		}
+	}
+
+	// 添加新机器
+	gcm.config.Machines = append(gcm.config.Machines, *machine)
+	return gcm.SaveGlobalConfig(gcm.config)
+}
+
+// GetMachine 根据名称获取机器配置
+func (gcm *GlobalConfigManager) GetMachine(name string) *define.Machine {
+	if gcm.config == nil {
+		return nil
+	}
+
+	for _, machine := range gcm.config.Machines {
+		if machine.Name == name {
+			return &machine
+		}
+	}
+	return nil
+}
+
+// RemoveMachine 移除机器配置
+func (gcm *GlobalConfigManager) RemoveMachine(name string) error {
+	if gcm.config == nil {
+		if _, err := gcm.LoadGlobalConfig(); err != nil {
+			return err
+		}
+	}
+
+	for i, machine := range gcm.config.Machines {
+		if machine.Name == name {
+			gcm.config.Machines = append(gcm.config.Machines[:i], gcm.config.Machines[i+1:]...)
+			return gcm.SaveGlobalConfig(gcm.config)
+		}
+	}
+
+	return fmt.Errorf("机器配置 '%s' 不存在", name)
+}
+
+// GetAllMachines 获取所有机器配置
+func (gcm *GlobalConfigManager) GetAllMachines() []define.Machine {
+	if gcm.config == nil {
+		return []define.Machine{}
+	}
+
+	return gcm.config.Machines
 }

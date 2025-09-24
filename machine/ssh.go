@@ -29,6 +29,12 @@ func NewSSHClient(machine *define.Machine) *SSHClient {
 
 // Connect 连接到远程机器
 func (sc *SSHClient) Connect() error {
+	// 获取敏感数据
+	sensitiveData, err := sc.config.GetSensitiveData()
+	if err != nil {
+		return fmt.Errorf("获取敏感数据失败: %w", err)
+	}
+
 	var auth []ssh.AuthMethod
 
 	// 密钥认证
@@ -41,8 +47,8 @@ func (sc *SSHClient) Connect() error {
 	}
 
 	// 密码认证
-	if sc.config.Password != "" {
-		auth = append(auth, ssh.Password(sc.config.Password))
+	if sensitiveData.Password != "" {
+		auth = append(auth, ssh.Password(sensitiveData.Password))
 	}
 
 	if len(auth) == 0 {
@@ -50,13 +56,13 @@ func (sc *SSHClient) Connect() error {
 	}
 
 	config := &ssh.ClientConfig{
-		User:            sc.config.User,
+		User:            sensitiveData.User,
 		Auth:            auth,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // 生产环境应该验证主机密钥
 		Timeout:         30 * time.Second,
 	}
 
-	addr := fmt.Sprintf("%s:%d", sc.config.Host, sc.config.Port)
+	addr := fmt.Sprintf("%s:%d", sensitiveData.Host, sensitiveData.Port)
 	client, err := ssh.Dial("tcp", addr, config)
 	if err != nil {
 		return fmt.Errorf("SSH连接失败: %w", err)

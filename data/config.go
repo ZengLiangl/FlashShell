@@ -93,16 +93,49 @@ func (cm *ConfigManager) GetRoot() *define.Root {
 
 // GetMachine 根据名称获取机器配置
 func (cm *ConfigManager) GetMachine(name string) *define.Machine {
-	if cm.root == nil {
+	// fmt.Println("GetMachine", name)
+	if cm.globalConfigManager == nil {
 		return nil
 	}
 
-	for _, machine := range cm.root.Machines {
+	for _, machine := range cm.globalConfigManager.config.Machines {
 		if machine.Name == name {
 			return &machine
 		}
 	}
 	return nil
+}
+
+// AddMachineToGlobal 添加机器配置到全局配置
+func (cm *ConfigManager) AddMachineToGlobal(machine *define.Machine) error {
+	if cm.globalConfigManager == nil {
+		return fmt.Errorf("全局配置管理器未初始化")
+	}
+	return cm.globalConfigManager.AddMachine(machine)
+}
+
+// GetMachineFromGlobal 从全局配置获取机器配置
+func (cm *ConfigManager) GetMachineFromGlobal(name string) *define.Machine {
+	if cm.globalConfigManager == nil {
+		return nil
+	}
+	return cm.globalConfigManager.GetMachine(name)
+}
+
+// GetAllMachinesFromGlobal 从全局配置获取所有机器配置
+func (cm *ConfigManager) GetAllMachinesFromGlobal() []define.Machine {
+	if cm.globalConfigManager == nil {
+		return []define.Machine{}
+	}
+	return cm.globalConfigManager.GetAllMachines()
+}
+
+// RemoveMachineFromGlobal 从全局配置移除机器配置
+func (cm *ConfigManager) RemoveMachineFromGlobal(name string) error {
+	if cm.globalConfigManager == nil {
+		return fmt.Errorf("全局配置管理器未初始化")
+	}
+	return cm.globalConfigManager.RemoveMachine(name)
 }
 
 // processPathVariables 处理路径变量替换
@@ -237,9 +270,6 @@ func CreateDefaultConfig(path string) error {
 		Machines: []define.Machine{
 			{
 				Name:    "示例服务器",
-				Host:    "example.com",
-				Port:    22,
-				User:    "deploy",
 				KeyFile: "~/.ssh/id_rsa",
 			},
 		},
