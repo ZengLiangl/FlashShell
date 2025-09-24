@@ -1,0 +1,13 @@
+appId: com.runner
+windowsName: 运行器
+configFile:
+    - /Users/ll/Documents/workspace/quick_cmd/ui/xyj.yaml
+    - config.yaml
+    - xyj.yaml
+lastOpenedFile: config.yaml
+workPaths:
+    ACC-CLOUD: /Users/ll/Documents/workspace/xyj-acc-cloud
+    HOME: ""
+    MVM: /Users/ll/Documents/Maven/apache-maven-3.6.1/bin/mvn
+    XYJ-ACC: /Users/ll/Documents/workspace/xyjacc
+    XYJ-ACC-CRON: /Users/ll/Documents/workspace/xyjacc-cron

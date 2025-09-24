@@ -5,10 +5,13 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 
 	"quick-cmd/data"
 	"quick-cmd/define"
 	"quick-cmd/machine"
+
+	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // App struct
@@ -31,7 +34,8 @@ func NewApp() *App {
 // Startup is called when the app starts up
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
-	a.configManager = data.NewConfigManager("config.yaml")
+	// 使用空字符串让 ConfigManager 自动从全局配置获取最后打开的文件
+	a.configManager = data.NewConfigManager("")
 
 	// 创建 SubProjectRunner
 	a.subProjectRunner = machine.NewSubProjectRunner(a.configManager)
@@ -41,7 +45,11 @@ func (a *App) Startup(ctx context.Context) {
 		if os.IsNotExist(err) {
 			println("配置文件不存在，创建默认配置")
 			data.CreateDefaultConfig("config.yaml")
-			a.configManager.LoadConfig()
+			if _, loadErr := a.configManager.LoadConfig(); loadErr != nil {
+				println("加载默认配置文件失败:", loadErr.Error())
+			} else {
+				println("默认配置文件加载成功")
+			}
 		} else {
 			println("加载配置文件失败:", err.Error())
 		}
@@ -235,4 +243,60 @@ func (a *App) DeleteMachine(machineName string) error {
 	}
 
 	return fmt.Errorf("未找到机器: %s", machineName)
+}
+
+// GetGlobalConfig 获取全局配置
+func (a *App) GetGlobalConfig() (*data.GlobalConfig, error) {
+	return a.configManager.GetGlobalConfig()
+}
+
+// SaveGlobalConfig 保存全局配置
+func (a *App) SaveGlobalConfig(config *data.GlobalConfig) error {
+	return a.configManager.SaveGlobalConfig(config)
+}
+
+// GetConfigFiles 获取所有配置文件列表
+func (a *App) GetConfigFiles() ([]string, error) {
+	return a.configManager.GetConfigFiles()
+}
+
+// SwitchConfigFile 切换配置文件
+func (a *App) SwitchConfigFile(configPath string) error {
+	// 停止所有正在运行的 SubProjects
+	if err := a.StopAllSubProjects(); err != nil {
+		// 记录错误但不阻止切换
+		fmt.Printf("停止运行中的项目时出错: %v\n", err)
+	}
+
+	// 清空输出
+	a.ClearOutput()
+
+	// 切换配置文件
+	if err := a.configManager.SwitchConfigFile(configPath); err != nil {
+		return fmt.Errorf("切换配置文件失败: %w", err)
+	}
+
+	// 重新创建 SubProjectRunner
+	a.subProjectRunner = machine.NewSubProjectRunner(a.configManager)
+
+	// 发送事件到前端通知配置文件已切换
+	if a.ctx != nil {
+		// 使用 Wails 的事件系统通知前端
+		fmt.Printf("发送 config:changed 事件，配置文件: %s\n", configPath)
+		runtime.EventsEmit(a.ctx, "config:changed", map[string]interface{}{
+			"configPath": configPath,
+			"timestamp":  time.Now().Unix(),
+		})
+		fmt.Println("事件发送完成")
+	} else {
+		fmt.Println("警告: ctx 为 nil，无法发送事件")
+	}
+
+	return nil
+}
+
+// RefreshUI 刷新用户界面（供菜单调用）
+func (a *App) RefreshUI() {
+	// 这个方法可以被前端调用来刷新界面
+	// 前端可以监听这个调用或者定期检查配置变化
 }

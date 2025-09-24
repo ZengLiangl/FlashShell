@@ -213,7 +213,9 @@
 
 <script>
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from "vue";
+import { ElMessage } from "element-plus";
 import * as App from "../wailsjs/go/app/App";
+import { EventsOn } from "../wailsjs/runtime/runtime";
 import Convert from "ansi-to-html";
 
 export default {
@@ -266,9 +268,16 @@ export default {
     };
 
     // 刷新配置
-    const refreshConfig = () => {
-      // 刷新整个页面
-      window.location.reload();
+    const refreshConfig = async () => {
+      try {
+        // ElMessage.info("正在重新加载配置...");
+        // 重新加载配置
+        await loadConfig();
+        // ElMessage.success("配置已重新加载");
+      } catch (error) {
+        console.error("刷新配置失败:", error);
+        ElMessage.error("刷新配置失败: " + error.message);
+      }
     };
 
     // 调试配置
@@ -281,13 +290,12 @@ export default {
       try {
         const config = await App.GetConfig();
         console.log("直接调用 GetConfig 结果:", config);
-        alert(`配置加载成功！项目数量: ${config.projects?.length || 0}`);
+        // alert(`配置加载成功！项目数量: ${config.projects?.length || 0}`);
       } catch (error) {
         console.error("调试失败:", error);
-        alert(`调试失败: ${error.message}`);
+        // alert(`调试失败: ${error.message}`);
       }
     };
-
     // 选择项目
     const selectProject = (project) => {
       selectedProject.value = project;
@@ -531,9 +539,13 @@ export default {
     });
 
     onMounted(() => {
-      console.log("组件已挂载，开始加载配置...");
       loadConfig();
       startOutputPolling();
+      // 监听配置变更事件
+      EventsOn("config:changed", async (data) => {
+        console.log("收到 config:changed 事件:", data);
+        window.location.reload();
+      });
     });
 
     // 组件卸载时清理定时器

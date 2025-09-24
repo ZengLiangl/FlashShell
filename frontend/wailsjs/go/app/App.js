@@ -26,6 +26,14 @@ export function GetConfig() {
   return window['go']['app']['App']['GetConfig']();
 }
 
+export function GetConfigFiles() {
+  return window['go']['app']['App']['GetConfigFiles']();
+}
+
+export function GetGlobalConfig() {
+  return window['go']['app']['App']['GetGlobalConfig']();
+}
+
 export function GetMachines() {
   return window['go']['app']['App']['GetMachines']();
 }
@@ -42,8 +50,16 @@ export function GetSubProjectStatus() {
   return window['go']['app']['App']['GetSubProjectStatus']();
 }
 
+export function RefreshUI() {
+  return window['go']['app']['App']['RefreshUI']();
+}
+
 export function SaveConfig(arg1) {
   return window['go']['app']['App']['SaveConfig'](arg1);
+}
+
+export function SaveGlobalConfig(arg1) {
+  return window['go']['app']['App']['SaveGlobalConfig'](arg1);
 }
 
 export function StopAllCommands() {
@@ -60,6 +76,10 @@ export function StopCommand(arg1, arg2, arg3) {
 
 export function StopSubProject(arg1, arg2) {
   return window['go']['app']['App']['StopSubProject'](arg1, arg2);
+}
+
+export function SwitchConfigFile(arg1) {
+  return window['go']['app']['App']['SwitchConfigFile'](arg1);
 }
 
 export function TestMachineConnection(arg1) {

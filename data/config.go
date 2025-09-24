@@ -13,14 +13,27 @@ import (
 
 // ConfigManager 配置管理器
 type ConfigManager struct {
-	configPath string
-	root       *define.Root
+	configPath          string
+	root                *define.Root
+	globalConfigManager *GlobalConfigManager
 }
 
 // NewConfigManager 创建配置管理器
 func NewConfigManager(configPath string) *ConfigManager {
+	gcm := NewGlobalConfigManager("global_config.yaml")
+
+	// 如果没有指定配置路径，尝试从全局配置获取最后打开的文件
+	if configPath == "" {
+		if globalConfig, err := gcm.LoadGlobalConfig(); err == nil && globalConfig.LastOpenedFile != "" {
+			configPath = globalConfig.LastOpenedFile
+		} else {
+			configPath = "config.yaml"
+		}
+	}
+
 	return &ConfigManager{
-		configPath: configPath,
+		configPath:          configPath,
+		globalConfigManager: gcm,
 	}
 }
 
@@ -45,6 +58,13 @@ func (cm *ConfigManager) LoadConfig() (*define.Root, error) {
 
 	// 处理路径变量替换
 	cm.processPathVariables(&root)
+
+	// 更新全局配置中的最后打开文件
+	if cm.globalConfigManager != nil {
+		cm.globalConfigManager.UpdateLastOpenedFile(cm.configPath)
+		// 添加到配置文件列表中（如果不存在）
+		cm.globalConfigManager.AddConfigFile(cm.configPath)
+	}
 
 	cm.root = &root
 	return &root, nil
@@ -88,19 +108,39 @@ func (cm *ConfigManager) GetMachine(name string) *define.Machine {
 // processPathVariables 处理路径变量替换
 func (cm *ConfigManager) processPathVariables(root *define.Root) {
 	for i := range root.Projects {
-		root.Projects[i].WorkDir = expandPath(root.Projects[i].WorkDir)
+		// 先进行工作路径变量替换，再展开路径
+		root.Projects[i].WorkDir = expandPath(cm.replaceWorkPaths(root.Projects[i].WorkDir))
 
 		for j := range root.Projects[i].SubProjects {
 			for k := range root.Projects[i].SubProjects[j].Commands {
 				cmd := &root.Projects[i].SubProjects[j].Commands[k]
-				cmd.WorkDir = expandPath(cmd.WorkDir)
+				cmd.WorkDir = expandPath(cm.replaceWorkPaths(cmd.WorkDir))
+
+				// 处理命令步骤中的工作路径变量
+				for l := range cmd.Steps {
+					cmd.Steps[l] = cm.replaceWorkPaths(cmd.Steps[l])
+				}
 			}
 		}
 	}
 
 	for i := range root.Machines {
-		root.Machines[i].KeyFile = expandPath(root.Machines[i].KeyFile)
+		root.Machines[i].KeyFile = expandPath(cm.replaceWorkPaths(root.Machines[i].KeyFile))
 	}
+}
+
+// replaceWorkPaths 替换工作路径变量
+func (cm *ConfigManager) replaceWorkPaths(input string) string {
+	if cm.globalConfigManager == nil {
+		return input
+	}
+
+	// 确保全局配置已加载
+	if cm.globalConfigManager.GetConfig() == nil {
+		cm.globalConfigManager.LoadGlobalConfig()
+	}
+
+	return cm.globalConfigManager.ReplaceWorkPaths(input)
 }
 
 // expandPath 展开路径中的环境变量和 ~ 符号
@@ -123,6 +163,47 @@ func expandPath(path string) string {
 	return path
 }
 
+// GetGlobalConfig 获取全局配置
+func (cm *ConfigManager) GetGlobalConfig() (*GlobalConfig, error) {
+	if cm.globalConfigManager == nil {
+		return nil, fmt.Errorf("全局配置管理器未初始化")
+	}
+	return cm.globalConfigManager.LoadGlobalConfig()
+}
+
+// SaveGlobalConfig 保存全局配置
+func (cm *ConfigManager) SaveGlobalConfig(config *GlobalConfig) error {
+	if cm.globalConfigManager == nil {
+		return fmt.Errorf("全局配置管理器未初始化")
+	}
+	return cm.globalConfigManager.SaveGlobalConfig(config)
+}
+
+// SwitchConfigFile 切换配置文件
+func (cm *ConfigManager) SwitchConfigFile(configPath string) error {
+	cm.configPath = configPath
+
+	// 更新全局配置中的最后打开文件
+	if cm.globalConfigManager != nil {
+		if err := cm.globalConfigManager.UpdateLastOpenedFile(configPath); err != nil {
+			return fmt.Errorf("更新最后打开文件失败: %w", err)
+		}
+	}
+
+	// 重新加载配置
+	_, err := cm.LoadConfig()
+	return err
+}
+
+// GetConfigFiles 获取所有配置文件列表
+func (cm *ConfigManager) GetConfigFiles() ([]string, error) {
+	globalConfig, err := cm.GetGlobalConfig()
+	if err != nil {
+		return nil, err
+	}
+	return globalConfig.ConfigFiles, nil
+}
+
 // CreateDefaultConfig 创建默认配置文件
 func CreateDefaultConfig(path string) error {
 	defaultConfig := &define.Root{
@@ -130,7 +211,7 @@ func CreateDefaultConfig(path string) error {
 			{
 				Name:        "示例项目",
 				Description: "这是一个示例项目",
-				WorkDir:     "~/workspace/example",
+				WorkDir:     "${HOME}/workspace/example",
 				SubProjects: []define.SubProject{
 					{
 						Name:        "构建",
@@ -140,13 +221,13 @@ func CreateDefaultConfig(path string) error {
 								Name:        "编译",
 								Description: "编译项目",
 								Type:        "batch",
-								Steps:       []string{"go build ."},
+								Steps:       []string{"${MVM} clean compile"},
 							},
 							{
 								Name:        "测试",
 								Description: "运行测试",
 								Type:        "batch",
-								Steps:       []string{"go test ./..."},
+								Steps:       []string{"${MVM} test"},
 							},
 						},
 					},

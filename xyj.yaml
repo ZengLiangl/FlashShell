@@ -1,0 +1,40 @@
+projects:
+  - name: "XYJ项目"
+    description: "XYJ相关项目"
+    workDir: "${XYJ-ACC}"
+    subprojects:
+      - name: "构建"
+        description: "构建相关命令"
+        commands:
+          - name: "编译"
+            description: "编译项目"
+            type: "batch"
+            workDir: "${XYJ-ACC}"
+            steps:
+              - "${MVM} clean compile"
+              - "echo '编译完成'"
+          - name: "测试"
+            description: "运行测试"
+            type: "batch"
+            workDir: "${XYJ-ACC}"
+            steps:
+              - "${MVM} test"
+              - "echo '测试完成'"
+      - name: "部署"
+        description: "部署相关命令"
+        commands:
+          - name: "部署到ACC"
+            description: "部署到ACC环境"
+            type: "batch"
+            workDir: "${ACC-CLOUD}"
+            steps:
+              - "echo '开始部署到ACC'"
+              - "ls -la"
+              - "echo '部署完成'"
+
+machines:
+  - name: "ACC服务器"
+    host: "acc.example.com"
+    port: 22
+    user: "deploy"
+    keyFile: "${HOME}/.ssh/id_rsa"

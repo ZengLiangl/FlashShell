@@ -1,3 +1,28 @@
+export namespace data {
+	
+	export class GlobalConfig {
+	    appId: string;
+	    windowsName: string;
+	    configFile: string[];
+	    lastOpenedFile: string;
+	    workPaths: Record<string, string>;
+	
+	    static createFrom(source: any = {}) {
+	        return new GlobalConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.appId = source["appId"];
+	        this.windowsName = source["windowsName"];
+	        this.configFile = source["configFile"];
+	        this.lastOpenedFile = source["lastOpenedFile"];
+	        this.workPaths = source["workPaths"];
+	    }
+	}
+
+}
+
 export namespace define {
 	
 	export class Command {
