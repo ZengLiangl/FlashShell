@@ -155,7 +155,7 @@
               {{ Math.max(1, status.completedCommands + 1) }}/{{ status.totalCommands }} 命令
             </div>
           </div>
-          <el-progress :percentage="progressPercentage" :status="progressStatus" :stroke-width="8" :show-text="false"
+          <el-progress :percentage="progressPercentage" :status="progressStatus" :stroke-width="8" :show-text="true"
             class="execution-progress" />
         </div>
 
@@ -584,7 +584,6 @@ export default {
 .main-container {
   flex: 1;
   height: calc(100vh - 40px);
-  /* 减去状态栏的高度 */
 }
 
 .left-panel {
