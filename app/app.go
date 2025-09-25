@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
+	"runtime"
 	"sync"
 	"time"
 
@@ -11,6 +13,8 @@ import (
 	"quick-cmd/define"
 	"quick-cmd/machine"
 
+	"github.com/wailsapp/wails/v2/pkg/menu"
+	"github.com/wailsapp/wails/v2/pkg/menu/keys"
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -332,23 +336,174 @@ func (a *App) OpenMachineConfig() {
 	}
 }
 
-// RefreshConfigMenu 刷新配置菜单
-func (a *App) RefreshConfigMenu() {
-	// 清空现有菜单项
-	// 注意：Wails v2 的菜单 API 可能不支持动态修改
-	// 这里只是示例，实际可能需要重新创建整个菜单
-	println("刷新配置菜单")
-	// 发送事件到前端通知配置文件已切换
-	if a.GetCtx() != nil {
-		// 使用 Wails 的事件系统通知前端
-		config, _ := a.GetGlobalConfig()
-		wailsRuntime.EventsEmit(a.GetCtx(), "config:changed", map[string]interface{}{
-			"configPath": config.LastOpenedFile,
-			"timestamp":  time.Now().Unix(),
+// RefreshAll 全局刷新功能
+func (a *App) RefreshConfigMenu() error {
+	a.configManager = data.NewConfigManager("")
+	if a.ctx != nil {
+		err := a.UpdateApplicationMenu()
+		if err != nil {
+			fmt.Printf("更新菜单失败: %v\n", err)
+		} else {
+			fmt.Println("菜单更新完成")
+		}
+	}
+	return nil
+}
+
+// UpdateApplicationMenu 更新应用程序菜单
+func (a *App) UpdateApplicationMenu() error {
+	// 重新创建菜单（使用公共方法）
+	newMenu := a.CreateApplicationMenu()
+	wailsRuntime.MenuSetApplicationMenu(a.ctx, newMenu)
+	wailsRuntime.MenuUpdateApplicationMenu(a.ctx)
+	return nil
+}
+
+// CreateApplicationMenu 创建应用程序菜单的公共方法
+func (a *App) CreateApplicationMenu() *menu.Menu {
+	appMenu := menu.NewMenu()
+
+	// 文件菜单
+	fileMenu := appMenu.AddSubmenu("文件")
+	fileMenu.AddText("新建窗口", keys.CmdOrCtrl("n"), func(_ *menu.CallbackData) {
+		NewWindow()
+	})
+	fileMenu.AddText("打开当前配置", nil, func(_ *menu.CallbackData) {
+		newVar, _ := a.GetGlobalConfig()
+		OpenCurrentConfig(newVar.LastOpenedFile)
+	})
+
+	fileMenu.AddSeparator()
+	// 添加机器配置菜单
+	configMenu := appMenu.AddSubmenu("设置")
+	// 配置菜单
+	configFileMenu := appMenu.AddSubmenu("配置文件")
+	// 动态加载配置文件列表
+	configFiles, err := a.GetConfigFiles()
+	if err != nil {
+		// 如果获取失败，添加默认项
+		configFileMenu.AddText("无法加载配置文件", keys.CmdOrCtrl("r"), func(_ *menu.CallbackData) {
+			a.RefreshConfigMenu()
 		})
-		fmt.Println("事件发送完成")
 	} else {
-		fmt.Println("警告: ctx 为 nil，无法发送事件")
+		// 获取当前配置文件
+		globalConfig, _ := a.GetGlobalConfig()
+		currentConfig := ""
+		if globalConfig != nil {
+			currentConfig = globalConfig.LastOpenedFile
+		}
+
+		// 为每个配置文件添加菜单项
+		for _, configFile := range configFiles {
+			// 获取文件名（去掉路径）
+			fileName := getFileName(configFile)
+			// 创建菜单项
+			_ = configFileMenu.AddRadio(fileName, configFile == currentConfig, nil, func(data *menu.CallbackData) {
+				// 切换配置文件
+				switchConfigFile(a, configFile)
+			})
+		}
+
+		// 添加分隔符和刷新选项
+		configFileMenu.AddSeparator()
+		configFileMenu.AddText("刷新配置列表", keys.CmdOrCtrl("r"), func(_ *menu.CallbackData) {
+			a.RefreshConfigMenu()
+		})
+	}
+
+	configMenu.AddText("机器配置", keys.CmdOrCtrl("m"), func(_ *menu.CallbackData) {
+		// 打开机器配置对话框
+		a.OpenMachineConfig()
+	})
+
+	configMenu.AddText("环境变量", keys.CmdOrCtrl("e"), func(_ *menu.CallbackData) {
+		// 打开环境变量配置对话框
+		a.OpenWorkPathConfig()
+	})
+
+	// 帮助菜单
+	helpMenu := appMenu.AddSubmenu("帮助")
+	helpMenu.AddText("关于", nil, func(_ *menu.CallbackData) {
+		// 显示关于信息
+	})
+
+	return appMenu
+}
+
+// getFileName 获取文件名（去掉路径）
+func getFileName(filePath string) string {
+	if filePath == "" {
+		return ""
+	}
+	// 简单的路径分割，支持 Unix 和 Windows 路径
+	for i := len(filePath) - 1; i >= 0; i-- {
+		if filePath[i] == '/' || filePath[i] == '\\' {
+			return filePath[i+1:]
+		}
+	}
+	return filePath
+}
+
+// switchConfigFile 切换配置文件
+func switchConfigFile(appInstance *App, configFile string) {
+	err := appInstance.SwitchConfigFile(configFile)
+	if err != nil {
+		// 这里可以显示错误对话框，但为了简化，我们只打印错误
+		println("切换配置文件失败:", err.Error())
+	} else {
+		println("成功切换到配置文件:", configFile)
+		// 配置文件切换成功后，前端会通过事件监听自动刷新
+		// 这里不需要额外的操作，因为 SwitchConfigFile 已经发送了事件
+	}
+}
+
+// NewWindow 创建新窗口（通过启动新进程实现）
+func NewWindow() {
+	// 获取当前程序的路径
+	execPath, err := os.Executable()
+	if err != nil {
+		println("启动新窗口失败:", err.Error())
+		return
+	}
+	// 启动新的进程
+	cmd := exec.Command(execPath)
+	if err := cmd.Start(); err != nil {
+		println("启动新窗口失败:", err.Error())
+	}
+}
+
+// OpenCurrentConfig 打开当前配置文件（供菜单调用）
+func OpenCurrentConfig(lastOpenedFile string) {
+	if lastOpenedFile == "" {
+		fmt.Println("没有找到当前配置文件")
+		return
+	}
+
+	// 检查文件是否存在
+	if _, err := os.Stat(lastOpenedFile); os.IsNotExist(err) {
+		fmt.Printf("配置文件不存在: %s\n", lastOpenedFile)
+		return
+	}
+
+	// 使用系统默认程序打开配置文件
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin": // macOS
+		cmd = exec.Command("open", lastOpenedFile)
+	case "windows": // Windows
+		cmd = exec.Command("cmd", "/c", "start", "", lastOpenedFile)
+	case "linux": // Linux
+		cmd = exec.Command("xdg-open", lastOpenedFile)
+	default:
+		fmt.Printf("不支持的操作系统: %s\n", runtime.GOOS)
+		return
+	}
+
+	err := cmd.Run()
+	if err != nil {
+		fmt.Printf("打开配置文件失败: %v\n", err)
+	} else {
+		fmt.Printf("成功打开配置文件: %s\n", lastOpenedFile)
 	}
 }
 

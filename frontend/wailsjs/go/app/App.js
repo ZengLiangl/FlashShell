@@ -18,6 +18,10 @@ export function ClearOutput() {
   return window['go']['app']['App']['ClearOutput']();
 }
 
+export function CreateApplicationMenu() {
+  return window['go']['app']['App']['CreateApplicationMenu']();
+}
+
 export function DeleteMachine(arg1) {
   return window['go']['app']['App']['DeleteMachine'](arg1);
 }
@@ -128,6 +132,10 @@ export function SwitchConfigFile(arg1) {
 
 export function TestMachineConnection(arg1) {
   return window['go']['app']['App']['TestMachineConnection'](arg1);
+}
+
+export function UpdateApplicationMenu() {
+  return window['go']['app']['App']['UpdateApplicationMenu']();
 }
 
 export function UpdateMachine(arg1, arg2) {
