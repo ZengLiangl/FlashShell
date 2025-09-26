@@ -153,21 +153,28 @@
         </div>
 
         <!-- 进度条区域 -->
-        <div v-if="status.isRunning" class="progress-section">
-          <div class="progress-info">
-            <div class="progress-text">
-              <span class="project-name">{{ status.subProjectName }}</span>
-              <span v-if="status.currentCommand" class="current-command">
-                正在执行: {{ status.currentCommand }}
-              </span>
+        <transition name="progress-slide" appear>
+          <div v-if="status.isRunning" class="progress-section">
+            <div class="progress-info">
+              <div class="progress-text">
+                <span class="project-name">{{ status.subProjectName }}</span>
+                <transition name="command-fade" mode="out-in">
+                  <span v-if="status.currentCommand" key="current" class="current-command">
+                    正在执行: {{ status.currentCommand }}
+                  </span>
+                  <span v-else key="waiting" class="current-command">
+                    准备执行...
+                  </span>
+                </transition>
+              </div>
+              <div class="progress-stats">
+                {{ Math.max(1, status.completedCommands + 1) }}/{{ status.totalCommands }} 命令
+              </div>
             </div>
-            <div class="progress-stats">
-              {{ Math.max(1, status.completedCommands + 1) }}/{{ status.totalCommands }} 命令
-            </div>
+            <el-progress :percentage="progressPercentage" :status="progressStatus" :stroke-width="8" :show-text="true"
+              class="execution-progress" />
           </div>
-          <el-progress :percentage="progressPercentage" :status="progressStatus" :stroke-width="8" :show-text="true"
-            class="execution-progress" />
-        </div>
+        </transition>
 
         <div class="terminal-output" ref="terminalOutput">
           <div v-for="(line, index) in outputLines" :key="index" class="output-line" :class="{
@@ -185,27 +192,33 @@
     <!-- 状态栏 - 始终显示在底部 -->
     <div class="status-bar">
       <div class="status-info">
-        <!-- 执行状态 -->
-        <el-tag v-if="status.isRunning" type="warning" size="small">
-          <el-icon>
-            <Loading />
-          </el-icon>
-          执行中: {{ status.subProjectName }}
-          <span v-if="status.currentCommand"> - {{ status.currentCommand }}</span>
-        </el-tag>
-        <el-tag v-else type="success" size="small">
-          <el-icon>
-            <Check />
-          </el-icon>
-          就绪
-        </el-tag>
-
-
+        <!-- 执行状态 - 固定宽度容器 -->
+        <div class="status-container">
+          <transition name="status-fade" mode="out-in">
+            <el-tag v-if="status.isRunning" key="running" type="warning" size="small">
+              <el-icon>
+                <Loading />
+              </el-icon>
+              <span class="status-text">
+                执行中: {{ status.subProjectName }}
+                <span v-if="status.currentCommand"> - {{ status.currentCommand }}</span>
+              </span>
+            </el-tag>
+            <el-tag v-else key="ready" type="success" size="small">
+              <el-icon>
+                <Check />
+              </el-icon>
+              <span class="status-text">就绪</span>
+            </el-tag>
+          </transition>
+        </div>
 
         <!-- 项目信息 - 显示当前选中的项目 -->
-        <el-tag v-if="selectedProject && !status.isRunning" size="small" type="info">
-          项目: {{ selectedProject.name }}
-        </el-tag>
+        <transition name="project-fade">
+          <el-tag v-if="selectedProject" size="small" type="info">
+            项目: {{ selectedProject.name }}
+          </el-tag>
+        </transition>
 
         <!-- 快捷键提示 -->
         <span class="shortcuts-hint">
@@ -215,9 +228,11 @@
 
       <div class="status-actions">
         <!-- 执行控制按钮 -->
-        <el-button v-if="status.isRunning" size="small" type="danger" @click="stopAllCommands">
-          停止执行
-        </el-button>
+        <transition name="button-slide">
+          <el-button v-if="status.isRunning" size="small" type="danger" @click="stopAllCommands">
+            停止执行
+          </el-button>
+        </transition>
 
         <!-- 应用信息 -->
         <span class="app-info">Quick Cmd v1.2.0</span>
@@ -1658,6 +1673,21 @@ export default {
   height: 100%;
 }
 
+/* 执行状态固定宽度容器 */
+.status-container {
+  min-width: 200px;
+  max-width: 300px;
+  flex-shrink: 0;
+}
+
+.status-text {
+  display: inline-block;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .status-actions {
   display: flex;
   align-items: center;
@@ -1942,5 +1972,87 @@ export default {
 
 .usage-info p:last-child {
   margin-bottom: 0;
+}
+
+/* 过渡动画样式 */
+/* 进度条区域滑入滑出动画 */
+.progress-slide-enter-active,
+.progress-slide-leave-active {
+  transition: all 0.3s ease-in-out;
+  transform-origin: top;
+}
+
+.progress-slide-enter-from {
+  opacity: 0;
+  transform: translateY(-20px) scaleY(0);
+}
+
+.progress-slide-leave-to {
+  opacity: 0;
+  transform: translateY(-10px) scaleY(0);
+}
+
+/* 命令状态淡入淡出动画 */
+.command-fade-enter-active,
+.command-fade-leave-active {
+  transition: all 0.2s ease-in-out;
+}
+
+.command-fade-enter-from {
+  opacity: 0;
+  transform: translateY(5px);
+}
+
+.command-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-5px);
+}
+
+/* 状态栏状态切换动画 */
+.status-fade-enter-active,
+.status-fade-leave-active {
+  transition: all 0.25s ease-in-out;
+}
+
+.status-fade-enter-from {
+  opacity: 0;
+  transform: translateX(-10px) scale(0.95);
+}
+
+.status-fade-leave-to {
+  opacity: 0;
+  transform: translateX(10px) scale(0.95);
+}
+
+/* 项目信息淡入淡出动画 */
+.project-fade-enter-active,
+.project-fade-leave-active {
+  transition: all 0.2s ease-in-out;
+}
+
+.project-fade-enter-from {
+  opacity: 0;
+  transform: translateY(3px);
+}
+
+.project-fade-leave-to {
+  opacity: 0;
+  transform: translateY(-3px);
+}
+
+/* 按钮滑入滑出动画 */
+.button-slide-enter-active,
+.button-slide-leave-active {
+  transition: all 0.2s ease-in-out;
+}
+
+.button-slide-enter-from {
+  opacity: 0;
+  transform: translateX(20px);
+}
+
+.button-slide-leave-to {
+  opacity: 0;
+  transform: translateX(20px);
 }
 </style>

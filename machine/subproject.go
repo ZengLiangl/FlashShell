@@ -3,6 +3,7 @@ package machine
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	"quick-cmd/define"
 )
@@ -35,6 +36,20 @@ func NewSubProjectRunner(configManager ConfigManagerInterface) *SubProjectRunner
 
 // ExecuteSubProject 执行 SubProject
 func (spr *SubProjectRunner) ExecuteSubProject(projectName, subProjectName string, output chan<- string) error {
+	// 检查是否已经有任务在运行，如果有则先停止
+	spr.statusMutex.RLock()
+	if spr.currentStatus.IsRunning {
+		spr.statusMutex.RUnlock()
+		// 先停止当前运行的任务
+		if err := spr.StopSubProject(spr.currentStatus.ProjectName, spr.currentStatus.SubProjectName); err != nil {
+			fmt.Printf("停止当前任务时出错: %v\n", err)
+		}
+		// 等待一下确保停止完成
+		time.Sleep(100 * time.Millisecond)
+	} else {
+		spr.statusMutex.RUnlock()
+	}
+
 	// 获取配置
 	root := spr.configManager.GetRoot()
 	if root == nil {
@@ -60,6 +75,12 @@ func (spr *SubProjectRunner) ExecuteSubProject(projectName, subProjectName strin
 
 	if subProject == nil {
 		return fmt.Errorf("未找到 SubProject: %s/%s", projectName, subProjectName)
+	}
+
+	// 清空停止通道，确保没有残留的停止信号
+	select {
+	case <-spr.stopChannel:
+	default:
 	}
 
 	// 初始化执行状态
@@ -204,6 +225,12 @@ func (spr *SubProjectRunner) StopSubProject(projectName, subProjectName string) 
 			fmt.Printf("停止执行器时出错: %v\n", err)
 		}
 	}
+
+	// 强制重置执行状态，确保下次可以正常执行
+	spr.statusMutex.Lock()
+	spr.currentStatus.IsRunning = false
+	spr.currentStatus.CurrentCommand = ""
+	spr.statusMutex.Unlock()
 
 	return nil
 }
