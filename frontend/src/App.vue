@@ -47,7 +47,7 @@
             <h3>可执行项目</h3>
             <el-tag v-if="selectedProject" size="small">{{
               selectedProject.name
-            }}</el-tag>
+              }}</el-tag>
           </div>
           <div v-if="subProjects.length > 0" class="subproject-list">
             <div v-for="subProject in subProjects" :key="subProject.name" class="subproject-container">
@@ -180,6 +180,7 @@
           <div v-for="(line, index) in outputLines" :key="index" class="output-line" :class="{
             'error-line': line.isError,
             'success-line': line.isSuccess,
+            'progress-line': line.isProgress,
           }" v-html="line.html">
           </div>
           <div v-if="outputLines.length === 0" class="empty-output">
@@ -679,14 +680,34 @@ export default {
         const output = await App.GetOutput();
         if (output && output.length > 0) {
           // 处理每行输出的 ANSI 转义序列
-          const processedOutput = output.map(line => ({
-            raw: line,
-            html: processAnsiOutput(line),
-            isError: line.includes('STDERR') || line.includes('失败') || line.includes('错误') || line.includes('Error'),
-            isSuccess: line.includes('完成') || line.includes('成功')
-          }));
+          const processedOutput = output.map(line => (newProcessedOutput(line)));
+          // 处理进度更新
+          processedOutput.forEach(outputItem => {
+            if (outputItem.raw.startsWith('PROGRESS_UPDATE:')) {
+              // 进度更新，格式: PROGRESS_UPDATE:progressID:progressText
+              const parts = outputItem.raw.split(':');
+              if (parts.length >= 3) {
+                const progressID = parts[1];
+                const progressText = parts.slice(2).join(':'); // 处理文本中可能包含的冒号
 
-          outputLines.value.push(...processedOutput);
+                const progressItem = newProcessedOutput(progressText, !progressText.includes('传输完成'));
+                progressItem.progressID = progressID;
+                progressItem.isSuccess = !progressText.includes('传输完成');
+                // 查找并替换对应进度ID的进度行
+                for (let i = outputLines.value.length - 1; i >= 0; i--) {
+                  if (outputLines.value[i].isProgress && outputLines.value[i].progressID === progressID) {
+                    outputLines.value[i] = progressItem;
+                    return;
+                  }
+                }
+                // 如果没有找到对应进度ID的行，添加新的
+                outputLines.value.push(progressItem);
+              }
+            } else {
+              // 普通输出，直接添加
+              outputLines.value.push(outputItem);
+            }
+          });
 
           // 滚动到底部
           nextTick(() => {
@@ -698,6 +719,16 @@ export default {
         }
       } catch (error) {
         console.error("获取输出失败:", error);
+      }
+
+      function newProcessedOutput(line, isProgress = false) {
+        return {
+          raw: line,
+          html: processAnsiOutput(line),
+          isError: line.includes('STDERR') || line.includes('失败') || line.includes('错误') || line.includes('Error'),
+          isSuccess: line.includes('完成') || line.includes('成功'),
+          isProgress: isProgress
+        };
       }
     };
 
@@ -1645,6 +1676,11 @@ export default {
 
 .success-line {
   color: #67c23a;
+}
+
+.progress-line {
+  color: #409eff;
+  font-weight: 500;
 }
 
 .empty-output {

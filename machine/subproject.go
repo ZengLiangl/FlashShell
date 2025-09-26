@@ -172,9 +172,10 @@ func (spr *SubProjectRunner) executeCommand(command define.Command, ctx *define.
 		}
 
 		sshClient := NewSSHClient(machineConfig)
-		if err := sshClient.Connect(); err != nil {
+		if err := sshClient.Connect(machineConfig); err != nil {
 			return fmt.Errorf("连接远程机器失败: %w", err)
 		}
+		defer sshClient.remoteMachine.Close()
 		runner = sshClient
 
 	default:

@@ -3,84 +3,43 @@ package machine
 import (
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
+	"regexp"
 	"strings"
-	"time"
 
+	"quick-cmd/cmds"
 	"quick-cmd/define"
-
-	"golang.org/x/crypto/ssh"
 )
 
 // SSHClient SSH客户端封装
 type SSHClient struct {
-	config  *define.Machine
-	client  *ssh.Client
-	session *ssh.Session
+	config        *define.Machine
+	remoteMachine *define.RemoteMachine
 }
 
 // NewSSHClient 创建SSH客户端
 func NewSSHClient(machine *define.Machine) *SSHClient {
+	remoteMachine := define.NewRemoteMachine()
 	return &SSHClient{
-		config: machine,
+		config:        machine,
+		remoteMachine: remoteMachine,
 	}
 }
 
 // Connect 连接到远程机器
-func (sc *SSHClient) Connect() error {
-	// 获取敏感数据
-	sensitiveData, err := sc.config.GetSensitiveData()
-	if err != nil {
-		return fmt.Errorf("获取敏感数据失败: %w", err)
-	}
-
-	var auth []ssh.AuthMethod
-
-	// 密钥认证
-	if sc.config.KeyFile != "" {
-		key, err := sc.loadPrivateKey(sc.config.KeyFile)
-		if err != nil {
-			return fmt.Errorf("加载私钥失败: %w", err)
-		}
-		auth = append(auth, ssh.PublicKeys(key))
-	}
-
-	// 密码认证
-	if sensitiveData.Password != "" {
-		auth = append(auth, ssh.Password(sensitiveData.Password))
-	}
-
-	if len(auth) == 0 {
-		return fmt.Errorf("未配置认证方式")
-	}
-
-	config := &ssh.ClientConfig{
-		User:            sensitiveData.User,
-		Auth:            auth,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // 生产环境应该验证主机密钥
-		Timeout:         30 * time.Second,
-	}
-
-	addr := fmt.Sprintf("%s:%d", sensitiveData.Host, sensitiveData.Port)
-	client, err := ssh.Dial("tcp", addr, config)
-	if err != nil {
-		return fmt.Errorf("SSH连接失败: %w", err)
-	}
-
-	sc.client = client
-	return nil
+func (sc *SSHClient) Connect(machine *define.Machine) error {
+	// 使用 RemoteMachine 连接
+	return sc.remoteMachine.Connect(machine)
 }
 
 // Execute 执行命令
 func (sc *SSHClient) Execute(cmd define.Command, output chan<- string) error {
-	if sc.client == nil {
+	if !sc.remoteMachine.IsConnected() {
 		return fmt.Errorf("SSH客户端未连接")
 	}
-
-	for _, step := range cmd.Steps {
+	for i, step := range cmd.Steps {
+		output <- fmt.Sprintf("执行步骤 %d: %s", i+1, step)
 		if err := sc.executeStep(step, output); err != nil {
-			return err
+			return fmt.Errorf("步骤 %d 执行失败: %w", i+1, err)
 		}
 	}
 
@@ -89,29 +48,18 @@ func (sc *SSHClient) Execute(cmd define.Command, output chan<- string) error {
 
 // executeStep 执行单个命令步骤
 func (sc *SSHClient) executeStep(command string, output chan<- string) error {
-	session, err := sc.client.NewSession()
+	// 判断是否在cmds包中
+	specialCmd, splitStr := getSpecialCmd(command)
+	if specialCmd != nil {
+		return specialCmd(sc.remoteMachine, splitStr, output)
+	}
+
+	// 创建新的 SSH session
+	session, err := sc.remoteMachine.NewSession()
 	if err != nil {
 		return fmt.Errorf("创建SSH会话失败: %w", err)
 	}
 	defer session.Close()
-
-	// 设置伪终端以支持 ANSI 颜色
-	modes := ssh.TerminalModes{
-		ssh.ECHO:          0,     // 禁用回显
-		ssh.TTY_OP_ISPEED: 14400, // 输入速度 = 14.4kbaud
-		ssh.TTY_OP_OSPEED: 14400, // 输出速度 = 14.4kbaud
-	}
-
-	if err := session.RequestPty("xterm-256color", 80, 24, modes); err != nil {
-		// 如果请求 PTY 失败，继续执行但可能没有颜色支持
-		output <- fmt.Sprintf("警告: 无法设置伪终端: %s", err.Error())
-	}
-
-	// 设置环境变量以支持颜色输出
-	session.Setenv("TERM", "xterm-256color")
-	session.Setenv("COLORTERM", "truecolor")
-	session.Setenv("FORCE_COLOR", "1")
-
 	// 设置输出管道
 	stdout, err := session.StdoutPipe()
 	if err != nil {
@@ -122,23 +70,25 @@ func (sc *SSHClient) executeStep(command string, output chan<- string) error {
 	if err != nil {
 		return fmt.Errorf("获取stderr管道失败: %w", err)
 	}
-
 	// 启动命令
 	if err := session.Start(command); err != nil {
 		return fmt.Errorf("启动命令失败: %w", err)
 	}
-
 	// 读取输出
 	go sc.readOutput(stdout, output, "STDOUT")
 	go sc.readOutput(stderr, output, "STDERR")
-
 	// 等待命令完成
 	if err := session.Wait(); err != nil {
-		// output <- fmt.Sprintf("命令执行失败: %s", err.Error())
 		return err
 	}
-
 	return nil
+}
+
+func getSpecialCmd(command string) (func(*define.RemoteMachine, []string, chan<- string) error, []string) {
+	compile := regexp.MustCompile("\\S+")
+	allString := compile.FindAllString(command, -1)
+	specialCmd := cmds.CmdManager.GetSpecialCmd(allString[0])
+	return specialCmd, allString
 }
 
 // readOutput 读取命令输出，保留 ANSI 转义序列
@@ -187,53 +137,28 @@ func (sc *SSHClient) readOutput(reader io.Reader, output chan<- string, prefix s
 
 // Stop 停止执行
 func (sc *SSHClient) Stop() error {
-	if sc.session != nil {
-		return sc.session.Signal(ssh.SIGTERM)
-	}
+	// SSH session 不支持信号发送，这里暂时返回 nil
+	// 如果需要停止功能，可以考虑使用 context 或其他机制
 	return nil
 }
 
 // Close 关闭连接
 func (sc *SSHClient) Close() error {
-	if sc.client != nil {
-		return sc.client.Close()
+	if sc.remoteMachine != nil {
+		return sc.remoteMachine.Close()
 	}
 	return nil
 }
 
-// loadPrivateKey 加载私钥
-func (sc *SSHClient) loadPrivateKey(keyPath string) (ssh.Signer, error) {
-	// 展开路径
-	if strings.HasPrefix(keyPath, "~/") {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			return nil, err
-		}
-		keyPath = filepath.Join(homeDir, keyPath[2:])
-	}
-
-	key, err := os.ReadFile(keyPath)
-	if err != nil {
-		return nil, err
-	}
-
-	signer, err := ssh.ParsePrivateKey(key)
-	if err != nil {
-		return nil, err
-	}
-
-	return signer, nil
-}
-
 // TestConnection 测试连接
 func (sc *SSHClient) TestConnection() error {
-	if err := sc.Connect(); err != nil {
+	if err := sc.Connect(sc.config); err != nil {
 		return err
 	}
 	defer sc.Close()
 
 	// 执行简单的测试命令
-	session, err := sc.client.NewSession()
+	session, err := sc.remoteMachine.NewSession()
 	if err != nil {
 		return err
 	}
@@ -244,26 +169,16 @@ func (sc *SSHClient) TestConnection() error {
 
 // IsConnected 检查是否已连接
 func (sc *SSHClient) IsConnected() bool {
-	if sc.client == nil {
-		return false
-	}
-
-	// 尝试创建一个会话来测试连接
-	session, err := sc.client.NewSession()
-	if err != nil {
-		return false
-	}
-	session.Close()
-	return true
+	return sc.remoteMachine.IsConnected()
 }
 
 // GetConnectionInfo 获取连接信息
 func (sc *SSHClient) GetConnectionInfo() string {
-	if sc.client == nil {
+	if sc.remoteMachine.SSHClient == nil {
 		return "未连接"
 	}
 
-	conn := sc.client.Conn
+	conn := sc.remoteMachine.SSHClient.Conn
 	if conn == nil {
 		return "连接信息不可用"
 	}
