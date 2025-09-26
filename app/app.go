@@ -203,6 +203,20 @@ func (a *App) AddMachine(machine define.Machine) error {
 	return a.configManager.AddMachineToGlobal(&machine)
 }
 
+// AddMachineWithEvent 添加机器配置（带事件通知）
+func (a *App) AddMachineWithEvent(machine define.Machine) error {
+	err := a.configManager.AddMachineToGlobal(&machine)
+	if err != nil {
+		a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("添加机器配置失败: %s", err.Error()), define.MsgTypeError, false, nil)
+		return err
+	}
+
+	a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("成功添加机器配置: %s", machine.Name), define.MsgTypeSuccess, false, map[string]interface{}{
+		"machineName": machine.Name,
+	})
+	return nil
+}
+
 // UpdateMachine 更新机器配置（在全局配置中）
 func (a *App) UpdateMachine(machineName string, machine define.Machine) error {
 	// 先删除旧配置
@@ -214,9 +228,44 @@ func (a *App) UpdateMachine(machineName string, machine define.Machine) error {
 	return a.configManager.AddMachineToGlobal(&machine)
 }
 
+// UpdateMachineWithEvent 更新机器配置（带事件通知）
+func (a *App) UpdateMachineWithEvent(machineName string, machine define.Machine) error {
+	// 先删除旧配置
+	if err := a.configManager.RemoveMachineFromGlobal(machineName); err != nil {
+		a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("删除旧配置失败: %s", err.Error()), define.MsgTypeError, false, nil)
+		return fmt.Errorf("删除旧配置失败: %w", err)
+	}
+
+	// 添加新配置
+	if err := a.configManager.AddMachineToGlobal(&machine); err != nil {
+		a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("更新机器配置失败: %s", err.Error()), define.MsgTypeError, false, nil)
+		return err
+	}
+
+	a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("成功更新机器配置: %s", machine.Name), define.MsgTypeSuccess, false, map[string]interface{}{
+		"machineName": machine.Name,
+		"oldName":     machineName,
+	})
+	return nil
+}
+
 // DeleteMachine 删除机器配置（从全局配置）
 func (a *App) DeleteMachine(machineName string) error {
 	return a.configManager.RemoveMachineFromGlobal(machineName)
+}
+
+// DeleteMachineWithEvent 删除机器配置（带事件通知）
+func (a *App) DeleteMachineWithEvent(machineName string) error {
+	err := a.configManager.RemoveMachineFromGlobal(machineName)
+	if err != nil {
+		a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("删除机器配置失败: %s", err.Error()), define.MsgTypeError, false, nil)
+		return err
+	}
+
+	a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("成功删除机器配置: %s", machineName), define.MsgTypeSuccess, false, map[string]interface{}{
+		"machineName": machineName,
+	})
+	return nil
 }
 
 // GetGlobalConfig 获取全局配置
@@ -234,12 +283,13 @@ func (a *App) GetConfigFiles() ([]string, error) {
 	return a.configManager.GetConfigFiles()
 }
 
-// SwitchConfigFile 切换配置文件
-func (a *App) SwitchConfigFile(configPath string) error {
+// SwitchConfigFileWithEvent 切换配置文件（带事件通知）
+func (a *App) SwitchConfigFileWithEvent(configPath string) error {
 	// 停止所有正在运行的 SubProjects
 	if err := a.StopAllSubProjects(); err != nil {
 		// 记录错误但不阻止切换
 		fmt.Printf("停止运行中的项目时出错: %v\n", err)
+		a.emitOperationEvent(define.OpTypeSwitchConfig, fmt.Sprintf("停止运行中的项目时出错: %v", err), define.MsgTypeWarning, false, nil)
 	}
 
 	// 清空输出
@@ -247,23 +297,21 @@ func (a *App) SwitchConfigFile(configPath string) error {
 
 	// 切换配置文件
 	if err := a.configManager.SwitchConfigFile(configPath); err != nil {
+		a.emitOperationEvent(define.OpTypeSwitchConfig, fmt.Sprintf("%v", err.Error()), define.MsgTypeError, true, nil)
 		return fmt.Errorf("切换配置文件失败: %w", err)
 	}
 
 	// 重新创建 SubProjectRunner
 	a.subProjectRunner = machine.NewSubProjectRunner(a.configManager)
 
-	// 发送事件到前端通知配置文件已切换
+	// 发送事件到前端通知配置文件已切换（保持向后兼容）
 	if a.ctx != nil {
-		// 使用 Wails 的事件系统通知前端
 		fmt.Printf("发送 config:changed 事件，配置文件: %s\n", configPath)
 		wailsRuntime.EventsEmit(a.ctx, "config:changed", map[string]interface{}{
 			"configPath": configPath,
 			"timestamp":  time.Now().Unix(),
 		})
 		fmt.Println("事件发送完成")
-	} else {
-		fmt.Println("警告: ctx 为 nil，无法发送事件")
 	}
 
 	return nil
@@ -331,8 +379,10 @@ func (a *App) OpenMachineConfig() {
 			"timestamp": time.Now().Unix(),
 		})
 		fmt.Println("发送打开机器配置事件")
+		a.emitOperationEvent(define.OpTypeMachineConfig, "打开机器配置对话框", define.MsgTypeInfo, false, nil)
 	} else {
 		fmt.Println("警告: ctx 为 nil，无法发送事件")
+		a.emitOperationEvent(define.OpTypeMachineConfig, "无法发送事件，ctx 为 nil", define.MsgTypeError, false, nil)
 	}
 }
 
@@ -347,6 +397,23 @@ func (a *App) RefreshConfigMenu() error {
 			fmt.Println("菜单更新完成")
 		}
 	}
+	return nil
+}
+
+// RefreshConfigMenuWithEvent 全局刷新功能（带事件通知）
+func (a *App) RefreshConfigMenuWithEvent() error {
+	a.configManager = data.NewConfigManager("")
+	if a.ctx != nil {
+		err := a.UpdateApplicationMenu()
+		if err != nil {
+			a.emitOperationEvent(define.OpTypeRefreshConfig, fmt.Sprintf("更新菜单失败: %v", err), define.MsgTypeError, false, nil)
+			return err
+		} else {
+			fmt.Println("菜单更新完成")
+		}
+	}
+
+	a.emitOperationEvent(define.OpTypeRefreshConfig, "配置列表刷新成功", define.MsgTypeSuccess, false, nil)
 	return nil
 }
 
@@ -369,8 +436,7 @@ func (a *App) CreateApplicationMenu() *menu.Menu {
 		NewWindow()
 	})
 	fileMenu.AddText("打开当前配置", nil, func(_ *menu.CallbackData) {
-		newVar, _ := a.GetGlobalConfig()
-		OpenCurrentConfig(newVar.LastOpenedFile)
+		a.OpenCurrentConfigWithEvent()
 	})
 
 	fileMenu.AddSeparator()
@@ -383,7 +449,7 @@ func (a *App) CreateApplicationMenu() *menu.Menu {
 	if err != nil {
 		// 如果获取失败，添加默认项
 		configFileMenu.AddText("无法加载配置文件", keys.CmdOrCtrl("r"), func(_ *menu.CallbackData) {
-			a.RefreshConfigMenu()
+			a.RefreshConfigMenuWithEvent()
 		})
 	} else {
 		// 获取当前配置文件
@@ -407,7 +473,7 @@ func (a *App) CreateApplicationMenu() *menu.Menu {
 		// 添加分隔符和刷新选项
 		configFileMenu.AddSeparator()
 		configFileMenu.AddText("刷新配置列表", keys.CmdOrCtrl("r"), func(_ *menu.CallbackData) {
-			a.RefreshConfigMenu()
+			a.RefreshConfigMenuWithEvent()
 		})
 	}
 
@@ -446,14 +512,14 @@ func getFileName(filePath string) string {
 
 // switchConfigFile 切换配置文件
 func switchConfigFile(appInstance *App, configFile string) {
-	err := appInstance.SwitchConfigFile(configFile)
+	err := appInstance.SwitchConfigFileWithEvent(configFile)
 	if err != nil {
-		// 这里可以显示错误对话框，但为了简化，我们只打印错误
+		// 错误已经通过事件发送，这里不需要额外处理
 		println("切换配置文件失败:", err.Error())
 	} else {
 		println("成功切换到配置文件:", configFile)
 		// 配置文件切换成功后，前端会通过事件监听自动刷新
-		// 这里不需要额外的操作，因为 SwitchConfigFile 已经发送了事件
+		// 这里不需要额外的操作，因为 SwitchConfigFileWithEvent 已经发送了事件
 	}
 }
 
@@ -507,6 +573,49 @@ func OpenCurrentConfig(lastOpenedFile string) {
 	}
 }
 
+// OpenCurrentConfigWithEvent 打开当前配置文件（带事件通知）
+func (a *App) OpenCurrentConfigWithEvent() {
+	globalConfig, err := a.GetGlobalConfig()
+	if err != nil {
+		a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("获取全局配置失败: %s", err.Error()), define.MsgTypeError, false, nil)
+		return
+	}
+
+	lastOpenedFile := globalConfig.LastOpenedFile
+	if lastOpenedFile == "" {
+		a.emitOperationEvent(define.OpTypeOpenConfig, "没有找到当前配置文件", define.MsgTypeWarning, false, nil)
+		return
+	}
+
+	// 检查文件是否存在
+	if _, err := os.Stat(lastOpenedFile); os.IsNotExist(err) {
+		a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("配置文件不存在: %s", lastOpenedFile), define.MsgTypeError, false, nil)
+		return
+	}
+
+	// 使用系统默认程序打开配置文件
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin": // macOS
+		cmd = exec.Command("open", lastOpenedFile)
+	case "windows": // Windows
+		cmd = exec.Command("cmd", "/c", "start", "", lastOpenedFile)
+	case "linux": // Linux
+		cmd = exec.Command("xdg-open", lastOpenedFile)
+	default:
+		a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("不支持的操作系统: %s", runtime.GOOS), define.MsgTypeError, false, nil)
+		return
+	}
+
+	err = cmd.Run()
+	if err != nil {
+		a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("打开配置文件失败: %v", err), define.MsgTypeError, false, nil)
+		return
+	}
+
+	a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("成功打开配置文件: %s", lastOpenedFile), define.MsgTypeSuccess, false, nil)
+}
+
 // GetWorkPaths 获取所有工作路径
 func (a *App) GetWorkPaths() map[string]string {
 	return a.configManager.GetAllWorkPathsFromGlobal()
@@ -517,14 +626,50 @@ func (a *App) AddWorkPath(key, value string) error {
 	return a.configManager.AddWorkPathToGlobal(key, value)
 }
 
+// AddWorkPathWithEvent 添加工作路径（带事件通知）
+func (a *App) AddWorkPathWithEvent(key, value string) error {
+	err := a.configManager.AddWorkPathToGlobal(key, value)
+	if err != nil {
+		a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("添加环境变量失败: %s", err.Error()), define.MsgTypeError, false, nil)
+		return err
+	}
+
+	a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("成功添加环境变量: %s", key), define.MsgTypeSuccess, false, nil)
+	return nil
+}
+
 // UpdateWorkPath 更新工作路径
 func (a *App) UpdateWorkPath(key, value string) error {
 	return a.configManager.UpdateWorkPathInGlobal(key, value)
 }
 
+// UpdateWorkPathWithEvent 更新工作路径（带事件通知）
+func (a *App) UpdateWorkPathWithEvent(key, value string) error {
+	err := a.configManager.UpdateWorkPathInGlobal(key, value)
+	if err != nil {
+		a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("更新环境变量失败: %s", err.Error()), define.MsgTypeError, false, nil)
+		return err
+	}
+
+	a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("成功更新环境变量: %s", key), define.MsgTypeSuccess, false, nil)
+	return nil
+}
+
 // DeleteWorkPath 删除工作路径
 func (a *App) DeleteWorkPath(key string) error {
 	return a.configManager.RemoveWorkPathFromGlobal(key)
+}
+
+// DeleteWorkPathWithEvent 删除工作路径（带事件通知）
+func (a *App) DeleteWorkPathWithEvent(key string) error {
+	err := a.configManager.RemoveWorkPathFromGlobal(key)
+	if err != nil {
+		a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("删除环境变量失败: %s", err.Error()), define.MsgTypeError, false, nil)
+		return err
+	}
+
+	a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("成功删除环境变量: %s", key), define.MsgTypeSuccess, false, nil)
+	return nil
 }
 
 // OpenWorkPathConfig 打开工作路径配置对话框（供菜单调用）
@@ -535,7 +680,29 @@ func (a *App) OpenWorkPathConfig() {
 			"timestamp": time.Now().Unix(),
 		})
 		fmt.Println("发送打开工作路径配置事件")
+		a.emitOperationEvent(define.OpTypeEnvConfig, "打开环境变量配置对话框", define.MsgTypeInfo, false, nil)
 	} else {
 		fmt.Println("警告: ctx 为 nil，无法发送事件")
+		a.emitOperationEvent(define.OpTypeEnvConfig, "无法发送事件，ctx 为 nil", define.MsgTypeError, false, nil)
 	}
+}
+
+// emitOperationEvent 发送操作事件到前端
+func (a *App) emitOperationEvent(eventType, message, messageType string, needReload bool, data any) {
+	if a.ctx == nil {
+		fmt.Printf("警告: ctx 为 nil，无法发送事件 %s\n", eventType)
+		return
+	}
+
+	event := define.OperationEvent{
+		Type:        eventType,
+		NeedReload:  needReload,
+		Message:     message,
+		MessageType: messageType,
+		Timestamp:   time.Now().Unix(),
+		Data:        data,
+	}
+
+	wailsRuntime.EventsEmit(a.ctx, "operation:result", event)
+	fmt.Printf("发送操作事件: %s - %s (%s)\n", eventType, message, messageType)
 }

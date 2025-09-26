@@ -752,6 +752,13 @@ export default {
     onMounted(() => {
       loadConfig();
       startOutputPolling();
+
+      // 监听统一的操作结果事件
+      EventsOn("operation:result", async (event) => {
+        console.log("收到操作结果事件:", event);
+        handleOperationEvent(event);
+      });
+
       // 监听配置变更事件
       EventsOn("config:changed", async (data) => {
         console.log("收到 config:changed 事件:", data);
@@ -993,6 +1000,37 @@ export default {
       }
     };
 
+    // 处理操作事件
+    const handleOperationEvent = (event) => {
+      console.log("处理操作事件:", event);
+
+      // 根据消息类型显示不同的提示
+      switch (event.messageType) {
+        case 'success':
+          ElMessage.success(event.message);
+          break;
+        case 'error':
+          ElMessage.error(event.message);
+          break;
+        case 'warning':
+          ElMessage.warning(event.message);
+          break;
+        case 'info':
+          ElMessage.info(event.message);
+          break;
+        default:
+          ElMessage.info(event.message);
+      }
+
+      // 如果需要重新加载，显示加载状态并重新加载
+      if (event.needReload) {
+        setTimeout(() => {
+          isReloading.value = true;
+          window.location.reload();
+        }, 1500);
+      }
+    };
+
     // 组件卸载时清理定时器
     onUnmounted(() => {
       stopOutputPolling();
@@ -1061,6 +1099,8 @@ export default {
       editWorkPath,
       saveWorkPath,
       deleteWorkPath,
+      // 事件处理
+      handleOperationEvent,
     };
   },
 };

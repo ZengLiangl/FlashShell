@@ -163,3 +163,31 @@ type CommandStatus struct {
 	Command   string `json:"command"`
 	Output    string `json:"output"`
 }
+
+// OperationEvent 操作事件
+type OperationEvent struct {
+	Type        string `json:"type"`        // 事件类型：new_window, open_config, switch_config, refresh_config, machine_config, env_config
+	NeedReload  bool   `json:"needReload"`  // 是否需要重新加载
+	Message     string `json:"message"`     // 提示信息
+	MessageType string `json:"messageType"` // 提示类型：success, error, warning, info
+	Timestamp   int64  `json:"timestamp"`   // 时间戳
+	Data        any    `json:"data"`        // 额外数据
+}
+
+// OperationType 操作类型常量
+const (
+	OpTypeNewWindow     = "new_window"
+	OpTypeOpenConfig    = "open_config"
+	OpTypeSwitchConfig  = "switch_config"
+	OpTypeRefreshConfig = "refresh_config"
+	OpTypeMachineConfig = "machine_config"
+	OpTypeEnvConfig     = "env_config"
+)
+
+// MessageType 消息类型常量
+const (
+	MsgTypeSuccess = "success"
+	MsgTypeError   = "error"
+	MsgTypeWarning = "warning"
+	MsgTypeInfo    = "info"
+)

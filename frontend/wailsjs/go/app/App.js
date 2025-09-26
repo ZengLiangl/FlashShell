@@ -6,8 +6,16 @@ export function AddMachine(arg1) {
   return window['go']['app']['App']['AddMachine'](arg1);
 }
 
+export function AddMachineWithEvent(arg1) {
+  return window['go']['app']['App']['AddMachineWithEvent'](arg1);
+}
+
 export function AddWorkPath(arg1, arg2) {
   return window['go']['app']['App']['AddWorkPath'](arg1, arg2);
+}
+
+export function AddWorkPathWithEvent(arg1, arg2) {
+  return window['go']['app']['App']['AddWorkPathWithEvent'](arg1, arg2);
 }
 
 export function ClearMachineSensitiveData(arg1) {
@@ -26,8 +34,16 @@ export function DeleteMachine(arg1) {
   return window['go']['app']['App']['DeleteMachine'](arg1);
 }
 
+export function DeleteMachineWithEvent(arg1) {
+  return window['go']['app']['App']['DeleteMachineWithEvent'](arg1);
+}
+
 export function DeleteWorkPath(arg1) {
   return window['go']['app']['App']['DeleteWorkPath'](arg1);
+}
+
+export function DeleteWorkPathWithEvent(arg1) {
+  return window['go']['app']['App']['DeleteWorkPathWithEvent'](arg1);
 }
 
 export function ExecuteCommand(arg1, arg2, arg3) {
@@ -78,6 +94,10 @@ export function GetWorkPaths() {
   return window['go']['app']['App']['GetWorkPaths']();
 }
 
+export function OpenCurrentConfigWithEvent() {
+  return window['go']['app']['App']['OpenCurrentConfigWithEvent']();
+}
+
 export function OpenMachineConfig() {
   return window['go']['app']['App']['OpenMachineConfig']();
 }
@@ -88,6 +108,10 @@ export function OpenWorkPathConfig() {
 
 export function RefreshConfigMenu() {
   return window['go']['app']['App']['RefreshConfigMenu']();
+}
+
+export function RefreshConfigMenuWithEvent() {
+  return window['go']['app']['App']['RefreshConfigMenuWithEvent']();
 }
 
 export function RefreshUI() {
@@ -126,8 +150,8 @@ export function StopSubProject(arg1, arg2) {
   return window['go']['app']['App']['StopSubProject'](arg1, arg2);
 }
 
-export function SwitchConfigFile(arg1) {
-  return window['go']['app']['App']['SwitchConfigFile'](arg1);
+export function SwitchConfigFileWithEvent(arg1) {
+  return window['go']['app']['App']['SwitchConfigFileWithEvent'](arg1);
 }
 
 export function TestMachineConnection(arg1) {
@@ -142,6 +166,14 @@ export function UpdateMachine(arg1, arg2) {
   return window['go']['app']['App']['UpdateMachine'](arg1, arg2);
 }
 
+export function UpdateMachineWithEvent(arg1, arg2) {
+  return window['go']['app']['App']['UpdateMachineWithEvent'](arg1, arg2);
+}
+
 export function UpdateWorkPath(arg1, arg2) {
   return window['go']['app']['App']['UpdateWorkPath'](arg1, arg2);
+}
+
+export function UpdateWorkPathWithEvent(arg1, arg2) {
+  return window['go']['app']['App']['UpdateWorkPathWithEvent'](arg1, arg2);
 }
