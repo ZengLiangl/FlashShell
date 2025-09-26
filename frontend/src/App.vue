@@ -47,7 +47,7 @@
             <h3>可执行项目</h3>
             <el-tag v-if="selectedProject" size="small">{{
               selectedProject.name
-              }}</el-tag>
+            }}</el-tag>
           </div>
           <div v-if="subProjects.length > 0" class="subproject-list">
             <div v-for="subProject in subProjects" :key="subProject.name" class="subproject-container">
@@ -206,6 +206,11 @@
         <el-tag v-if="selectedProject && !status.isRunning" size="small" type="info">
           项目: {{ selectedProject.name }}
         </el-tag>
+
+        <!-- 快捷键提示 -->
+        <span class="shortcuts-hint">
+          快捷键: Cmd+C复制 | Cmd+R刷新 | Cmd+K清空 | Cmd+M机器配置 | Cmd+E环境变量
+        </span>
       </div>
 
       <div class="status-actions">
@@ -332,7 +337,7 @@
     <el-dialog v-model="workPathEditVisible" :title="editingWorkPath ? '编辑环境变量' : '添加环境变量'" width="500px">
       <el-form :model="workPathForm" :rules="workPathRules" ref="workPathFormRef" label-width="100px">
         <el-form-item label="变量名" prop="key">
-          <el-input v-model="workPathForm.key" placeholder="请输入变量名（如：PROJECT_HOME）" :disabled="!!editingWorkPath" />
+          <el-input v-model="workPathForm.key" placeholder="请输入变量名（如：PROJECT_HOME）" />
         </el-form-item>
 
         <el-form-item label="变量值" prop="value">
@@ -437,7 +442,6 @@ export default {
     const workPathRules = {
       key: [
         { required: true, message: '请输入变量名', trigger: 'blur' },
-        { pattern: /^[A-Z_][A-Z0-9_]*$/, message: '变量名只能包含大写字母、数字和下划线，且必须以字母或下划线开头', trigger: 'blur' }
       ],
       value: [
         { required: true, message: '请输入变量值', trigger: 'blur' }
@@ -749,9 +753,86 @@ export default {
       return '';
     });
 
+    // 键盘快捷键处理
+    const handleKeyDown = (e) => {
+      // 检查是否在输入框中，如果是则不处理快捷键
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.contentEditable === 'true') {
+        return;
+      }
+
+      // 复制快捷键 (Cmd+C 或 Ctrl+C)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
+        e.preventDefault();
+        copySelectedText();
+        return;
+      }
+
+      // 刷新配置快捷键 (Cmd+R 或 Ctrl+R)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
+        e.preventDefault();
+        refreshConfig();
+        return;
+      }
+
+      // 清空输出快捷键 (Cmd+K 或 Ctrl+K)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        clearOutput();
+        return;
+      }
+
+      // 打开机器配置快捷键 (Cmd+M 或 Ctrl+M)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'm') {
+        e.preventDefault();
+        openMachineConfig();
+        return;
+      }
+
+      // 打开环境变量配置快捷键 (Cmd+E 或 Ctrl+E)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
+        e.preventDefault();
+        openWorkPathConfig();
+        return;
+      }
+
+      // Escape 键关闭对话框
+      if (e.key === 'Escape') {
+        if (machineConfigVisible.value) {
+          handleMachineConfigClose();
+        }
+        if (workPathConfigVisible.value) {
+          handleWorkPathConfigClose();
+        }
+        return;
+      }
+    };
+
+    // 复制选中的文本
+    const copySelectedText = async () => {
+      try {
+        const selectedText = window.getSelection().toString();
+        if (selectedText) {
+          await navigator.clipboard.writeText(selectedText);
+        } else {
+          // 如果没有选中文本，复制所有终端输出
+          const allText = outputLines.value.map(line => line.text || line.html.replace(/<[^>]*>/g, '')).join('\n');
+          if (allText.trim()) {
+            await navigator.clipboard.writeText(allText);
+          } else {
+          }
+        }
+      } catch (err) {
+        console.error('复制失败:', err);
+        ElMessage.error('复制失败');
+      }
+    };
+
     onMounted(() => {
       loadConfig();
       startOutputPolling();
+
+      // 添加全局键盘事件监听器
+      document.addEventListener('keydown', handleKeyDown);
 
       // 监听统一的操作结果事件
       EventsOn("operation:result", async (event) => {
@@ -1034,6 +1115,8 @@ export default {
     // 组件卸载时清理定时器
     onUnmounted(() => {
       stopOutputPolling();
+      // 清理键盘事件监听器
+      document.removeEventListener('keydown', handleKeyDown);
     });
 
     return {
@@ -1101,6 +1184,9 @@ export default {
       deleteWorkPath,
       // 事件处理
       handleOperationEvent,
+      // 键盘快捷键
+      handleKeyDown,
+      copySelectedText,
     };
   },
 };
@@ -1592,6 +1678,13 @@ export default {
   font-size: 12px;
   color: #909399;
   font-weight: 500;
+}
+
+.shortcuts-hint {
+  font-size: 11px;
+  color: #909399;
+  font-weight: 400;
+  opacity: 0.8;
 }
 
 .no-projects {

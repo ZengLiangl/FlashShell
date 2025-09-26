@@ -379,7 +379,6 @@ func (a *App) OpenMachineConfig() {
 			"timestamp": time.Now().Unix(),
 		})
 		fmt.Println("发送打开机器配置事件")
-		a.emitOperationEvent(define.OpTypeMachineConfig, "打开机器配置对话框", define.MsgTypeInfo, false, nil)
 	} else {
 		fmt.Println("警告: ctx 为 nil，无法发送事件")
 		a.emitOperationEvent(define.OpTypeMachineConfig, "无法发送事件，ctx 为 nil", define.MsgTypeError, false, nil)
@@ -680,7 +679,6 @@ func (a *App) OpenWorkPathConfig() {
 			"timestamp": time.Now().Unix(),
 		})
 		fmt.Println("发送打开工作路径配置事件")
-		a.emitOperationEvent(define.OpTypeEnvConfig, "打开环境变量配置对话框", define.MsgTypeInfo, false, nil)
 	} else {
 		fmt.Println("警告: ctx 为 nil，无法发送事件")
 		a.emitOperationEvent(define.OpTypeEnvConfig, "无法发送事件，ctx 为 nil", define.MsgTypeError, false, nil)

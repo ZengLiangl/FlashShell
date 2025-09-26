@@ -7,10 +7,10 @@ configFile:
     - xyj2.yaml
     - xyj24.yaml
     - xyj24aaaa.yaml
-lastOpenedFile: xyj24.yaml
+lastOpenedFile: config.yaml
 workPaths:
     ACC-CLOUD: /Users/ll/Documents/workspace/xyj-acc-cloud
-    HOME: ""
+    HOME: "~"
     MVM: /Users/ll/Documents/Maven/apache-maven-3.6.1/bin/mvn
     XYJ-ACC: /Users/ll/Documents/workspace/xyjacc
     XYJ-ACC-CRON: /Users/ll/Documents/workspace/xyjacc-cron
