@@ -100,12 +100,13 @@ func (spr *SubProjectRunner) ExecuteSubProject(projectName, subProjectName strin
 
 	// 创建执行上下文
 	ctx := &define.ExecutionContext{
-		ProjectName:    projectName,
-		SubProjectName: subProjectName,
-		Commands:       subProject.Commands,
-		CurrentIndex:   0,
-		OutputChannel:  output,
-		WorkDir:        project.WorkDir,
+		ProjectName:       projectName,
+		SubProjectName:    subProjectName,
+		Commands:          subProject.Commands,
+		CurrentIndex:      0,
+		OutputChannel:     output,
+		ProjectWorkDir:    project.WorkDir,
+		SubProjectWorkDir: subProject.WorkDir,
 	}
 
 	// 按顺序执行所有 Commands
@@ -154,7 +155,11 @@ func (spr *SubProjectRunner) executeCommand(command define.Command, ctx *define.
 	switch command.Type {
 	case "batch":
 		// 本地执行
-		workDir := ctx.WorkDir
+		// WorkDir 优先级：Command.WorkDir > SubProject.WorkDir > Project.WorkDir
+		workDir := ctx.ProjectWorkDir
+		if ctx.SubProjectWorkDir != "" {
+			workDir = ctx.SubProjectWorkDir
+		}
 		if command.WorkDir != "" {
 			workDir = command.WorkDir
 		}

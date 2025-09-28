@@ -145,6 +145,9 @@ func (cm *ConfigManager) processPathVariables(root *define.Root) {
 		root.Projects[i].WorkDir = expandPath(cm.replaceWorkPaths(root.Projects[i].WorkDir))
 
 		for j := range root.Projects[i].SubProjects {
+			// 处理 SubProject 的 WorkDir
+			root.Projects[i].SubProjects[j].WorkDir = expandPath(cm.replaceWorkPaths(root.Projects[i].SubProjects[j].WorkDir))
+
 			for k := range root.Projects[i].SubProjects[j].Commands {
 				cmd := &root.Projects[i].SubProjects[j].Commands[k]
 				cmd.WorkDir = expandPath(cm.replaceWorkPaths(cmd.WorkDir))

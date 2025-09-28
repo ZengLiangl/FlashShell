@@ -2,12 +2,8 @@ appId: com.runner
 windowsName: 运行器
 configFile:
     - /Users/ll/Documents/workspace/quick_cmd/ui/xyj.yaml
-    - config.yaml
-    - xyj.yaml
-    - xyj2.yaml
-    - xyj24.yaml
-    - xyj24aaaa.yaml
-lastOpenedFile: config.yaml
+    - /Users/ll/Documents/workspace/new_cmd/config.yaml
+lastOpenedFile: /Users/ll/Documents/workspace/new_cmd/config.yaml
 workPaths:
     ACC-CLOUD: /Users/ll/Documents/workspace/xyj-acc-cloud
     HOME: "~"
@@ -15,6 +11,9 @@ workPaths:
     XYJ-ACC: /Users/ll/Documents/workspace/xyjacc
     XYJ-ACC-CRON: /Users/ll/Documents/workspace/xyjacc-cron
 machines:
-    - encrypted_data: AqmCXKWPbbJ0sadelljJ3uKG0Hqp1l7RMWCYemxARvFFZdpO91dUyNRgd8rMSjrM5jxIxYinGEx9S6wPAFEDzyk2TUpGM18zPSLXe+bcxbRWWPTHkElpV8b1OXtfXioai/mtk5Oru8f1WEXmQOXDLp88CxHoo52OMPsHgvfwDoJ8QiKs11wHqQ==
+    - encrypted_data: bmKmZdz27Omg/bGF3320s3fatcEhCqp6CA3+QHozi/BGL+KHgl7qEZfOwYimEPc3y4i4v7roW6aYrNZ1qW6ETHuLBJ61ICAfJTAkRdfh4ay1TWRyvi/1LNKXeDPYljnTWApCiO6UWuYJiirXO55OIQs8hZehFAGTNbr+idwNpA==
+      name: 196-dev
+      key_file: /Users/ll/.ssh/id_rsa
+    - encrypted_data: 7D/z8bpuptrEcfxwH7Sch0v0tqiRZJgDK1VSfbh0nTvRafV01yniiZjhTUhfHP8JHt7KN1SBbO5Vngylybm71o9nyls2cYikEtRnOQ5P0NUAHslIj5AC7tn842p9I8tmfmnN5HoQ/6tcGgbKZUipKsJA0wPzJ35Liw==
       name: jz
       key_file: /Users/ll/.ssh/id_rsa

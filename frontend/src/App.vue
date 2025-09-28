@@ -47,7 +47,7 @@
             <h3>可执行项目</h3>
             <el-tag v-if="selectedProject" size="small">{{
               selectedProject.name
-              }}</el-tag>
+            }}</el-tag>
           </div>
           <div v-if="subProjects.length > 0" class="subproject-list">
             <div v-for="subProject in subProjects" :key="subProject.name" class="subproject-container">
@@ -987,7 +987,6 @@ export default {
           user: machineForm.user,
           password: machineForm.password
         };
-
         if (editingMachine.value) {
           // 更新机器
           await App.UpdateMachine(editingMachine.value.name, machineData);

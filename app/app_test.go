@@ -198,3 +198,302 @@ func TestApp_MachineManagement(t *testing.T) {
 		}
 	}
 }
+
+func TestSubProjectWorkDirPriority(t *testing.T) {
+	// 创建临时配置文件
+	tempConfig := "test_workdir_config.yaml"
+	defer os.Remove(tempConfig)
+
+	// 创建测试配置，测试 WorkDir 优先级
+	testRoot := &define.Root{
+		Projects: []define.Project{
+			{
+				Name:        "WorkDir测试项目",
+				Description: "测试 WorkDir 优先级",
+				WorkDir:     "/project/workdir", // Project WorkDir
+				SubProjects: []define.SubProject{
+					{
+						Name:        "测试子项目1",
+						Description: "使用 Project WorkDir",
+						// 没有设置 SubProject WorkDir
+						Commands: []define.Command{
+							{
+								Name:        "测试命令1",
+								Description: "应该使用 Project WorkDir",
+								Type:        "batch",
+								Steps:       []string{"echo 'Project WorkDir'"},
+								// 没有设置 Command WorkDir
+							},
+						},
+					},
+					{
+						Name:        "测试子项目2",
+						Description: "使用 SubProject WorkDir",
+						WorkDir:     "/subproject/workdir", // SubProject WorkDir
+						Commands: []define.Command{
+							{
+								Name:        "测试命令2",
+								Description: "应该使用 SubProject WorkDir",
+								Type:        "batch",
+								Steps:       []string{"echo 'SubProject WorkDir'"},
+								// 没有设置 Command WorkDir
+							},
+						},
+					},
+					{
+						Name:        "测试子项目3",
+						Description: "使用 Command WorkDir",
+						WorkDir:     "/subproject/workdir", // SubProject WorkDir
+						Commands: []define.Command{
+							{
+								Name:        "测试命令3",
+								Description: "应该使用 Command WorkDir",
+								Type:        "batch",
+								Steps:       []string{"echo 'Command WorkDir'"},
+								WorkDir:     "/command/workdir", // Command WorkDir
+							},
+						},
+					},
+				},
+			},
+		},
+		Machines: []define.Machine{},
+	}
+
+	// 保存测试配置
+	configManager := data.NewConfigManager(tempConfig)
+	if err := configManager.SaveConfig(testRoot); err != nil {
+		t.Fatalf("保存测试配置失败: %v", err)
+	}
+
+	// 创建应用实例
+	app := NewApp()
+	app.configManager = configManager
+
+	// 手动初始化 SubProjectRunner
+	app.subProjectRunner = machine.NewSubProjectRunner(configManager)
+
+	// 加载配置
+	if _, err := app.GetConfig(); err != nil {
+		t.Fatalf("加载配置失败: %v", err)
+	}
+
+	// 测试 WorkDir 优先级逻辑
+	// 这里我们主要测试结构体是否正确创建，实际的 WorkDir 解析会在执行时进行
+	config, err := app.GetConfig()
+	if err != nil {
+		t.Fatalf("获取配置失败: %v", err)
+	}
+
+	// 验证 SubProject 结构体包含 WorkDir 字段
+	if len(config.Projects) == 0 {
+		t.Fatal("项目列表为空")
+	}
+
+	project := config.Projects[0]
+	if len(project.SubProjects) != 3 {
+		t.Fatalf("期望 3 个子项目，实际 %d 个", len(project.SubProjects))
+	}
+
+	// 验证第一个子项目没有 WorkDir（应该使用 Project WorkDir）
+	subProject1 := project.SubProjects[0]
+	if subProject1.WorkDir != "" {
+		t.Errorf("子项目1不应该有 WorkDir，实际: %s", subProject1.WorkDir)
+	}
+
+	// 验证第二个子项目有 WorkDir
+	subProject2 := project.SubProjects[1]
+	if subProject2.WorkDir != "/subproject/workdir" {
+		t.Errorf("子项目2 WorkDir 期望 '/subproject/workdir'，实际: %s", subProject2.WorkDir)
+	}
+
+	// 验证第三个子项目有 WorkDir，且命令也有 WorkDir
+	subProject3 := project.SubProjects[2]
+	if subProject3.WorkDir != "/subproject/workdir" {
+		t.Errorf("子项目3 WorkDir 期望 '/subproject/workdir'，实际: %s", subProject3.WorkDir)
+	}
+
+	command3 := subProject3.Commands[0]
+	if command3.WorkDir != "/command/workdir" {
+		t.Errorf("命令3 WorkDir 期望 '/command/workdir'，实际: %s", command3.WorkDir)
+	}
+
+	t.Log("WorkDir 优先级测试通过")
+}
+
+func TestSubProjectWorkDirEnvReplace(t *testing.T) {
+	// 创建临时配置文件
+	tempConfig := "test_env_replace_config.yaml"
+	defer os.Remove(tempConfig)
+
+	// 创建测试配置，测试 SubProject WorkDir 的环境变量替换
+	testRoot := &define.Root{
+		Projects: []define.Project{
+			{
+				Name:        "环境变量测试项目",
+				Description: "测试 SubProject WorkDir 环境变量替换",
+				WorkDir:     "/project/workdir",
+				SubProjects: []define.SubProject{
+					{
+						Name:        "测试子项目1",
+						Description: "使用环境变量的 SubProject WorkDir",
+						WorkDir:     "${TEST_PROJECT_PATH}/subproject1", // 使用环境变量
+						Commands: []define.Command{
+							{
+								Name:        "测试命令1",
+								Description: "应该使用替换后的 SubProject WorkDir",
+								Type:        "batch",
+								Steps:       []string{"echo 'SubProject WorkDir with env var'"},
+							},
+						},
+					},
+					{
+						Name:        "测试子项目2",
+						Description: "使用多个环境变量的 SubProject WorkDir",
+						WorkDir:     "${TEST_PROJECT_PATH}/${TEST_SUBPROJECT_PATH}", // 使用多个环境变量
+						Commands: []define.Command{
+							{
+								Name:        "测试命令2",
+								Description: "应该使用替换后的多个环境变量",
+								Type:        "batch",
+								Steps:       []string{"echo 'Multiple env vars'"},
+							},
+						},
+					},
+				},
+			},
+		},
+		Machines: []define.Machine{},
+	}
+
+	// 保存测试配置
+	configManager := data.NewConfigManager(tempConfig)
+	if err := configManager.SaveConfig(testRoot); err != nil {
+		t.Fatalf("保存测试配置失败: %v", err)
+	}
+
+	// 设置测试环境变量
+	os.Setenv("TEST_PROJECT_PATH", "/test/project")
+	os.Setenv("TEST_SUBPROJECT_PATH", "subproject2")
+	defer func() {
+		os.Unsetenv("TEST_PROJECT_PATH")
+		os.Unsetenv("TEST_SUBPROJECT_PATH")
+	}()
+
+	// 创建应用实例
+	app := NewApp()
+	app.configManager = configManager
+
+	// 加载配置（这会触发环境变量替换）
+	config, err := app.GetConfig()
+	if err != nil {
+		t.Fatalf("加载配置失败: %v", err)
+	}
+
+	// 验证环境变量替换结果
+	if len(config.Projects) == 0 {
+		t.Fatal("项目列表为空")
+	}
+
+	project := config.Projects[0]
+	if len(project.SubProjects) != 2 {
+		t.Fatalf("期望 2 个子项目，实际 %d 个", len(project.SubProjects))
+	}
+
+	// 验证第一个子项目的环境变量替换
+	subProject1 := project.SubProjects[0]
+	expectedWorkDir1 := "/test/project/subproject1"
+	if subProject1.WorkDir != expectedWorkDir1 {
+		t.Errorf("子项目1 WorkDir 期望 '%s'，实际: %s", expectedWorkDir1, subProject1.WorkDir)
+	}
+
+	// 验证第二个子项目的多个环境变量替换
+	subProject2 := project.SubProjects[1]
+	expectedWorkDir2 := "/test/project/subproject2"
+	if subProject2.WorkDir != expectedWorkDir2 {
+		t.Errorf("子项目2 WorkDir 期望 '%s'，实际: %s", expectedWorkDir2, subProject2.WorkDir)
+	}
+
+	t.Log("SubProject WorkDir 环境变量替换测试通过")
+}
+
+func TestSubProjectWorkDirGlobalConfigReplace(t *testing.T) {
+	// 创建临时配置文件
+	tempConfig := "test_global_config_replace.yaml"
+	defer os.Remove(tempConfig)
+
+	// 创建测试配置，测试 SubProject WorkDir 使用全局配置中的 workPaths
+	testRoot := &define.Root{
+		Projects: []define.Project{
+			{
+				Name:        "全局配置测试项目",
+				Description: "测试 SubProject WorkDir 使用全局配置 workPaths",
+				WorkDir:     "/project/workdir",
+				SubProjects: []define.SubProject{
+					{
+						Name:        "测试子项目",
+						Description: "使用全局配置 workPaths 的 SubProject WorkDir",
+						WorkDir:     "${TEST_WORK_PATH}/subproject", // 使用全局配置中的 workPaths
+						Commands: []define.Command{
+							{
+								Name:        "测试命令",
+								Description: "应该使用全局配置替换后的 WorkDir",
+								Type:        "batch",
+								Steps:       []string{"echo 'Global config workPaths'"},
+							},
+						},
+					},
+				},
+			},
+		},
+		Machines: []define.Machine{},
+	}
+
+	// 保存测试配置
+	configManager := data.NewConfigManager(tempConfig)
+	if err := configManager.SaveConfig(testRoot); err != nil {
+		t.Fatalf("保存测试配置失败: %v", err)
+	}
+
+	// 设置全局配置中的 workPaths
+	globalConfig := &data.GlobalConfig{
+		AppId:       "com.runner",
+		WindowsName: "运行器",
+		WorkPaths: map[string]string{
+			"TEST_WORK_PATH": "/global/test/work",
+		},
+	}
+
+	if err := configManager.SaveGlobalConfig(globalConfig); err != nil {
+		t.Fatalf("保存全局配置失败: %v", err)
+	}
+
+	// 创建应用实例
+	app := NewApp()
+	app.configManager = configManager
+
+	// 加载配置（这会触发环境变量替换）
+	config, err := app.GetConfig()
+	if err != nil {
+		t.Fatalf("加载配置失败: %v", err)
+	}
+
+	// 验证全局配置 workPaths 替换结果
+	if len(config.Projects) == 0 {
+		t.Fatal("项目列表为空")
+	}
+
+	project := config.Projects[0]
+	if len(project.SubProjects) != 1 {
+		t.Fatalf("期望 1 个子项目，实际 %d 个", len(project.SubProjects))
+	}
+
+	// 验证子项目的全局配置 workPaths 替换
+	subProject := project.SubProjects[0]
+	expectedWorkDir := "/global/test/work/subproject"
+	if subProject.WorkDir != expectedWorkDir {
+		t.Errorf("子项目 WorkDir 期望 '%s'，实际: %s", expectedWorkDir, subProject.WorkDir)
+	}
+
+	t.Log("SubProject WorkDir 全局配置 workPaths 替换测试通过")
+}

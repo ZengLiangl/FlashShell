@@ -30,6 +30,7 @@ type Project struct {
 type SubProject struct {
 	Name        string    `yaml:"name" json:"name"`
 	Description string    `yaml:"description" json:"description"`
+	WorkDir     string    `yaml:"workdir,omitempty" json:"workdir,omitempty"`
 	Commands    []Command `yaml:"commands" json:"commands"`
 }
 
@@ -132,8 +133,7 @@ type RemoteMachine struct {
 
 // NewRemoteMachine 创建远程机器包装类
 func NewRemoteMachine() *RemoteMachine {
-	return &RemoteMachine{
-	}
+	return &RemoteMachine{}
 }
 
 // Connect 连接到远程机器并初始化 SSH 和 SFTP 客户端
@@ -274,12 +274,13 @@ type SubProjectStatus struct {
 
 // ExecutionContext 执行上下文
 type ExecutionContext struct {
-	ProjectName    string
-	SubProjectName string
-	Commands       []Command
-	CurrentIndex   int
-	OutputChannel  chan<- string
-	WorkDir        string
+	ProjectName       string
+	SubProjectName    string
+	Commands          []Command
+	CurrentIndex      int
+	OutputChannel     chan<- string
+	ProjectWorkDir    string
+	SubProjectWorkDir string
 }
 
 // CommandStatus 命令状态 (保持向后兼容)

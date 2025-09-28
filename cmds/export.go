@@ -10,4 +10,6 @@ var (
 
 func init() {
 	RegUploadCmd()
+	RegChdir()
+	RegTarCmd()
 }

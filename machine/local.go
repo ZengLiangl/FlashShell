@@ -60,7 +60,7 @@ func (lr *LocalRunner) executeStep(command, workDir string, output chan<- string
 	// 设置工作目录
 	if workDir != "" {
 		cmd.Dir = workDir
-		// output <- fmt.Sprintf("工作目录: %s", workDir)
+		output <- fmt.Sprintf("工作目录: %s", workDir)
 	}
 
 	// 设置环境变量，确保使用 UTF-8 编码并支持颜色输出

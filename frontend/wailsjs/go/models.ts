@@ -102,6 +102,7 @@ export namespace define {
 	export class SubProject {
 	    name: string;
 	    description: string;
+	    workdir?: string;
 	    commands: Command[];
 	
 	    static createFrom(source: any = {}) {
@@ -112,6 +113,7 @@ export namespace define {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.name = source["name"];
 	        this.description = source["description"];
+	        this.workdir = source["workdir"];
 	        this.commands = this.convertValues(source["commands"], Command);
 	    }
 	

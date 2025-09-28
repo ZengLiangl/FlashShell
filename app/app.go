@@ -334,7 +334,12 @@ func (a *App) SetMachineSensitiveData(machineName string, sensitiveData define.S
 		return fmt.Errorf("未找到机器: %s", machineName)
 	}
 
-	return machine.SetSensitiveData(&sensitiveData)
+	// 设置敏感数据并加密
+	if err := machine.SetSensitiveData(&sensitiveData); err != nil {
+		return fmt.Errorf("设置敏感数据失败: %w", err)
+	}
+	// 将更新后的机器配置重新保存到全局配置文件中
+	return a.configManager.AddMachineToGlobal(machine)
 }
 
 // GetMachineSensitiveData 获取机器敏感数据
