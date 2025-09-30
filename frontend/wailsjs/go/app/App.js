@@ -62,10 +62,6 @@ export function GetConfigFiles() {
   return window['go']['app']['App']['GetConfigFiles']();
 }
 
-export function GetCtx() {
-  return window['go']['app']['App']['GetCtx']();
-}
-
 export function GetGlobalConfig() {
   return window['go']['app']['App']['GetGlobalConfig']();
 }
@@ -112,10 +108,6 @@ export function RefreshConfigMenu() {
 
 export function RefreshConfigMenuWithEvent() {
   return window['go']['app']['App']['RefreshConfigMenuWithEvent']();
-}
-
-export function RefreshUI() {
-  return window['go']['app']['App']['RefreshUI']();
 }
 
 export function SaveConfig(arg1) {

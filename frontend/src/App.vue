@@ -12,7 +12,9 @@
 
     <el-container class="main-container">
       <!-- 左侧面板 -->
-      <el-aside width="400px" class="left-panel">
+      <el-aside :width="leftPanelWidth + 'px'" class="left-panel" :class="{ resizing: isResizing }">
+        <!-- 拖拽手柄 -->
+        <div class="resize-handle" @mousedown="startResize"></div>
         <!-- 项目列表 -->
         <div class="panel-section">
           <div class="section-header">
@@ -403,6 +405,12 @@ export default {
       command: "",
     });
     const terminalOutput = ref(null);
+
+    // 左侧面板宽度控制
+    const leftPanelWidth = ref(400);
+    const minPanelWidth = 200;
+    const maxPanelWidth = 800;
+    const isResizing = ref(false);
 
     // 展开状态管理
     const expandedSubProjects = ref({});
@@ -873,6 +881,38 @@ export default {
       }
     };
 
+    // 拖拽调整面板宽度
+    const startResize = (e) => {
+      e.preventDefault();
+      isResizing.value = true;
+
+      const startX = e.clientX;
+      const startWidth = leftPanelWidth.value;
+
+      const handleMouseMove = (e) => {
+        const deltaX = e.clientX - startX;
+        const newWidth = startWidth + deltaX;
+
+        // 限制宽度范围
+        if (newWidth >= minPanelWidth && newWidth <= maxPanelWidth) {
+          leftPanelWidth.value = newWidth;
+        }
+      };
+
+      const handleMouseUp = () => {
+        isResizing.value = false;
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+    };
+
     onMounted(() => {
       loadConfig();
       startOutputPolling();
@@ -1193,6 +1233,10 @@ export default {
       isCommandRunning,
       clearOutput,
       refreshOutput,
+      // 面板拖拽相关
+      leftPanelWidth,
+      isResizing,
+      startResize,
       // 机器配置相关
       machineConfigVisible,
       machineEditVisible,
@@ -1302,6 +1346,7 @@ export default {
   background-color: #f5f7fa;
   display: flex;
   flex-direction: column;
+  position: relative;
 }
 
 .panel-section {
@@ -2089,5 +2134,35 @@ export default {
 .button-slide-leave-to {
   opacity: 0;
   transform: translateX(20px);
+}
+
+/* 拖拽手柄样式 */
+.resize-handle {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 6px;
+  height: 100%;
+  background: transparent;
+  cursor: col-resize;
+  z-index: 10;
+  transition: background-color 0.2s ease;
+}
+
+.resize-handle:hover {
+  background: rgba(64, 158, 255, 0.3);
+}
+
+.resize-handle:active {
+  background: rgba(64, 158, 255, 0.5);
+}
+
+/* 拖拽时的视觉反馈 */
+.left-panel.resizing {
+  user-select: none;
+}
+
+.left-panel.resizing .resize-handle {
+  background: rgba(64, 158, 255, 0.5);
 }
 </style>

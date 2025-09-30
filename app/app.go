@@ -317,16 +317,6 @@ func (a *App) SwitchConfigFileWithEvent(configPath string) error {
 	return nil
 }
 
-// RefreshUI 刷新用户界面（供菜单调用）
-func (a *App) RefreshUI() {
-	// 这个方法可以被前端调用来刷新界面
-	// 前端可以监听这个调用或者定期检查配置变化
-}
-
-func (a *App) GetCtx() context.Context {
-	return a.ctx
-}
-
 // SetMachineSensitiveData 设置机器敏感数据
 func (a *App) SetMachineSensitiveData(machineName string, sensitiveData define.SensitiveData) error {
 	machine := a.configManager.GetMachineFromGlobal(machineName)
