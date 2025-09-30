@@ -81,6 +81,11 @@ func (a *App) GetConfig() (*define.Root, error) {
 	return a.configManager.LoadConfig()
 }
 
+// GetConfigForRefresh 获取配置（用于刷新，不更新全局配置）
+func (a *App) GetConfigForRefresh() (*define.Root, error) {
+	return a.configManager.LoadConfigForRefresh()
+}
+
 // SaveConfig 保存配置
 func (a *App) SaveConfig(root *define.Root) error {
 	return a.configManager.SaveConfig(root)
@@ -271,6 +276,16 @@ func (a *App) DeleteMachineWithEvent(machineName string) error {
 // GetGlobalConfig 获取全局配置
 func (a *App) GetGlobalConfig() (*data.GlobalConfig, error) {
 	return a.configManager.GetGlobalConfig()
+}
+
+// GetGlobalConfigForRefresh 获取全局配置（用于刷新，从文件重新读取）
+func (a *App) GetGlobalConfigForRefresh() (*data.GlobalConfig, error) {
+	globalConfig , err := a.configManager.GetGlobalConfigForRefresh()
+	if err != nil {
+		return nil, err
+	}
+	a.UpdateApplicationMenu()
+	return globalConfig, nil
 }
 
 // SaveGlobalConfig 保存全局配置

@@ -20,7 +20,7 @@ type ConfigManager struct {
 
 // NewConfigManager 创建配置管理器
 func NewConfigManager(configPath string) *ConfigManager {
-	gcm := NewGlobalConfigManager("global_config.yaml")
+	gcm := NewGlobalConfigManager("")
 
 	// 如果没有指定配置路径，尝试从全局配置获取最后打开的文件
 	if configPath == "" {
@@ -35,6 +35,33 @@ func NewConfigManager(configPath string) *ConfigManager {
 		configPath:          configPath,
 		globalConfigManager: gcm,
 	}
+}
+
+// LoadConfigForRefresh 专门用于刷新的配置加载，不更新全局配置
+func (cm *ConfigManager) LoadConfigForRefresh() (*define.Root, error) {
+	if cm.configPath == "" {
+		cm.configPath = "config.yaml"
+	}
+
+	// 展开路径中的 ~ 符号
+	expandedPath := expandPath(cm.configPath)
+
+	data, err := os.ReadFile(expandedPath)
+	if err != nil {
+		return nil, fmt.Errorf("读取配置文件失败: %w", err)
+	}
+
+	var root define.Root
+	if err := yaml.Unmarshal(data, &root); err != nil {
+		return nil, fmt.Errorf("解析配置文件失败: %w", err)
+	}
+
+	// 处理路径变量替换
+	cm.processPathVariables(&root)
+
+	// 注意：这里不更新全局配置，只是刷新内存中的数据
+	cm.root = &root
+	return &root, nil
 }
 
 // LoadConfig 加载配置文件
@@ -201,6 +228,14 @@ func expandPath(path string) string {
 
 // GetGlobalConfig 获取全局配置
 func (cm *ConfigManager) GetGlobalConfig() (*GlobalConfig, error) {
+	if cm.globalConfigManager == nil {
+		return nil, fmt.Errorf("全局配置管理器未初始化")
+	}
+	return cm.globalConfigManager.LoadGlobalConfig()
+}
+
+// GetGlobalConfigForRefresh 获取全局配置（用于刷新，从文件重新读取）
+func (cm *ConfigManager) GetGlobalConfigForRefresh() (*GlobalConfig, error) {
 	if cm.globalConfigManager == nil {
 		return nil, fmt.Errorf("全局配置管理器未初始化")
 	}

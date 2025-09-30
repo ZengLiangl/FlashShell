@@ -505,17 +505,70 @@ export default {
       }
     };
 
+    // 刷新全局配置（从文件读取最新数据到内存）
+    const loadGlobalConfigForRefresh = async () => {
+      try {
+        console.log("开始刷新全局配置...");
+        console.log("App 对象:", App);
+
+        const globalConfig = await App.GetGlobalConfigForRefresh();
+        console.log("刷新后的全局配置数据:", globalConfig);
+
+        // 这里可以根据需要更新前端相关的全局配置状态
+        // 例如：更新最后打开的文件、配置文件列表等
+
+        console.log("全局配置刷新完成");
+      } catch (error) {
+        console.error("刷新全局配置失败:", error);
+        console.error("错误详情:", error.stack);
+      }
+    };
+
+    // 刷新配置（从文件读取最新数据，不更新全局配置）
+    const loadConfigForRefresh = async () => {
+      try {
+        console.log("开始刷新项目配置...");
+        console.log("App 对象:", App);
+
+        const config = await App.GetConfigForRefresh();
+        console.log("刷新后的项目配置数据:", config);
+
+        projects.value = config.projects || [];
+        console.log("设置的项目数据:", projects.value);
+        console.log("项目数量:", projects.value.length);
+
+        if (projects.value.length > 0) {
+          console.log("第一个项目:", projects.value[0]);
+          // 默认选中第一个项目
+          selectProject(projects.value[0]);
+        }
+
+        console.log("项目配置刷新完成");
+      } catch (error) {
+        console.error("刷新项目配置失败:", error);
+        console.error("错误详情:", error.stack);
+      }
+    };
+
     // 刷新配置
     const refreshConfig = async () => {
       try {
         isReloading.value = true;
-        setTimeout(() => {
-          // await loadConfig();
-          window.location.reload();
-        }, 200);
+        console.log("开始刷新配置...");
+
+        // 第一步：先从全局配置文件读取最新数据，重置内存中的全局配置
+        await loadGlobalConfigForRefresh();
+
+        // 第二步：再刷新项目配置
+        await loadConfigForRefresh();
+
+        console.log("配置刷新完成");
+        ElMessage.success("配置已刷新");
       } catch (error) {
         console.error("刷新配置失败:", error);
         ElMessage.error("刷新配置失败: " + error.message);
+      } finally {
+        isReloading.value = false;
       }
     };
 

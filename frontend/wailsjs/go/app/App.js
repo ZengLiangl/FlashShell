@@ -62,8 +62,16 @@ export function GetConfigFiles() {
   return window['go']['app']['App']['GetConfigFiles']();
 }
 
+export function GetConfigForRefresh() {
+  return window['go']['app']['App']['GetConfigForRefresh']();
+}
+
 export function GetGlobalConfig() {
   return window['go']['app']['App']['GetGlobalConfig']();
+}
+
+export function GetGlobalConfigForRefresh() {
+  return window['go']['app']['App']['GetGlobalConfigForRefresh']();
 }
 
 export function GetMachineSensitiveData(arg1) {

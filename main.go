@@ -20,10 +20,17 @@ func main() {
 	// 创建菜单
 	appMenu := appInstance.CreateApplicationMenu()
 
+	// 获取窗口名称
+	globalConfig, err := appInstance.GetGlobalConfig()
+	windowsName := "Quick Cmd" // 默认窗口名称
+	if err == nil && globalConfig != nil {
+		windowsName = globalConfig.WindowsName
+	}
+
 	// Create application with options
-	err := wails.Run(&options.App{
-		Title:  "Quick Cmd",
-		Width:  1024,
+	err = wails.Run(&options.App{
+		Title:  windowsName,
+		Width:  1200,
 		Height: 768,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
@@ -34,8 +41,8 @@ func main() {
 		OnBeforeClose:    appInstance.BeforeClose,
 		OnShutdown:       appInstance.Shutdown,
 		Fullscreen:       false,
-		MinWidth:         800,
-		MinHeight:        600,
+		MinWidth:         1200,
+		MinHeight:        768,
 		Menu:             appMenu,
 		// 绑定后端结构体到前端
 		Bind: []interface{}{

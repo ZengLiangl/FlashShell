@@ -34,7 +34,11 @@ export function GetConfig():Promise<define.Root>;
 
 export function GetConfigFiles():Promise<Array<string>>;
 
+export function GetConfigForRefresh():Promise<define.Root>;
+
 export function GetGlobalConfig():Promise<data.GlobalConfig>;
+
+export function GetGlobalConfigForRefresh():Promise<data.GlobalConfig>;
 
 export function GetMachineSensitiveData(arg1:string):Promise<define.SensitiveData>;
 

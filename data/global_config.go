@@ -3,6 +3,7 @@ package data
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"quick-cmd/define"
@@ -29,7 +30,15 @@ type GlobalConfigManager struct {
 // NewGlobalConfigManager 创建全局配置管理器
 func NewGlobalConfigManager(configPath string) *GlobalConfigManager {
 	if configPath == "" {
-		configPath = "global_config.yaml"
+		// 获取用户主目录
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			// 如果获取用户主目录失败，使用当前目录
+			configPath = "global_config.yaml"
+		} else {
+			// 使用用户主目录下的 .cmd-config 文件夹
+			configPath = filepath.Join(homeDir, ".cmd-config", "global_config.yaml")
+		}
 	}
 	return &GlobalConfigManager{
 		configPath: configPath,
@@ -42,6 +51,12 @@ func (gcm *GlobalConfigManager) LoadGlobalConfig() (*GlobalConfig, error) {
 
 	// 如果文件不存在，创建默认配置
 	if _, err := os.Stat(expandedPath); os.IsNotExist(err) {
+		// 确保目录存在
+		configDir := filepath.Dir(expandedPath)
+		if err := os.MkdirAll(configDir, 0755); err != nil {
+			return nil, fmt.Errorf("创建配置目录失败: %w", err)
+		}
+
 		if err := gcm.createDefaultGlobalConfig(); err != nil {
 			return nil, fmt.Errorf("创建默认全局配置失败: %w", err)
 		}
@@ -69,6 +84,13 @@ func (gcm *GlobalConfigManager) SaveGlobalConfig(config *GlobalConfig) error {
 	}
 
 	expandedPath := expandPath(gcm.configPath)
+
+	// 确保目录存在
+	configDir := filepath.Dir(expandedPath)
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return fmt.Errorf("创建配置目录失败: %w", err)
+	}
+
 	if err := os.WriteFile(expandedPath, data, 0644); err != nil {
 		return fmt.Errorf("保存全局配置文件失败: %w", err)
 	}
