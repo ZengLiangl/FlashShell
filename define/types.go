@@ -243,7 +243,7 @@ func (rm *RemoteMachine) NewSession() (*ssh.Session, error) {
 
 // Runner 命令执行器接口
 type Runner interface {
-	Execute(cmd Command, output chan<- string) error
+	Execute(cmd Command, output chan<- string, onStepStart func(step string), onStepComplete func()) error
 	Stop() error
 }
 
@@ -267,8 +267,11 @@ type SubProjectStatus struct {
 	SubProjectName    string `json:"subProjectName"`
 	IsRunning         bool   `json:"isRunning"`
 	CurrentCommand    string `json:"currentCommand"`
+	CurrentStep       string `json:"currentStep"`
 	CompletedCommands int    `json:"completedCommands"`
+	CompletedSteps    int    `json:"completedSteps"`
 	TotalCommands     int    `json:"totalCommands"`
+	TotalSteps        int    `json:"totalSteps"`
 	Output            string `json:"output"`
 }
 

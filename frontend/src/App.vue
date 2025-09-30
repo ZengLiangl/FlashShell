@@ -16,7 +16,7 @@
         <!-- 拖拽手柄 -->
         <div class="resize-handle" @mousedown="startResize"></div>
         <!-- 项目列表 -->
-        <div class="panel-section">
+        <div class="panel-section project-section">
           <div class="section-header">
             <h3>项目列表</h3>
             <div>
@@ -24,9 +24,6 @@
                 <el-icon>
                   <Refresh />
                 </el-icon>
-              </el-button>
-              <el-button size="small" @click="debugConfig" type="warning">
-                调试
               </el-button>
             </div>
           </div>
@@ -44,7 +41,7 @@
         </div>
 
         <!-- SubProject 列表 -->
-        <div class="panel-section">
+        <div class="panel-section subproject-section">
           <div class="section-header">
             <h3>可执行项目</h3>
             <el-tag v-if="selectedProject" size="small">{{
@@ -66,7 +63,7 @@
                       <div class="subproject-name">{{ subProject.name }}</div>
                       <div class="subproject-desc">{{ subProject.description }}</div>
                       <div class="subproject-meta">
-                        <el-tag size="small" type="info">{{ subProject.commandCount }} 个命令</el-tag>
+                        <el-tag size="small" type="info">{{ subProject.stepCount }} 个命令</el-tag>
                       </div>
                     </div>
                   </div>
@@ -112,7 +109,7 @@
                         {{ getCommandTypeText(command.type) }}
                       </el-tag>
                       <el-tag size="small" type="info" effect="plain">
-                        {{ command.steps?.length || 0 }} 步骤
+                        {{ command.steps?.length || 0 }} 命令
                       </el-tag>
                     </div>
                   </div>
@@ -159,10 +156,10 @@
           <div v-if="status.isRunning" class="progress-section">
             <div class="progress-info">
               <div class="progress-text">
-                <span class="project-name">{{ status.subProjectName }}</span>
+                <span class="project-name">{{ status.currentCommand }}</span>
                 <transition name="command-fade" mode="out-in">
-                  <span v-if="status.currentCommand" key="current" class="current-command">
-                    正在执行: {{ status.currentCommand }}
+                  <span v-if="status.currentStep" key="current" class="current-command">
+                    正在执行: {{ status.currentStep }}
                   </span>
                   <span v-else key="waiting" class="current-command">
                     准备执行...
@@ -170,7 +167,7 @@
                 </transition>
               </div>
               <div class="progress-stats">
-                {{ Math.max(1, status.completedCommands + 1) }}/{{ status.totalCommands }} 命令
+                {{ Math.max(1, status.completedSteps + 1) }}/{{ status.totalSteps }} 命令
               </div>
             </div>
             <el-progress :percentage="progressPercentage" :status="progressStatus" :stroke-width="8" :show-text="true"
@@ -203,7 +200,7 @@
                 <Loading />
               </el-icon>
               <span class="status-text">
-                执行中: {{ status.subProjectName }}
+                执行中:
                 <span v-if="status.currentCommand"> - {{ status.currentCommand }}</span>
               </span>
             </el-tag>
@@ -222,11 +219,6 @@
             项目: {{ selectedProject.name }}
           </el-tag>
         </transition>
-
-        <!-- 快捷键提示 -->
-        <span class="shortcuts-hint">
-          快捷键: Cmd+C复制 | Cmd+R刷新 | Cmd+K清空 | Cmd+M机器配置 | Cmd+E环境变量
-        </span>
       </div>
 
       <div class="status-actions">
@@ -403,6 +395,9 @@ export default {
     const status = reactive({
       isRunning: false,
       command: "",
+      currentStep: "",
+      completedSteps: 0,
+      totalSteps: 0,
     });
     const terminalOutput = ref(null);
 
@@ -598,7 +593,8 @@ export default {
         subProjects.value = project.subprojects.map(subproject => ({
           ...subproject,
           projectName: project.name,
-          commandCount: subproject.commands ? subproject.commands.length : 0
+          commandCount: subproject.commands ? subproject.commands.length : 0,
+          stepCount: subproject.commands ? subproject.commands.reduce((total, command) => total + (command.steps?.length || 0), 0) : 0
         }));
       } else {
         subProjects.value = [];
@@ -840,13 +836,13 @@ export default {
 
     // 计算进度百分比
     const progressPercentage = computed(() => {
-      if (!status.isRunning || status.totalCommands === 0) {
+      if (!status.isRunning || status.totalSteps === 0) {
         return 0;
       }
-      // 将进度映射到1-100的范围内
-      const temp = (Math.max(1, status.completedCommands + 1) == status.totalCommands) ? status.completedCommands : Math.max(1, status.completedCommands + 1)
-      const completedRatio = temp / status.totalCommands;
-      return Math.round(completedRatio * 99);
+      // 基于已完成的步骤数计算进度
+      const completedRatio = Math.max(1, status.completedSteps + 1) / status.totalSteps;
+      return Math.round(completedRatio * 95);
+
     });
 
     // 计算进度状态
@@ -871,13 +867,6 @@ export default {
       if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
         e.preventDefault();
         copySelectedText();
-        return;
-      }
-
-      // 刷新配置快捷键 (Cmd+R 或 Ctrl+R)
-      if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
-        e.preventDefault();
-        refreshConfig();
         return;
       }
 
@@ -1400,16 +1389,35 @@ export default {
   display: flex;
   flex-direction: column;
   position: relative;
+  height: 100%;
 }
 
 .panel-section {
-  flex: 1;
   padding: 16px;
   border-bottom: 1px solid #e4e7ed;
+  display: flex;
+  flex-direction: column;
 }
 
 .panel-section:last-child {
   border-bottom: none;
+  flex: 1;
+  min-height: 0;
+  /* 允许 flex 子项缩小 */
+}
+
+/* 项目列表区域 - 限制高度 */
+.project-section {
+  flex-shrink: 0;
+  max-height: 40vh;
+  /* 最大高度为视口高度的40% */
+}
+
+/* SubProject 列表区域 - 占用剩余空间 */
+.subproject-section {
+  flex: 1;
+  min-height: 0;
+  /* 允许内容区域滚动 */
 }
 
 .section-header {
@@ -1430,6 +1438,9 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .project-item {
@@ -1463,7 +1474,9 @@ export default {
 }
 
 .subproject-list {
-  max-height: 300px;
+  flex: 1;
+  min-height: 0;
+  /* 允许 flex 子项缩小 */
   overflow-y: auto;
 }
 

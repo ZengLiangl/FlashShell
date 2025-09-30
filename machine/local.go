@@ -27,7 +27,7 @@ func NewLocalRunner(workDir string) *LocalRunner {
 }
 
 // Execute 执行命令
-func (lr *LocalRunner) Execute(cmd define.Command, output chan<- string) error {
+func (lr *LocalRunner) Execute(cmd define.Command, output chan<- string, onStepStart func(step string), onStepComplete func()) error {
 	// 设置工作目录
 	workDir := lr.workDir
 	if cmd.WorkDir != "" {
@@ -35,10 +35,20 @@ func (lr *LocalRunner) Execute(cmd define.Command, output chan<- string) error {
 	}
 
 	for i, step := range cmd.Steps {
+		// 通知步骤开始执行
+		if onStepStart != nil {
+			onStepStart(step)
+		}
+
 		output <- fmt.Sprintf("执行步骤 %d: %s", i+1, step)
 
 		if err := lr.executeStep(step, workDir, output); err != nil {
 			return fmt.Errorf("步骤 %d 执行失败: %w", i+1, err)
+		}
+
+		// 通知步骤执行完成
+		if onStepComplete != nil {
+			onStepComplete()
 		}
 	}
 

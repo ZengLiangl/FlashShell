@@ -227,8 +227,11 @@ export namespace define {
 	    subProjectName: string;
 	    isRunning: boolean;
 	    currentCommand: string;
+	    currentStep: string;
 	    completedCommands: number;
+	    completedSteps: number;
 	    totalCommands: number;
+	    totalSteps: number;
 	    output: string;
 	
 	    static createFrom(source: any = {}) {
@@ -241,8 +244,11 @@ export namespace define {
 	        this.subProjectName = source["subProjectName"];
 	        this.isRunning = source["isRunning"];
 	        this.currentCommand = source["currentCommand"];
+	        this.currentStep = source["currentStep"];
 	        this.completedCommands = source["completedCommands"];
+	        this.completedSteps = source["completedSteps"];
 	        this.totalCommands = source["totalCommands"];
+	        this.totalSteps = source["totalSteps"];
 	        this.output = source["output"];
 	    }
 	}
