@@ -16,363 +16,34 @@
         <!-- 拖拽手柄 -->
         <div class="resize-handle" @mousedown="startResize"></div>
         <!-- 项目列表 -->
-        <div class="panel-section project-section">
-          <div class="section-header">
-            <h3>项目列表</h3>
-            <div>
-              <el-button size="small" @click="refreshConfig">
-                <el-icon>
-                  <Refresh />
-                </el-icon>
-              </el-button>
-            </div>
-          </div>
-          <div v-if="projects.length === 0" class="no-projects">
-            <p>暂无项目配置</p>
-            <p>项目数量: {{ projects.length }}</p>
-          </div>
-          <div v-else class="project-list">
-            <div v-for="project in projects" :key="project.name" class="project-item"
-              :class="{ active: selectedProject?.name === project.name }" @click="selectProject(project)">
-              <div class="project-name">{{ project.name }}</div>
-              <div class="project-desc">{{ project.description }}</div>
-            </div>
-          </div>
-        </div>
+        <ProjectList :projects="projects" :selected-project-name="selectedProject?.name || ''" @refresh="refreshConfig"
+          @select="selectProject" />
 
         <!-- SubProject 列表 -->
-        <div class="panel-section subproject-section">
-          <div class="section-header">
-            <h3>可执行项目</h3>
-            <el-tag v-if="selectedProject" size="small">{{
-              selectedProject.name
-            }}</el-tag>
-          </div>
-          <div v-if="subProjects.length > 0" class="subproject-list">
-            <div v-for="subProject in subProjects" :key="subProject.name" class="subproject-container">
-              <div class="subproject-item">
-                <div class="subproject-info">
-                  <div class="subproject-header">
-                    <el-button size="small" text @click="toggleSubProject(subProject.name)" class="expand-button">
-                      <el-icon>
-                        <ArrowRight v-if="!expandedSubProjects[subProject.name]" />
-                        <ArrowDown v-else />
-                      </el-icon>
-                    </el-button>
-                    <div class="subproject-title">
-                      <div class="subproject-name">{{ subProject.name }}</div>
-                      <div class="subproject-desc">{{ subProject.description }}</div>
-                      <div class="subproject-meta">
-                        <el-tag size="small" type="info">{{ subProject.stepCount }} 个命令</el-tag>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div class="subproject-actions">
-                  <el-button size="small" type="primary" @click="executeSubProject(subProject)"
-                    :loading="isSubProjectRunning(subProject)"
-                    :disabled="status.isRunning && !isSubProjectRunning(subProject)">
-                    {{ isSubProjectRunning(subProject) ? "运行中" : "执行" }}
-                  </el-button>
-                  <el-button v-if="isSubProjectRunning(subProject)" size="small" type="danger"
-                    @click="stopSubProject(subProject)">
-                    停止
-                  </el-button>
-                </div>
-              </div>
-
-              <!-- Commands 展开区域 -->
-              <div v-if="expandedSubProjects[subProject.name]" class="commands-container">
-                <div v-for="command in subProject.commands" :key="command.name" class="command-container">
-                  <div class="command-item">
-                    <div class="command-header">
-                      <el-button size="small" text @click="toggleCommand(subProject.name, command.name)"
-                        class="expand-button">
-                        <el-icon>
-                          <ArrowRight v-if="!expandedCommands[`${subProject.name}-${command.name}`]" />
-                          <ArrowDown v-else />
-                        </el-icon>
-                      </el-button>
-                      <div class="command-info">
-                        <div class="command-name">
-                          <!-- <el-icon class="command-type-icon">
-                            <Connection v-if="command.type === 'remote'" />
-                            <Setting v-else />
-                          </el-icon> -->
-                          {{ command.name }}
-                        </div>
-                        <!-- <div class="command-desc">{{ command.description }}</div> -->
-                      </div>
-                    </div>
-                    <div class="command-meta">
-                      <el-tag size="small" :type="getCommandTagType(command.type)" effect="light">
-                        {{ getCommandTypeText(command.type) }}
-                      </el-tag>
-                      <el-tag size="small" type="info" effect="plain">
-                        {{ command.steps?.length || 0 }} 命令
-                      </el-tag>
-                    </div>
-                  </div>
-
-                  <!-- Steps 展开区域 -->
-                  <div v-if="expandedCommands[`${subProject.name}-${command.name}`]" class="steps-container">
-                    <div v-for="(step, index) in command.steps" :key="index" class="step-item">
-                      <div class="step-number">{{ index + 1 }}</div>
-                      <div class="step-content">
-                        <div class="step-command">{{ step }}</div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-          <el-empty v-else description="请选择项目查看可执行项目" />
-        </div>
+        <SubProjectList :selected-project="selectedProject" :sub-projects="subProjects"
+          :expanded-sub-projects="expandedSubProjects" :expanded-commands="expandedCommands" :status="status"
+          :get-command-tag-type="getCommandTagType" :get-command-type-text="getCommandTypeText"
+          :is-sub-project-running="isSubProjectRunning" @toggle-sub="toggleSubProject" @toggle-cmd="toggleCommand"
+          @execute-sub="executeSubProject" @stop-sub="stopSubProject" />
       </el-aside>
 
       <!-- 右侧终端输出 -->
       <el-main class="terminal-container">
-        <div class="terminal-header">
-          <h3>终端输出</h3>
-          <div class="terminal-actions">
-            <el-button size="small" @click="clearOutput">
-              <el-icon>
-                <Delete />
-              </el-icon>
-              清空
-            </el-button>
-            <el-button size="small" @click="refreshOutput">
-              <el-icon>
-                <Refresh />
-              </el-icon>
-              刷新
-            </el-button>
-          </div>
-        </div>
-
-        <!-- 进度条区域 -->
-        <transition name="progress-slide" appear>
-          <div v-if="status.isRunning" class="progress-section">
-            <div class="progress-info">
-              <div class="progress-text">
-                <span class="project-name">{{ status.currentCommand }}</span>
-                <transition name="command-fade" mode="out-in">
-                  <span v-if="status.currentStep" key="current" class="current-command">
-                    正在执行: {{ status.currentStep }}
-                  </span>
-                  <span v-else key="waiting" class="current-command">
-                    准备执行...
-                  </span>
-                </transition>
-              </div>
-              <div class="progress-stats">
-                {{ Math.max(1, status.completedSteps + 1) }}/{{ status.totalSteps }} 命令
-              </div>
-            </div>
-            <el-progress :percentage="progressPercentage" :status="progressStatus" :stroke-width="8" :show-text="true"
-              class="execution-progress" />
-          </div>
-        </transition>
-
-        <div class="terminal-output" ref="terminalOutput">
-          <div v-for="(line, index) in outputLines" :key="index" class="output-line" :class="{
-            'error-line': line.isError,
-            'success-line': line.isSuccess,
-            'progress-line': line.isProgress,
-          }" v-html="line.html">
-          </div>
-          <div v-if="outputLines.length === 0" class="empty-output">
-            等待命令输出...
-          </div>
-        </div>
+        <TerminalHeader @clear="clearOutput" @refresh="refreshOutput" />
+        <TerminalOutput :status="status" :output-lines="outputLines" :progress-percentage="progressPercentage"
+          :progress-status="progressStatus" />
       </el-main>
     </el-container>
 
     <!-- 状态栏 - 始终显示在底部 -->
-    <div class="status-bar">
-      <div class="status-info">
-        <!-- 执行状态 - 固定宽度容器 -->
-        <div class="status-container">
-          <transition name="status-fade" mode="out-in">
-            <el-tag v-if="status.isRunning" key="running" type="warning" size="small">
-              <el-icon>
-                <Loading />
-              </el-icon>
-              <span class="status-text">
-                执行中:
-                <span v-if="status.currentCommand"> - {{ status.currentCommand }}</span>
-              </span>
-            </el-tag>
-            <el-tag v-else key="ready" type="success" size="small">
-              <el-icon>
-                <Check />
-              </el-icon>
-              <span class="status-text">就绪</span>
-            </el-tag>
-          </transition>
-        </div>
-
-        <!-- 项目信息 - 显示当前选中的项目 -->
-        <transition name="project-fade">
-          <el-tag v-if="selectedProject" size="small" type="info">
-            项目: {{ selectedProject.name }}
-          </el-tag>
-        </transition>
-      </div>
-
-      <div class="status-actions">
-        <!-- 执行控制按钮 -->
-        <transition name="button-slide">
-          <el-button v-if="status.isRunning" size="small" type="danger" @click="stopAllCommands">
-            停止执行
-          </el-button>
-        </transition>
-
-        <!-- 应用信息 -->
-        <span class="app-info">Quick Cmd v1.2.0</span>
-      </div>
-    </div>
+    <StatusBar :status="status" :selected-project="selectedProject" :app-info="'Quick Cmd v1.2.0'"
+      @stop-all="stopAllCommands" />
 
     <!-- 机器配置弹框 -->
-    <el-dialog v-model="machineConfigVisible" title="机器配置管理" width="80%" :before-close="handleMachineConfigClose">
-      <div class="machine-config-container">
-        <!-- 机器列表 -->
-        <div class="machine-list">
-          <div class="list-header">
-            <h4>机器列表</h4>
-            <el-button type="primary" @click="addMachine">
-              <el-icon>
-                <Plus />
-              </el-icon>
-              添加机器
-            </el-button>
-          </div>
-
-          <el-table :data="machines" style="width: 100%" v-loading="machinesLoading">
-            <el-table-column prop="name" label="机器名称" width="150" />
-            <el-table-column prop="key_file" label="密钥文件" overflow-tooltip />
-            <el-table-column label="操作" width="250">
-              <template #default="scope">
-                <el-button size="small" @click="editMachine(scope.row)">编辑</el-button>
-                <el-button size="small" @click="testConnection(scope.row)" :loading="scope.row.testing">
-                  测试连接
-                </el-button>
-                <el-button size="small" type="danger" @click="deleteMachine(scope.row)">
-                  删除
-                </el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-        </div>
-      </div>
-    </el-dialog>
-
-    <!-- 机器编辑弹框 -->
-    <el-dialog v-model="machineEditVisible" :title="editingMachine ? '编辑机器' : '添加机器'" width="600px">
-      <el-form :model="machineForm" :rules="machineRules" ref="machineFormRef" label-width="100px">
-        <el-form-item label="机器名称" prop="name">
-          <el-input v-model="machineForm.name" placeholder="请输入机器名称" />
-        </el-form-item>
-
-        <el-form-item label="密钥文件" prop="key_file">
-          <div class="key-file-input">
-            <el-input v-model="machineForm.key_file" placeholder="请选择密钥文件" readonly />
-            <el-button type="primary" @click="selectKeyFile">选择文件</el-button>
-          </div>
-        </el-form-item>
-
-        <el-divider content-position="left">连接信息</el-divider>
-
-        <el-form-item label="主机地址" prop="host">
-          <el-input v-model="machineForm.host" placeholder="请输入主机地址" />
-        </el-form-item>
-
-        <el-form-item label="端口" prop="port">
-          <el-input-number v-model="machineForm.port" :min="1" :max="65535" placeholder="SSH端口" />
-        </el-form-item>
-
-        <el-form-item label="用户名" prop="user">
-          <el-input v-model="machineForm.user" placeholder="请输入用户名" />
-        </el-form-item>
-
-        <el-form-item label="密码" prop="password">
-          <el-input v-model="machineForm.password" type="password" placeholder="请输入密码（可选）" show-password />
-        </el-form-item>
-      </el-form>
-
-      <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="machineEditVisible = false">取消</el-button>
-          <el-button type="primary" @click="saveMachine" :loading="savingMachine">
-            {{ editingMachine ? '更新' : '添加' }}
-          </el-button>
-        </div>
-      </template>
-    </el-dialog>
+    <MachineConfigDialog v-model="machineConfigVisible" />
 
     <!-- 环境变量配置弹框 -->
-    <el-dialog v-model="workPathConfigVisible" title="环境变量配置管理" width="80%" :before-close="handleWorkPathConfigClose">
-      <div class="workpath-config-container">
-        <!-- 环境变量列表 -->
-        <div class="workpath-list">
-          <div class="list-header">
-            <h4>环境变量列表</h4>
-            <el-button type="primary" @click="addWorkPath">
-              <el-icon>
-                <Plus />
-              </el-icon>
-              添加环境变量
-            </el-button>
-          </div>
-
-          <el-table :data="Object.entries(workPaths).map(([key, value]) => ({ key, value }))" style="width: 100%"
-            v-loading="workPathsLoading">
-            <el-table-column prop="key" label="变量名" width="200" />
-            <el-table-column prop="value" label="变量值" overflow-tooltip />
-            <el-table-column label="操作" width="200">
-              <template #default="scope">
-                <el-button size="small" @click="editWorkPath(scope.row.key)">编辑</el-button>
-                <el-button size="small" type="danger" @click="deleteWorkPath(scope.row.key)">
-                  删除
-                </el-button>
-              </template>
-            </el-table-column>
-          </el-table>
-        </div>
-      </div>
-    </el-dialog>
-
-    <!-- 环境变量编辑弹框 -->
-    <el-dialog v-model="workPathEditVisible" :title="editingWorkPath ? '编辑环境变量' : '添加环境变量'" width="500px">
-      <el-form :model="workPathForm" :rules="workPathRules" ref="workPathFormRef" label-width="100px">
-        <el-form-item label="变量名" prop="key">
-          <el-input v-model="workPathForm.key" placeholder="请输入变量名（如：PROJECT_HOME）" />
-        </el-form-item>
-
-        <el-form-item label="变量值" prop="value">
-          <el-input v-model="workPathForm.value" placeholder="请输入变量值（如：/home/user/projects）" />
-        </el-form-item>
-
-        <el-form-item label="使用说明">
-          <div class="usage-info">
-            <p>• 变量名只能包含大写字母、数字和下划线</p>
-            <p>• 变量名必须以字母或下划线开头</p>
-            <p>• 在配置文件中可以使用 ${变量名} 来引用这些环境变量</p>
-            <p>• 例如：workdir: "${PROJECT_HOME}/my-project"</p>
-          </div>
-        </el-form-item>
-      </el-form>
-
-      <template #footer>
-        <div class="dialog-footer">
-          <el-button @click="workPathEditVisible = false">取消</el-button>
-          <el-button type="primary" @click="saveWorkPath" :loading="savingWorkPath">
-            {{ editingWorkPath ? '更新' : '添加' }}
-          </el-button>
-        </div>
-      </template>
-    </el-dialog>
+    <WorkPathConfigDialog v-model="workPathConfigVisible" />
   </div>
 </template>
 
@@ -382,9 +53,17 @@ import { ElMessage } from "element-plus";
 import * as App from "../wailsjs/go/app/App";
 import { EventsOn, EventsOff } from "../wailsjs/runtime/runtime";
 import Convert from "ansi-to-html";
+import TerminalOutput from "./components/TerminalOutput.vue";
+import StatusBar from "./components/StatusBar.vue";
+import ProjectList from "./components/ProjectList.vue";
+import SubProjectList from "./components/SubProjectList.vue";
+import MachineConfigDialog from "./components/MachineConfigDialog.vue";
+import WorkPathConfigDialog from "./components/WorkPathConfigDialog.vue";
+import TerminalHeader from "./components/TerminalHeader.vue";
 
 export default {
   name: "App",
+  components: { TerminalOutput, StatusBar, ProjectList, SubProjectList, MachineConfigDialog, WorkPathConfigDialog, TerminalHeader },
   setup() {
     const projects = ref([]);
     const subProjects = ref([]);
@@ -399,8 +78,6 @@ export default {
       completedSteps: 0,
       totalSteps: 0,
     });
-    const terminalOutput = ref(null);
-
     // 终端输出行数上限，防止内存增长过快
     const MAX_OUTPUT_LINES = 2000;
 
@@ -778,14 +455,7 @@ export default {
           // 控制最大行数，避免无上限增长
           enforceOutputLimit();
 
-          // 仅在视图已接近底部时保持粘底，避免用户查看历史时被强制跳转
-          const el = terminalOutput.value;
-          const shouldStickToBottom = el && (el.scrollTop + el.clientHeight >= el.scrollHeight - 10);
-          nextTick(() => {
-            if (shouldStickToBottom && terminalOutput.value) {
-              terminalOutput.value.scrollTop = terminalOutput.value.scrollHeight;
-            }
-          });
+          // 粘底滚动逻辑迁移到子组件中处理
         }
       } catch (error) {
         console.error("获取输出失败:", error);
@@ -1284,7 +954,6 @@ export default {
       selectedSubProject,
       isReloading,
       status,
-      terminalOutput,
       progressPercentage,
       progressStatus,
       expandedSubProjects,
@@ -1423,414 +1092,7 @@ export default {
   overflow-x: hidden;
 }
 
-.panel-section {
-  padding: 16px;
-  border-bottom: 1px solid #e4e7ed;
-  display: flex;
-  flex-direction: column;
-}
-
-.panel-section:last-child {
-  border-bottom: none;
-  flex: 1;
-  min-height: 0;
-  /* 允许 flex 子项缩小 */
-}
-
-/* 项目列表区域 - 限制高度 */
-.project-section {
-  flex-shrink: 0;
-  max-height: 40vh;
-  /* 最大高度为视口高度的40% */
-}
-
-/* SubProject 列表区域 - 占用剩余空间 */
-.subproject-section {
-  flex: 1;
-  min-height: 0;
-  /* 允许内容区域滚动 */
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 12px;
-}
-
-.section-header h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.project-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  flex: 1;
-  min-height: 0;
-}
-
-.project-item {
-  padding: 12px;
-  background: white;
-  border-radius: 6px;
-  border: 1px solid #e4e7ed;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.project-item:hover {
-  border-color: #409eff;
-  box-shadow: 0 2px 8px rgba(64, 158, 255, 0.1);
-}
-
-.project-item.active {
-  border-color: #409eff;
-  background: #ecf5ff;
-}
-
-.project-name {
-  font-weight: 600;
-  color: #303133;
-  margin-bottom: 4px;
-}
-
-.project-desc {
-  font-size: 12px;
-  color: #909399;
-}
-
-.subproject-list {
-  flex: 1;
-  min-height: 0;
-  /* 允许 flex 子项缩小 */
-  overflow-y: auto;
-  overflow-x: hidden;
-}
-
-.subproject-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px;
-  margin-bottom: 8px;
-  background: white;
-  border-radius: 6px;
-  border: 1px solid #e4e7ed;
-}
-
-.subproject-info {
-  flex: 1;
-}
-
-.subproject-name {
-  font-weight: 600;
-  color: #303133;
-  margin-bottom: 4px;
-}
-
-.subproject-desc {
-  font-size: 12px;
-  color: #909399;
-  margin-bottom: 6px;
-}
-
-.subproject-meta {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  margin-top: 6px;
-}
-
-.subproject-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.subproject-container {
-  margin-bottom: 8px;
-}
-
-.subproject-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.expand-button {
-  padding: 4px !important;
-  min-width: auto !important;
-  width: 24px;
-  height: 24px;
-}
-
-.subproject-title {
-  flex: 1;
-}
-
-.commands-container {
-  margin-left: 32px;
-  margin-top: 8px;
-  border-left: 2px solid #e4e7ed;
-  padding-left: 12px;
-}
-
-.command-container {
-  margin-bottom: 8px;
-}
-
-.command-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px;
-  background: #fafafa;
-  border-radius: 4px;
-  border: 1px solid #f0f0f0;
-}
-
-.command-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex: 1;
-}
-
-.command-info {
-  flex: 1;
-}
-
-.command-name {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-weight: 500;
-  color: #606266;
-  font-size: 13px;
-  margin-bottom: 2px;
-}
-
-.command-type-icon {
-  font-size: 14px;
-  color: #409eff;
-}
-
-.command-desc {
-  font-size: 11px;
-  color: #909399;
-}
-
-.command-meta {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.steps-container {
-  margin-left: 32px;
-  margin-top: 6px;
-  border-left: 2px solid #f0f0f0;
-  padding-left: 12px;
-}
-
-.step-item {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 6px 0;
-  border-bottom: 1px solid #f5f5f5;
-}
-
-.step-item:last-child {
-  border-bottom: none;
-}
-
-.step-number {
-  background: #409eff;
-  color: white;
-  border-radius: 50%;
-  width: 18px;
-  height: 18px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  font-weight: 500;
-  flex-shrink: 0;
-  margin-top: 2px;
-}
-
-.step-content {
-  flex: 1;
-}
-
-.step-command {
-  font-family: "Consolas", "Monaco", "Courier New", monospace;
-  font-size: 12px;
-  color: #303133;
-  background: #f8f9fa;
-  padding: 4px 8px;
-  border-radius: 3px;
-  border: 1px solid #e9ecef;
-  margin-bottom: 4px;
-}
-
-.step-desc {
-  font-size: 11px;
-  color: #909399;
-}
-
-/* 保持向后兼容的样式 */
-.command-list {
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.command-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px;
-  margin-bottom: 8px;
-  background: white;
-  border-radius: 6px;
-  border: 1px solid #e4e7ed;
-}
-
-.command-info {
-  flex: 1;
-}
-
-.command-name {
-  font-weight: 600;
-  color: #303133;
-  margin-bottom: 4px;
-}
-
-.command-desc {
-  font-size: 12px;
-  color: #909399;
-  margin-bottom: 6px;
-}
-
-.command-meta {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-}
-
-.command-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.terminal-container {
-  display: flex;
-  flex-direction: column;
-  padding: 0;
-}
-
-.terminal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16px;
-  border-bottom: 1px solid #e4e7ed;
-  background: #f5f7fa;
-}
-
-.terminal-header h3 {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.terminal-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.progress-section {
-  padding: 12px 16px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e4e7ed;
-}
-
-.progress-info {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.progress-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.project-name {
-  font-weight: 600;
-  color: #303133;
-  font-size: 14px;
-}
-
-.current-command {
-  font-size: 12px;
-  color: #606266;
-}
-
-.progress-stats {
-  font-size: 12px;
-  color: #909399;
-  font-weight: 500;
-}
-
-.execution-progress {
-  margin: 0;
-}
-
-.terminal-output {
-  flex: 1;
-  padding: 16px;
-  background: #1e1e1e;
-  color: #d4d4d4;
-  font-family: "Consolas", "Monaco", "Courier New", monospace;
-  font-size: 13px;
-  line-height: 1.4;
-  overflow-y: auto;
-  white-space: pre-wrap;
-}
-
-.output-line {
-  margin-bottom: 2px;
-  word-break: break-all;
-}
-
-.error-line {
-  color: #f56c6c;
-}
-
-.success-line {
-  color: #67c23a;
-}
-
-.progress-line {
-  color: #409eff;
-  font-weight: 500;
-}
-
-.empty-output {
-  color: #909399;
-  text-align: center;
-  margin-top: 50px;
-}
+/* 子组件已接管样式：ProjectList、SubProjectList、TerminalOutput、StatusBar */
 
 .status-bar {
   display: flex;
@@ -2273,5 +1535,9 @@ body,
   height: 100%;
   overflow: hidden;
   overscroll-behavior: none;
+}
+
+.terminal-container {
+  overflow: hidden;
 }
 </style>
