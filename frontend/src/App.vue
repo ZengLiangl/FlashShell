@@ -380,7 +380,7 @@
 import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from "vue";
 import { ElMessage } from "element-plus";
 import * as App from "../wailsjs/go/app/App";
-import { EventsOn } from "../wailsjs/runtime/runtime";
+import { EventsOn, EventsOff } from "../wailsjs/runtime/runtime";
 import Convert from "ansi-to-html";
 
 export default {
@@ -400,6 +400,16 @@ export default {
       totalSteps: 0,
     });
     const terminalOutput = ref(null);
+
+    // 终端输出行数上限，防止内存增长过快
+    const MAX_OUTPUT_LINES = 2000;
+
+    const enforceOutputLimit = () => {
+      const overflow = outputLines.value.length - MAX_OUTPUT_LINES;
+      if (overflow > 0) {
+        outputLines.value.splice(0, overflow);
+      }
+    };
 
     // 左侧面板宽度控制
     const leftPanelWidth = ref(400);
@@ -765,12 +775,15 @@ export default {
               outputLines.value.push(outputItem);
             }
           });
+          // 控制最大行数，避免无上限增长
+          enforceOutputLimit();
 
-          // 滚动到底部
+          // 仅在视图已接近底部时保持粘底，避免用户查看历史时被强制跳转
+          const el = terminalOutput.value;
+          const shouldStickToBottom = el && (el.scrollTop + el.clientHeight >= el.scrollHeight - 10);
           nextTick(() => {
-            if (terminalOutput.value) {
-              terminalOutput.value.scrollTop =
-                terminalOutput.value.scrollHeight;
+            if (shouldStickToBottom && terminalOutput.value) {
+              terminalOutput.value.scrollTop = terminalOutput.value.scrollHeight;
             }
           });
         }
@@ -814,22 +827,33 @@ export default {
       getOutput();
     };
 
-    // 开始输出轮询
+    // 开始输出轮询（动态退避：运行中高频，空闲降低频率）
     let outputTimer = null;
+    const computePollInterval = () => (status.isRunning ? 300 : 1500);
+    const scheduleNextPoll = () => {
+      const interval = computePollInterval();
+      outputTimer = setTimeout(async () => {
+        try {
+          await getOutput();
+          await getStatus();
+        } finally {
+          scheduleNextPoll();
+        }
+      }, interval);
+    };
+
     const startOutputPolling = () => {
       if (outputTimer) {
-        clearInterval(outputTimer);
+        clearTimeout(outputTimer);
+        outputTimer = null;
       }
-      outputTimer = setInterval(() => {
-        getOutput();
-        getStatus();
-      }, 500);
+      scheduleNextPoll();
     };
 
     // 停止输出轮询
     const stopOutputPolling = () => {
       if (outputTimer) {
-        clearInterval(outputTimer);
+        clearTimeout(outputTimer);
         outputTimer = null;
       }
     };
@@ -1244,6 +1268,12 @@ export default {
       stopOutputPolling();
       // 清理键盘事件监听器
       document.removeEventListener('keydown', handleKeyDown);
+      // 解绑 Wails 事件，防止重复注册导致内存泄漏
+      try {
+        EventsOff("operation:result", "config:changed", "open:machine-config", "open:workpath-config");
+      } catch (e) {
+        // 忽略解绑异常，确保卸载流程不中断
+      }
     });
 
     return {
@@ -1390,6 +1420,7 @@ export default {
   flex-direction: column;
   position: relative;
   height: 100%;
+  overflow-x: hidden;
 }
 
 .panel-section {
@@ -1439,6 +1470,7 @@ export default {
   flex-direction: column;
   gap: 8px;
   overflow-y: auto;
+  overflow-x: hidden;
   flex: 1;
   min-height: 0;
 }
@@ -1478,6 +1510,7 @@ export default {
   min-height: 0;
   /* 允许 flex 子项缩小 */
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .subproject-item {
@@ -2230,5 +2263,15 @@ export default {
 
 .left-panel.resizing .resize-handle {
   background: rgba(64, 158, 255, 0.5);
+}
+</style>
+
+<style>
+html,
+body,
+#app {
+  height: 100%;
+  overflow: hidden;
+  overscroll-behavior: none;
 }
 </style>
