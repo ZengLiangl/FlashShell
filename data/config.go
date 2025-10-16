@@ -234,6 +234,14 @@ func (cm *ConfigManager) GetGlobalConfig() (*GlobalConfig, error) {
 	return cm.globalConfigManager.LoadGlobalConfig()
 }
 
+// GetGlobalConfigPath 获取全局配置文件路径
+func (cm *ConfigManager) GetGlobalConfigPath() string {
+	if cm.globalConfigManager == nil {
+		return ""
+	}
+	return cm.globalConfigManager.GetConfigPath()
+}
+
 // GetGlobalConfigForRefresh 获取全局配置（用于刷新，从文件重新读取）
 func (cm *ConfigManager) GetGlobalConfigForRefresh() (*GlobalConfig, error) {
 	if cm.globalConfigManager == nil {

@@ -96,6 +96,11 @@ func (a *App) ExecuteSubProject(projectName, subProjectName string) error {
 	a.executionMutex.Lock()
 	defer a.executionMutex.Unlock()
 
+	// 在执行前刷新配置，确保读取到最新的 SubProject 定义
+	if _, err := a.configManager.LoadConfigForRefresh(); err != nil {
+		return err
+	}
+
 	// 异步执行 SubProject
 	go func() {
 		if err := a.subProjectRunner.ExecuteSubProject(projectName, subProjectName, a.outputChannel); err != nil {
@@ -280,7 +285,7 @@ func (a *App) GetGlobalConfig() (*data.GlobalConfig, error) {
 
 // GetGlobalConfigForRefresh 获取全局配置（用于刷新，从文件重新读取）
 func (a *App) GetGlobalConfigForRefresh() (*data.GlobalConfig, error) {
-	globalConfig , err := a.configManager.GetGlobalConfigForRefresh()
+	globalConfig, err := a.configManager.GetGlobalConfigForRefresh()
 	if err != nil {
 		return nil, err
 	}
@@ -444,6 +449,14 @@ func (a *App) CreateApplicationMenu() *menu.Menu {
 	fileMenu.AddText("新建窗口", keys.CmdOrCtrl("n"), func(_ *menu.CallbackData) {
 		NewWindow()
 	})
+	fileMenu.AddText("打开全局配置", nil, func(_ *menu.CallbackData) {
+		// 获取全局配置文件路径 GlobalConfigManager
+		globalConfigPath := a.configManager.GetGlobalConfigPath()
+		if globalConfigPath != "" {
+			OpenCurrentConfig(globalConfigPath)
+		}
+	})
+	
 	fileMenu.AddText("打开当前配置", nil, func(_ *menu.CallbackData) {
 		a.OpenCurrentConfigWithEvent()
 	})

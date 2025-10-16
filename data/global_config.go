@@ -104,6 +104,11 @@ func (gcm *GlobalConfigManager) GetConfig() *GlobalConfig {
 	return gcm.config
 }
 
+// GetConfigPath 获取全局配置文件路径
+func (gcm *GlobalConfigManager) GetConfigPath() string {
+	return gcm.configPath
+}
+
 // UpdateLastOpenedFile 更新最后打开的配置文件
 func (gcm *GlobalConfigManager) UpdateLastOpenedFile(filePath string) error {
 	if gcm.config == nil {
