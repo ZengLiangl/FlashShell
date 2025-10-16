@@ -1,5 +1,222 @@
 # Quick Cmd
 
+一个基于 Wails v2 的跨平台桌面应用，用于快速执行和管理本地/远程（SSH）命令，支持多项目分组、可视化执行、实时终端输出（ANSI 颜色）、环境变量管理、远程机器管理等。
+
+## 功能特性
+
+- 图形化执行：项目/子项目分组展示，一键执行整套命令
+- 实时终端：完整 ANSI 转义序列渲染，自动高亮成功/错误
+- 多配置支持：支持多个 `config.yaml`，菜单中可切换/刷新/打开
+- 远程管理：SSH 连接测试、敏感信息加密缓存、SFTP 支持（见代码）
+- 环境变量：全局“环境变量配置管理”对话框，变量在配置中可展开
+- 机器管理：全局“机器配置”对话框，新增/编辑/删除/连接测试
+- 窗口与菜单：原生应用菜单（文件/设置/帮助），含“关于”弹框
+
+## 技术栈
+
+- 后端：Go 1.20+、Wails v2（`wails.Run` 应用生命周期）
+- 前端：Vue 3、Element Plus、Vite（构建输出内嵌到 Wails 资源）
+
+## 目录结构（关键）
+
+```
+new_cmd/
+├── app/                 # 应用主逻辑（菜单、事件、配置入口）
+│   └── app.go
+├── data/                # 配置与全局状态（加载/保存/切换）
+├── define/              # 公共类型定义（状态、事件、模型）
+├── machine/             # 本地/SSH 执行与传输
+├── frontend/            # 前端应用（Vue 3 + Element Plus）
+│   ├── src/App.vue      # 主界面（终端、列表、对话框、事件）
+│   └── src/components/  # 机器/环境变量/关于 等弹框组件
+├── build/               # 构建产物（macOS .app 等）
+├── main.go              # 应用入口（菜单、窗口参数、资源绑定）
+├── Makefile             # 常用任务（dev/build/test/lint 等）
+├── build.sh, dev.sh     # 构建/开发脚本（由 Makefile 调用）
+└── config.yaml          # 配置文件（可在应用中切换/打开）
+```
+
+## 全局配置（global_config.yaml）
+
+- 默认路径：`~/.cmd-config/global_config.yaml`（若不存在将自动创建）
+- 用途：
+  - 记忆最后打开的业务配置文件（`lastOpenedFile`）与历史列表（`configFile`）
+  - 维护工作路径变量映射 `workPaths`，在业务配置中可使用 `${KEY}` 引用
+  - 维护全局机器清单 `machines`（敏感信息经加密后写入 `encrypted_data`）
+
+字段说明：
+- `appId`：应用标识
+- `windowsName`：窗口标题
+- `configFile`：历史业务配置文件数组
+- `lastOpenedFile`：最后一次打开的业务配置文件
+- `workPaths`：键值对的路径变量表，如 `HOME: ~`
+- `machines`：机器数组，结构为 `name`、`key_file`、`encrypted_data`（敏感信息通过 UI 写入后加密存储）
+
+默认示例：
+
+```yaml
+appId: com.runner
+windowsName: "运行器"
+configFile:
+  - config.yaml
+lastOpenedFile: config.yaml
+workPaths:
+  HOME: ~
+machines:
+  - name: 示例服务器
+    key_file: ~/.ssh/id_rsa
+    # encrypted_data: "..."  # UI 写入后生成
+```
+
+说明：业务配置在解析时会先用全局配置的 `workPaths` 替换 `${KEY}`，再展开 `~` 与环境变量（见 `data/config.go` 的 `processPathVariables` 与 `expandPath`）。
+
+## 安装与依赖
+
+1) 安装 Go 1.20+、Node.js 16+
+2) 安装 Wails CLI（若本地未安装）：
+
+```bash
+go install github.com/wailsapp/wails/v2/cmd/wails@latest
+```
+
+3) 安装依赖（前后端）：
+
+```bash
+make install-deps
+```
+
+> 提示：`make frontend-deps` 可单独安装前端依赖；`go mod tidy` 在 `install-deps` 中自动执行。
+
+## 开发与构建
+
+- 开发模式（热重载，通过脚本统一启动）：
+
+```bash
+make dev
+```
+
+- 构建发布版本（产物位于 `build/`）：
+
+```bash
+make build
+```
+
+- 其他常用任务：
+
+```bash
+make test   # 运行测试（Go）
+make fmt    # 格式化（Go + 尝试前端）
+make lint   # 静态检查（Go vet）
+make clean  # 清理构建与前端产物
+```
+
+## 运行模式（前台/后台）
+
+应用支持通过命令行切换运行模式（见 `main.go`）：
+
+- 前台（默认）：`-reg=desk`
+- 后台（守护）运行：`-reg=back`
+
+当使用后台模式时，应用会自举为守护进程并将日志写入：
+- 标准输出：`/tmp/quick-cmd.out`
+- 标准错误：`/tmp/quick-cmd.err`
+
+示例：
+
+```bash
+./build/bin/quick-cmd -reg=back
+```
+
+> 非 Windows 平台将设置 `Setsid` 实现后台化；进程内部使用 `QUICKCMD_DAEMONIZED=1` 防止递归。
+
+## 应用菜单与对话框
+
+- 文件
+  - 新建窗口：启动新进程打开新的应用窗口
+
+- 设置
+  - 配置文件：动态列出所有配置；可切换、刷新、打开全局/当前配置
+  - 机器配置：打开“机器配置”对话框（增删改查、连接测试、敏感信息）
+  - 环境变量：打开“环境变量配置管理”对话框（增删改查、用法说明）
+
+- 帮助
+  - 关于：打开“关于 Quick Cmd”对话框，展示项目简介与版本信息
+
+以上菜单均由 `app/app.go` 中的 `CreateApplicationMenu()` 构建，通过 Wails 事件与前端组件联动（例如 `open:machine-config`、`open:workpath-config`、`open:about`）。
+
+## 配置文件与多配置切换
+
+- 首次启动时若缺少 `config.yaml`，后端会创建默认配置并加载
+- 菜单“设置/配置文件”支持：
+  - 单选切换当前配置
+  - 刷新配置列表
+  - 打开全局配置文件/当前配置文件
+- 切换配置会：
+  - 停止正在运行的任务
+  - 清空输出
+  - 重建执行器并通知前端 `config:changed`（前端将自动刷新）
+
+### 业务配置示例（与实现一致）
+
+```yaml
+projects:
+  - name: 示例项目
+    description: 这是一个示例项目
+    workdir: "${HOME}/workspace/example"
+    subprojects:
+      - name: 构建
+        description: 构建相关命令
+        commands:
+          - name: 编译
+            description: 编译项目
+            type: batch
+            steps:
+              - "${MVM} clean compile"
+          - name: 测试
+            description: 运行测试
+            type: batch
+            steps:
+              - "${MVM} test"
+
+machines:
+  - name: 示例服务器
+    key_file: ~/.ssh/id_rsa
+    # encrypted_data: "..."  # 经 UI 写入
+```
+
+## 键盘快捷键（前端）
+
+- Cmd/Ctrl+C：复制选中文本；若无选择则复制全部终端文本
+- Cmd/Ctrl+K：清空终端输出
+- Cmd/Ctrl+M：打开“机器配置”
+- Cmd/Ctrl+E：打开“环境变量配置”
+- Escape：关闭已打开对话框
+
+## 窗口与外观
+
+窗口标题从全局配置中读取（`windowsName`），若缺失则为“Quick Cmd”。应用窗口尺寸与限制见 `main.go`（宽 1200、高 768，设定最小值与背景色）。
+
+## 典型工作流
+
+1) 启动应用并加载配置
+2) 在列表中选择一个项目
+3) 在“子项目”区域选择要执行的单元并点击“执行”
+4) 在右侧终端观察实时输出与进度
+5) 如需中断，可点击状态栏“停止全部”或对具体子项目“停止”
+
+## 故障排除
+
+- Wails 构建失败：更新 Wails CLI；确保 Node/Go 版本满足要求
+- SSH 连接失败：检查主机/端口/认证信息；可在“机器配置”中进行连接测试
+- 前端无响应：查看控制台/刷新界面；确保后端正常运行
+- 配置刷新无效：在菜单中使用“刷新配置列表”或切换配置
+
+## 许可证
+
+MIT License，详见 `LICENSE`。
+
+# Quick Cmd
+
 这是一个名为 **Quick Cmd** 的 Go 桌面应用程序，主要用于**快速执行和管理各种命令行任务**。它是一个基于 Wails GUI 框架的跨平台工具，可以帮助开发者快速执行本地和远程服务器的命令。
 
 ## 快速开始
@@ -66,17 +283,16 @@ make dev
 
 📖 **详细使用说明请查看 [USAGE.md](USAGE.md)**
 
-🌈 **ANSI 颜色支持请查看 [ANSI_SUPPORT.md](ANSI_SUPPORT.md)**
 
 ### 配置文件
 
-创建 `config.yaml` 文件来配置你的项目和命令：
+创建 `config.yaml` 文件来配置你的项目和命令（下例为标准结构，机器敏感信息不以明文出现）：
 
 ```yaml
 projects:
   - name: "我的项目"
     description: "项目描述"
-    workdir: "~/workspace/myproject"
+    workdir: "${HOME}/workspace/myproject"
     subprojects:
       - name: "构建"
         description: "构建相关命令"
@@ -94,10 +310,8 @@ projects:
 
 machines:
   - name: "生产服务器"
-    host: "your-server.com"
-    port: 22
-    user: "deploy"
-    keyfile: "~/.ssh/id_rsa"
+    key_file: "~/.ssh/id_rsa"
+    # encrypted_data: "..."  # 通过 UI 写入（host/port/user/password）
 ```
 
 ## 核心功能特性

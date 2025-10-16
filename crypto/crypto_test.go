@@ -8,7 +8,7 @@ func TestEncryptDecryptSensitiveData(t *testing.T) {
 	// 测试数据
 	testData := &SensitiveData{
 		Name:     "测试服务器",
-		Host:     "101.200.180.32",
+		Host:     "your-server.com",
 		Port:     22,
 		Username: "root",
 	}
