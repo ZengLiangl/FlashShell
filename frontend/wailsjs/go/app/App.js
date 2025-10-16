@@ -98,6 +98,10 @@ export function GetWorkPaths() {
   return window['go']['app']['App']['GetWorkPaths']();
 }
 
+export function OpenAbout() {
+  return window['go']['app']['App']['OpenAbout']();
+}
+
 export function OpenCurrentConfigWithEvent() {
   return window['go']['app']['App']['OpenCurrentConfigWithEvent']();
 }

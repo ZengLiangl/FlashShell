@@ -52,6 +52,8 @@ export function GetSubProjectStatus():Promise<define.SubProjectStatus>;
 
 export function GetWorkPaths():Promise<Record<string, string>>;
 
+export function OpenAbout():Promise<void>;
+
 export function OpenCurrentConfigWithEvent():Promise<void>;
 
 export function OpenMachineConfig():Promise<void>;

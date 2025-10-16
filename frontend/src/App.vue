@@ -50,6 +50,9 @@
 
     <!-- 环境变量配置弹框 -->
     <WorkPathConfigDialog v-model="workPathConfigVisible" />
+
+    <!-- 关于弹框 -->
+    <AboutDialog v-model="aboutVisible" :intro-html="aboutIntroHtml" />
   </div>
 </template>
 
@@ -66,10 +69,11 @@ import SubProjectList from "./components/SubProjectList.vue";
 import MachineConfigDialog from "./components/MachineConfigDialog.vue";
 import WorkPathConfigDialog from "./components/WorkPathConfigDialog.vue";
 import TerminalHeader from "./components/TerminalHeader.vue";
+import AboutDialog from "./components/AboutDialog.vue";
 
 export default {
   name: "App",
-  components: { TerminalOutput, StatusBar, ProjectList, SubProjectList, MachineConfigDialog, WorkPathConfigDialog, TerminalHeader },
+  components: { TerminalOutput, StatusBar, ProjectList, SubProjectList, MachineConfigDialog, WorkPathConfigDialog, TerminalHeader, AboutDialog },
   setup() {
     const projects = ref([]);
     const subProjects = ref([]);
@@ -115,6 +119,14 @@ export default {
 
     // 环境变量配置相关
     const workPathConfigVisible = ref(false);
+    // 关于弹框
+    const aboutVisible = ref(false);
+    const aboutIntroHtml = ref('');
+
+    const openAbout = () => {
+      aboutVisible.value = true;
+    };
+
     const workPathEditVisible = ref(false);
     const workPaths = ref({});
     const workPathsLoading = ref(false);
@@ -693,6 +705,12 @@ export default {
         console.log("收到 open:workpath-config 事件:", data);
         await openWorkPathConfig();
       });
+
+      // 监听关于事件
+      EventsOn("open:about", async (data) => {
+        console.log("收到 open:about 事件:", data);
+        openAbout();
+      });
     });
 
     // 机器配置相关方法
@@ -949,7 +967,7 @@ export default {
       document.removeEventListener('keydown', handleKeyDown);
       // 解绑 Wails 事件，防止重复注册导致内存泄漏
       try {
-        EventsOff("operation:result", "config:changed", "open:machine-config", "open:workpath-config");
+        EventsOff("operation:result", "config:changed", "open:machine-config", "open:workpath-config", "open:about");
       } catch (e) {
         // 忽略解绑异常，确保卸载流程不中断
       }
@@ -1022,6 +1040,10 @@ export default {
       editWorkPath,
       saveWorkPath,
       deleteWorkPath,
+      // 关于
+      aboutVisible,
+      aboutIntroHtml,
+      openAbout,
       // 事件处理
       handleOperationEvent,
       // 键盘快捷键

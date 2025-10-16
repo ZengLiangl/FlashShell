@@ -519,6 +519,7 @@ func (a *App) CreateApplicationMenu() *menu.Menu {
 	helpMenu := appMenu.AddSubmenu("帮助")
 	helpMenu.AddText("关于", nil, func(_ *menu.CallbackData) {
 		// 显示关于信息
+		a.OpenAbout()
 	})
 
 	return appMenu
@@ -712,6 +713,18 @@ func (a *App) OpenWorkPathConfig() {
 		fmt.Println("警告: ctx 为 nil，无法发送事件")
 		a.emitOperationEvent(define.OpTypeEnvConfig, "无法发送事件，ctx 为 nil", define.MsgTypeError, false, nil)
 	}
+}
+
+// OpenAbout 打开关于对话框（供菜单调用）
+func (a *App) OpenAbout() {
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "open:about", map[string]interface{}{
+			"timestamp": time.Now().Unix(),
+		})
+		fmt.Println("发送打开关于对话框事件")
+		return
+	}
+	fmt.Println("警告: ctx 为 nil，无法发送关于事件")
 }
 
 // emitOperationEvent 发送操作事件到前端
