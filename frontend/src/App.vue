@@ -10,34 +10,40 @@
       </div>
     </div>
 
-    <el-container class="main-container">
-      <!-- 左侧面板 -->
-      <el-aside :width="leftPanelWidth + 'px'" class="left-panel" :class="{ resizing: isResizing }">
-        <!-- 拖拽手柄 -->
-        <div class="resize-handle" @mousedown="startResize"></div>
-        <!-- 项目列表 -->
-        <ProjectList :projects="projects" :selected-project-name="selectedProject?.name || ''" @refresh="refreshConfig"
-          @select="selectProject" />
+    <!-- 详情视图：展示子项目 + 终端 + 状态栏 -->
+    <template v-if="selectedProject">
+      <el-container class="main-container">
+        <!-- 左侧面板 -->
+        <el-aside :width="leftPanelWidth + 'px'" class="left-panel" :class="{ resizing: isResizing }">
+          <!-- 拖拽手柄 -->
+          <div class="resize-handle" @mousedown="startResize"></div>
+          <SubProjectList :selected-project="selectedProject" :sub-projects="subProjects"
+            :expanded-sub-projects="expandedSubProjects" :expanded-commands="expandedCommands" :status="status"
+            :get-command-tag-type="getCommandTagType" :get-command-type-text="getCommandTypeText"
+            :is-sub-project-running="isSubProjectRunning" @toggle-sub="toggleSubProject" @toggle-cmd="toggleCommand"
+            @execute-sub="executeSubProject" @stop-sub="stopSubProject" @back="backToProjectList" />
+        </el-aside>
 
-        <!-- SubProject 列表 -->
-        <SubProjectList :selected-project="selectedProject" :sub-projects="subProjects"
-          :expanded-sub-projects="expandedSubProjects" :expanded-commands="expandedCommands" :status="status"
-          :get-command-tag-type="getCommandTagType" :get-command-type-text="getCommandTypeText"
-          :is-sub-project-running="isSubProjectRunning" @toggle-sub="toggleSubProject" @toggle-cmd="toggleCommand"
-          @execute-sub="executeSubProject" @stop-sub="stopSubProject" />
-      </el-aside>
+        <!-- 右侧终端输出 -->
+        <el-main class="terminal-container">
+          <TerminalHeader :show-back="false" @clear="clearOutput" @refresh="refreshOutput" />
+          <TerminalOutput :status="status" :output-lines="outputLines" :progress-percentage="progressPercentage"
+            :progress-status="progressStatus" />
+        </el-main>
+      </el-container>
 
-      <!-- 右侧终端输出 -->
-      <el-main class="terminal-container">
-        <TerminalHeader @clear="clearOutput" @refresh="refreshOutput" />
-        <TerminalOutput :status="status" :output-lines="outputLines" :progress-percentage="progressPercentage"
-          :progress-status="progressStatus" />
-      </el-main>
-    </el-container>
+      <!-- 状态栏（仅详情视图显示） -->
+      <StatusBar :status="status" :selected-project="selectedProject" :app-info="'Quick Cmd v1.2.0'"
+        @stop-all="stopAllCommands" />
+    </template>
 
-    <!-- 状态栏 - 始终显示在底部 -->
-    <StatusBar :status="status" :selected-project="selectedProject" :app-info="'Quick Cmd v1.2.0'"
-      @stop-all="stopAllCommands" />
+    <!-- 列表视图：全局仅展示项目列表 -->
+    <template v-else>
+      <div class="projectlist-fullscreen">
+        <ProjectList :projects="projects" :selected-project-name="''" @refresh="refreshConfig" @select="selectProject"
+          :full-screen="true" />
+      </div>
+    </template>
 
     <!-- 机器配置弹框 -->
     <MachineConfigDialog v-model="machineConfigVisible" />
@@ -176,11 +182,9 @@ export default {
         console.log("设置的项目数据:", projects.value);
         console.log("项目数量:", projects.value.length);
 
-        if (projects.value.length > 0) {
-          console.log("第一个项目:", projects.value[0]);
-          // 默认选中第一个项目
-          selectProject(projects.value[0]);
-        }
+        // 初始不自动选中项目，展示项目列表
+        selectedProject.value = null;
+        subProjects.value = [];
       } catch (error) {
         console.error("加载配置失败:", error);
         console.error("错误详情:", error.stack);
@@ -219,11 +223,9 @@ export default {
         console.log("设置的项目数据:", projects.value);
         console.log("项目数量:", projects.value.length);
 
-        if (projects.value.length > 0) {
-          console.log("第一个项目:", projects.value[0]);
-          // 默认选中第一个项目
-          selectProject(projects.value[0]);
-        }
+        // 刷新后保持在项目列表，避免误触发执行
+        selectedProject.value = null;
+        subProjects.value = [];
 
         console.log("项目配置刷新完成");
       } catch (error) {
@@ -292,6 +294,13 @@ export default {
       expandedCommands.value = {};
 
       console.log(`选择项目: ${project.name}, 找到 ${subProjects.value.length} 个 SubProjects`);
+    };
+
+    const backToProjectList = () => {
+      selectedProject.value = null;
+      subProjects.value = [];
+      expandedSubProjects.value = {};
+      expandedCommands.value = {};
     };
 
     // 切换 SubProject 展开状态
@@ -961,6 +970,7 @@ export default {
       refreshConfig,
       debugConfig,
       selectProject,
+      backToProjectList,
       toggleSubProject,
       toggleCommand,
       getCommandTagType,

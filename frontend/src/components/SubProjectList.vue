@@ -2,7 +2,15 @@
     <div class="panel-section subproject-section">
         <div class="section-header">
             <h3>可执行项目</h3>
-            <el-tag v-if="selectedProject" size="small">{{ selectedProject.name }}</el-tag>
+            <div class="header-actions">
+                <el-tag v-if="selectedProject" size="small">{{ selectedProject.name }}</el-tag>
+                <el-button size="small" type="primary" text @click="$emit('back')">
+                    <el-icon>
+                        <ArrowLeft />
+                    </el-icon>
+                    返回
+                </el-button>
+            </div>
         </div>
 
         <div v-if="subProjects.length > 0" class="subproject-list">
@@ -93,7 +101,7 @@ export default {
         getCommandTypeText: { type: Function, required: true },
         isSubProjectRunning: { type: Function, required: true }
     },
-    emits: ['toggle-sub', 'toggle-cmd', 'execute-sub', 'stop-sub']
+    emits: ['toggle-sub', 'toggle-cmd', 'execute-sub', 'stop-sub', 'back']
 }
 </script>
 
@@ -115,6 +123,12 @@ export default {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 12px;
+}
+
+.header-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .subproject-list {

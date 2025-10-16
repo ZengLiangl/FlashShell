@@ -2,18 +2,27 @@
     <div class="terminal-header">
         <h3>终端输出</h3>
         <div class="terminal-actions">
-            <el-button size="small" @click="$emit('clear')">
-                <el-icon>
-                    <Delete />
-                </el-icon>
-                清空
-            </el-button>
-            <el-button size="small" @click="$emit('refresh')">
-                <el-icon>
-                    <Refresh />
-                </el-icon>
-                刷新
-            </el-button>
+            <div class="actions-left"></div>
+            <div class="actions-right">
+                <el-button v-if="showBack" size="small" type="primary" text @click="$emit('back')">
+                    <el-icon>
+                        <ArrowLeft />
+                    </el-icon>
+                    返回
+                </el-button>
+                <el-button size="small" @click="$emit('clear')">
+                    <el-icon>
+                        <Delete />
+                    </el-icon>
+                    清空
+                </el-button>
+                <el-button size="small" @click="$emit('refresh')">
+                    <el-icon>
+                        <Refresh />
+                    </el-icon>
+                    刷新
+                </el-button>
+            </div>
         </div>
     </div>
 </template>
@@ -21,7 +30,10 @@
 <script>
 export default {
     name: 'TerminalHeader',
-    emits: ['clear', 'refresh']
+    props: {
+        showBack: { type: Boolean, default: false }
+    },
+    emits: ['clear', 'refresh', 'back']
 }
 </script>
 
