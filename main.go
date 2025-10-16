@@ -2,6 +2,12 @@ package main
 
 import (
 	"embed"
+	"flag"
+	"os"
+	"os/exec"
+	"runtime"
+	"strings"
+	"syscall"
 
 	"quick-cmd/app"
 
@@ -15,6 +21,41 @@ var assets embed.FS
 
 // main is the entry point for the application
 func main() {
+	// parse run mode from command line
+	runMode := flag.String("reg", "desk", "运行模式: desk(前台)/back(后台)")
+	flag.Parse()
+
+	// daemonize if requested (like nohup), only on non-Windows
+	if *runMode == "back" && os.Getenv("QUICKCMD_DAEMONIZED") != "1" {
+		exePath, err := os.Executable()
+		if err == nil {
+			childArgs := os.Args[1:]
+			for i, a := range childArgs {
+				if strings.HasPrefix(a, "-reg=") {
+					childArgs[i] = "-reg=desk"
+				}
+			}
+
+			stdoutFile, _ := os.OpenFile("/tmp/quick-cmd.out", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+			stderrFile, _ := os.OpenFile("/tmp/quick-cmd.err", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+
+			cmd := exec.Command(exePath, childArgs...)
+			cmd.Env = append(os.Environ(), "QUICKCMD_DAEMONIZED=1")
+			cmd.Stdin = nil
+			if stdoutFile != nil {
+				cmd.Stdout = stdoutFile
+			}
+			if stderrFile != nil {
+				cmd.Stderr = stderrFile
+			}
+			if runtime.GOOS != "windows" {
+				cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+			}
+			_ = cmd.Start()
+		}
+		os.Exit(0)
+	}
+
 	// Create an instance of the app structure
 	appInstance := app.NewApp()
 	// 创建菜单

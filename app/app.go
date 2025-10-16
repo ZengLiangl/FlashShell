@@ -437,6 +437,12 @@ func (a *App) UpdateApplicationMenu() error {
 	newMenu := a.CreateApplicationMenu()
 	wailsRuntime.MenuSetApplicationMenu(a.ctx, newMenu)
 	wailsRuntime.MenuUpdateApplicationMenu(a.ctx)
+	globalConfig, _ := a.GetGlobalConfig()
+	if globalConfig.WindowsName != "" {
+		wailsRuntime.WindowSetTitle(a.ctx, globalConfig.WindowsName)
+	} else {
+		wailsRuntime.WindowSetTitle(a.ctx, "Quick Cmd")
+	}
 	return nil
 }
 
@@ -448,17 +454,6 @@ func (a *App) CreateApplicationMenu() *menu.Menu {
 	fileMenu := appMenu.AddSubmenu("文件")
 	fileMenu.AddText("新建窗口", keys.CmdOrCtrl("n"), func(_ *menu.CallbackData) {
 		NewWindow()
-	})
-	fileMenu.AddText("打开全局配置", nil, func(_ *menu.CallbackData) {
-		// 获取全局配置文件路径 GlobalConfigManager
-		globalConfigPath := a.configManager.GetGlobalConfigPath()
-		if globalConfigPath != "" {
-			OpenCurrentConfig(globalConfigPath)
-		}
-	})
-	
-	fileMenu.AddText("打开当前配置", nil, func(_ *menu.CallbackData) {
-		a.OpenCurrentConfigWithEvent()
 	})
 
 	fileMenu.AddSeparator()
@@ -496,6 +491,17 @@ func (a *App) CreateApplicationMenu() *menu.Menu {
 		configFileMenu.AddSeparator()
 		configFileMenu.AddText("刷新配置列表", keys.CmdOrCtrl("r"), func(_ *menu.CallbackData) {
 			a.RefreshConfigMenuWithEvent()
+		})
+		configFileMenu.AddText("打开全局配置", nil, func(_ *menu.CallbackData) {
+			// 获取全局配置文件路径 GlobalConfigManager
+			globalConfigPath := a.configManager.GetGlobalConfigPath()
+			if globalConfigPath != "" {
+				OpenCurrentConfig(globalConfigPath)
+			}
+		})
+
+		configFileMenu.AddText("打开当前配置", nil, func(_ *menu.CallbackData) {
+			a.OpenCurrentConfigWithEvent()
 		})
 	}
 
