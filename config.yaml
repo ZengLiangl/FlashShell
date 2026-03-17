@@ -20,3 +20,233 @@ projects:
               - "upload hj-business/target/hj-business.jar /home/test/hj-business.jar"
               # 执行脚本（按需加 bash/sh）
               - "bash /home/test/restart-test.sh"
+  - name: "XYJ"
+    description: ""
+    subprojects:
+      - name: "发布测试【merchant】"
+        description: ""
+        workdir: "${ACC-CLOUD}"
+        commands:
+          - name: "打包【merchant】"
+            description: "Maven构建"
+            type: "batch"
+            steps:
+              - ${MVM} package -Dmaven.test.skip=true -P dev
+          - name: "发布测试【merchant】"
+            description: "Maven构建"
+            type: "remote"
+            machine: jz
+            steps:
+              - upload ${ACC-CLOUD}/xyj-merchant/merchant-service/target/jar /root/app/merchant-service/lib
+              - upload ${ACC-CLOUD}/xyj-merchant/merchant-service/target/merchant-service-1.0-dev-SNAPSHOT.jar /root/app/merchant-service/merchant-service-1.0-dev-SNAPSHOT.jar
+              - docker restart merchant-service
+
+      - name: "发布测试【open】"
+        description: ""
+        workdir: "${ACC-CLOUD}"
+        commands:
+          - name: "打包【open】"
+            description: "Maven构建"
+            type: "batch"
+            steps:
+              - ${MVM} package -Dmaven.test.skip=true -P dev
+          - name: "发布测试【open】"
+            description: "Maven构建"
+            type: "remote"
+            machine: jz
+            steps:
+              - upload ${ACC-CLOUD}/xyj-open/open-service/target/jar /root/app/open-service/lib
+              - upload ${ACC-CLOUD}/xyj-open/open-service/target/open-service-1.0-dev-SNAPSHOT.jar /root/app/open-service/open-service-1.0-dev-SNAPSHOT.jar
+              - docker restart open-service
+
+      - name: "发布测试【order】"
+        description: ""
+        workdir: "${ACC-CLOUD}"
+        commands:
+          - name: "打包【order】"
+            description: "Maven构建"
+            type: "batch"
+            steps:
+              - ${MVM} package -Dmaven.test.skip=true -P dev -pl xyj-order/order-service
+          - name: "发布测试【order】"
+            description: "Maven构建"
+            type: "remote"
+            machine: jz
+            steps:
+              # - upload ${ACC-CLOUD}/xyj-order/order-service/target/jar /root/app/order-service/lib
+              # - upload ${ACC-CLOUD}/xyj-order/order-service/target/order-service-1.0-dev-SNAPSHOT.jar /root/app/order-service/order-service-1.0-dev-SNAPSHOT.jar
+
+              - echo $LANG
+              - docker restart order-service
+
+      - name: "发布测试【pay】"
+        description: ""
+        workdir: "${ACC-CLOUD}"
+        commands:
+          - name: "打包【pay】"
+            description: "Maven构建"
+            type: "batch"
+            steps:
+              - ${MVM} package -Dmaven.test.skip=true -P dev -pl xyj-pay/pay-service
+          - name: "发布测试【pay】"
+            description: "Maven构建"
+            type: "remote"
+            machine: jz
+            steps:
+              - upload ${ACC-CLOUD}/xyj-pay/pay-service/target/pay-service-1.0-dev-SNAPSHOT.jar /root/app/pay-service/pay-service-1.0-dev-SNAPSHOT.jar
+              - docker restart pay-service
+
+      - name: "发布测试【cp】"
+        description: ""
+        workdir: "${ACC-CLOUD}"
+        commands:
+          - name: "打包【cp】"
+            description: "Maven构建"
+            type: "batch"
+            steps:
+              - ${MVM} package -Dmaven.test.skip=true -P dev -pl xyj-cp/cp-service
+          - name: "发布测试【cp】"
+            description: "Maven构建"
+            type: "remote"
+            machine: jz
+            steps:
+              - upload ${ACC-CLOUD}/xyj-cp/cp-service/target/cp-service-1.0-dev-SNAPSHOT.jar /root/app/cp-service/cp-service-1.0-dev-SNAPSHOT.jar
+              - upload ${ACC-CLOUD}/xyj-cp/cp-service/target/cp-service-1.0-dev-SNAPSHOT.jar /root/app/cp-service/cp-service-1.0-dev-SNAPSHOT.jar
+              - docker restart cp-service
+
+      - name: "发布测试【hk】"
+        description: ""
+        workdir: "${ACC-CLOUD}"
+        commands:
+          - name: "打包【hk】"
+            description: "Maven构建"
+            type: "batch"
+            steps:
+              - ${MVM} package -Dmaven.test.skip=true -P dev -pl xyj-hk/hk-service
+          - name: "发布测试【hk】"
+            description: "Maven构建"
+            type: "remote"
+            machine: jz
+            steps:
+              - upload ${ACC-CLOUD}/xyj-hk/hk-service/target/hk-service-1.0-dev-SNAPSHOT.jar /root/app/hk-service/hk-service-1.0-dev-SNAPSHOT.jar
+              - upload ${ACC-CLOUD}/xyj-hk/hk-service/target/hk-service-1.0-dev-SNAPSHOT.jar /root/app/hk-service/hk-service-1.0-dev-SNAPSHOT.jar
+              - docker restart hk-service
+
+      - name: "发布测试【xyj-task】"
+        description: ""
+        workdir: "${ACC-CLOUD}"
+        commands:
+          - name: "打包【xyj-task】"
+            description: "Maven构建"
+            type: "batch"
+            steps:
+              - ${MVM} package -Dmaven.test.skip=true -P dev
+          - name: "发布测试【xyj-task】"
+            description: "Maven构建"
+            type: "remote"
+            machine: jz
+            steps:
+              - upload ${ACC-CLOUD}/xyj-iaas/xyj-task/target/xyj-task-1.0-dev-SNAPSHOT.jar /root/app/xyj-task/xyj-task-1.0-dev-SNAPSHOT.jar
+              - docker restart xyj-task
+
+      - name: "发布测试【xyjacc】"
+        workdir: "${XYJ-ACC}"
+        description: ""
+        commands:
+          - name: "打包测试xyjacc"
+            type: batch
+            steps:
+              - rm -rf ./libs/xyjacc-1.0.war
+              - ./gradlew war
+
+          - name: "发布测试xyjacc"
+            type: "remote"
+            machine: 196-dev
+            steps:
+              - docker stop xyjacc
+              - rm -rf /root/app/xyjacc/webapps/xyjacc
+              - rm -rf /root/app/xyjacc/webapps/xyjacc.war
+              - upload ${XYJ-ACC}/build/libs/xyjacc-1.0.war /root/app/xyjacc/webapps/xyjacc.war
+              - unzip /root/app/xyjacc/webapps/xyjacc.war -d /root/app/xyjacc/webapps/xyjacc
+              - rm -rf /root/app/xyjacc/webapps/xyjacc.war
+              - rm -rf /root/app/xyjacc/webapps/xyjacc/WEB-INF/classes/rebel.xml
+              - /bin/cp -f /root/app/config.properties /root/app/xyjacc/webapps/xyjacc/WEB-INF/classes/config/config.properties
+              - docker restart xyjacc
+
+      - name: "发布测试【xyjacc-cron】"
+        description: ""
+        workdir: ${XYJ-ACC-CRON}
+        commands:
+          - name: "打包测试xyjacc-cron"
+            type: batch
+            steps:
+              - rm -rf ./libs/xyjacc-1.0.war
+              - ./gradlew war
+
+          - name: "发布测试xyjacc-cron"
+            type: "remote"
+            machine: 196-dev
+            steps:
+              - docker stop xyjacc-corn
+              - rm -rf /root/app/xyjacc-corn/webapps/xyjacc
+              - rm -rf /root/app/xyjacc-corn/webapps/xyjacc.war
+              - upload ${XYJ-ACC-CRON}/build/libs/xyjacc-1.0.war /root/app/xyjacc-corn/webapps/xyjacc.war
+              - unzip /root/app/xyjacc-corn/webapps/xyjacc.war -d /root/app/xyjacc-corn/webapps/xyjacc
+              - rm -rf /root/app/xyjacc-corn/webapps/xyjacc.war
+              - rm -rf /root/app/xyjacc-corn/webapps/xyjacc/WEB-INF/classes/rebel.xml
+              - /bin/cp -f /root/app/config.properties /root/app/xyjacc-corn/webapps/xyjacc/WEB-INF/classes/config/config.properties
+              - rm -rf /root/app/xyjacc-corn/webapps/xyjacc/WEB-INF/classes/xiyijiang/com/service/GetPromSmsReportService.class
+              - rm -rf /root/app/xyjacc-corn/webapps/xyjacc/WEB-INF/classes/xiyijiang/com/service/GetSmsReportService.class
+              - docker restart xyjacc-corn
+      - name: "启动【测试环境】"
+        description: ""
+        commands:
+          - name: "启动测试环境"
+            type: "batch"
+            steps:
+              - curl https://t.xiyijiang.com/xyjacc/t/setServers?status=1
+      - name: "发布测试【gateway&auth】"
+        description: ""
+        workdir: "${ACC-CLOUD}"
+        commands:
+          - name: "发布测试【gateway&auth】"
+            type: "remote"
+            machine: jz
+            steps:
+              - docker restart auth-service gateway
+      - name: "启动【Nacos】"
+        description: ""
+        commands:
+          - name: "启动Nacos"
+            type: "batch"
+            steps:
+              - sh -c /Users/ll/Desktop/nacos/nacos/bin/startup.sh  -m standalone
+      - name: "关闭【Nacos】"
+        description: ""
+        commands:
+          - name: "关闭Nacos"
+            type: "batch"
+            steps:
+              - ps aux | grep /Users/ll/Desktop/nacos/nacos | grep -v grep | awk '{print $2}' | xargs -r kill -9
+
+      - name: "启动【Docker】"
+        description: ""
+        commands:
+          - name: "启动Docker"
+            type: "batch"
+            steps:
+              - open /Applications/Docker.app
+      - name: "关闭【Docker】"
+        description: ""
+        commands:
+          - name: "关闭Docker"
+            type: "batch"
+            steps:
+              - ps aux | grep /Applications/Docker.app | grep -v grep | awk '{print $2}' | xargs -r kill -9
+      - name: "获取【公网IP】"
+        description: ""
+        commands:
+          - name: "获取公网IP"
+            type: "batch"
+            steps:
+              - curl -s https://ipinfo.io/ip | tee /dev/tty | pbcopy
