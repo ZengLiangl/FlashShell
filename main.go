@@ -7,7 +7,7 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
-	"syscall"
+	_ "syscall"
 
 	"quick-cmd/app"
 
@@ -49,7 +49,7 @@ func main() {
 				cmd.Stderr = stderrFile
 			}
 			if runtime.GOOS != "windows" {
-				cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
+				// cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}
 			}
 			_ = cmd.Start()
 		}
@@ -76,7 +76,7 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		BackgroundColour: &options.RGBA{R: 27, G: 38, B: 54, A: 1},
+		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 1},
 		OnStartup:        appInstance.Startup,
 		OnDomReady:       appInstance.DomReady,
 		OnBeforeClose:    appInstance.BeforeClose,

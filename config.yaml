@@ -1,0 +1,22 @@
+projects:
+  - name: hj-server
+    description: hj-server
+    workdir: D:\IdeaProjects\hj-server
+    subprojects:
+      - name: 构建
+        description: 构建相关命令
+        commands:
+          - name: 编译
+            description: 编译项目
+            type: batch
+            steps:
+              - "mvn clean package -Dmaven.test.skip=true"
+          - name: 部署到测试服
+            description: 上传 hj-business.jar 然后执行重启脚本
+            type: remote
+            machine: huoju
+            steps:
+              # 上传：upload <本地路径> <远程路径>
+              - "upload hj-business/target/hj-business.jar /home/test/hj-business.jar"
+              # 执行脚本（按需加 bash/sh）
+              - "bash /home/test/restart-test.sh"
