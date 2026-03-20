@@ -671,6 +671,13 @@ export default {
     };
 
     onMounted(() => {
+      // 如果上一次刷新触发了页面重载，则在重载完成后再弹提示
+      const pendingReloadToast = sessionStorage.getItem('pendingReloadToastMessage');
+      if (pendingReloadToast) {
+        sessionStorage.removeItem('pendingReloadToastMessage');
+        ElMessage.success(pendingReloadToast);
+      }
+
       loadConfig();
       startOutputPolling();
 
@@ -933,7 +940,21 @@ export default {
     const handleOperationEvent = (event) => {
       console.log("处理操作事件:", event);
 
-      // 根据消息类型显示不同的提示
+      // 如果需要重新加载，显示加载状态并重新加载
+      if (event.needReload) {
+        // 需要 reload 时不在当前页面立刻弹 toast；
+        // 而是把提示内容存到 sessionStorage，reload 完成后再弹。
+        if (event.messageType === 'success' && event.message) {
+          sessionStorage.setItem('pendingReloadToastMessage', event.message);
+        }
+        setTimeout(() => {
+          isReloading.value = true;
+          window.location.reload();
+        }, 1500);
+        return;
+      }
+
+      // 根据消息类型显示不同的提示（非重载场景）
       switch (event.messageType) {
         case 'success':
           ElMessage.success(event.message);
@@ -949,14 +970,6 @@ export default {
           break;
         default:
           ElMessage.info(event.message);
-      }
-
-      // 如果需要重新加载，显示加载状态并重新加载
-      if (event.needReload) {
-        setTimeout(() => {
-          isReloading.value = true;
-          window.location.reload();
-        }, 1500);
       }
     };
 

@@ -402,7 +402,13 @@ func (a *App) OpenMachineConfig() {
 
 // RefreshAll 全局刷新功能
 func (a *App) RefreshConfigMenu() error {
+	// 刷新配置列表时，确保执行上下文也同步使用新配置
+	// 否则 subProjectRunner 内部仍会持有旧的 configManager 引用。
+	_ = a.StopAllSubProjects()
+	a.ClearOutput()
+
 	a.configManager = data.NewConfigManager("")
+	a.subProjectRunner = machine.NewSubProjectRunner(a.configManager)
 	if a.ctx != nil {
 		err := a.UpdateApplicationMenu()
 		if err != nil {
@@ -416,18 +422,25 @@ func (a *App) RefreshConfigMenu() error {
 
 // RefreshConfigMenuWithEvent 全局刷新功能（带事件通知）
 func (a *App) RefreshConfigMenuWithEvent() error {
+	// 刷新配置列表时，确保执行上下文也同步使用新配置
+	// 否则 subProjectRunner 内部仍会持有旧的 configManager 引用。
+	_ = a.StopAllSubProjects()
+	a.ClearOutput()
+
 	a.configManager = data.NewConfigManager("")
+	a.subProjectRunner = machine.NewSubProjectRunner(a.configManager)
 	if a.ctx != nil {
 		err := a.UpdateApplicationMenu()
 		if err != nil {
-			a.emitOperationEvent(define.OpTypeRefreshConfig, fmt.Sprintf("更新菜单失败: %v", err), define.MsgTypeError, false, nil)
+			a.emitOperationEvent(define.OpTypeRefreshConfig, fmt.Sprintf("更新菜单失败: %v", err), define.MsgTypeError, true, nil)
 			return err
 		} else {
 			fmt.Println("菜单更新完成")
 		}
 	}
 
-	a.emitOperationEvent(define.OpTypeRefreshConfig, "配置列表刷新成功", define.MsgTypeSuccess, false, nil)
+	// 前端仅在 needReload 为 true 时会重载页面，从而刷新“实际上下文”视图。
+	a.emitOperationEvent(define.OpTypeRefreshConfig, "配置列表刷新成功", define.MsgTypeSuccess, true, nil)
 	return nil
 }
 
