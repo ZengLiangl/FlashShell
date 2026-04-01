@@ -62,6 +62,7 @@ func (lr *LocalRunner) executeStep(command, workDir string, output chan<- string
 	// 根据操作系统选择shell
 	if runtime.GOOS == "windows" {
 		cmd = exec.Command("cmd", "/C", command)
+		applyNoConsoleWindow(cmd)
 	} else {
 		// 在 macOS/Linux 上使用 bash 并设置正确的编码
 		cmd = exec.Command("bash", "-c", command)
