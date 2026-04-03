@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strconv"
 	"strings"
 	"unicode/utf8"
 
@@ -40,7 +41,7 @@ func (lr *LocalRunner) Execute(cmd define.Command, output chan<- string, onStepS
 			onStepStart(step)
 		}
 
-		output <- fmt.Sprintf("执行步骤 %d: %s", i+1, step)
+		lr.sendOutput(output, fmt.Sprintf("执行步骤 %d: %s", i+1, step))
 
 		if err := lr.executeStep(step, workDir, output); err != nil {
 			return fmt.Errorf("步骤 %d 执行失败: %w", i+1, err)
@@ -53,6 +54,18 @@ func (lr *LocalRunner) Execute(cmd define.Command, output chan<- string, onStepS
 	}
 
 	return nil
+}
+
+// sendOutput is non-blocking to avoid goroutine buildup when output is very chatty.
+// If the channel is full, we drop the message (terminal will miss some lines but the app stays responsive).
+func (lr *LocalRunner) sendOutput(output chan<- string, msg string) {
+	if output == nil {
+		return
+	}
+	select {
+	case output <- msg:
+	default:
+	}
 }
 
 // executeStep 执行单个命令步骤
@@ -71,7 +84,7 @@ func (lr *LocalRunner) executeStep(command, workDir string, output chan<- string
 	// 设置工作目录
 	if workDir != "" {
 		cmd.Dir = workDir
-		output <- fmt.Sprintf("工作目录: %s", workDir)
+		lr.sendOutput(output, fmt.Sprintf("工作目录: %s", workDir))
 	}
 
 	// 设置环境变量，确保使用 UTF-8 编码并支持颜色输出
@@ -113,7 +126,7 @@ func (lr *LocalRunner) executeStep(command, workDir string, output chan<- string
 
 	// 等待命令完成
 	if err := cmd.Wait(); err != nil {
-		output <- fmt.Sprintf("命令执行失败: %s", err.Error())
+		lr.sendOutput(output, fmt.Sprintf("命令执行失败: %s", err.Error()))
 		return err
 	}
 
@@ -129,7 +142,7 @@ func (lr *LocalRunner) readOutput(pipe io.Reader, output chan<- string, prefix s
 	for {
 		line, err := reader.ReadString('\n')
 		if err != nil && err != io.EOF {
-			output <- fmt.Sprintf("[%s] 读取输出错误: %s", prefix, err.Error())
+			lr.sendOutput(output, fmt.Sprintf("[%s] 读取输出错误: %s", prefix, err.Error()))
 			break
 		}
 
@@ -147,9 +160,9 @@ func (lr *LocalRunner) readOutput(pipe io.Reader, output chan<- string, prefix s
 			if line != "" {
 				// 添加前缀标识输出来源
 				if prefix == "STDERR" {
-					output <- fmt.Sprintf("[%s] %s", prefix, line)
+					lr.sendOutput(output, fmt.Sprintf("[%s] %s", prefix, line))
 				} else {
-					output <- line
+					lr.sendOutput(output, line)
 				}
 			}
 		}
@@ -163,6 +176,13 @@ func (lr *LocalRunner) readOutput(pipe io.Reader, output chan<- string, prefix s
 // Stop 停止执行
 func (lr *LocalRunner) Stop() error {
 	if lr.cmd != nil && lr.cmd.Process != nil {
+		// Windows: kill the whole process tree to avoid mvn/java child processes lingering.
+		if runtime.GOOS == "windows" {
+			pid := lr.cmd.Process.Pid
+			// /T: kill child processes, /F: force
+			killCmd := exec.Command("taskkill", "/T", "/F", "/PID", strconv.FormatInt(int64(pid), 10))
+			return killCmd.Run()
+		}
 		return lr.cmd.Process.Kill()
 	}
 	return nil
