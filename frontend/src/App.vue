@@ -12,8 +12,8 @@
       </div>
     </div>
 
-    <!-- 详情视图：展示子项目 + 终端 + 状态栏 -->
-    <template v-if="selectedProject">
+    <!-- 任务详情视图 -->
+    <template v-if="selectedProject && !shellMode">
       <el-container class="main-container">
         <!-- 左侧面板 -->
         <el-aside :width="leftPanelWidth + 'px'" class="left-panel" :class="{ resizing: isResizing }">
@@ -49,12 +49,41 @@
         @stop-all="stopAllCommands" />
     </template>
 
-    <!-- 列表视图：全局仅展示项目列表 -->
+    <!-- Shell 视图 -->
+    <ShellWorkspace
+      v-else-if="shellMode"
+      :left-panel-width="leftPanelWidth"
+      :is-resizing="isResizing"
+      :app-info="statusBarInfo"
+      :machines="shellMachines"
+      :sessions="shellSessions"
+      :connected-sessions="connectedSessions"
+      :connected-count="connectedCount"
+      v-model:active-machine="activeMachine"
+      :connecting-name="connectingName"
+      :testing-name="testingName"
+      @back="leaveShellMode"
+      @connect="(name) => connectShell(name, status.isRunning)"
+      @disconnect="disconnectShell"
+      @test="testShellConnection"
+      @add-machine="openShellMachineDialog"
+      @start-resize="startResize"
+    />
+
+    <!-- 首页：任务模式 + Shell 模式入口 -->
     <template v-else>
       <div class="projectlist-fullscreen">
-        <ProjectList :projects="projects" :selected-project-name="''" @refresh="refreshConfig" @select="selectProject"
+        <HomePage
+          :projects="projects"
+          :connected-count="connectedCount"
+          @refresh="refreshConfig"
+          @select-project="selectProject"
+          @open-shell="enterShellMode"
+          @connect-machine="openShellAndConnect"
+          @add-machine="openShellMachineDialog"
           @open-system-settings="systemSettingsVisible = true"
-          @open-execution-history="executionHistoryVisible = true" :full-screen="true" />
+          @open-execution-history="executionHistoryVisible = true"
+        />
       </div>
     </template>
 
@@ -82,6 +111,9 @@ import Convert from "ansi-to-html";
 import TerminalOutput from "./components/TerminalOutput.vue";
 import StatusBar from "./components/StatusBar.vue";
 import ProjectList from "./components/ProjectList.vue";
+import HomePage from "./components/HomePage.vue";
+import ShellWorkspace from "./views/ShellWorkspace.vue";
+import { useShell } from "./composables/useShell";
 import SubProjectList from "./components/SubProjectList.vue";
 import MachineConfigDialog from "./components/MachineConfigDialog.vue";
 import WorkPathConfigDialog from "./components/WorkPathConfigDialog.vue";
@@ -95,7 +127,7 @@ import { useTheme } from "./composables/useTheme";
 
 export default {
   name: "App",
-  components: { AppMenuBar, TerminalOutput, StatusBar, ProjectList, SubProjectList, MachineConfigDialog, WorkPathConfigDialog, TerminalHeader, AboutDialog, ConfigEditorDialog, SystemSettingsDialog, ExecutionHistoryDialog },
+  components: { AppMenuBar, TerminalOutput, StatusBar, ProjectList, HomePage, ShellWorkspace, SubProjectList, MachineConfigDialog, WorkPathConfigDialog, TerminalHeader, AboutDialog, ConfigEditorDialog, SystemSettingsDialog, ExecutionHistoryDialog },
   setup() {
     const { isDark, themeMode, terminalPreset, loadTheme } = useTheme();
     const projects = ref([]);
@@ -148,6 +180,21 @@ export default {
     const configEditorVisible = ref(false);
     const systemSettingsVisible = ref(false);
     const executionHistoryVisible = ref(false);
+    const shellMode = ref(false);
+    const {
+      sessions: shellSessions,
+      activeMachine,
+      shellMachines,
+      connectingName,
+      testingName,
+      connectedSessions,
+      connectedCount,
+      syncSessions,
+      loadMachines: loadShellMachines,
+      connect: connectShell,
+      disconnect: disconnectShell,
+      testMachine: testShellConnection,
+    } = useShell();
     const terminalOutputRef = ref(null);
     const terminalSearchVisible = ref(false);
     const terminalSearchQuery = ref('');
@@ -338,6 +385,11 @@ export default {
     };
     // 选择项目
     const selectProject = (project) => {
+      if (connectedCount.value > 0) {
+        ElMessage.warning('请先断开 Shell 连接后再进入任务模式');
+        return;
+      }
+      shellMode.value = false;
       selectedProject.value = project;
       selectedSubProject.value = null;
 
@@ -365,6 +417,32 @@ export default {
       subProjects.value = [];
       expandedSubProjects.value = {};
       expandedCommands.value = {};
+    };
+
+    const enterShellMode = async () => {
+      if (status.isRunning) {
+        ElMessage.warning('任务正在执行，请先停止后再使用 Shell');
+        return;
+      }
+      selectedProject.value = null;
+      shellMode.value = true;
+      await loadShellMachines();
+      await syncSessions();
+    };
+
+    const leaveShellMode = () => {
+      shellMode.value = false;
+    };
+
+    const openShellAndConnect = async (machineName) => {
+      await enterShellMode();
+      await connectShell(machineName, status.isRunning);
+    };
+
+    const openShellMachineDialog = async () => {
+      machineConfigVisible.value = true;
+      await loadMachines();
+      await loadShellMachines();
     };
 
     // 切换 SubProject 展开状态
@@ -644,10 +722,12 @@ export default {
         return;
       }
 
-      // 终端搜索 (Cmd+F 或 Ctrl+F)
+      // 终端搜索 (Cmd+F 或 Ctrl+F) — 仅任务模式
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
         e.preventDefault();
-        terminalSearchVisible.value = true;
+        if (!shellMode.value) {
+          terminalSearchVisible.value = true;
+        }
         return;
       }
 
@@ -915,6 +995,7 @@ export default {
 
         machineEditVisible.value = false;
         await loadMachines();
+        await loadShellMachines();
 
       } catch (error) {
         console.error('保存机器配置失败:', error);
@@ -929,6 +1010,7 @@ export default {
         await App.DeleteMachine(machine.name);
         ElMessage.success('机器配置删除成功');
         await loadMachines();
+        await loadShellMachines();
       } catch (error) {
         console.error('删除机器配置失败:', error);
         ElMessage.error('删除机器配置失败: ' + error.message);
@@ -1089,6 +1171,9 @@ export default {
           "output:line",
           "output:clear",
           "execution:status",
+          "shell:line",
+          "shell:clear",
+          "shell:status",
         );
       } catch (e) {
         // 忽略解绑异常，确保卸载流程不中断
@@ -1187,6 +1272,22 @@ export default {
       refreshProjectConfig,
       sessionId,
       statusBarInfo,
+      // Shell 模式
+      shellMode,
+      shellSessions,
+      shellMachines,
+      activeMachine,
+      connectingName,
+      testingName,
+      connectedSessions,
+      connectedCount,
+      enterShellMode,
+      leaveShellMode,
+      openShellAndConnect,
+      connectShell,
+      disconnectShell,
+      openShellMachineDialog,
+      testShellConnection,
     };
   },
 };
@@ -1270,6 +1371,18 @@ export default {
   min-height: 0;
   overflow: hidden;
   background: var(--app-bg);
+  display: flex;
+  flex-direction: column;
+}
+
+.shell-terminal-container {
+  display: flex;
+  flex-direction: column;
+}
+
+.shell-terminal-container :deep(.terminal-wrapper) {
+  flex: 1;
+  min-height: 0;
 }
 
 /* 子组件已接管样式：ProjectList、SubProjectList、TerminalOutput、StatusBar */

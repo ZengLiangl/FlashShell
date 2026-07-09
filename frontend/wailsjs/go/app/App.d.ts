@@ -16,6 +16,10 @@ export function ClearMachineSensitiveData(arg1:string):Promise<void>;
 
 export function ClearOutput():Promise<void>;
 
+export function ClearShellOutput(arg1:string):Promise<void>;
+
+export function ConnectShell(arg1:string):Promise<void>;
+
 export function CreateApplicationMenu():Promise<menu.Menu>;
 
 export function DeleteMachine(arg1:string):Promise<void>;
@@ -26,7 +30,11 @@ export function DeleteWorkPath(arg1:string):Promise<void>;
 
 export function DeleteWorkPathWithEvent(arg1:string):Promise<void>;
 
+export function DisconnectShell(arg1:string):Promise<void>;
+
 export function ExecuteCommand(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function ExecuteShellCommand(arg1:string,arg2:string):Promise<void>;
 
 export function ExecuteSubProject(arg1:string,arg2:string):Promise<void>;
 
@@ -51,6 +59,10 @@ export function GetMachines():Promise<Array<define.Machine>>;
 export function GetOutput():Promise<Array<string>>;
 
 export function GetSessionInfo():Promise<data.SessionState>;
+
+export function GetShellSessions():Promise<Array<define.ShellStatus>>;
+
+export function GetShellStatus():Promise<define.ShellStatus>;
 
 export function GetStatus():Promise<define.CommandStatus>;
 
@@ -88,6 +100,8 @@ export function RefreshConfigMenu():Promise<void>;
 
 export function RefreshConfigMenuWithEvent():Promise<void>;
 
+export function ResizeShell(arg1:string,arg2:number,arg3:number):Promise<void>;
+
 export function SaveConfig(arg1:define.Root):Promise<void>;
 
 export function SaveGlobalConfig(arg1:data.GlobalConfig):Promise<void>;
@@ -98,6 +112,10 @@ export function SaveThemeSettings(arg1:data.ThemeSettings):Promise<void>;
 
 export function SelectKeyFile():Promise<string>;
 
+export function SendShellInput(arg1:string,arg2:string):Promise<void>;
+
+export function SendShellInterrupt(arg1:string):Promise<void>;
+
 export function SetMachineSensitiveData(arg1:string,arg2:define.SensitiveData):Promise<void>;
 
 export function StopAllCommands():Promise<void>;
@@ -105,6 +123,8 @@ export function StopAllCommands():Promise<void>;
 export function StopAllSubProjects():Promise<void>;
 
 export function StopCommand(arg1:string,arg2:string,arg3:string):Promise<void>;
+
+export function StopShellCommand(arg1:string):Promise<void>;
 
 export function StopSubProject(arg1:string,arg2:string):Promise<void>;
 

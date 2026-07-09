@@ -14,6 +14,11 @@
 
                 <el-table :data="machines" style="width: 100%" v-loading="machinesLoading">
                     <el-table-column prop="name" label="机器名称" width="150" />
+                    <el-table-column prop="group" label="分组" width="120">
+                        <template #default="scope">
+                            {{ scope.row.group || '默认分组' }}
+                        </template>
+                    </el-table-column>
                     <el-table-column prop="key_file" label="密钥文件" overflow-tooltip />
                     <el-table-column label="操作" width="250">
                         <template #default="scope">
@@ -32,6 +37,10 @@
             <el-form :model="machineForm" :rules="machineRules" ref="machineFormRef" label-width="100px">
                 <el-form-item label="机器名称" prop="name">
                     <el-input v-model="machineForm.name" placeholder="请输入机器名称" />
+                </el-form-item>
+
+                <el-form-item label="分组" prop="group">
+                    <el-input v-model="machineForm.group" placeholder="留空则归入默认分组" />
                 </el-form-item>
 
                 <el-form-item label="密钥文件" prop="key_file">
@@ -100,6 +109,7 @@ export default {
 
         const machineForm = reactive({
             name: '',
+            group: '',
             key_file: '',
             host: '',
             port: 22,
@@ -140,6 +150,7 @@ export default {
         const editMachine = async (machine) => {
             editingMachine.value = machine
             machineForm.name = machine.name
+            machineForm.group = machine.group || ''
             machineForm.key_file = machine.key_file || ''
             try {
                 const sensitiveData = await App.GetMachineSensitiveData(machine.name)
@@ -158,6 +169,7 @@ export default {
 
         const resetMachineForm = () => {
             machineForm.name = ''
+            machineForm.group = ''
             machineForm.key_file = ''
             machineForm.host = ''
             machineForm.port = 22
@@ -170,7 +182,7 @@ export default {
             try {
                 await machineFormRef.value.validate()
                 savingMachine.value = true
-                const machineData = { name: machineForm.name, key_file: machineForm.key_file }
+                const machineData = { name: machineForm.name, group: machineForm.group, key_file: machineForm.key_file }
                 const sensitiveData = { host: machineForm.host, port: machineForm.port, user: machineForm.user, password: machineForm.password }
                 if (editingMachine.value) {
                     await App.UpdateMachine(editingMachine.value.name, machineData)

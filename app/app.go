@@ -2,10 +2,12 @@ package app
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -25,6 +27,7 @@ type App struct {
 	sessionManager   *data.SessionManager
 	logManager       *data.LogManager
 	subProjectRunner *machine.SubProjectRunner
+	shellPool        *machine.ShellSessionPool
 	outputChannel    chan string
 	outputIngress    chan string
 	executionMutex   sync.RWMutex
@@ -48,6 +51,7 @@ func NewApp(sessionID string) *App {
 		configManager:  configManager,
 		sessionManager: sessionManager,
 		logManager:     logManager,
+		shellPool:      machine.NewShellSessionPool(),
 	}
 	app.refreshLogSettings()
 	go app.outputEventLoop()
@@ -98,6 +102,9 @@ func (a *App) DomReady(ctx context.Context) {
 // BeforeClose is called when the application is about to quit
 func (a *App) BeforeClose(ctx context.Context) (prevent bool) {
 	a.StopAllSubProjects()
+	for _, session := range a.shellPool.ListSessions() {
+		_ = a.shellPool.Disconnect(session.MachineName, a.shellHandlerFor(session.MachineName))
+	}
 	return false
 }
 
@@ -149,6 +156,58 @@ func (a *App) emitExecutionStatus(status *define.SubProjectStatus) {
 	}
 }
 
+func (a *App) shellHandlerFor(machineName string) machine.ShellOutputHandler {
+	return machine.ShellOutputHandler{
+		OnLine: func(line string) {
+			a.pushShellOutput(machineName, line)
+		},
+		OnData: func(data []byte) {
+			a.pushShellData(machineName, data)
+		},
+		OnStatus: func(_ *define.ShellStatus) {
+			go a.emitShellSessions()
+		},
+		OnClose: func() {
+			if machineName != "" {
+				a.shellPool.RemoveSession(machineName)
+			}
+			go a.emitShellSessions()
+		},
+	}
+}
+
+func (a *App) pushShellData(machineName string, data []byte) {
+	if a.ctx != nil && len(data) > 0 {
+		wailsRuntime.EventsEmit(a.ctx, "shell:data", map[string]interface{}{
+			"machineName": machineName,
+			"data":        base64.StdEncoding.EncodeToString(data),
+		})
+	}
+}
+
+func (a *App) pushShellOutput(machineName, msg string) {
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "shell:line", map[string]interface{}{
+			"machineName": machineName,
+			"line":        msg,
+		})
+	}
+}
+
+func (a *App) emitShellClear(machineName string) {
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "shell:clear", map[string]interface{}{
+			"machineName": machineName,
+		})
+	}
+}
+
+func (a *App) emitShellSessions() {
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "shell:status", a.shellPool.ListSessions())
+	}
+}
+
 // GetConfig 获取配置
 func (a *App) GetConfig() (*define.Root, error) {
 	return a.configManager.LoadConfig()
@@ -168,6 +227,10 @@ func (a *App) SaveConfig(root *define.Root) error {
 func (a *App) ExecuteSubProject(projectName, subProjectName string) error {
 	a.executionMutex.Lock()
 	defer a.executionMutex.Unlock()
+
+	if a.shellPool.IsAnyConnected() {
+		return fmt.Errorf("Shell 模式已连接，请先断开后再执行任务")
+	}
 
 	// 在执行前刷新配置，确保读取到最新的 SubProject 定义
 	if _, err := a.configManager.LoadConfigForRefresh(); err != nil {
@@ -1036,6 +1099,94 @@ func (a *App) applyWindowTheme(mode string) {
 		wailsRuntime.WindowSetLightTheme(a.ctx)
 		wailsRuntime.WindowSetBackgroundColour(a.ctx, 255, 255, 255, 255)
 	}
+}
+
+// ConnectShell 连接远程 Shell（支持多会话）
+func (a *App) ConnectShell(machineName string) error {
+	a.executionMutex.Lock()
+	status := a.subProjectRunner.GetExecutionStatus()
+	if status.IsRunning {
+		a.executionMutex.Unlock()
+		return fmt.Errorf("任务正在执行，请先停止后再使用 Shell")
+	}
+	a.executionMutex.Unlock()
+
+	machineConfig := a.configManager.GetMachine(machineName)
+	if machineConfig == nil {
+		return fmt.Errorf("未找到机器配置: %s", machineName)
+	}
+
+	err := a.shellPool.Connect(machineName, machineConfig, a.configManager.GetWorkPathVars(), a.shellHandlerFor(machineName))
+	if err == nil {
+		a.emitShellSessions()
+	}
+	return err
+}
+
+// DisconnectShell 断开指定机器的 Shell
+func (a *App) DisconnectShell(machineName string) error {
+	a.executionMutex.Lock()
+	defer a.executionMutex.Unlock()
+	err := a.shellPool.Disconnect(machineName, a.shellHandlerFor(machineName))
+	a.emitShellSessions()
+	return err
+}
+
+// SendShellInput 向指定 PTY Shell 发送输入
+func (a *App) SendShellInput(machineName, input string) error {
+	a.executionMutex.RLock()
+	defer a.executionMutex.RUnlock()
+	return a.shellPool.SendInput(machineName, input)
+}
+
+// SendShellInterrupt 向指定 PTY Shell 发送 Ctrl+C
+func (a *App) SendShellInterrupt(machineName string) error {
+	a.executionMutex.RLock()
+	defer a.executionMutex.RUnlock()
+	return a.shellPool.SendInterrupt(machineName)
+}
+
+// ResizeShell 调整指定 PTY 终端尺寸
+func (a *App) ResizeShell(machineName string, cols, rows int) error {
+	a.executionMutex.RLock()
+	defer a.executionMutex.RUnlock()
+	return a.shellPool.Resize(machineName, cols, rows)
+}
+
+// ExecuteShellCommand 兼容旧接口
+func (a *App) ExecuteShellCommand(machineName, command string) error {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return fmt.Errorf("命令不能为空")
+	}
+	if !strings.HasSuffix(command, "\n") {
+		command += "\n"
+	}
+	return a.SendShellInput(machineName, command)
+}
+
+// StopShellCommand 兼容旧接口
+func (a *App) StopShellCommand(machineName string) error {
+	return a.SendShellInterrupt(machineName)
+}
+
+// GetShellSessions 获取所有 Shell 会话状态
+func (a *App) GetShellSessions() []define.ShellStatus {
+	return a.shellPool.ListSessions()
+}
+
+// GetShellStatus 兼容旧接口，返回首个会话或空状态
+func (a *App) GetShellStatus() *define.ShellStatus {
+	sessions := a.shellPool.ListSessions()
+	if len(sessions) == 0 {
+		return &define.ShellStatus{}
+	}
+	return &sessions[0]
+}
+
+// ClearShellOutput 清空指定终端显示
+func (a *App) ClearShellOutput(machineName string) {
+	a.emitShellClear(machineName)
 }
 
 func openWithSystemApp(path string) error {

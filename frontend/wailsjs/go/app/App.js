@@ -26,6 +26,14 @@ export function ClearOutput() {
   return window['go']['app']['App']['ClearOutput']();
 }
 
+export function ClearShellOutput(arg1) {
+  return window['go']['app']['App']['ClearShellOutput'](arg1);
+}
+
+export function ConnectShell(arg1) {
+  return window['go']['app']['App']['ConnectShell'](arg1);
+}
+
 export function CreateApplicationMenu() {
   return window['go']['app']['App']['CreateApplicationMenu']();
 }
@@ -46,8 +54,16 @@ export function DeleteWorkPathWithEvent(arg1) {
   return window['go']['app']['App']['DeleteWorkPathWithEvent'](arg1);
 }
 
+export function DisconnectShell(arg1) {
+  return window['go']['app']['App']['DisconnectShell'](arg1);
+}
+
 export function ExecuteCommand(arg1, arg2, arg3) {
   return window['go']['app']['App']['ExecuteCommand'](arg1, arg2, arg3);
+}
+
+export function ExecuteShellCommand(arg1, arg2) {
+  return window['go']['app']['App']['ExecuteShellCommand'](arg1, arg2);
 }
 
 export function ExecuteSubProject(arg1, arg2) {
@@ -96,6 +112,14 @@ export function GetOutput() {
 
 export function GetSessionInfo() {
   return window['go']['app']['App']['GetSessionInfo']();
+}
+
+export function GetShellSessions() {
+  return window['go']['app']['App']['GetShellSessions']();
+}
+
+export function GetShellStatus() {
+  return window['go']['app']['App']['GetShellStatus']();
 }
 
 export function GetStatus() {
@@ -170,6 +194,10 @@ export function RefreshConfigMenuWithEvent() {
   return window['go']['app']['App']['RefreshConfigMenuWithEvent']();
 }
 
+export function ResizeShell(arg1, arg2, arg3) {
+  return window['go']['app']['App']['ResizeShell'](arg1, arg2, arg3);
+}
+
 export function SaveConfig(arg1) {
   return window['go']['app']['App']['SaveConfig'](arg1);
 }
@@ -190,6 +218,14 @@ export function SelectKeyFile() {
   return window['go']['app']['App']['SelectKeyFile']();
 }
 
+export function SendShellInput(arg1, arg2) {
+  return window['go']['app']['App']['SendShellInput'](arg1, arg2);
+}
+
+export function SendShellInterrupt(arg1) {
+  return window['go']['app']['App']['SendShellInterrupt'](arg1);
+}
+
 export function SetMachineSensitiveData(arg1, arg2) {
   return window['go']['app']['App']['SetMachineSensitiveData'](arg1, arg2);
 }
@@ -204,6 +240,10 @@ export function StopAllSubProjects() {
 
 export function StopCommand(arg1, arg2, arg3) {
   return window['go']['app']['App']['StopCommand'](arg1, arg2, arg3);
+}
+
+export function StopShellCommand(arg1) {
+  return window['go']['app']['App']['StopShellCommand'](arg1);
 }
 
 export function StopSubProject(arg1, arg2) {

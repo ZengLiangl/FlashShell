@@ -197,6 +197,7 @@ export namespace define {
 	export class Machine {
 	    encrypted_data?: string;
 	    name: string;
+	    group?: string;
 	    key_file?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -207,6 +208,7 @@ export namespace define {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.encrypted_data = source["encrypted_data"];
 	        this.name = source["name"];
+	        this.group = source["group"];
 	        this.key_file = source["key_file"];
 	    }
 	}
@@ -330,6 +332,28 @@ export namespace define {
 	        this.port = source["port"];
 	        this.user = source["user"];
 	        this.password = source["password"];
+	    }
+	}
+	export class ShellStatus {
+	    connected: boolean;
+	    machineName: string;
+	    host: string;
+	    user: string;
+	    isRunning: boolean;
+	    currentCommand: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShellStatus(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.connected = source["connected"];
+	        this.machineName = source["machineName"];
+	        this.host = source["host"];
+	        this.user = source["user"];
+	        this.isRunning = source["isRunning"];
+	        this.currentCommand = source["currentCommand"];
 	    }
 	}
 	
