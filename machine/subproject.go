@@ -6,16 +6,18 @@ import (
 	"time"
 
 	"quick-cmd/define"
+	"quick-cmd/utils"
 )
 
 // SubProjectRunner SubProject 执行器实现
 type SubProjectRunner struct {
-	configManager ConfigManagerInterface
-	runners       map[string]define.Runner
-	runnerMutex   sync.RWMutex
-	currentStatus *define.SubProjectStatus
-	statusMutex   sync.RWMutex
-	stopChannel   chan bool
+	configManager    ConfigManagerInterface
+	runners          map[string]define.Runner
+	runnerMutex      sync.RWMutex
+	currentStatus    *define.SubProjectStatus
+	statusMutex      sync.RWMutex
+	stopChannel      chan bool
+	onStatusChange   func(*define.SubProjectStatus)
 }
 
 // ConfigManagerInterface 配置管理器接口
@@ -32,6 +34,11 @@ func NewSubProjectRunner(configManager ConfigManagerInterface) *SubProjectRunner
 		currentStatus: &define.SubProjectStatus{},
 		stopChannel:   make(chan bool, 1),
 	}
+}
+
+// SetStatusChangeHandler 设置状态变更回调（用于事件推送）
+func (spr *SubProjectRunner) SetStatusChangeHandler(handler func(*define.SubProjectStatus)) {
+	spr.onStatusChange = handler
 }
 
 // ExecuteSubProject 执行 SubProject
@@ -102,10 +109,15 @@ func (spr *SubProjectRunner) ExecuteSubProject(projectName, subProjectName strin
 		TotalCommands:     len(subProject.Commands),
 		TotalSteps:        totalSteps,
 	}
+	handler := spr.onStatusChange
 	spr.statusMutex.Unlock()
 
-	output <- fmt.Sprintf("开始执行 SubProject: %s/%s", projectName, subProjectName)
-	output <- fmt.Sprintf("总共 %d 个命令需要执行", len(subProject.Commands))
+	if handler != nil {
+		handler(spr.GetExecutionStatus())
+	}
+
+	utils.SendOutput(output, fmt.Sprintf("开始执行 SubProject: %s/%s", projectName, subProjectName))
+	utils.SendOutput(output, fmt.Sprintf("总共 %d 个命令需要执行", len(subProject.Commands)))
 
 	// 创建执行上下文
 	ctx := &define.ExecutionContext{
@@ -123,7 +135,7 @@ func (spr *SubProjectRunner) ExecuteSubProject(projectName, subProjectName strin
 		// 检查是否需要停止
 		select {
 		case <-spr.stopChannel:
-			output <- "执行已被用户停止"
+			utils.SendOutput(output, "执行已被用户停止")
 			spr.updateStatus("", "", len(subProject.Commands), totalSteps, false)
 			return fmt.Errorf("执行被用户停止")
 		default:
@@ -132,9 +144,9 @@ func (spr *SubProjectRunner) ExecuteSubProject(projectName, subProjectName strin
 		// 更新当前执行状态 - 开始执行新命令
 		spr.updateStatus(command.Name, "", i, spr.currentStatus.CompletedSteps, true)
 
-		output <- fmt.Sprintf("执行命令 %d/%d: %s", i+1, len(subProject.Commands), command.Name)
-		// output <- fmt.Sprintf("命令描述: %s", command.Description)
-		output <- fmt.Sprintf("命令类型: %s", command.Type)
+		utils.SendOutput(output, fmt.Sprintf("执行命令 %d/%d: %s", i+1, len(subProject.Commands), command.Name))
+		// utils.SendOutput(output, fmt.Sprintf("命令描述: %s", command.Description))
+		utils.SendOutput(output, fmt.Sprintf("命令类型: %s", command.Type))
 
 		// 执行当前命令
 		if err := spr.executeCommand(command, ctx, output); err != nil {
@@ -143,14 +155,14 @@ func (spr *SubProjectRunner) ExecuteSubProject(projectName, subProjectName strin
 			return fmt.Errorf("命令 '%s' 执行失败: %w", command.Name, err)
 		}
 
-		output <- fmt.Sprintf("命令 '%s' 执行完成", command.Name)
+		utils.SendOutput(output, fmt.Sprintf("命令 '%s' 执行完成", command.Name))
 
 		// 更新完成状态 - 命令完成，CompletedSteps 已经在步骤完成时实时更新了
 		spr.updateStatus(command.Name, "", i+1, spr.currentStatus.CompletedSteps, true)
 	}
 
 	// 所有命令执行完成
-	output <- fmt.Sprintf("'%s' 执行完成！", subProjectName)
+	utils.SendOutput(output, fmt.Sprintf("'%s' 执行完成！", subProjectName))
 	spr.updateStatus("", "", len(subProject.Commands), totalSteps, false)
 
 	return nil
@@ -186,7 +198,7 @@ func (spr *SubProjectRunner) executeCommand(command define.Command, ctx *define.
 		}
 
 		sshClient := NewSSHClient(machineConfig)
-		if err := sshClient.Connect(machineConfig); err != nil {
+		if err := sshClient.Connect(machineConfig, CommandNeedsSFTP(command)); err != nil {
 			return fmt.Errorf("连接远程机器失败: %w", err)
 		}
 		defer sshClient.remoteMachine.Close()
@@ -271,11 +283,15 @@ func (spr *SubProjectRunner) GetExecutionStatus() *define.SubProjectStatus {
 // updateStatus 更新执行状态
 func (spr *SubProjectRunner) updateStatus(currentCommand string, currentStep string, completedCommands int, completedSteps int, isRunning bool) {
 	spr.statusMutex.Lock()
-	defer spr.statusMutex.Unlock()
-
 	spr.currentStatus.CurrentCommand = currentCommand
 	spr.currentStatus.CurrentStep = currentStep
 	spr.currentStatus.CompletedCommands = completedCommands
 	spr.currentStatus.CompletedSteps = completedSteps
 	spr.currentStatus.IsRunning = isRunning
+	handler := spr.onStatusChange
+	spr.statusMutex.Unlock()
+
+	if handler != nil {
+		handler(spr.GetExecutionStatus())
+	}
 }

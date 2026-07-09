@@ -49,22 +49,29 @@ func NewGlobalConfigManager(configPath string) *GlobalConfigManager {
 func (gcm *GlobalConfigManager) LoadGlobalConfig() (*GlobalConfig, error) {
 	expandedPath := expandPath(gcm.configPath)
 
-	// 如果文件不存在，创建默认配置
-	if _, err := os.Stat(expandedPath); os.IsNotExist(err) {
-		// 确保目录存在
-		configDir := filepath.Dir(expandedPath)
-		if err := os.MkdirAll(configDir, 0755); err != nil {
-			return nil, fmt.Errorf("创建配置目录失败: %w", err)
-		}
-
-		if err := gcm.createDefaultGlobalConfig(); err != nil {
-			return nil, fmt.Errorf("创建默认全局配置失败: %w", err)
-		}
+	configDir := filepath.Dir(expandedPath)
+	if err := os.MkdirAll(configDir, 0755); err != nil {
+		return nil, fmt.Errorf("创建配置目录失败: %w", err)
 	}
 
 	data, err := os.ReadFile(expandedPath)
 	if err != nil {
-		return nil, fmt.Errorf("读取全局配置文件失败: %w", err)
+		if os.IsNotExist(err) {
+			if err := gcm.createDefaultGlobalConfig(); err != nil {
+				return nil, fmt.Errorf("创建默认全局配置失败: %w", err)
+			}
+			data, err = os.ReadFile(expandedPath)
+			if err != nil {
+				return nil, fmt.Errorf("读取全局配置文件失败: %w", err)
+			}
+		} else {
+			return nil, fmt.Errorf("读取全局配置文件失败: %w", err)
+		}
+	}
+
+	// 文件已存在但为空时，不覆盖为默认配置
+	if len(strings.TrimSpace(string(data))) == 0 {
+		return nil, fmt.Errorf("全局配置文件为空: %s", expandedPath)
 	}
 
 	var config GlobalConfig
@@ -109,12 +116,23 @@ func (gcm *GlobalConfigManager) GetConfigPath() string {
 	return gcm.configPath
 }
 
-// UpdateLastOpenedFile 更新最后打开的配置文件
+// normalizeConfigPath 规范化路径用于比较（Windows 下忽略大小写）
+func normalizeConfigPath(path string) string {
+	path = expandPath(path)
+	path = filepath.Clean(path)
+	return strings.ToLower(path)
+}
+
+// UpdateLastOpenedFile 更新最后打开的配置文件（仅在实际变更时写入磁盘）
 func (gcm *GlobalConfigManager) UpdateLastOpenedFile(filePath string) error {
 	if gcm.config == nil {
 		if _, err := gcm.LoadGlobalConfig(); err != nil {
 			return err
 		}
+	}
+
+	if normalizeConfigPath(gcm.config.LastOpenedFile) == normalizeConfigPath(filePath) {
+		return nil
 	}
 
 	gcm.config.LastOpenedFile = filePath

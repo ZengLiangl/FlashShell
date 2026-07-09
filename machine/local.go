@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"quick-cmd/define"
+	"quick-cmd/utils"
 )
 
 // LocalRunner 本地命令执行器
@@ -57,15 +58,8 @@ func (lr *LocalRunner) Execute(cmd define.Command, output chan<- string, onStepS
 }
 
 // sendOutput is non-blocking to avoid goroutine buildup when output is very chatty.
-// If the channel is full, we drop the message (terminal will miss some lines but the app stays responsive).
 func (lr *LocalRunner) sendOutput(output chan<- string, msg string) {
-	if output == nil {
-		return
-	}
-	select {
-	case output <- msg:
-	default:
-	}
+	utils.SendOutput(output, msg)
 }
 
 // executeStep 执行单个命令步骤

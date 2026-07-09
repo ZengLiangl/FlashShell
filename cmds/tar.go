@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"quick-cmd/define"
+	"quick-cmd/utils"
 	"strings"
 )
 
@@ -23,7 +24,7 @@ func doTar(rm *define.RemoteMachine, c []string, outputChan chan<- string) error
 	dest := c[2]
 	err := CreateTarGz(src, dest)
 	if err != nil {
-		outputChan <- fmt.Sprintf("压缩失败: %s", err.Error())
+		utils.SendOutput(outputChan, fmt.Sprintf("压缩失败: %s", err.Error()))
 	} else {
 		
 	}

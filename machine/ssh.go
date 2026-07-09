@@ -8,6 +8,7 @@ import (
 
 	"quick-cmd/cmds"
 	"quick-cmd/define"
+	"quick-cmd/utils"
 )
 
 // SSHClient SSH客户端封装
@@ -26,9 +27,8 @@ func NewSSHClient(machine *define.Machine) *SSHClient {
 }
 
 // Connect 连接到远程机器
-func (sc *SSHClient) Connect(machine *define.Machine) error {
-	// 使用 RemoteMachine 连接
-	return sc.remoteMachine.Connect(machine)
+func (sc *SSHClient) Connect(machine *define.Machine, withSFTP bool) error {
+	return sc.remoteMachine.Connect(machine, withSFTP)
 }
 
 // Execute 执行命令
@@ -42,7 +42,7 @@ func (sc *SSHClient) Execute(cmd define.Command, output chan<- string, onStepSta
 			onStepStart(step)
 		}
 
-		output <- fmt.Sprintf("执行步骤 %d: %s", i+1, step)
+		utils.SendOutput(output, fmt.Sprintf("执行步骤 %d: %s", i+1, step))
 		if err := sc.executeStep(step, output); err != nil {
 			return fmt.Errorf("步骤 %d 执行失败: %w", i+1, err)
 		}
@@ -118,9 +118,9 @@ func (sc *SSHClient) readOutput(reader io.Reader, output chan<- string, prefix s
 					line := lineBuffer.String()
 					if line != "" {
 						if prefix == "STDERR" {
-							output <- fmt.Sprintf("[%s] %s", prefix, line)
+							utils.SendOutput(output, fmt.Sprintf("[%s] %s", prefix, line))
 						} else {
-							output <- line
+							utils.SendOutput(output, line)
 						}
 					}
 					lineBuffer.Reset()
@@ -135,9 +135,9 @@ func (sc *SSHClient) readOutput(reader io.Reader, output chan<- string, prefix s
 			if lineBuffer.Len() > 0 {
 				line := lineBuffer.String()
 				if prefix == "STDERR" {
-					output <- fmt.Sprintf("[%s] %s", prefix, line)
+					utils.SendOutput(output, fmt.Sprintf("[%s] %s", prefix, line))
 				} else {
-					output <- line
+					utils.SendOutput(output, line)
 				}
 			}
 			break
@@ -162,7 +162,7 @@ func (sc *SSHClient) Close() error {
 
 // TestConnection 测试连接
 func (sc *SSHClient) TestConnection() error {
-	if err := sc.Connect(sc.config); err != nil {
+	if err := sc.Connect(sc.config, false); err != nil {
 		return err
 	}
 	defer sc.Close()

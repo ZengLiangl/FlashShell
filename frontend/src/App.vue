@@ -357,12 +357,11 @@ export default {
       }
 
       try {
+        outputLines.value = [];
         await App.ExecuteSubProject(
           subProject.projectName,
           subProject.name
         );
-        // 开始轮询输出
-        startOutputPolling();
       } catch (error) {
         console.error("执行 SubProject 失败:", error);
       }
@@ -439,61 +438,72 @@ export default {
       }
     };
 
-    // 获取输出
+    // 处理单行输出
+    const appendOutputLine = (line) => {
+      if (line.startsWith('PROGRESS_UPDATE:')) {
+        const parts = line.split(':');
+        if (parts.length >= 3) {
+          const progressID = parts[1];
+          const progressText = parts.slice(2).join(':');
+          const progressItem = newProcessedOutput(progressText, !progressText.includes('传输完成'));
+          progressItem.progressID = progressID;
+          progressItem.isSuccess = !progressText.includes('传输完成');
+
+          for (let i = outputLines.value.length - 1; i >= 0; i--) {
+            if (outputLines.value[i].isProgress && outputLines.value[i].progressID === progressID) {
+              outputLines.value[i] = progressItem;
+              return;
+            }
+          }
+          outputLines.value.push(progressItem);
+        }
+        return;
+      }
+
+      outputLines.value.push(newProcessedOutput(line));
+      enforceOutputLimit();
+    };
+
+    const newProcessedOutput = (line, isProgress = false) => {
+      return {
+        raw: line,
+        html: processAnsiOutput(line),
+        isError: line.includes('STDERR') || line.includes('失败') || line.includes('错误') || line.includes('Error'),
+        isSuccess: line.includes('完成') || line.includes('成功'),
+        isProgress: isProgress
+      };
+    };
+
+    const handleOutputLine = (line) => {
+      if (typeof line !== 'string' || line.length === 0) {
+        return;
+      }
+      appendOutputLine(line);
+    };
+
+    const handleOutputClear = () => {
+      outputLines.value = [];
+    };
+
+    const handleExecutionStatus = (currentStatus) => {
+      if (!currentStatus) {
+        return;
+      }
+      Object.assign(status, currentStatus);
+    };
+
+    // 手动刷新输出（保留一次性拉取，不再轮询）
     const getOutput = async () => {
       try {
         const output = await App.GetOutput();
         if (output && output.length > 0) {
-          // 处理每行输出的 ANSI 转义序列
-          const processedOutput = output.map(line => (newProcessedOutput(line)));
-          // 处理进度更新
-          processedOutput.forEach(outputItem => {
-            if (outputItem.raw.startsWith('PROGRESS_UPDATE:')) {
-              // 进度更新，格式: PROGRESS_UPDATE:progressID:progressText
-              const parts = outputItem.raw.split(':');
-              if (parts.length >= 3) {
-                const progressID = parts[1];
-                const progressText = parts.slice(2).join(':'); // 处理文本中可能包含的冒号
-
-                const progressItem = newProcessedOutput(progressText, !progressText.includes('传输完成'));
-                progressItem.progressID = progressID;
-                progressItem.isSuccess = !progressText.includes('传输完成');
-                // 查找并替换对应进度ID的进度行
-                for (let i = outputLines.value.length - 1; i >= 0; i--) {
-                  if (outputLines.value[i].isProgress && outputLines.value[i].progressID === progressID) {
-                    outputLines.value[i] = progressItem;
-                    return;
-                  }
-                }
-                // 如果没有找到对应进度ID的行，添加新的
-                outputLines.value.push(progressItem);
-              }
-            } else {
-              // 普通输出，直接添加
-              outputLines.value.push(outputItem);
-            }
-          });
-          // 控制最大行数，避免无上限增长
-          enforceOutputLimit();
-
-          // 粘底滚动逻辑迁移到子组件中处理
+          output.forEach((line) => appendOutputLine(line));
         }
       } catch (error) {
         console.error("获取输出失败:", error);
       }
-
-      function newProcessedOutput(line, isProgress = false) {
-        return {
-          raw: line,
-          html: processAnsiOutput(line),
-          isError: line.includes('STDERR') || line.includes('失败') || line.includes('错误') || line.includes('Error'),
-          isSuccess: line.includes('完成') || line.includes('成功'),
-          isProgress: isProgress
-        };
-      }
     };
 
-    // 获取状态
     const getStatus = async () => {
       try {
         const currentStatus = await App.GetSubProjectStatus();
@@ -506,47 +516,16 @@ export default {
     // 清空输出
     const clearOutput = async () => {
       try {
-        await App.ClearOutput();
         outputLines.value = [];
+        await App.ClearOutput();
       } catch (error) {
         console.error("清空输出失败:", error);
       }
     };
 
-    // 刷新输出
-    const refreshOutput = () => {
-      getOutput();
-    };
-
-    // 开始输出轮询（动态退避：运行中高频，空闲降低频率）
-    let outputTimer = null;
-    const computePollInterval = () => (status.isRunning ? 300 : 1500);
-    const scheduleNextPoll = () => {
-      const interval = computePollInterval();
-      outputTimer = setTimeout(async () => {
-        try {
-          await getOutput();
-          await getStatus();
-        } finally {
-          scheduleNextPoll();
-        }
-      }, interval);
-    };
-
-    const startOutputPolling = () => {
-      if (outputTimer) {
-        clearTimeout(outputTimer);
-        outputTimer = null;
-      }
-      scheduleNextPoll();
-    };
-
-    // 停止输出轮询
-    const stopOutputPolling = () => {
-      if (outputTimer) {
-        clearTimeout(outputTimer);
-        outputTimer = null;
-      }
+    const refreshOutput = async () => {
+      await getOutput();
+      await getStatus();
     };
 
     // 计算进度百分比
@@ -679,7 +658,11 @@ export default {
       }
 
       loadConfig();
-      startOutputPolling();
+
+      // 监听输出与执行状态事件（替代轮询）
+      EventsOn("output:line", handleOutputLine);
+      EventsOn("output:clear", handleOutputClear);
+      EventsOn("execution:status", handleExecutionStatus);
 
       // 添加全局键盘事件监听器
       document.addEventListener('keydown', handleKeyDown);
@@ -973,14 +956,19 @@ export default {
       }
     };
 
-    // 组件卸载时清理定时器
     onUnmounted(() => {
-      stopOutputPolling();
-      // 清理键盘事件监听器
       document.removeEventListener('keydown', handleKeyDown);
-      // 解绑 Wails 事件，防止重复注册导致内存泄漏
       try {
-        EventsOff("operation:result", "config:changed", "open:machine-config", "open:workpath-config", "open:about");
+        EventsOff(
+          "operation:result",
+          "config:changed",
+          "open:machine-config",
+          "open:workpath-config",
+          "open:about",
+          "output:line",
+          "output:clear",
+          "execution:status",
+        );
       } catch (e) {
         // 忽略解绑异常，确保卸载流程不中断
       }

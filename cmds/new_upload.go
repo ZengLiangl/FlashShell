@@ -96,7 +96,7 @@ func uploadDirectory(rm *define.RemoteMachine, localPath, remotePath, targetFile
 	// 使用 zip 管道上传
 	err := uploadDirectoryZip(rm, localPath, remotePath, targetFileName, outputChan)
 	if err != nil {
-		outputChan <- fmt.Sprintf("文件夹上传失败: %s", err.Error())
+		utils.SendOutput(outputChan, fmt.Sprintf("文件夹上传失败: %s", err.Error()))
 		return fmt.Errorf("文件夹上传失败: %w", err)
 	}
 
@@ -169,14 +169,14 @@ func extractTarOnRemote(rm *define.RemoteMachine, remoteTarPath, targetPath stri
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
-			outputChan <- scanner.Text()
+			utils.SendOutput(outputChan, scanner.Text())
 		}
 	}()
 
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
-			outputChan <- fmt.Sprintf("[STDERR] %s", scanner.Text())
+			utils.SendOutput(outputChan, fmt.Sprintf("[STDERR] %s", scanner.Text()))
 		}
 	}()
 
@@ -242,7 +242,7 @@ func (pw *progressWriter) startProgressDisplay() {
 			// 构建当前进度行
 			currentProgressLine := fmt.Sprintf("[%s] 进度: %.2f%%, 速度: %.2f KB/s", pw.fileName, progress, speed)
 			// 使用特殊标记表示这是进度更新，包含进度ID
-			pw.outputChan <- fmt.Sprintf("PROGRESS_UPDATE:%s:%s", pw.progressID, currentProgressLine)
+			utils.SendOutput(pw.outputChan, fmt.Sprintf("PROGRESS_UPDATE:%s:%s", pw.progressID, currentProgressLine))
 		} else if pw.written >= pw.totalSize {
 			// 传输完成
 			elapsed := time.Since(pw.startTime).Seconds()
@@ -250,7 +250,7 @@ func (pw *progressWriter) startProgressDisplay() {
 				speed := float64(pw.written) / elapsed / 1024 // KB/s
 				// 传输完成，输出最终结果
 				completionLine := fmt.Sprintf("[%s] 传输完成: 100%%, 文件大小: %s, 平均速度: %.2f KB/s, 耗时: %.2f秒", pw.fileName, bytesToHumanReadable(pw.totalSize), speed, elapsed)
-				pw.outputChan <- fmt.Sprintf("PROGRESS_UPDATE:%s:%s", pw.progressID, completionLine)
+				utils.SendOutput(pw.outputChan, fmt.Sprintf("PROGRESS_UPDATE:%s:%s", pw.progressID, completionLine))
 			}
 			return
 		}

@@ -9,6 +9,17 @@ import (
 	"strings"
 )
 
+// SendOutput writes to the output channel without blocking.
+func SendOutput(output chan<- string, msg string) {
+	if output == nil {
+		return
+	}
+	select {
+	case output <- msg:
+	default:
+	}
+}
+
 // LocalZip 本地压缩文件夹为ZIP格式
 func LocalZip(dirPath, outFullName string) error {
 	zipFile, err := os.Create(outFullName)

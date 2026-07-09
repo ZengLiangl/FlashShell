@@ -24,6 +24,7 @@ type App struct {
 	configManager    *data.ConfigManager
 	subProjectRunner *machine.SubProjectRunner
 	outputChannel    chan string
+	outputIngress    chan string
 	executionMutex   sync.RWMutex
 }
 
@@ -31,16 +32,17 @@ type App struct {
 func NewApp() *App {
 	app := &App{
 		outputChannel: make(chan string, 1000),
+		outputIngress: make(chan string, 1000),
 		configManager: data.NewConfigManager(""),
 	}
+	go app.outputEventLoop()
 	return app
 }
 
 // Startup is called when the app starts up
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
-	// 创建 SubProjectRunner
-	a.subProjectRunner = machine.NewSubProjectRunner(a.configManager)
+	a.setupSubProjectRunner()
 
 	// 尝试加载配置文件，如果不存在则创建默认配置
 	if _, err := a.configManager.LoadConfig(); err != nil {
@@ -73,7 +75,47 @@ func (a *App) BeforeClose(ctx context.Context) (prevent bool) {
 
 // Shutdown is called during application termination
 func (a *App) Shutdown(ctx context.Context) {
-	close(a.outputChannel)
+	close(a.outputIngress)
+}
+
+func (a *App) setupSubProjectRunner() {
+	a.subProjectRunner = machine.NewSubProjectRunner(a.configManager)
+	a.subProjectRunner.SetStatusChangeHandler(a.emitExecutionStatus)
+}
+
+func (a *App) outputEventLoop() {
+	for msg := range a.outputIngress {
+		select {
+		case a.outputChannel <- msg:
+		default:
+		}
+		if a.ctx != nil {
+			wailsRuntime.EventsEmit(a.ctx, "output:line", msg)
+		}
+	}
+}
+
+func (a *App) outputWriter() chan<- string {
+	return a.outputIngress
+}
+
+func (a *App) pushOutput(msg string) {
+	select {
+	case a.outputIngress <- msg:
+	default:
+	}
+}
+
+func (a *App) emitOutputClear() {
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "output:clear", nil)
+	}
+}
+
+func (a *App) emitExecutionStatus(status *define.SubProjectStatus) {
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "execution:status", status)
+	}
 }
 
 // GetConfig 获取配置
@@ -101,10 +143,13 @@ func (a *App) ExecuteSubProject(projectName, subProjectName string) error {
 		return err
 	}
 
+	// 新任务开始前清空终端
+	a.ClearOutput()
+
 	// 异步执行 SubProject
 	go func() {
-		if err := a.subProjectRunner.ExecuteSubProject(projectName, subProjectName, a.outputChannel); err != nil {
-			a.outputChannel <- fmt.Sprintf("执行失败: %s", err.Error())
+		if err := a.subProjectRunner.ExecuteSubProject(projectName, subProjectName, a.outputWriter()); err != nil {
+			a.pushOutput(fmt.Sprintf("执行失败: %s", err.Error()))
 		}
 	}()
 
@@ -160,14 +205,23 @@ func (a *App) GetOutput() []string {
 
 // ClearOutput 清空输出
 func (a *App) ClearOutput() {
-	// 清空通道中的所有消息
+	for {
+		select {
+		case <-a.outputIngress:
+		default:
+			goto drainedIngress
+		}
+	}
+drainedIngress:
 	for {
 		select {
 		case <-a.outputChannel:
 		default:
-			return
+			goto drainedChannel
 		}
 	}
+drainedChannel:
+	a.emitOutputClear()
 }
 
 // GetSubProjectStatus 获取 SubProject 状态
@@ -322,7 +376,7 @@ func (a *App) SwitchConfigFileWithEvent(configPath string) error {
 	}
 
 	// 重新创建 SubProjectRunner
-	a.subProjectRunner = machine.NewSubProjectRunner(a.configManager)
+	a.setupSubProjectRunner()
 
 	// 发送事件到前端通知配置文件已切换（保持向后兼容）
 	if a.ctx != nil {
@@ -408,7 +462,7 @@ func (a *App) RefreshConfigMenu() error {
 	a.ClearOutput()
 
 	a.configManager = data.NewConfigManager("")
-	a.subProjectRunner = machine.NewSubProjectRunner(a.configManager)
+	a.setupSubProjectRunner()
 	if a.ctx != nil {
 		err := a.UpdateApplicationMenu()
 		if err != nil {
@@ -428,7 +482,7 @@ func (a *App) RefreshConfigMenuWithEvent() error {
 	a.ClearOutput()
 
 	a.configManager = data.NewConfigManager("")
-	a.subProjectRunner = machine.NewSubProjectRunner(a.configManager)
+	a.setupSubProjectRunner()
 	if a.ctx != nil {
 		err := a.UpdateApplicationMenu()
 		if err != nil {

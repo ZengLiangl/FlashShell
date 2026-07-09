@@ -1,6 +1,5 @@
 <template>
     <div class="terminal-wrapper">
-        <!-- 进度条区域 -->
         <transition name="progress-slide" appear>
             <div v-if="status.isRunning" class="progress-section">
                 <div class="progress-info">
@@ -24,23 +23,30 @@
             </div>
         </transition>
 
-        <div class="terminal-output" ref="terminalOutputRef">
-            <div v-for="(line, index) in outputLines" :key="index" class="output-line" :class="{
-                'error-line': line.isError,
-                'success-line': line.isSuccess,
-                'progress-line': line.isProgress,
-            }" v-html="line.html">
-            </div>
+        <div class="terminal-output" ref="terminalOutputRef" @scroll="onScroll">
             <div v-if="outputLines.length === 0" class="empty-output">
                 等待命令输出...
             </div>
+            <template v-else>
+                <div class="virtual-spacer" :style="{ height: topSpacerHeight + 'px' }"></div>
+                <div v-for="item in visibleLines" :key="item.index" class="output-line" :class="{
+                    'error-line': item.line.isError,
+                    'success-line': item.line.isSuccess,
+                    'progress-line': item.line.isProgress,
+                }" v-html="item.line.html">
+                </div>
+                <div class="virtual-spacer" :style="{ height: bottomSpacerHeight + 'px' }"></div>
+            </template>
             <div ref="bottomMarker"></div>
         </div>
     </div>
 </template>
 
 <script>
-import { ref, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+
+const LINE_HEIGHT = 20
+const OVERSCAN = 20
 
 export default {
     name: 'TerminalOutput',
@@ -53,24 +59,137 @@ export default {
     setup(props, { expose }) {
         const terminalOutputRef = ref(null)
         const bottomMarker = ref(null)
+        const scrollTop = ref(0)
+        const containerHeight = ref(600)
+        const stickToBottom = ref(true)
+        let resizeObserver = null
 
-        const scrollToBottom = () => {
+        const visibleRange = computed(() => {
+            const total = props.outputLines.length
+            if (total === 0) {
+                return { start: 0, end: 0 }
+            }
+            const start = Math.max(0, Math.floor(scrollTop.value / LINE_HEIGHT) - OVERSCAN)
+            const visibleCount = Math.ceil(containerHeight.value / LINE_HEIGHT) + OVERSCAN * 2
+            const end = Math.min(total, start + visibleCount)
+            return { start, end }
+        })
+
+        const visibleLines = computed(() => {
+            const { start, end } = visibleRange.value
+            return props.outputLines.slice(start, end).map((line, offset) => ({
+                index: start + offset,
+                line,
+            }))
+        })
+
+        const topSpacerHeight = computed(() => visibleRange.value.start * LINE_HEIGHT)
+        const bottomSpacerHeight = computed(() => {
+            const remaining = props.outputLines.length - visibleRange.value.end
+            return Math.max(0, remaining * LINE_HEIGHT)
+        })
+
+        const isNearBottom = () => {
+            const el = terminalOutputRef.value
+            if (!el) {
+                return true
+            }
+            return el.scrollHeight - el.scrollTop - el.clientHeight <= LINE_HEIGHT * 2
+        }
+
+        const scrollToBottom = (force = false) => {
+            if (!force && !stickToBottom.value) {
+                return
+            }
             nextTick(() => {
-                if (bottomMarker.value && typeof bottomMarker.value.scrollIntoView === 'function') {
-                    bottomMarker.value.scrollIntoView({ behavior: 'auto', block: 'end' })
-                } else if (terminalOutputRef.value) {
-                    terminalOutputRef.value.scrollTop = terminalOutputRef.value.scrollHeight
-                }
+                nextTick(() => {
+                    const el = terminalOutputRef.value
+                    if (!el) {
+                        return
+                    }
+                    el.scrollTop = el.scrollHeight
+                    scrollTop.value = el.scrollTop
+                    stickToBottom.value = true
+                })
             })
         }
 
-        watch(() => props.outputLines.length, () => {
-            scrollToBottom()
+        const onScroll = () => {
+            const el = terminalOutputRef.value
+            if (!el) {
+                return
+            }
+            scrollTop.value = el.scrollTop
+            stickToBottom.value = isNearBottom()
+        }
+
+        const updateContainerHeight = () => {
+            if (terminalOutputRef.value) {
+                containerHeight.value = terminalOutputRef.value.clientHeight
+            }
+        }
+
+        const lastOutputSignature = computed(() => {
+            const lines = props.outputLines
+            if (lines.length === 0) {
+                return '0'
+            }
+            const last = lines[lines.length - 1]
+            return `${lines.length}:${last.raw}:${last.html}`
         })
 
-        expose({ terminalOutputRef })
+        watch(lastOutputSignature, (signature, prevSignature) => {
+            if (signature === '0') {
+                stickToBottom.value = true
+                scrollToBottom(true)
+                return
+            }
+            if (signature === prevSignature) {
+                return
+            }
+            if (stickToBottom.value) {
+                scrollToBottom()
+            }
+        })
 
-        return { terminalOutputRef, bottomMarker }
+        watch(() => props.status.isRunning, (isRunning) => {
+            if (isRunning && stickToBottom.value) {
+                scrollToBottom()
+            }
+        })
+
+        onMounted(() => {
+            updateContainerHeight()
+            if (typeof ResizeObserver !== 'undefined' && terminalOutputRef.value) {
+                resizeObserver = new ResizeObserver(updateContainerHeight)
+                resizeObserver.observe(terminalOutputRef.value)
+            }
+        })
+
+        onUnmounted(() => {
+            if (resizeObserver) {
+                resizeObserver.disconnect()
+                resizeObserver = null
+            }
+        })
+
+        expose({
+            terminalOutputRef,
+            scrollToBottom: () => scrollToBottom(true),
+            resetScroll: () => {
+                stickToBottom.value = true
+                scrollToBottom(true)
+            },
+        })
+
+        return {
+            terminalOutputRef,
+            bottomMarker,
+            visibleLines,
+            topSpacerHeight,
+            bottomSpacerHeight,
+            onScroll,
+        }
     }
 }
 </script>
@@ -82,7 +201,6 @@ export default {
     height: 100%;
 }
 
-/* 进度与输出样式从 App.vue 迁移 */
 .progress-section {
     padding: 12px 16px;
     background: #f8f9fa;
@@ -135,8 +253,15 @@ export default {
     white-space: pre-wrap;
 }
 
+.virtual-spacer {
+    width: 100%;
+    flex-shrink: 0;
+}
+
 .output-line {
-    margin-bottom: 2px;
+    height: 20px;
+    margin-bottom: 0;
+    overflow: hidden;
     word-break: break-all;
 }
 

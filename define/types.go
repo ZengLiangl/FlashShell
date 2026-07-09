@@ -136,8 +136,8 @@ func NewRemoteMachine() *RemoteMachine {
 	return &RemoteMachine{}
 }
 
-// Connect 连接到远程机器并初始化 SSH 和 SFTP 客户端
-func (rm *RemoteMachine) Connect(machine *Machine) error {
+// Connect 连接到远程机器。withSFTP 为 true 时额外初始化 SFTP 客户端（文件上传需要）。
+func (rm *RemoteMachine) Connect(machine *Machine, withSFTP bool) error {
 	// 获取敏感数据
 	sensitiveData, err := machine.GetSensitiveData()
 	if err != nil {
@@ -179,14 +179,16 @@ func (rm *RemoteMachine) Connect(machine *Machine) error {
 
 	rm.SSHClient = client
 
-	// 创建 SFTP 客户端
-	sftpClient, err := sftp.NewClient(client)
-	if err != nil {
-		client.Close()
-		return fmt.Errorf("SFTP连接失败: %w", err)
+	if withSFTP {
+		sftpClient, err := sftp.NewClient(client)
+		if err != nil {
+			client.Close()
+			rm.SSHClient = nil
+			return fmt.Errorf("SFTP连接失败: %w", err)
+		}
+		rm.SFTPClient = sftpClient
 	}
 
-	rm.SFTPClient = sftpClient
 	return nil
 }
 
@@ -204,9 +206,9 @@ func (rm *RemoteMachine) Close() error {
 	return err
 }
 
-// IsConnected 检查是否已连接
+// IsConnected 检查 SSH 是否已连接
 func (rm *RemoteMachine) IsConnected() bool {
-	return rm.SSHClient != nil && rm.SFTPClient != nil
+	return rm.SSHClient != nil
 }
 
 // loadPrivateKey 加载私钥
