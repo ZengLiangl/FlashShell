@@ -1,57 +1,93 @@
 # Quick Cmd 使用指南
 
-本指南结合当前代码实现，介绍如何安装、运行、配置与高效使用 Quick Cmd。
+本文档介绍 Quick Cmd 的安装、配置、界面操作与常见场景，内容与当前代码实现保持一致。
 
-## 🚀 安装与启动
+## 目录
+
+- [安装与启动](#安装与启动)
+- [配置体系](#配置体系)
+- [界面与操作](#界面与操作)
+- [执行模型](#执行模型)
+- [命令类型与特殊命令](#命令类型与特殊命令)
+- [远程机器与敏感信息](#远程机器与敏感信息)
+- [环境变量与路径](#环境变量与路径)
+- [键盘快捷键](#键盘快捷键)
+- [性能说明](#性能说明)
+- [故障排除](#故障排除)
+- [配置示例](#配置示例)
+
+---
+
+## 安装与启动
 
 ### 环境准备
 
-- Go 1.20+
-- Node.js 16+
-- Wails v2（需安装 CLI）
-
-### 安装依赖
+| 依赖 | 版本 |
+|------|------|
+| Go | 1.23+ |
+| Node.js | 16+ |
+| Wails CLI | v2 |
 
 ```bash
+go install github.com/wailsapp/wails/v2/cmd/wails@latest
 make install-deps
 ```
 
-### 开发模式（热重载）
+Windows 用户请确保已安装 WebView2 运行时。
+
+### 开发模式
 
 ```bash
 make dev
+# 等价于 ./dev.sh → wails dev
 ```
 
-### 构建生产版本
+支持前端热重载，适合调试配置与界面。
+
+### 构建与运行
 
 ```bash
 make build
-# macOS 构建后可执行示例
-./build/bin/quick-cmd.app/Contents/MacOS/quick-cmd
+# Windows: build/bin/quick-cmd.exe
+# macOS:   build/bin/quick-cmd.app
+# Linux:   build/bin/quick-cmd
 ```
 
-### 运行模式切换（main.go）
+### 运行模式
 
-- 前台运行（默认）：`-reg=desk`
-- 后台（守护）运行：`-reg=back`（输出写入 `/tmp/quick-cmd.out/.err`）
+| 参数 | 说明 |
+|------|------|
+| `-reg=desk` | 前台运行（默认） |
+| `-reg=back` | 后台守护（非 Windows） |
 
-```bash
-./build/bin/quick-cmd -reg=back
+后台模式日志：`/tmp/quick-cmd.out`、`/tmp/quick-cmd.err`。
+
+---
+
+## 配置体系
+
+Quick Cmd 将配置分为**全局配置**和**业务配置**两层。
+
+### 全局配置 `global_config.yaml`
+
+**路径（固定）**：
+
+```
+Windows: C:\Users\<用户名>\.cmd-config\global_config.yaml
+macOS:   ~/.cmd-config/global_config.yaml
+Linux:   ~/.cmd-config/global_config.yaml
 ```
 
-## 📁 配置文件
+> 全局配置保存在用户主目录，**不是**项目目录下的文件。在应用菜单中可通过「设置 → 配置文件 → 打开全局配置」直接打开。
 
-应用默认读取 `config.yaml`。如果不存在，后端会创建默认配置并加载。
+**用途**：
 
-### 全局配置（global_config.yaml）
+- `windowsName`：窗口标题
+- `configFile` / `lastOpenedFile`：业务配置文件历史与当前选中项
+- `workPaths`：路径变量表，供业务配置 `${KEY}` 引用
+- `machines`：远程机器清单（敏感信息加密存储）
 
-- 默认路径：`~/.cmd-config/global_config.yaml`
-- 用途：
-  - 记录最近/历史业务配置（`lastOpenedFile` / `configFile`）
-  - 提供 `workPaths` 变量表用于业务配置中的 `${KEY}` 替换
-  - 维护全局 `machines`，敏感信息加密到 `encrypted_data`
-
-示例：
+**默认示例**（仅首次创建文件不存在时生成）：
 
 ```yaml
 appId: com.runner
@@ -61,419 +97,398 @@ configFile:
 lastOpenedFile: config.yaml
 workPaths:
   HOME: ~
-machines:
-  - name: 示例服务器
-    key_file: ~/.ssh/id_rsa
-    # encrypted_data: "..."  # 通过 UI 写入并加密
+machines: []
 ```
 
-说明：业务配置解析时会先替换 `${KEY}`，再展开 `~` 与环境变量。
+**保护策略**：
 
-### 结构示例
+- 文件已存在且有内容时，启动**不会**覆盖为默认配置
+- `lastOpenedFile` 仅在路径实际变化时才写回磁盘
+
+### 业务配置 `config.yaml`
+
+定义要执行的项目、子项目、命令步骤。可准备多个文件，通过菜单切换。
+
+**层级结构**：
+
+```
+Project（项目）
+ └── SubProject（子项目，可执行单元）
+      └── Command（命令，含 type 与 steps）
+           └── steps[]（具体 shell 步骤）
+```
+
+**最小示例**：
 
 ```yaml
 projects:
-  - name: "我的项目"
-    description: "项目描述"
-    workdir: "${HOME}/workspace/myproject"
+  - name: 我的项目
+    description: 本地 Go 项目
+    workdir: "${HOME}/workspace/myapp"
     subprojects:
-      - name: "构建"
-        description: "构建相关命令"
+      - name: 构建
+        description: 编译并测试
         commands:
-          - name: "编译"
-            description: "编译项目"
-            type: "batch"    # 或 remote（远程）
+          - name: 编译
+            type: batch
             steps:
-              - "go build ."
+              - go build .
+          - name: 测试
+            type: batch
+            steps:
+              - go test ./...
 
-machines:
-  - name: "生产服务器"
-    host: "your-server.com"
-    port: 22
-    user: "deploy"
-    keyfile: "~/.ssh/id_rsa"   # 或使用 password
+      - name: 部署测试
+        commands:
+          - name: 上传并重启
+            type: remote
+            machine: test-server
+            steps:
+              - upload ./bin/app /opt/app/app
+              - systemctl restart myapp
 ```
+
+### 工作目录优先级
+
+命令执行时，`workdir` 按以下优先级生效（高 → 低）：
+
+1. `Command.workdir`
+2. `SubProject.workdir`
+3. `Project.workdir`
+
+### 路径与变量展开
+
+解析业务配置时，处理顺序为：
+
+1. 用全局 `workPaths` 替换 `${KEY}`
+2. 展开 `~/` 为用户主目录
+3. 展开 `$VAR` 等操作系统环境变量
 
 ### 多配置切换
 
-通过“设置 > 配置文件”菜单：
-- 单选切换当前配置（自动停止运行任务、清空输出、重建 Runner）
-- 刷新配置列表
-- 打开全局配置/当前配置
+菜单 **设置 → 配置文件**：
 
-切换后后端会发送 `config:changed`，前端自动刷新。
+| 操作 | 行为 |
+|------|------|
+| 单选切换 | 停止当前任务、清空终端、加载新配置 |
+| 刷新配置列表 | 重新扫描并刷新菜单 |
+| 打开全局配置 | 用系统默认编辑器打开 `global_config.yaml` |
+| 打开当前配置 | 打开当前业务配置文件 |
 
-## 🖥️ 界面与交互（App.vue）
+切换后前端收到 `config:changed` 事件并自动刷新。
 
-### 主界面结构
+---
 
-- 左侧：项目列表 + 子项目（可执行单元）
-- 右侧：终端输出（ANSI 渲染）、执行进度、状态栏
+## 界面与操作
 
-### 顶部/状态栏操作
+### 主界面布局
 
-- 停止全部：终止当前执行的子项目
-- 应用信息：显示版本（例如 `Quick Cmd v1.2.0`）
+```
+┌─────────────────────┬──────────────────────────────┐
+│  项目列表（全屏）     │                              │
+│  或                  │   终端输出（ANSI + 虚拟滚动）  │
+│  子项目列表 + 执行按钮 │   进度条 / 状态               │
+├─────────────────────┴──────────────────────────────┤
+│  状态栏：运行状态 / 停止全部 / 版本信息              │
+└────────────────────────────────────────────────────┘
+```
+
+### 基本流程
+
+1. 启动应用，自动加载上次打开的业务配置
+2. 在项目列表中点击项目，进入子项目视图
+3. 点击子项目「执行」，按顺序运行其下所有 Command
+4. 右侧终端实时显示输出；底部状态栏显示进度
+5. 点击「停止」可中断**本地** batch 任务（远程 SSH 会话暂不支持强杀）
+
+### 终端行为
+
+- 新任务开始时**自动清空**终端
+- 输出通过 Wails 事件推送（`output:line`），无定时轮询
+- 虚拟滚动：大量日志时只渲染可见区域，降低卡顿
+- **粘底跟随**：在底部附近时自动滚到最新行；向上翻看历史时不强制跳回
 
 ### 对话框
 
-- 机器配置：增删改查、连接测试、敏感信息加密存储
-- 环境变量配置管理：增删改查、使用说明
-- 关于 Quick Cmd：项目简介/版本/技术栈
+| 入口 | 功能 |
+|------|------|
+| 设置 → 机器配置（Ctrl+M） | 增删改机器、测试 SSH、管理密钥 |
+| 设置 → 环境变量（Ctrl+E） | 管理 `workPaths` 变量 |
+| 帮助 → 关于 | 版本与简介 |
 
-菜单或快捷键触发后端事件，前端通过 `EventsOn` 监听：
-- `open:machine-config`
-- `open:workpath-config`
-- `open:about`
+### 应用菜单
 
-## ⛓️ 执行模型
+- **文件 → 新建窗口**：启动新的应用进程
+- **设置 → 配置文件**：切换/刷新/打开配置
+- **设置 → 机器配置 / 环境变量**
 
-### 概念
+---
 
-- Project：项目分组
-- SubProject：可执行单元（一次执行一个完整步骤序列）
-- Command：具体步骤（含 `type` 与 `steps`）
+## 执行模型
 
-### 类型
+### 概念对照
 
-- batch：本地执行
-- remote：通过 SSH 远程执行
+| 概念 | 说明 | 用户操作 |
+|------|------|----------|
+| Project | 项目分组 | 点击进入 |
+| SubProject | 一次完整执行单元 | 点击「执行」 |
+| Command | 一组步骤（batch 或 remote） | 自动顺序执行 |
+| Step | 单条 shell 命令 | 在配置中编写 |
 
-### 示例
+### 执行过程
 
-```yaml
-projects:
-  - name: "Go项目"
-    subprojects:
-      - name: "构建"
-        commands:
-          - name: "编译"
-            type: batch
-            steps: ["go build"]
-          - name: "测试"
-            type: batch
-            steps: ["go test"]
-```
+1. 点击「执行」→ 重读配置 → 清空终端
+2. 按 SubProject 内 Command 顺序依次执行
+3. 每个 Command 内 steps 逐步执行
+4. 状态通过 `execution:status` 事件推送到前端
+5. 全部完成或出错后停止，`IsRunning` 变为 false
 
-点击“构建”后，会依次执行其下所有命令并在终端显示输出，右侧显示执行状态与进度。
+### batch 与 remote 对比
 
-## 🔐 远程与敏感信息
+| 类型 | 执行位置 | 适用场景 |
+|------|----------|----------|
+| `batch` | 本机 `cmd /C`（Windows）或 `bash -c` | Maven/Gradle/npm 构建、本地脚本 |
+| `remote` | SSH 到指定 `machine` | 上传文件、重启服务、Docker 操作 |
 
-### SSH 与敏感信息（当前实现）
+---
 
-- 机器明文字段：`name`、`key_file`、`encrypted_data`
-- 主机/端口/用户名/密码由 UI 写入并加密到 `encrypted_data`
-- 远程命令通过命令的 `machine` 字段引用机器名
+## 命令类型与特殊命令
 
-### 敏感信息管理
+### batch（本地）
 
-- 在“机器配置”弹框中编辑信息
-- 后端通过 `SetMachineSensitiveData` 写入敏感数据并加密缓存
-- 运行前可通过 `TestMachineConnection` 测试连通性
-
-## 🌍 环境变量与路径
-
-- 在“环境变量配置管理”中增删改查
-- 配置文件中可通过 `${VAR}` 或 `~` 等方式展开（见 `data/` 逻辑）
-
-## ⌨️ 键盘快捷键
-
-- Cmd/Ctrl+C：复制选中文本（若无选择则复制全部终端文本）
-- Cmd/Ctrl+K：清空终端输出
-- Cmd/Ctrl+M：打开机器配置
-- Cmd/Ctrl+E：打开环境变量配置
-- Escape：关闭已打开的对话框
-
-## 🧰 常用 Make 任务
-
-```bash
-make dev            # 开发模式（调用 dev.sh）
-make build          # 构建（调用 build.sh）
-make install-deps   # 安装依赖（前端 + go mod tidy）
-make test           # Go 测试
-make fmt            # Go fmt + 尝试前端格式化
-make lint           # go vet
-make clean          # 清理构建与前端产物
-```
-
-## 🐞 故障排除
-
-- 构建失败：更新 Wails CLI、确认 Node/Go 版本
-- SSH 失败：检查主机/端口/认证；前端“机器配置”可测试连接
-- 界面无响应：刷新或重启；查看浏览器控制台；确认后端正常
-- 切换配置未生效：使用“刷新配置列表”或切换配置；前端收到 `config:changed` 会自动刷新
-
-## 📌 小贴士
-
-- 用 SubProject 聚合完整流程（如 构建 → 测试 → 打包）
-- 用环境变量抽离路径/凭据，避免重复
-- 推荐密钥认证代替密码，提升安全性
-
-# Quick Cmd 使用指南
-
-## 🚀 快速开始
-
-### 1. 启动应用
-
-#### 开发模式（推荐用于测试）
-
-```bash
-wails dev
-```
-
-这会启动开发服务器，支持热重载，方便调试。
-
-#### 生产模式
-
-```bash
-# 构建应用
-wails build
-
-# 运行构建的应用
-./build/bin/quick-cmd.app/Contents/MacOS/quick-cmd
-```
-
-### 2. 配置项目
-
-应用启动后会自动加载 `config.yaml` 配置文件。如果文件不存在，会自动创建一个示例配置。
-
-#### 配置文件结构
+在本地 shell 中执行，工作目录由上述优先级决定。
 
 ```yaml
-# 结构说明:
-# - Projects: 项目分组
-# - SubProjects: 可执行的项目单元 (点击执行)
-# - Commands: 执行步骤序列 (按顺序自动执行)
-
-projects:
-  - name: "项目名称"
-    description: "项目描述"
-    workdir: "~/workspace/project-path"
-    subprojects:
-      - name: "可执行项目名称"
-        description: "可执行项目描述"
-        commands:
-          - name: "命令名称"
-            description: "命令描述"
-            type: "batch" # 或 "remote"
-            steps:
-              - "命令1"
-              - "命令2"
-
-machines:
-  - name: "服务器名称"
-    host: "server.example.com"
-    port: 22
-    user: "username"
-    keyfile: "~/.ssh/id_rsa" # 或使用 password: "密码"
-```
-
-## 📋 界面说明
-
-### 左侧面板
-
-#### 项目列表区域
-
-- 显示所有配置的项目名称和描述
-- 点击项目卡片选择项目
-- 选中的项目会高亮显示
-- **刷新按钮**: 刷新整个页面重新加载配置
-- **调试按钮**: 显示配置加载状态和调试信息
-
-#### 可执行项目区域
-
-- 显示选中项目下的所有 SubProjects（可执行项目单元）
-- 每个 SubProject 显示名称、描述和包含的命令数量
-- **执行按钮**: 点击后按顺序执行该 SubProject 下的所有 Commands
-- **停止按钮**: 停止正在运行的 SubProject
-
-### 右侧面板
-
-#### 终端输出区域
-
-- 实时显示命令执行结果
-- **ANSI 转义序列支持**: 完整支持终端颜色、样式和格式
-- 支持 256 色和真彩色输出
-- 自动识别错误和成功消息并高亮显示
-- **清空按钮**: 清除所有输出
-- **刷新按钮**: 手动刷新输出
-
-#### 状态栏
-
-- 显示当前应用状态（就绪/执行中）
-- 显示正在执行的 SubProject 和当前 Command
-- 显示执行进度（已完成/总数）
-- **停止执行按钮**: 停止正在运行的 SubProject
-
-## 🔧 执行模型
-
-### 正确的理解
-
-1. **Projects** - 项目分组（如 "Go 项目", "前端项目"）
-2. **SubProjects** - **可执行的项目单元**（如 "构建", "部署", "开发"）
-3. **Commands** - **执行步骤序列**（如 "编译", "测试", "清理"）
-
-### 执行流程
-
-1. **选择项目**: 在左上角项目列表中点击项目
-2. **查看 SubProjects**: 左下角显示该项目的可执行项目单元
-3. **执行 SubProject**: 点击执行按钮，系统按顺序执行所有 Commands
-4. **监控进度**: 右侧终端显示实时输出和执行进度
-5. **完成或停止**: 所有 Commands 执行完成，或用户手动停止
-
-### 示例执行
-
-假设有以下配置：
-
-```yaml
-projects:
-  - name: "Go项目"
-    subprojects:
-      - name: "构建"
-        commands:
-          - name: "编译"
-            steps: ["go build"]
-          - name: "测试"
-            steps: ["go test"]
-          - name: "清理"
-            steps: ["go clean"]
-```
-
-当用户点击 "构建" SubProject 时：
-
-1. 执行 "编译" Command: `go build`
-2. 执行 "测试" Command: `go test`
-3. 执行 "清理" Command: `go clean`
-4. 显示 "构建完成"
-
-## 🎯 命令类型
-
-### batch（本地命令）
-
-在本地环境执行命令序列，适用于：
-
-- 编译构建
-- 运行测试
-- 文件操作
-- 本地脚本执行
-
-```yaml
-- name: "构建项目"
-  type: "batch"
+- name: 打包
+  type: batch
   steps:
-    - "go mod tidy"
-    - "go build -o bin/app ."
+    - mvn clean package -DskipTests
+    - echo 构建完成
 ```
 
-### remote（远程命令）
+Windows 下通过隐藏窗口的 `cmd /C` 执行；停止时会 `taskkill /T /F` 结束进程树。
 
-通过 SSH 在远程服务器执行命令，适用于：
+### remote（远程）
 
-- 服务部署
-- 远程操作
-- 服务器管理
+通过 SSH 连接 `machine` 字段指定的机器执行步骤。
 
 ```yaml
-- name: "部署到服务器"
-  type: "remote"
-  machine: "生产服务器"
+- name: 重启服务
+  type: remote
+  machine: jz
   steps:
-    - "systemctl stop myapp"
-    - "cp /tmp/app /opt/myapp/"
-    - "systemctl start myapp"
+    - docker restart auth-service gateway
 ```
 
-## 🛠️ 高级配置
+- 普通 shell 步骤：创建 SSH Session 执行
+- 仅当步骤包含 `upload` 时才建立 SFTP 连接（纯命令如 `docker restart` 不建 SFTP，连接更快）
 
-### 环境变量
+### 远程特殊命令
 
-配置文件支持环境变量和路径展开：
+在 `remote` 类型的 steps 中可使用以下内置命令：
 
-- `~/` 会自动展开为用户主目录
-- 支持 `$HOME`、`$USER` 等环境变量
+| 命令 | 格式 | 说明 |
+|------|------|------|
+| `upload` | `upload <本地路径> <远程路径>` | 上传文件或目录（目录先 zip 再传） |
+| `targz` | `targz <源目录> <目标.tar.gz>` | 本地打包（特殊场景） |
+| `chdir` | `chdir <远程目录>` | 切换远程工作目录 |
 
-### SSH 认证
+**upload 示例**：
 
-支持两种认证方式：
+```yaml
+steps:
+  - upload D:\build\app.jar /home/app/app.jar
+  - upload D:\build\dist /usr/share/nginx/html/app
+  - docker restart nginx
+```
 
-#### 密钥认证（推荐）
+上传目录时会自动压缩为 zip、传到远程临时目录、解压后删除压缩包，并显示传输进度。
+
+---
+
+## 远程机器与敏感信息
+
+### 配置方式
+
+机器信息保存在**全局配置**的 `machines` 数组中，通过 UI「机器配置」管理。
+
+磁盘上可见字段：
 
 ```yaml
 machines:
-  - name: "服务器"
-    host: "example.com"
-    port: 22
-    user: "deploy"
-    keyfile: "~/.ssh/id_rsa"
+  - name: jz
+    key_file: C:\Users\ll\.ssh\id_rsa
+    encrypted_data: "..."   # UI 写入后自动生成，勿手动编辑
 ```
 
-#### 密码认证
+主机、端口、用户名、密码通过 UI 填写，加密后写入 `encrypted_data`，**不以明文落盘**。
+
+### 认证方式
+
+- **密钥认证**：填写 `key_file` 路径（支持 `~/.ssh/id_rsa`）
+- **密码认证**：在 UI 中填写密码（加密存储）
+- 可同时配置，连接时两种都尝试
+
+### 连接测试
+
+在「机器配置」列表中点击「测试连接」，后端执行 `echo 'connection test'` 验证 SSH 可达。
+
+---
+
+## 环境变量与路径
+
+在「环境变量配置管理」中维护键值对，例如：
+
+| 键 | 值 |
+|----|-----|
+| `HOME` | `C:\Users\ll` |
+| `ACC-CLOUD` | `D:\IdeaProjects\acc-cloud` |
+| `MVM` | `mvn` |
+
+业务配置中引用：
 
 ```yaml
-machines:
-  - name: "服务器"
-    host: "example.com"
-    port: 22
-    user: "deploy"
-    password: "your-password"
+workdir: "${ACC-CLOUD}"
+steps:
+  - mvn package -pl my-module -am
+  - upload ${ACC-CLOUD}\target\app.jar /opt/app/app.jar
 ```
 
-### 工作目录与变量
+---
 
-可以为项目和命令分别设置工作目录：
+## 键盘快捷键
 
-```yaml
-projects:
-  - name: "项目"
-    workdir: "${HOME}/workspace/project" # 项目默认工作目录
-    subprojects:
-      - name: "子项目"
-        commands:
-          - name: "特殊命令"
-            workdir: "${HOME}/workspace/other" # 命令特定工作目录
-            type: "batch"
-            steps:
-              - "ls -la"
-```
+| 快捷键 | 功能 |
+|--------|------|
+| Ctrl/Cmd + C | 复制终端选中文本；无选中则复制全部 |
+| Ctrl/Cmd + K | 清空终端 |
+| Ctrl/Cmd + M | 打开机器配置 |
+| Ctrl/Cmd + E | 打开环境变量配置 |
+| Ctrl/Cmd + R | 刷新配置列表（菜单） |
+| Escape | 关闭已打开对话框 |
 
-## 🐛 故障排除
+---
+
+## 性能说明
+
+### 输出机制
+
+- 后端通过 `output:line`、`execution:status` 事件推送，**已移除前端轮询**
+- 本地输出通道满时非阻塞丢弃，避免卡死
+- 执行新任务时自动清空终端，避免历史 DOM 堆积
+
+### Windows 使用建议
+
+| 场景 | 建议 |
+|------|------|
+| Maven/Gradle 构建 | 限制并行度（如 `-T 2`），日常可去掉 `clean` |
+| 杀毒软件占用高 | 将项目目录、`.m2` 仓库加入 Defender 排除项 |
+| 远程 docker restart | 本身不占本地 CPU；等待期间 UI 应保持流畅 |
+| 终端历史过多 | 新任务会自动清空；也可手动 Ctrl+K |
+
+---
+
+## 故障排除
 
 ### 配置文件无法加载
 
-1. 检查 `config.yaml` 文件格式是否正确
-2. 确保文件编码为 UTF-8
-3. 点击"调试"按钮查看详细错误信息
+- 检查 YAML 缩进与编码（UTF-8）
+- 确认 `workdir` 引用的 `${KEY}` 在全局 `workPaths` 中已定义
+- 菜单「刷新配置列表」后重试
+
+### 全局配置丢失或被改写
+
+- 确认编辑路径为 `~/.cmd-config/global_config.yaml`
+- 应用不会在启动时覆盖已有内容的全局配置
+- 仅 UI 主动修改（机器/环境变量/切换配置）时才会写盘
 
 ### SSH 连接失败
 
-1. 检查服务器地址、端口、用户名
-2. 确保 SSH 密钥文件路径正确
-3. 测试手动 SSH 连接是否正常
+1. 机器配置中点击「测试连接」
+2. 检查 host、port、user、密钥路径
+3. 确认密钥权限（Linux/macOS 上通常为 600）
+4. 手动 `ssh user@host` 验证网络
 
-### SubProject 执行失败
+### 本地命令执行失败
 
-1. 检查 Commands 中的命令语法是否正确
-2. 确保工作目录存在且有权限
-3. 查看终端输出的错误信息
+- Windows 下命令通过 `cmd /C` 执行，复杂管道建议写成 `.bat` 或拆分步骤
+- 检查 `workdir` 是否存在
+- 查看终端 `[STDERR]` 行
 
-### 前端界面无响应
+### 远程 upload 失败
 
-1. 刷新页面或重启应用
-2. 检查浏览器控制台是否有错误
-3. 确保后端服务正常运行
+- 确认步骤以 `upload` 开头（此时才会建立 SFTP）
+- 检查本地路径与远程目录权限
+- 大目录上传会先 zip，留意磁盘空间
 
-## 💡 使用技巧
+### 界面无响应
 
-1. **合理分组**: 使用 Projects 来组织相关的 SubProjects
-2. **步骤设计**: 将复杂的操作分解为多个 Commands
-3. **快速调试**: 使用"调试"按钮快速检查配置是否正确
-4. **实时监控**: 终端输出会实时显示执行进度和结果
-5. **安全管理**: 建议使用 SSH 密钥而不是密码进行远程连接
+- 确认使用最新构建（含事件推送版本）
+- 菜单刷新配置或重启应用
+- Windows 任务管理器查看 `msedgewebview2` 占用
 
-## 📝 配置示例
+---
 
-查看 `config.example.yaml` 文件获取完整的配置示例。
+## 配置示例
 
-## 🔄 更新配置
+### 本地构建 + 远程发布
 
-修改 `config.yaml` 文件后，点击"刷新"按钮即可重新加载配置，无需重启应用。
+```yaml
+projects:
+  - name: XYJ
+    workdir: "${ACC-CLOUD}"
+    subprojects:
+      - name: 发布测试【merchant】
+        commands:
+          - name: 打包【merchant】
+            type: batch
+            steps:
+              - mvn package -DskipTests -P dev -pl merchant-service -am
+          - name: 发布测试【merchant】
+            type: remote
+            machine: jz
+            steps:
+              - upload ${ACC-CLOUD}\merchant-service\target\app.jar /opt/merchant/app.jar
+              - docker restart merchant-service
+
+      - name: 发布测试【auth&gateway】
+        commands:
+          - name: 重启【auth&gateway】
+            type: remote
+            machine: jz
+            steps:
+              - docker restart auth-service gateway
+```
+
+### 纯本地脚本
+
+```yaml
+projects:
+  - name: 工具
+    subprojects:
+      - name: 启动测试环境
+        commands:
+          - name: 启用服务
+            type: batch
+            steps:
+              - curl https://example.com/api/setServers?status=1
+```
+
+---
+
+## Make 任务速查
+
+```bash
+make dev            # 开发模式
+make build          # 构建
+make install-deps   # 安装依赖
+make test           # Go 测试
+make fmt            # 格式化
+make lint           # 静态检查
+make clean          # 清理
+make config         # 复制 config.example.yaml → config.yaml（若示例存在）
+```
+
+---
+
+如有问题，请先查看终端输出与全局配置路径是否正确，再对照本文档排查。
