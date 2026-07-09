@@ -36,6 +36,10 @@ export function GetConfigFiles():Promise<Array<string>>;
 
 export function GetConfigForRefresh():Promise<define.Root>;
 
+export function GetCurrentConfigPath():Promise<string>;
+
+export function GetExecutionLogs(arg1:number):Promise<Array<data.LogEntry>>;
+
 export function GetGlobalConfig():Promise<data.GlobalConfig>;
 
 export function GetGlobalConfigForRefresh():Promise<data.GlobalConfig>;
@@ -46,19 +50,39 @@ export function GetMachines():Promise<Array<define.Machine>>;
 
 export function GetOutput():Promise<Array<string>>;
 
+export function GetSessionInfo():Promise<data.SessionState>;
+
 export function GetStatus():Promise<define.CommandStatus>;
 
 export function GetSubProjectStatus():Promise<define.SubProjectStatus>;
 
+export function GetSystemSettings():Promise<data.GlobalConfig>;
+
+export function GetThemeSettings():Promise<data.ThemeSettings>;
+
 export function GetWorkPaths():Promise<Record<string, string>>;
+
+export function NewWindow():Promise<void>;
 
 export function OpenAbout():Promise<void>;
 
+export function OpenConfigEditor():Promise<void>;
+
 export function OpenCurrentConfigWithEvent():Promise<void>;
+
+export function OpenExecutionHistory():Promise<void>;
+
+export function OpenExecutionLog(arg1:string):Promise<void>;
+
+export function OpenGlobalConfigWithEvent():Promise<void>;
 
 export function OpenMachineConfig():Promise<void>;
 
+export function OpenSystemSettings():Promise<void>;
+
 export function OpenWorkPathConfig():Promise<void>;
+
+export function ReadExecutionLog(arg1:string):Promise<string>;
 
 export function RefreshConfigMenu():Promise<void>;
 
@@ -67,6 +91,10 @@ export function RefreshConfigMenuWithEvent():Promise<void>;
 export function SaveConfig(arg1:define.Root):Promise<void>;
 
 export function SaveGlobalConfig(arg1:data.GlobalConfig):Promise<void>;
+
+export function SaveSystemSettings(arg1:data.GlobalConfig):Promise<void>;
+
+export function SaveThemeSettings(arg1:data.ThemeSettings):Promise<void>;
 
 export function SelectKeyFile():Promise<string>;
 

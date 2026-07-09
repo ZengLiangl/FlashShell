@@ -66,6 +66,14 @@ export function GetConfigForRefresh() {
   return window['go']['app']['App']['GetConfigForRefresh']();
 }
 
+export function GetCurrentConfigPath() {
+  return window['go']['app']['App']['GetCurrentConfigPath']();
+}
+
+export function GetExecutionLogs(arg1) {
+  return window['go']['app']['App']['GetExecutionLogs'](arg1);
+}
+
 export function GetGlobalConfig() {
   return window['go']['app']['App']['GetGlobalConfig']();
 }
@@ -86,6 +94,10 @@ export function GetOutput() {
   return window['go']['app']['App']['GetOutput']();
 }
 
+export function GetSessionInfo() {
+  return window['go']['app']['App']['GetSessionInfo']();
+}
+
 export function GetStatus() {
   return window['go']['app']['App']['GetStatus']();
 }
@@ -94,24 +106,60 @@ export function GetSubProjectStatus() {
   return window['go']['app']['App']['GetSubProjectStatus']();
 }
 
+export function GetSystemSettings() {
+  return window['go']['app']['App']['GetSystemSettings']();
+}
+
+export function GetThemeSettings() {
+  return window['go']['app']['App']['GetThemeSettings']();
+}
+
 export function GetWorkPaths() {
   return window['go']['app']['App']['GetWorkPaths']();
+}
+
+export function NewWindow() {
+  return window['go']['app']['App']['NewWindow']();
 }
 
 export function OpenAbout() {
   return window['go']['app']['App']['OpenAbout']();
 }
 
+export function OpenConfigEditor() {
+  return window['go']['app']['App']['OpenConfigEditor']();
+}
+
 export function OpenCurrentConfigWithEvent() {
   return window['go']['app']['App']['OpenCurrentConfigWithEvent']();
+}
+
+export function OpenExecutionHistory() {
+  return window['go']['app']['App']['OpenExecutionHistory']();
+}
+
+export function OpenExecutionLog(arg1) {
+  return window['go']['app']['App']['OpenExecutionLog'](arg1);
+}
+
+export function OpenGlobalConfigWithEvent() {
+  return window['go']['app']['App']['OpenGlobalConfigWithEvent']();
 }
 
 export function OpenMachineConfig() {
   return window['go']['app']['App']['OpenMachineConfig']();
 }
 
+export function OpenSystemSettings() {
+  return window['go']['app']['App']['OpenSystemSettings']();
+}
+
 export function OpenWorkPathConfig() {
   return window['go']['app']['App']['OpenWorkPathConfig']();
+}
+
+export function ReadExecutionLog(arg1) {
+  return window['go']['app']['App']['ReadExecutionLog'](arg1);
 }
 
 export function RefreshConfigMenu() {
@@ -128,6 +176,14 @@ export function SaveConfig(arg1) {
 
 export function SaveGlobalConfig(arg1) {
   return window['go']['app']['App']['SaveGlobalConfig'](arg1);
+}
+
+export function SaveSystemSettings(arg1) {
+  return window['go']['app']['App']['SaveSystemSettings'](arg1);
+}
+
+export function SaveThemeSettings(arg1) {
+  return window['go']['app']['App']['SaveThemeSettings'](arg1);
 }
 
 export function SelectKeyFile() {

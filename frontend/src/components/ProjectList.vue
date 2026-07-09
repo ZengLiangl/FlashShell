@@ -2,7 +2,9 @@
     <div class="panel-section project-section" :class="{ 'fullscreen': fullScreen }">
         <div class="section-header">
             <h3>项目列表</h3>
-            <div>
+            <div class="header-actions">
+                <el-button size="small" @click="$emit('open-system-settings')">系统设置</el-button>
+                <el-button size="small" @click="$emit('open-execution-history')">执行历史</el-button>
                 <el-button size="small" @click="$emit('refresh')">
                     <el-icon>
                         <Refresh />
@@ -46,16 +48,19 @@ export default {
         selectedProjectName: { type: String, default: '' },
         fullScreen: { type: Boolean, default: false }
     },
-    emits: ['refresh', 'select']
+    emits: ['refresh', 'select', 'open-system-settings', 'open-execution-history']
 }
 </script>
 
 <style scoped>
 .panel-section {
     padding: 16px;
-    border-bottom: 1px solid #e4e7ed;
+    border-bottom: 1px solid var(--app-border);
     display: flex;
     flex-direction: column;
+    background: var(--app-panel-bg);
+    color: var(--app-text);
+    height: 100%;
 }
 
 .project-section {
@@ -79,7 +84,19 @@ export default {
     margin: 0;
     font-size: 14px;
     font-weight: 600;
-    color: #303133;
+    color: var(--app-text);
+}
+
+.header-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.no-projects {
+    text-align: center;
+    color: var(--app-text-muted);
+    padding: 20px;
 }
 
 .project-list {
@@ -87,20 +104,18 @@ export default {
     grid-template-columns: repeat(4, 220px);
     justify-content: center;
     gap: 16px 40px;
-    /* 行间距 24, 列间距 28 */
     overflow-y: auto;
     overflow-x: hidden;
     flex: 1;
     min-height: 0;
     padding: 12px 32px 20px;
-    /* 增加左右内边距以提升可视留白 */
 }
 
 .project-item {
     padding: 12px;
-    background: white;
+    background: var(--app-card-bg);
     border-radius: 10px;
-    border: 1px solid #ebeef5;
+    border: 1px solid var(--app-card-border);
     cursor: pointer;
     transition: all 0.2s ease-in-out;
     box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
@@ -113,26 +128,26 @@ export default {
 }
 
 .project-item:hover {
-    border-color: #409eff;
-    box-shadow: 0 6px 18px rgba(64, 158, 255, 0.15);
+    border-color: var(--app-accent-color);
+    box-shadow: 0 6px 18px var(--app-card-hover-shadow);
     transform: translateY(-2px);
 }
 
 .project-item.active {
-    border-color: #409eff;
-    background: #f3f9ff;
-    box-shadow: 0 6px 18px rgba(64, 158, 255, 0.2);
+    border-color: var(--app-accent-color);
+    background: var(--app-card-active-bg);
+    box-shadow: 0 6px 18px var(--app-card-hover-shadow);
 }
 
 .project-name {
     font-weight: 600;
-    color: #303133;
+    color: var(--app-text);
     margin-bottom: 4px;
 }
 
 .project-desc {
     font-size: 12px;
-    color: #909399;
+    color: var(--app-text-muted);
 }
 
 .card-header {
@@ -145,8 +160,8 @@ export default {
     width: 36px;
     height: 36px;
     border-radius: 8px;
-    background: #ecf5ff;
-    color: #409eff;
+    background: var(--app-accent-bg);
+    color: var(--app-accent-color);
     display: flex;
     align-items: center;
     justify-content: center;

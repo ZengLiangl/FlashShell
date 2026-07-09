@@ -54,18 +54,16 @@ export default {
 
 <style scoped>
 .status-bar {
-    position: sticky;
-    bottom: 0;
-    left: 0;
-    right: 0;
+    flex-shrink: 0;
     height: 40px;
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0 16px;
-    border-top: 1px solid #e4e7ed;
-    background: #fff;
-    z-index: 100;
+    border-top: 1px solid var(--app-border);
+    background: var(--app-panel-bg);
+    color: var(--app-text);
+    box-sizing: border-box;
 }
 
 .status-info {
@@ -89,7 +87,7 @@ export default {
 }
 
 .app-info {
-    color: #909399;
+    color: var(--app-text-muted);
     font-size: 12px;
 }
 </style>

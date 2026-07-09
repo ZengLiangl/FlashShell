@@ -33,7 +33,7 @@
                     'error-line': item.line.isError,
                     'success-line': item.line.isSuccess,
                     'progress-line': item.line.isProgress,
-                }" v-html="item.line.html">
+                }" v-html="renderLineHtml(item)">
                 </div>
                 <div class="virtual-spacer" :style="{ height: bottomSpacerHeight + 'px' }"></div>
             </template>
@@ -54,9 +54,12 @@ export default {
         status: { type: Object, required: true },
         outputLines: { type: Array, required: true },
         progressPercentage: { type: Number, required: true },
-        progressStatus: { type: String, required: true }
+        progressStatus: { type: String, required: true },
+        searchQuery: { type: String, default: '' },
+        activeMatchIndex: { type: Number, default: -1 }
     },
-    setup(props, { expose }) {
+    emits: ['search-matches'],
+    setup(props, { expose, emit }) {
         const terminalOutputRef = ref(null)
         const bottomMarker = ref(null)
         const scrollTop = ref(0)
@@ -73,6 +76,50 @@ export default {
             const visibleCount = Math.ceil(containerHeight.value / LINE_HEIGHT) + OVERSCAN * 2
             const end = Math.min(total, start + visibleCount)
             return { start, end }
+        })
+
+        const matchLineIndices = computed(() => {
+            const q = props.searchQuery.trim().toLowerCase()
+            if (!q) return []
+            const indices = []
+            props.outputLines.forEach((line, index) => {
+                const text = (line.raw || line.text || '').toLowerCase()
+                if (text.includes(q)) indices.push(index)
+            })
+            return indices
+        })
+
+        const escapeRegExp = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+        const renderLineHtml = (item) => {
+            const html = item.line.html || ''
+            const q = props.searchQuery.trim()
+            if (!q) return html
+            const text = item.line.raw || item.line.text || ''
+            if (!text.toLowerCase().includes(q.toLowerCase())) return html
+
+            const regex = new RegExp(`(${escapeRegExp(q)})`, 'gi')
+            const plain = text.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            const highlighted = plain.replace(regex, '<mark class="search-highlight">$1</mark>')
+            const isActive = matchLineIndices.value[props.activeMatchIndex] === item.index
+            return isActive ? `<span class="search-active-line">${highlighted}</span>` : highlighted
+        }
+
+        const scrollToLine = (lineIndex) => {
+            const el = terminalOutputRef.value
+            if (!el || lineIndex < 0) return
+            el.scrollTop = Math.max(0, lineIndex * LINE_HEIGHT - containerHeight.value / 2)
+            scrollTop.value = el.scrollTop
+            stickToBottom.value = false
+        }
+
+        watch(matchLineIndices, (indices) => {
+            emit('search-matches', indices)
+        }, { immediate: true })
+
+        watch(() => props.activeMatchIndex, (idx) => {
+            const lineIndex = matchLineIndices.value[idx]
+            if (lineIndex !== undefined) scrollToLine(lineIndex)
         })
 
         const visibleLines = computed(() => {
@@ -189,6 +236,7 @@ export default {
             topSpacerHeight,
             bottomSpacerHeight,
             onScroll,
+            renderLineHtml,
         }
     }
 }
@@ -198,13 +246,16 @@ export default {
 .terminal-wrapper {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .progress-section {
+    flex-shrink: 0;
     padding: 12px 16px;
-    background: #f8f9fa;
-    border-bottom: 1px solid #e4e7ed;
+    background: var(--app-panel-bg);
+    border-bottom: 1px solid var(--app-border);
 }
 
 .progress-info {
@@ -222,18 +273,18 @@ export default {
 
 .project-name {
     font-weight: 600;
-    color: #303133;
+    color: var(--app-text);
     font-size: 14px;
 }
 
 .current-command {
     font-size: 12px;
-    color: #606266;
+    color: var(--app-text-secondary);
 }
 
 .progress-stats {
     font-size: 12px;
-    color: #909399;
+    color: var(--app-text-muted);
     font-weight: 500;
 }
 
@@ -243,9 +294,10 @@ export default {
 
 .terminal-output {
     flex: 1;
+    min-height: 0;
     padding: 16px;
-    background: #1e1e1e;
-    color: #d4d4d4;
+    background: var(--terminal-bg, #1e1e1e);
+    color: var(--terminal-fg, #d4d4d4);
     font-family: "Consolas", "Monaco", "Courier New", monospace;
     font-size: 13px;
     line-height: 1.4;
@@ -266,16 +318,20 @@ export default {
 }
 
 .error-line {
-    color: #f56c6c;
+    color: var(--terminal-error, #f56c6c);
 }
 
 .success-line {
-    color: #67c23a;
+    color: var(--terminal-success, #67c23a);
 }
 
 .progress-line {
-    color: #409eff;
+    color: var(--terminal-progress, #409eff);
     font-weight: 500;
+}
+
+:deep(.search-active-line) {
+    outline: 1px solid var(--terminal-search-highlight, #ffd666);
 }
 
 .empty-output {

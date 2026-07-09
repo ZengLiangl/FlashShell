@@ -76,7 +76,8 @@
                             <div v-for="(step, index) in command.steps" :key="index" class="step-item">
                                 <div class="step-number">{{ index + 1 }}</div>
                                 <div class="step-content">
-                                    <div class="step-command">{{ step }}</div>
+                                    <div class="step-command">{{ stepDisplay(step) }}</div>
+                                <div v-if="stepMeta(step)" class="step-meta">{{ stepMeta(step) }}</div>
                                 </div>
                             </div>
                         </div>
@@ -101,16 +102,31 @@ export default {
         getCommandTypeText: { type: Function, required: true },
         isSubProjectRunning: { type: Function, required: true }
     },
-    emits: ['toggle-sub', 'toggle-cmd', 'execute-sub', 'stop-sub', 'back']
+    emits: ['toggle-sub', 'toggle-cmd', 'execute-sub', 'stop-sub', 'back'],
+    methods: {
+        stepDisplay(step) {
+            if (typeof step === 'string') return step
+            return step?.command || step?.cmd || ''
+        },
+        stepMeta(step) {
+            if (typeof step === 'string') return ''
+            const parts = []
+            if (step?.onFail && step.onFail !== 'abort') parts.push(`on_fail: ${step.onFail}`)
+            if (step?.retry > 0) parts.push(`retry: ${step.retry}`)
+            return parts.join(' · ')
+        }
+    }
 }
 </script>
 
 <style scoped>
 .panel-section {
     padding: 16px;
-    border-bottom: 1px solid #e4e7ed;
+    border-bottom: 1px solid var(--app-border);
     display: flex;
     flex-direction: column;
+    background: var(--app-panel-bg);
+    color: var(--app-text);
 }
 
 .subproject-section {
@@ -144,9 +160,9 @@ export default {
     align-items: center;
     padding: 12px;
     margin-bottom: 8px;
-    background: white;
+    background: var(--app-card-bg);
     border-radius: 6px;
-    border: 1px solid #e4e7ed;
+    border: 1px solid var(--app-border);
 }
 
 .subproject-info {
@@ -155,13 +171,13 @@ export default {
 
 .subproject-name {
     font-weight: 600;
-    color: #303133;
+    color: var(--app-text);
     margin-bottom: 4px;
 }
 
 .subproject-desc {
     font-size: 12px;
-    color: #909399;
+    color: var(--app-text-muted);
     margin-bottom: 6px;
 }
 
@@ -201,7 +217,7 @@ export default {
 .commands-container {
     margin-left: 32px;
     margin-top: 8px;
-    border-left: 2px solid #e4e7ed;
+    border-left: 2px solid var(--app-border);
     padding-left: 12px;
 }
 
@@ -214,9 +230,9 @@ export default {
     justify-content: space-between;
     align-items: center;
     padding: 8px 12px;
-    background: #fafafa;
+    background: var(--app-card-bg);
     border-radius: 4px;
-    border: 1px solid #f0f0f0;
+    border: 1px solid var(--app-border);
 }
 
 .command-header {
@@ -297,11 +313,17 @@ export default {
 .step-command {
     font-family: "Consolas", "Monaco", "Courier New", monospace;
     font-size: 12px;
-    color: #303133;
-    background: #f8f9fa;
+    color: var(--app-text);
+    background: var(--step-bg);
     padding: 4px 8px;
     border-radius: 3px;
-    border: 1px solid #e9ecef;
+    border: 1px solid var(--step-border);
+    margin-bottom: 2px;
+}
+
+.step-meta {
+    font-size: 11px;
+    color: var(--app-text-muted);
     margin-bottom: 4px;
 }
 

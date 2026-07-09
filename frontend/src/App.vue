@@ -1,5 +1,7 @@
 <template>
-  <div class="app-container">
+  <div class="app-container" :class="themeClass">
+    <AppMenuBar />
+
     <!-- 全局加载遮罩 -->
     <div v-if="isReloading" class="global-loading">
       <div class="loading-content">
@@ -26,14 +28,24 @@
 
         <!-- 右侧终端输出 -->
         <el-main class="terminal-container">
-          <TerminalHeader :show-back="false" @clear="clearOutput" @refresh="refreshOutput" />
-          <TerminalOutput :status="status" :output-lines="outputLines" :progress-percentage="progressPercentage"
-            :progress-status="progressStatus" />
+          <TerminalHeader :show-back="false"
+            :search-visible="terminalSearchVisible"
+            v-model:search-query="terminalSearchQuery"
+            :match-summary="terminalMatchSummary"
+            @clear="clearOutput" @refresh="refreshOutput"
+            @toggle-search="toggleTerminalSearch"
+            @search-next="gotoNextSearchMatch"
+            @search-prev="gotoPrevSearchMatch"
+            @close-search="closeTerminalSearch" />
+          <TerminalOutput ref="terminalOutputRef" :status="status" :output-lines="outputLines"
+            :progress-percentage="progressPercentage" :progress-status="progressStatus"
+            :search-query="terminalSearchQuery" :active-match-index="terminalActiveMatchIndex"
+            @search-matches="handleSearchMatches" />
         </el-main>
       </el-container>
 
       <!-- 状态栏（仅详情视图显示） -->
-      <StatusBar :status="status" :selected-project="selectedProject" :app-info="'Quick Cmd v1.2.0'"
+      <StatusBar :status="status" :selected-project="selectedProject" :app-info="statusBarInfo"
         @stop-all="stopAllCommands" />
     </template>
 
@@ -41,7 +53,8 @@
     <template v-else>
       <div class="projectlist-fullscreen">
         <ProjectList :projects="projects" :selected-project-name="''" @refresh="refreshConfig" @select="selectProject"
-          :full-screen="true" />
+          @open-system-settings="systemSettingsVisible = true"
+          @open-execution-history="executionHistoryVisible = true" :full-screen="true" />
       </div>
     </template>
 
@@ -53,6 +66,10 @@
 
     <!-- 关于弹框 -->
     <AboutDialog v-model="aboutVisible" :intro-html="aboutIntroHtml" />
+
+    <ConfigEditorDialog v-model="configEditorVisible" @saved="refreshProjectConfig" />
+    <SystemSettingsDialog v-model="systemSettingsVisible" />
+    <ExecutionHistoryDialog v-model="executionHistoryVisible" />
   </div>
 </template>
 
@@ -70,11 +87,17 @@ import MachineConfigDialog from "./components/MachineConfigDialog.vue";
 import WorkPathConfigDialog from "./components/WorkPathConfigDialog.vue";
 import TerminalHeader from "./components/TerminalHeader.vue";
 import AboutDialog from "./components/AboutDialog.vue";
+import ConfigEditorDialog from "./components/ConfigEditorDialog.vue";
+import SystemSettingsDialog from "./components/SystemSettingsDialog.vue";
+import ExecutionHistoryDialog from "./components/ExecutionHistoryDialog.vue";
+import AppMenuBar from "./components/AppMenuBar.vue";
+import { useTheme } from "./composables/useTheme";
 
 export default {
   name: "App",
-  components: { TerminalOutput, StatusBar, ProjectList, SubProjectList, MachineConfigDialog, WorkPathConfigDialog, TerminalHeader, AboutDialog },
+  components: { AppMenuBar, TerminalOutput, StatusBar, ProjectList, SubProjectList, MachineConfigDialog, WorkPathConfigDialog, TerminalHeader, AboutDialog, ConfigEditorDialog, SystemSettingsDialog, ExecutionHistoryDialog },
   setup() {
+    const { isDark, themeMode, terminalPreset, loadTheme } = useTheme();
     const projects = ref([]);
     const subProjects = ref([]);
     const outputLines = ref([]);
@@ -122,6 +145,33 @@ export default {
     // 关于弹框
     const aboutVisible = ref(false);
     const aboutIntroHtml = ref('');
+    const configEditorVisible = ref(false);
+    const systemSettingsVisible = ref(false);
+    const executionHistoryVisible = ref(false);
+    const terminalOutputRef = ref(null);
+    const terminalSearchVisible = ref(false);
+    const terminalSearchQuery = ref('');
+    const terminalMatchIndices = ref([]);
+    const terminalActiveMatchIndex = ref(-1);
+    const sessionId = ref('');
+
+    const statusBarInfo = computed(() => {
+      const base = 'Quick Cmd v1.2.0';
+      if (!sessionId.value) return base;
+      return `${base} · 会话 ${sessionId.value.slice(0, 8)}`;
+    });
+
+    const themeClass = computed(() => ({
+      'theme-dark': isDark.value,
+      [`terminal-preset-${terminalPreset.value || 'classic'}`]: true,
+    }));
+
+    const terminalMatchSummary = computed(() => {
+      const total = terminalMatchIndices.value.length;
+      if (!terminalSearchQuery.value.trim() || total === 0) return total ? `0/${total}` : '0/0';
+      const current = terminalActiveMatchIndex.value >= 0 ? terminalActiveMatchIndex.value + 1 : 0;
+      return `${current}/${total}`;
+    });
 
     const openAbout = () => {
       aboutVisible.value = true;
@@ -245,6 +295,8 @@ export default {
         console.error("错误详情:", error.stack);
       }
     };
+
+    const refreshProjectConfig = loadConfigForRefresh;
 
     // 刷新配置
     const refreshConfig = async () => {
@@ -550,10 +602,52 @@ export default {
       return '';
     });
 
+    const toggleTerminalSearch = () => {
+      terminalSearchVisible.value = !terminalSearchVisible.value;
+      if (!terminalSearchVisible.value) {
+        terminalSearchQuery.value = '';
+        terminalActiveMatchIndex.value = -1;
+      }
+    };
+
+    const closeTerminalSearch = () => {
+      terminalSearchVisible.value = false;
+      terminalSearchQuery.value = '';
+      terminalActiveMatchIndex.value = -1;
+    };
+
+    const handleSearchMatches = (indices) => {
+      terminalMatchIndices.value = indices;
+      if (indices.length === 0) {
+        terminalActiveMatchIndex.value = -1;
+        return;
+      }
+      if (terminalActiveMatchIndex.value < 0 || terminalActiveMatchIndex.value >= indices.length) {
+        terminalActiveMatchIndex.value = 0;
+      }
+    };
+
+    const gotoNextSearchMatch = () => {
+      if (terminalMatchIndices.value.length === 0) return;
+      terminalActiveMatchIndex.value = (terminalActiveMatchIndex.value + 1) % terminalMatchIndices.value.length;
+    };
+
+    const gotoPrevSearchMatch = () => {
+      if (terminalMatchIndices.value.length === 0) return;
+      terminalActiveMatchIndex.value = (terminalActiveMatchIndex.value - 1 + terminalMatchIndices.value.length) % terminalMatchIndices.value.length;
+    };
+
     // 键盘快捷键处理
     const handleKeyDown = (e) => {
       // 检查是否在输入框中，如果是则不处理快捷键
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.contentEditable === 'true') {
+        return;
+      }
+
+      // 终端搜索 (Cmd+F 或 Ctrl+F)
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+        e.preventDefault();
+        terminalSearchVisible.value = true;
         return;
       }
 
@@ -582,6 +676,27 @@ export default {
       if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
         e.preventDefault();
         openWorkPathConfig();
+        return;
+      }
+
+      // 新建窗口 (Cmd+N 或 Ctrl+N)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+        e.preventDefault();
+        App.NewWindow();
+        return;
+      }
+
+      // 刷新配置列表 (Cmd+R 或 Ctrl+R)
+      if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
+        e.preventDefault();
+        App.RefreshConfigMenuWithEvent();
+        return;
+      }
+
+      // 业务配置编辑 (Cmd+, 或 Ctrl+,)
+      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+        e.preventDefault();
+        App.OpenConfigEditor();
         return;
       }
 
@@ -658,6 +773,8 @@ export default {
       }
 
       loadConfig();
+      loadTheme();
+      App.GetSessionInfo().then((info) => { sessionId.value = info.sessionId || ''; }).catch(() => {});
 
       // 监听输出与执行状态事件（替代轮询）
       EventsOn("output:line", handleOutputLine);
@@ -701,6 +818,10 @@ export default {
         console.log("收到 open:about 事件:", data);
         openAbout();
       });
+
+      EventsOn("open:config-editor", () => { configEditorVisible.value = true; });
+      EventsOn("open:system-settings", () => { systemSettingsVisible.value = true; });
+      EventsOn("open:execution-history", () => { executionHistoryVisible.value = true; });
     });
 
     // 机器配置相关方法
@@ -1050,6 +1171,22 @@ export default {
       // 键盘快捷键
       handleKeyDown,
       copySelectedText,
+      themeClass,
+      configEditorVisible,
+      systemSettingsVisible,
+      executionHistoryVisible,
+      terminalSearchVisible,
+      terminalSearchQuery,
+      terminalMatchSummary,
+      terminalActiveMatchIndex,
+      toggleTerminalSearch,
+      closeTerminalSearch,
+      gotoNextSearchMatch,
+      gotoPrevSearchMatch,
+      handleSearchMatches,
+      refreshProjectConfig,
+      sessionId,
+      statusBarInfo,
     };
   },
 };
@@ -1061,6 +1198,8 @@ export default {
   display: flex;
   flex-direction: column;
   position: relative;
+  background: var(--app-bg);
+  color: var(--app-text);
 }
 
 /* 全局加载遮罩 */
@@ -1112,17 +1251,25 @@ export default {
 
 .main-container {
   flex: 1;
-  height: calc(100vh - 40px);
+  min-height: 0;
+  overflow: hidden;
 }
 
 .left-panel {
-  border-right: 1px solid #e4e7ed;
-  background-color: #f5f7fa;
+  border-right: 1px solid var(--app-border);
+  background-color: var(--app-panel-bg);
   display: flex;
   flex-direction: column;
   position: relative;
   height: 100%;
   overflow-x: hidden;
+}
+
+.projectlist-fullscreen {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--app-bg);
 }
 
 /* 子组件已接管样式：ProjectList、SubProjectList、TerminalOutput、StatusBar */
@@ -1132,8 +1279,9 @@ export default {
   justify-content: space-between;
   align-items: center;
   padding: 0 16px;
-  background: #f5f7fa;
-  border-top: 1px solid #e4e7ed;
+  background: var(--app-panel-bg);
+  border-top: 1px solid var(--app-border);
+  color: var(--app-text);
   height: 40px;
   flex-shrink: 0;
   box-sizing: border-box;
@@ -1180,7 +1328,7 @@ export default {
 
 .app-info {
   font-size: 12px;
-  color: #909399;
+  color: var(--app-text-muted);
   font-weight: 500;
 }
 
@@ -1571,6 +1719,12 @@ body,
 }
 
 .terminal-container {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
+  padding: 0 !important;
+  box-sizing: border-box;
 }
 </style>

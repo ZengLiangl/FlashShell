@@ -16,24 +16,33 @@ type ConfigManager struct {
 	configPath          string
 	root                *define.Root
 	globalConfigManager *GlobalConfigManager
+	sessionManager      *SessionManager
 }
 
 // NewConfigManager 创建配置管理器
-func NewConfigManager(configPath string) *ConfigManager {
+func NewConfigManager(configPath string, sessionManager *SessionManager) *ConfigManager {
 	gcm := NewGlobalConfigManager("")
 
-	// 如果没有指定配置路径，尝试从全局配置获取最后打开的文件
+	// 如果没有指定配置路径，优先会话级配置，其次全局配置
 	if configPath == "" {
-		if globalConfig, err := gcm.LoadGlobalConfig(); err == nil && globalConfig.LastOpenedFile != "" {
-			configPath = globalConfig.LastOpenedFile
-		} else {
-			configPath = "config.yaml"
+		if sessionManager != nil {
+			if sessionFile := sessionManager.GetLastOpenedFile(); sessionFile != "" {
+				configPath = sessionFile
+			}
+		}
+		if configPath == "" {
+			if globalConfig, err := gcm.LoadGlobalConfig(); err == nil && globalConfig.LastOpenedFile != "" {
+				configPath = globalConfig.LastOpenedFile
+			} else {
+				configPath = "config.yaml"
+			}
 		}
 	}
 
 	return &ConfigManager{
 		configPath:          configPath,
 		globalConfigManager: gcm,
+		sessionManager:      sessionManager,
 	}
 }
 
@@ -86,10 +95,13 @@ func (cm *ConfigManager) LoadConfig() (*define.Root, error) {
 	// 处理路径变量替换
 	cm.processPathVariables(&root)
 
-	// 更新全局配置中的最后打开文件
-	if cm.globalConfigManager != nil {
+	// 更新最后打开文件：会话级优先，避免多窗口互相覆盖
+	if cm.sessionManager != nil {
+		_ = cm.sessionManager.SetLastOpenedFile(cm.configPath)
+	} else if cm.globalConfigManager != nil {
 		cm.globalConfigManager.UpdateLastOpenedFile(cm.configPath)
-		// 添加到配置文件列表中（如果不存在）
+	}
+	if cm.globalConfigManager != nil {
 		cm.globalConfigManager.AddConfigFile(cm.configPath)
 	}
 
@@ -116,6 +128,11 @@ func (cm *ConfigManager) SaveConfig(root *define.Root) error {
 // GetRoot 获取根配置
 func (cm *ConfigManager) GetRoot() *define.Root {
 	return cm.root
+}
+
+// GetConfigPath 获取当前业务配置文件路径
+func (cm *ConfigManager) GetConfigPath() string {
+	return cm.configPath
 }
 
 // GetMachine 根据名称获取机器配置
@@ -181,7 +198,7 @@ func (cm *ConfigManager) processPathVariables(root *define.Root) {
 
 				// 处理命令步骤中的工作路径变量
 				for l := range cmd.Steps {
-					cmd.Steps[l] = cm.replaceWorkPaths(cmd.Steps[l])
+					cmd.Steps[l].Command = cm.replaceWorkPaths(cmd.Steps[l].Command)
 				}
 			}
 		}
@@ -262,8 +279,11 @@ func (cm *ConfigManager) SaveGlobalConfig(config *GlobalConfig) error {
 func (cm *ConfigManager) SwitchConfigFile(configPath string) error {
 	cm.configPath = configPath
 
-	// 更新全局配置中的最后打开文件
-	if cm.globalConfigManager != nil {
+	if cm.sessionManager != nil {
+		if err := cm.sessionManager.SetLastOpenedFile(configPath); err != nil {
+			return fmt.Errorf("更新会话配置文件失败: %w", err)
+		}
+	} else if cm.globalConfigManager != nil {
 		if err := cm.globalConfigManager.UpdateLastOpenedFile(configPath); err != nil {
 			return fmt.Errorf("更新最后打开文件失败: %w", err)
 		}
@@ -300,13 +320,13 @@ func CreateDefaultConfig(path string) error {
 								Name:        "编译",
 								Description: "编译项目",
 								Type:        "batch",
-								Steps:       []string{"${MVM} clean compile"},
+								Steps:       define.StepList{{Command: "${MVM} clean compile"}},
 							},
 							{
 								Name:        "测试",
 								Description: "运行测试",
 								Type:        "batch",
-								Steps:       []string{"${MVM} test"},
+								Steps:       define.StepList{{Command: "${MVM} test"}},
 							},
 						},
 					},
@@ -336,6 +356,14 @@ func CreateDefaultConfig(path string) error {
 
 // GetAllWorkPathsFromGlobal 获取所有工作路径
 func (cm *ConfigManager) GetAllWorkPathsFromGlobal() map[string]string {
+	return cm.globalConfigManager.GetAllWorkPaths()
+}
+
+// GetWorkPathVars 获取环境变量映射（供步骤条件评估）
+func (cm *ConfigManager) GetWorkPathVars() map[string]string {
+	if cm.globalConfigManager == nil {
+		return map[string]string{}
+	}
 	return cm.globalConfigManager.GetAllWorkPaths()
 }
 

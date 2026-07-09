@@ -1,5 +1,33 @@
 export namespace data {
 	
+	export class ThemeSettings {
+	    mode: string;
+	    terminalPreset: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ThemeSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.mode = source["mode"];
+	        this.terminalPreset = source["terminalPreset"];
+	    }
+	}
+	export class LogSettings {
+	    enabled: boolean;
+	    path: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new LogSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.path = source["path"];
+	    }
+	}
 	export class GlobalConfig {
 	    appId: string;
 	    windowsName: string;
@@ -7,6 +35,8 @@ export namespace data {
 	    lastOpenedFile: string;
 	    workPaths: Record<string, string>;
 	    machines?: define.Machine[];
+	    logSettings: LogSettings;
+	    themeSettings: ThemeSettings;
 	
 	    static createFrom(source: any = {}) {
 	        return new GlobalConfig(source);
@@ -20,6 +50,8 @@ export namespace data {
 	        this.lastOpenedFile = source["lastOpenedFile"];
 	        this.workPaths = source["workPaths"];
 	        this.machines = this.convertValues(source["machines"], define.Machine);
+	        this.logSettings = this.convertValues(source["logSettings"], LogSettings);
+	        this.themeSettings = this.convertValues(source["themeSettings"], ThemeSettings);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -40,16 +72,77 @@ export namespace data {
 		    return a;
 		}
 	}
+	export class LogEntry {
+	    fileName: string;
+	    fullPath: string;
+	    project: string;
+	    subProject: string;
+	    startedAt: string;
+	    size: number;
+	    success: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new LogEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.fileName = source["fileName"];
+	        this.fullPath = source["fullPath"];
+	        this.project = source["project"];
+	        this.subProject = source["subProject"];
+	        this.startedAt = source["startedAt"];
+	        this.size = source["size"];
+	        this.success = source["success"];
+	    }
+	}
+	
+	export class SessionState {
+	    sessionId: string;
+	    lastOpenedFile: string;
+	    theme: string;
+	    terminalPreset: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SessionState(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.lastOpenedFile = source["lastOpenedFile"];
+	        this.theme = source["theme"];
+	        this.terminalPreset = source["terminalPreset"];
+	    }
+	}
 
 }
 
 export namespace define {
 	
+	export class Step {
+	    command: string;
+	    when?: string;
+	    onFail?: string;
+	    retry?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Step(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.command = source["command"];
+	        this.when = source["when"];
+	        this.onFail = source["onFail"];
+	        this.retry = source["retry"];
+	    }
+	}
 	export class Command {
 	    name: string;
 	    description: string;
 	    type: string;
-	    steps: string[];
+	    steps: Step[];
 	    machine?: string;
 	    workdir?: string;
 	
@@ -62,10 +155,28 @@ export namespace define {
 	        this.name = source["name"];
 	        this.description = source["description"];
 	        this.type = source["type"];
-	        this.steps = source["steps"];
+	        this.steps = this.convertValues(source["steps"], Step);
 	        this.machine = source["machine"];
 	        this.workdir = source["workdir"];
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class CommandStatus {
 	    isRunning: boolean;
@@ -221,6 +332,7 @@ export namespace define {
 	        this.password = source["password"];
 	    }
 	}
+	
 	
 	export class SubProjectStatus {
 	    projectName: string;

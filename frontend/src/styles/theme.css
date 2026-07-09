@@ -1,0 +1,136 @@
+:root {
+  --app-bg: #ffffff;
+  --app-panel-bg: #f5f7fa;
+  --app-text: #303133;
+  --app-text-secondary: #606266;
+  --app-text-muted: #909399;
+  --app-border: #e4e7ed;
+  --app-card-bg: #ffffff;
+  --app-card-border: #ebeef5;
+  --app-card-active-bg: #f3f9ff;
+  --app-card-hover-shadow: rgba(64, 158, 255, 0.15);
+  --app-accent-bg: #ecf5ff;
+  --app-accent-color: #409eff;
+  --terminal-bg: #1e1e1e;
+  --terminal-fg: #d4d4d4;
+  --terminal-success: #67c23a;
+  --terminal-error: #f56c6c;
+  --terminal-progress: #409eff;
+  --terminal-search-highlight: #ffd666;
+  --step-bg: #f8f9fa;
+  --step-border: #e9ecef;
+}
+
+html.dark {
+  color-scheme: dark;
+  --app-bg: #141414;
+  --app-panel-bg: #1d1e1f;
+  --app-text: #e5eaf3;
+  --app-text-secondary: #cfd3dc;
+  --app-text-muted: #a3a6ad;
+  --app-border: #414243;
+  --app-card-bg: #262727;
+  --app-card-border: #414243;
+  --app-card-active-bg: #2a3441;
+  --app-card-hover-shadow: rgba(64, 158, 255, 0.25);
+  --app-accent-bg: #1a3a5c;
+  --app-accent-color: #79bbff;
+  --terminal-bg: #0d1117;
+  --terminal-fg: #c9d1d9;
+  --terminal-success: #3fb950;
+  --terminal-error: #f85149;
+  --terminal-progress: #58a6ff;
+  --terminal-search-highlight: #9e6a03;
+  --step-bg: #2b2b2c;
+  --step-border: #414243;
+}
+
+html.dark .terminal-preset-monokai {
+  --terminal-bg: #272822;
+  --terminal-fg: #f8f8f2;
+}
+
+html.dark .terminal-preset-solarized {
+  --terminal-bg: #002b36;
+  --terminal-fg: #839496;
+}
+
+html,
+body,
+#app {
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+.app-container {
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+.app-container.theme-dark,
+html.dark .app-container {
+  background: var(--app-bg);
+  color: var(--app-text);
+}
+
+.app-container .left-panel,
+.app-container .terminal-header,
+.app-container .status-bar,
+.app-container .section-header,
+.app-container .projectlist-fullscreen,
+.app-container .progress-section {
+  background: var(--app-panel-bg);
+  border-color: var(--app-border);
+  color: var(--app-text);
+}
+
+.app-container .terminal-header h3,
+.app-container .project-name,
+.app-container .subproject-name,
+.app-container .subproject-desc,
+.app-container .command-name,
+.app-container .progress-section .project-name {
+  color: var(--app-text);
+}
+
+.app-container .project-desc,
+.app-container .step-meta,
+.app-container .progress-section .current-command {
+  color: var(--app-text-secondary);
+}
+
+.app-container .progress-section .progress-stats {
+  color: var(--app-text-muted);
+}
+
+.app-container .terminal-output {
+  background: var(--terminal-bg);
+  color: var(--terminal-fg);
+}
+
+.app-container .error-line {
+  color: var(--terminal-error);
+}
+
+.app-container .success-line {
+  color: var(--terminal-success);
+}
+
+.app-container .progress-line {
+  color: var(--terminal-progress);
+}
+
+.search-highlight {
+  background: var(--terminal-search-highlight);
+  color: #000;
+  border-radius: 2px;
+  padding: 0 1px;
+}
+
+.app-menu-bar .menu-inner {
+  --el-menu-bg-color: var(--app-panel-bg);
+  --el-menu-text-color: var(--app-text);
+  --el-menu-hover-text-color: var(--app-accent-color);
+  --el-menu-hover-bg-color: var(--app-accent-bg);
+  --el-menu-active-color: var(--app-accent-color);
+}

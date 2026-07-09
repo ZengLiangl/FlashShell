@@ -21,8 +21,8 @@ func TestApp_GetConfig(t *testing.T) {
 	}
 
 	// 创建应用实例
-	app := NewApp()
-	app.configManager = data.NewConfigManager(tempConfig)
+	app := NewApp("")
+	app.configManager = data.NewConfigManager(tempConfig, nil)
 
 	// 测试获取配置
 	config, err := app.GetConfig()
@@ -64,7 +64,7 @@ func TestApp_ExecuteLocalCommand(t *testing.T) {
 								Name:        "测试命令",
 								Description: "测试命令描述",
 								Type:        "batch",
-								Steps:       []string{"echo 'Hello World'"},
+								Steps:       define.StepList{{Command: "echo 'Hello World'"}},
 							},
 						},
 					},
@@ -75,13 +75,13 @@ func TestApp_ExecuteLocalCommand(t *testing.T) {
 	}
 
 	// 保存测试配置
-	configManager := data.NewConfigManager(tempConfig)
+	configManager := data.NewConfigManager(tempConfig, nil)
 	if err := configManager.SaveConfig(testRoot); err != nil {
 		t.Fatalf("保存测试配置失败: %v", err)
 	}
 
 	// 创建应用实例
-	app := NewApp()
+	app := NewApp("")
 	app.configManager = configManager
 
 	// 手动初始化 SubProjectRunner（因为测试中不会调用 Startup）
@@ -125,8 +125,8 @@ func TestApp_MachineManagement(t *testing.T) {
 	}
 
 	// 创建应用实例
-	app := NewApp()
-	app.configManager = data.NewConfigManager(tempConfig)
+	app := NewApp("")
+	app.configManager = data.NewConfigManager(tempConfig, nil)
 
 	// 加载配置
 	if _, err := app.GetConfig(); err != nil {
@@ -221,7 +221,7 @@ func TestSubProjectWorkDirPriority(t *testing.T) {
 								Name:        "测试命令1",
 								Description: "应该使用 Project WorkDir",
 								Type:        "batch",
-								Steps:       []string{"echo 'Project WorkDir'"},
+								Steps:       define.StepList{{Command: "echo 'Project WorkDir'"}},
 								// 没有设置 Command WorkDir
 							},
 						},
@@ -235,7 +235,7 @@ func TestSubProjectWorkDirPriority(t *testing.T) {
 								Name:        "测试命令2",
 								Description: "应该使用 SubProject WorkDir",
 								Type:        "batch",
-								Steps:       []string{"echo 'SubProject WorkDir'"},
+								Steps:       define.StepList{{Command: "echo 'SubProject WorkDir'"}},
 								// 没有设置 Command WorkDir
 							},
 						},
@@ -249,7 +249,7 @@ func TestSubProjectWorkDirPriority(t *testing.T) {
 								Name:        "测试命令3",
 								Description: "应该使用 Command WorkDir",
 								Type:        "batch",
-								Steps:       []string{"echo 'Command WorkDir'"},
+								Steps:       define.StepList{{Command: "echo 'Command WorkDir'"}},
 								WorkDir:     "/command/workdir", // Command WorkDir
 							},
 						},
@@ -261,13 +261,13 @@ func TestSubProjectWorkDirPriority(t *testing.T) {
 	}
 
 	// 保存测试配置
-	configManager := data.NewConfigManager(tempConfig)
+	configManager := data.NewConfigManager(tempConfig, nil)
 	if err := configManager.SaveConfig(testRoot); err != nil {
 		t.Fatalf("保存测试配置失败: %v", err)
 	}
 
 	// 创建应用实例
-	app := NewApp()
+	app := NewApp("")
 	app.configManager = configManager
 
 	// 手动初始化 SubProjectRunner
@@ -343,7 +343,7 @@ func TestSubProjectWorkDirEnvReplace(t *testing.T) {
 								Name:        "测试命令1",
 								Description: "应该使用替换后的 SubProject WorkDir",
 								Type:        "batch",
-								Steps:       []string{"echo 'SubProject WorkDir with env var'"},
+								Steps:       define.StepList{{Command: "echo 'SubProject WorkDir with env var'"}},
 							},
 						},
 					},
@@ -356,7 +356,7 @@ func TestSubProjectWorkDirEnvReplace(t *testing.T) {
 								Name:        "测试命令2",
 								Description: "应该使用替换后的多个环境变量",
 								Type:        "batch",
-								Steps:       []string{"echo 'Multiple env vars'"},
+								Steps:       define.StepList{{Command: "echo 'Multiple env vars'"}},
 							},
 						},
 					},
@@ -367,7 +367,7 @@ func TestSubProjectWorkDirEnvReplace(t *testing.T) {
 	}
 
 	// 保存测试配置
-	configManager := data.NewConfigManager(tempConfig)
+	configManager := data.NewConfigManager(tempConfig, nil)
 	if err := configManager.SaveConfig(testRoot); err != nil {
 		t.Fatalf("保存测试配置失败: %v", err)
 	}
@@ -381,7 +381,7 @@ func TestSubProjectWorkDirEnvReplace(t *testing.T) {
 	}()
 
 	// 创建应用实例
-	app := NewApp()
+	app := NewApp("")
 	app.configManager = configManager
 
 	// 加载配置（这会触发环境变量替换）
@@ -439,7 +439,7 @@ func TestSubProjectWorkDirGlobalConfigReplace(t *testing.T) {
 								Name:        "测试命令",
 								Description: "应该使用全局配置替换后的 WorkDir",
 								Type:        "batch",
-								Steps:       []string{"echo 'Global config workPaths'"},
+								Steps:       define.StepList{{Command: "echo 'Global config workPaths'"}},
 							},
 						},
 					},
@@ -450,7 +450,7 @@ func TestSubProjectWorkDirGlobalConfigReplace(t *testing.T) {
 	}
 
 	// 保存测试配置
-	configManager := data.NewConfigManager(tempConfig)
+	configManager := data.NewConfigManager(tempConfig, nil)
 	if err := configManager.SaveConfig(testRoot); err != nil {
 		t.Fatalf("保存测试配置失败: %v", err)
 	}
@@ -469,7 +469,7 @@ func TestSubProjectWorkDirGlobalConfigReplace(t *testing.T) {
 	}
 
 	// 创建应用实例
-	app := NewApp()
+	app := NewApp("")
 	app.configManager = configManager
 
 	// 加载配置（这会触发环境变量替换）

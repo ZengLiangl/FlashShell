@@ -19,7 +19,7 @@ func TestConfigManager_LoadConfig(t *testing.T) {
 	}
 
 	// 创建配置管理器
-	cm := NewConfigManager(tempFile)
+	cm := NewConfigManager(tempFile, nil)
 
 	// 加载配置
 	root, err := cm.LoadConfig()
@@ -62,7 +62,7 @@ func TestConfigManager_SaveConfig(t *testing.T) {
 	defer os.Remove(tempFile)
 
 	// 创建配置管理器
-	cm := NewConfigManager(tempFile)
+	cm := NewConfigManager(tempFile, nil)
 
 	// 创建测试配置
 	testRoot := &define.Root{
@@ -80,7 +80,7 @@ func TestConfigManager_SaveConfig(t *testing.T) {
 								Name:        "测试命令",
 								Description: "测试命令描述",
 								Type:        "batch",
-								Steps:       []string{"echo 'test'"},
+								Steps:       define.StepList{{Command: "echo 'test'"}},
 							},
 						},
 					},
@@ -127,9 +127,14 @@ func TestConfigManager_GetMachine(t *testing.T) {
 	}
 
 	// 创建配置管理器并加载配置
-	cm := NewConfigManager(tempFile)
+	cm := NewConfigManager(tempFile, nil)
 	if _, err := cm.LoadConfig(); err != nil {
 		t.Fatalf("加载配置失败: %v", err)
+	}
+
+	// 机器配置保存在全局配置中
+	if err := cm.AddMachineToGlobal(&define.Machine{Name: "示例服务器", KeyFile: "~/.ssh/id_rsa"}); err != nil {
+		t.Fatalf("添加示例机器失败: %v", err)
 	}
 
 	// 测试获取存在的机器
@@ -187,7 +192,7 @@ func TestCreateDefaultConfig(t *testing.T) {
 	}
 
 	// 验证文件内容
-	cm := NewConfigManager(tempFile)
+	cm := NewConfigManager(tempFile, nil)
 	root, err := cm.LoadConfig()
 	if err != nil {
 		t.Fatalf("加载默认配置失败: %v", err)

@@ -39,7 +39,7 @@ type Command struct {
 	Name        string   `yaml:"name" json:"name"`
 	Description string   `yaml:"description" json:"description"`
 	Type        string   `yaml:"type" json:"type"` // batch, remote
-	Steps       []string `yaml:"steps" json:"steps"`
+	Steps       StepList `yaml:"steps" json:"steps"`
 	Machine     string   `yaml:"machine,omitempty" json:"machine,omitempty"`
 	WorkDir     string   `yaml:"workdir,omitempty" json:"workdir,omitempty"`
 }
@@ -286,6 +286,7 @@ type ExecutionContext struct {
 	OutputChannel     chan<- string
 	ProjectWorkDir    string
 	SubProjectWorkDir string
+	WorkPathVars      map[string]string
 }
 
 // CommandStatus 命令状态 (保持向后兼容)

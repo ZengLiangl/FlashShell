@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"flag"
+	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
@@ -23,6 +24,7 @@ var assets embed.FS
 func main() {
 	// parse run mode from command line
 	runMode := flag.String("reg", "desk", "运行模式: desk(前台)/back(后台)")
+	sessionID := flag.String("session", "", "窗口会话 ID")
 	flag.Parse()
 
 	// daemonize if requested (like nohup), only on non-Windows
@@ -57,15 +59,16 @@ func main() {
 	}
 
 	// Create an instance of the app structure
-	appInstance := app.NewApp()
-	// 创建菜单
-	appMenu := appInstance.CreateApplicationMenu()
+	appInstance := app.NewApp(*sessionID)
 
 	// 获取窗口名称
 	globalConfig, err := appInstance.GetGlobalConfig()
 	windowsName := "Quick Cmd" // 默认窗口名称
 	if err == nil && globalConfig != nil {
 		windowsName = globalConfig.WindowsName
+	}
+	if *sessionID != "" && len(*sessionID) >= 8 {
+		windowsName = fmt.Sprintf("%s [%s]", windowsName, (*sessionID)[:8])
 	}
 
 	// Create application with options
@@ -84,7 +87,7 @@ func main() {
 		Fullscreen:       false,
 		MinWidth:         1200,
 		MinHeight:        768,
-		Menu:             appMenu,
+		Menu:             nil,
 		// 绑定后端结构体到前端
 		Bind: []interface{}{
 			appInstance,

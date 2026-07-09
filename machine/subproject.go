@@ -24,6 +24,7 @@ type SubProjectRunner struct {
 type ConfigManagerInterface interface {
 	GetRoot() *define.Root
 	GetMachine(name string) *define.Machine
+	GetWorkPathVars() map[string]string
 }
 
 // NewSubProjectRunner 创建 SubProject 执行器
@@ -128,6 +129,7 @@ func (spr *SubProjectRunner) ExecuteSubProject(projectName, subProjectName strin
 		OutputChannel:     output,
 		ProjectWorkDir:    project.WorkDir,
 		SubProjectWorkDir: subProject.WorkDir,
+		WorkPathVars:      spr.configManager.GetWorkPathVars(),
 	}
 
 	// 按顺序执行所有 Commands
@@ -150,7 +152,6 @@ func (spr *SubProjectRunner) ExecuteSubProject(projectName, subProjectName strin
 
 		// 执行当前命令
 		if err := spr.executeCommand(command, ctx, output); err != nil {
-			// output <- fmt.Sprintf("命令执行失败: %s", err.Error())
 			spr.updateStatus(command.Name, "", i, spr.currentStatus.CompletedSteps, false)
 			return fmt.Errorf("命令 '%s' 执行失败: %w", command.Name, err)
 		}
@@ -184,7 +185,7 @@ func (spr *SubProjectRunner) executeCommand(command define.Command, ctx *define.
 		if command.WorkDir != "" {
 			workDir = command.WorkDir
 		}
-		runner = NewLocalRunner(workDir)
+		runner = NewLocalRunner(workDir, ctx.WorkPathVars)
 
 	case "remote":
 		// 远程执行
@@ -197,11 +198,11 @@ func (spr *SubProjectRunner) executeCommand(command define.Command, ctx *define.
 			return fmt.Errorf("未找到机器配置: %s", command.Machine)
 		}
 
-		sshClient := NewSSHClient(machineConfig)
+		sshClient := NewSSHClient(machineConfig, ctx.WorkPathVars)
 		if err := sshClient.Connect(machineConfig, CommandNeedsSFTP(command)); err != nil {
 			return fmt.Errorf("连接远程机器失败: %w", err)
 		}
-		defer sshClient.remoteMachine.Close()
+		defer sshClient.Close()
 		runner = sshClient
 
 	default:

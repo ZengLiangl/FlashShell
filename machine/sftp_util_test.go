@@ -15,23 +15,23 @@ func TestCommandNeedsSFTP(t *testing.T) {
 		{
 			name: "docker restart only",
 			cmd: define.Command{
-				Steps: []string{"docker restart auth-service gateway"},
+				Steps: define.StepList{{Command: "docker restart auth-service gateway"}},
 			},
 			want: false,
 		},
 		{
 			name: "upload step",
 			cmd: define.Command{
-				Steps: []string{"upload /tmp/app.jar /root/app/app.jar"},
+				Steps: define.StepList{{Command: "upload /tmp/app.jar /root/app/app.jar"}},
 			},
 			want: true,
 		},
 		{
 			name: "mixed steps",
 			cmd: define.Command{
-				Steps: []string{
-					"upload /tmp/app.jar /root/app/app.jar",
-					"docker restart app",
+				Steps: define.StepList{
+					{Command: "upload /tmp/app.jar /root/app/app.jar"},
+					{Command: "docker restart app"},
 				},
 			},
 			want: true,

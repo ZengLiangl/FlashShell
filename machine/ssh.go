@@ -15,14 +15,16 @@ import (
 type SSHClient struct {
 	config        *define.Machine
 	remoteMachine *define.RemoteMachine
+	workVars      map[string]string
 }
 
 // NewSSHClient 创建SSH客户端
-func NewSSHClient(machine *define.Machine) *SSHClient {
+func NewSSHClient(machine *define.Machine, workVars map[string]string) *SSHClient {
 	remoteMachine := define.NewRemoteMachine()
 	return &SSHClient{
 		config:        machine,
 		remoteMachine: remoteMachine,
+		workVars:      workVars,
 	}
 }
 
@@ -36,41 +38,25 @@ func (sc *SSHClient) Execute(cmd define.Command, output chan<- string, onStepSta
 	if !sc.remoteMachine.IsConnected() {
 		return fmt.Errorf("SSH客户端未连接")
 	}
-	for i, step := range cmd.Steps {
-		// 通知步骤开始执行
-		if onStepStart != nil {
-			onStepStart(step)
-		}
 
-		utils.SendOutput(output, fmt.Sprintf("执行步骤 %d: %s", i+1, step))
-		if err := sc.executeStep(step, output); err != nil {
-			return fmt.Errorf("步骤 %d 执行失败: %w", i+1, err)
-		}
-
-		// 通知步骤执行完成
-		if onStepComplete != nil {
-			onStepComplete()
-		}
-	}
-
-	return nil
+	return executeSteps(cmd.Steps, output, onStepStart, onStepComplete, func(command string, out chan<- string) error {
+		return sc.executeStep(command, out)
+	})
 }
 
 // executeStep 执行单个命令步骤
 func (sc *SSHClient) executeStep(command string, output chan<- string) error {
-	// 判断是否在cmds包中
 	specialCmd, splitStr := getSpecialCmd(command)
 	if specialCmd != nil {
 		return specialCmd(sc.remoteMachine, splitStr, output)
 	}
 
-	// 创建新的 SSH session
 	session, err := sc.remoteMachine.NewSession()
 	if err != nil {
 		return fmt.Errorf("创建SSH会话失败: %w", err)
 	}
 	defer session.Close()
-	// 设置输出管道
+
 	stdout, err := session.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("获取stdout管道失败: %w", err)
@@ -80,14 +66,14 @@ func (sc *SSHClient) executeStep(command string, output chan<- string) error {
 	if err != nil {
 		return fmt.Errorf("获取stderr管道失败: %w", err)
 	}
-	// 启动命令
+
 	if err := session.Start(command); err != nil {
 		return fmt.Errorf("启动命令失败: %w", err)
 	}
-	// 读取输出
+
 	go sc.readOutput(stdout, output, "STDOUT")
 	go sc.readOutput(stderr, output, "STDERR")
-	// 等待命令完成
+
 	if err := session.Wait(); err != nil {
 		return err
 	}
@@ -97,6 +83,9 @@ func (sc *SSHClient) executeStep(command string, output chan<- string) error {
 func getSpecialCmd(command string) (func(*define.RemoteMachine, []string, chan<- string) error, []string) {
 	compile := regexp.MustCompile("\\S+")
 	allString := compile.FindAllString(command, -1)
+	if len(allString) == 0 {
+		return nil, nil
+	}
 	specialCmd := cmds.CmdManager.GetSpecialCmd(allString[0])
 	return specialCmd, allString
 }
@@ -111,10 +100,8 @@ func (sc *SSHClient) readOutput(reader io.Reader, output chan<- string, prefix s
 		if n > 0 {
 			text := convertToUTF8(buf[:n])
 
-			// 逐字符处理，保留 ANSI 转义序列
 			for _, char := range text {
 				if char == '\n' {
-					// 遇到换行符，输出当前行
 					line := lineBuffer.String()
 					if line != "" {
 						if prefix == "STDERR" {
@@ -125,13 +112,11 @@ func (sc *SSHClient) readOutput(reader io.Reader, output chan<- string, prefix s
 					}
 					lineBuffer.Reset()
 				} else if char != '\r' {
-					// 添加字符到行缓冲区（跳过回车符）
 					lineBuffer.WriteRune(char)
 				}
 			}
 		}
 		if err != nil {
-			// 输出剩余的内容
 			if lineBuffer.Len() > 0 {
 				line := lineBuffer.String()
 				if prefix == "STDERR" {
@@ -147,8 +132,6 @@ func (sc *SSHClient) readOutput(reader io.Reader, output chan<- string, prefix s
 
 // Stop 停止执行
 func (sc *SSHClient) Stop() error {
-	// SSH session 不支持信号发送，这里暂时返回 nil
-	// 如果需要停止功能，可以考虑使用 context 或其他机制
 	return nil
 }
 
@@ -167,7 +150,6 @@ func (sc *SSHClient) TestConnection() error {
 	}
 	defer sc.Close()
 
-	// 执行简单的测试命令
 	session, err := sc.remoteMachine.NewSession()
 	if err != nil {
 		return err

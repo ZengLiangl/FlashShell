@@ -22,21 +22,48 @@ import (
 type App struct {
 	ctx              context.Context
 	configManager    *data.ConfigManager
+	sessionManager   *data.SessionManager
+	logManager       *data.LogManager
 	subProjectRunner *machine.SubProjectRunner
 	outputChannel    chan string
 	outputIngress    chan string
 	executionMutex   sync.RWMutex
+	logEnabled       bool
 }
 
 // NewApp creates a new App application struct
-func NewApp() *App {
-	app := &App{
-		outputChannel: make(chan string, 1000),
-		outputIngress: make(chan string, 1000),
-		configManager: data.NewConfigManager(""),
+func NewApp(sessionID string) *App {
+	sessionManager, err := data.NewSessionManager(sessionID)
+	if err != nil {
+		println("创建会话管理器失败:", err.Error())
+		sessionManager, _ = data.NewSessionManager(data.NewSessionID())
 	}
+
+	configManager := data.NewConfigManager("", sessionManager)
+	logManager := data.NewLogManager("~/.cmd-config/logs")
+
+	app := &App{
+		outputChannel:  make(chan string, 1000),
+		outputIngress:  make(chan string, 1000),
+		configManager:  configManager,
+		sessionManager: sessionManager,
+		logManager:     logManager,
+	}
+	app.refreshLogSettings()
 	go app.outputEventLoop()
 	return app
+}
+
+func (a *App) refreshLogSettings() {
+	globalConfig, err := a.configManager.GetGlobalConfig()
+	if err != nil || globalConfig == nil {
+		a.logEnabled = false
+		return
+	}
+	a.logEnabled = globalConfig.LogSettings.Enabled
+	if globalConfig.LogSettings.Path != "" {
+		a.logManager.SetBasePath(globalConfig.LogSettings.Path)
+	}
 }
 
 // Startup is called when the app starts up
@@ -60,6 +87,7 @@ func (a *App) Startup(ctx context.Context) {
 	} else {
 		println("配置文件加载成功")
 	}
+	a.applyWindowTheme(a.GetThemeSettings().Mode)
 }
 
 // DomReady is called after front-end resources have been loaded
@@ -88,6 +116,9 @@ func (a *App) outputEventLoop() {
 		select {
 		case a.outputChannel <- msg:
 		default:
+		}
+		if a.logEnabled {
+			a.logManager.WriteLine(msg)
 		}
 		if a.ctx != nil {
 			wailsRuntime.EventsEmit(a.ctx, "output:line", msg)
@@ -148,8 +179,22 @@ func (a *App) ExecuteSubProject(projectName, subProjectName string) error {
 
 	// 异步执行 SubProject
 	go func() {
+		success := true
+		summary := "执行完成"
+		if a.logEnabled {
+			if _, err := a.logManager.StartSession(projectName, subProjectName); err != nil {
+				a.pushOutput(fmt.Sprintf("日志落盘启动失败: %s", err.Error()))
+			}
+		}
+
 		if err := a.subProjectRunner.ExecuteSubProject(projectName, subProjectName, a.outputWriter()); err != nil {
 			a.pushOutput(fmt.Sprintf("执行失败: %s", err.Error()))
+			success = false
+			summary = err.Error()
+		}
+
+		if a.logEnabled {
+			a.logManager.FinishSession(success, summary)
 		}
 	}()
 
@@ -253,7 +298,7 @@ func (a *App) TestMachineConnection(machineName string) error {
 		return fmt.Errorf("未找到机器配置: %s", machineName)
 	}
 
-	sshClient := machine.NewSSHClient(machineConfig)
+	sshClient := machine.NewSSHClient(machineConfig, a.configManager.GetWorkPathVars())
 	return sshClient.TestConnection()
 }
 
@@ -461,7 +506,7 @@ func (a *App) RefreshConfigMenu() error {
 	_ = a.StopAllSubProjects()
 	a.ClearOutput()
 
-	a.configManager = data.NewConfigManager("")
+	a.configManager = data.NewConfigManager("", a.sessionManager)
 	a.setupSubProjectRunner()
 	if a.ctx != nil {
 		err := a.UpdateApplicationMenu()
@@ -481,7 +526,7 @@ func (a *App) RefreshConfigMenuWithEvent() error {
 	_ = a.StopAllSubProjects()
 	a.ClearOutput()
 
-	a.configManager = data.NewConfigManager("")
+	a.configManager = data.NewConfigManager("", a.sessionManager)
 	a.setupSubProjectRunner()
 	if a.ctx != nil {
 		err := a.UpdateApplicationMenu()
@@ -498,12 +543,11 @@ func (a *App) RefreshConfigMenuWithEvent() error {
 	return nil
 }
 
-// UpdateApplicationMenu 更新应用程序菜单
+// UpdateApplicationMenu 通知前端刷新应用内菜单并更新窗口标题
 func (a *App) UpdateApplicationMenu() error {
-	// 重新创建菜单（使用公共方法）
-	newMenu := a.CreateApplicationMenu()
-	wailsRuntime.MenuSetApplicationMenu(a.ctx, newMenu)
-	wailsRuntime.MenuUpdateApplicationMenu(a.ctx)
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "menu:refresh", nil)
+	}
 	globalConfig, _ := a.GetGlobalConfig()
 	if globalConfig.WindowsName != "" {
 		wailsRuntime.WindowSetTitle(a.ctx, globalConfig.WindowsName)
@@ -538,8 +582,8 @@ func (a *App) CreateApplicationMenu() *menu.Menu {
 	} else {
 		// 获取当前配置文件
 		globalConfig, _ := a.GetGlobalConfig()
-		currentConfig := ""
-		if globalConfig != nil {
+		currentConfig := a.configManager.GetConfigPath()
+		if currentConfig == "" && globalConfig != nil {
 			currentConfig = globalConfig.LastOpenedFile
 		}
 
@@ -582,6 +626,17 @@ func (a *App) CreateApplicationMenu() *menu.Menu {
 		a.OpenWorkPathConfig()
 	})
 
+	configMenu.AddSeparator()
+	configMenu.AddText("业务配置编辑", keys.CmdOrCtrl(","), func(_ *menu.CallbackData) {
+		a.OpenConfigEditor()
+	})
+	configMenu.AddText("系统设置", nil, func(_ *menu.CallbackData) {
+		a.OpenSystemSettings()
+	})
+	configMenu.AddText("执行历史", nil, func(_ *menu.CallbackData) {
+		a.OpenExecutionHistory()
+	})
+
 	// 帮助菜单
 	helpMenu := appMenu.AddSubmenu("帮助")
 	helpMenu.AddText("关于", nil, func(_ *menu.CallbackData) {
@@ -619,19 +674,35 @@ func switchConfigFile(appInstance *App, configFile string) {
 	}
 }
 
-// NewWindow 创建新窗口（通过启动新进程实现）
+// NewWindow 创建新窗口（通过启动新进程实现，独立会话）
 func NewWindow() {
-	// 获取当前程序的路径
 	execPath, err := os.Executable()
 	if err != nil {
 		println("启动新窗口失败:", err.Error())
 		return
 	}
-	// 启动新的进程
-	cmd := exec.Command(execPath)
+	sessionID := data.NewSessionID()
+	cmd := exec.Command(execPath, "-session="+sessionID)
 	if err := cmd.Start(); err != nil {
 		println("启动新窗口失败:", err.Error())
 	}
+}
+
+// NewWindow 供前端调用的新建窗口入口
+func (a *App) NewWindow() {
+	NewWindow()
+}
+
+// GetCurrentConfigPath 获取当前业务配置文件路径
+func (a *App) GetCurrentConfigPath() string {
+	currentConfig := a.configManager.GetConfigPath()
+	if currentConfig == "" {
+		globalConfig, _ := a.GetGlobalConfig()
+		if globalConfig != nil {
+			currentConfig = globalConfig.LastOpenedFile
+		}
+	}
+	return currentConfig
 }
 
 // OpenCurrentConfig 打开当前配置文件（供菜单调用）
@@ -710,6 +781,27 @@ func (a *App) OpenCurrentConfigWithEvent() {
 	}
 
 	a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("成功打开配置文件: %s", lastOpenedFile), define.MsgTypeSuccess, false, nil)
+}
+
+// OpenGlobalConfigWithEvent 打开全局配置文件（带事件通知）
+func (a *App) OpenGlobalConfigWithEvent() {
+	globalConfigPath := a.configManager.GetGlobalConfigPath()
+	if globalConfigPath == "" {
+		a.emitOperationEvent(define.OpTypeOpenConfig, "没有找到全局配置文件", define.MsgTypeWarning, false, nil)
+		return
+	}
+
+	if _, err := os.Stat(globalConfigPath); os.IsNotExist(err) {
+		a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("全局配置文件不存在: %s", globalConfigPath), define.MsgTypeError, false, nil)
+		return
+	}
+
+	if err := openWithSystemApp(globalConfigPath); err != nil {
+		a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("打开全局配置文件失败: %v", err), define.MsgTypeError, false, nil)
+		return
+	}
+
+	a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("成功打开全局配置文件: %s", globalConfigPath), define.MsgTypeSuccess, false, nil)
 }
 
 // GetWorkPaths 获取所有工作路径
@@ -812,4 +904,151 @@ func (a *App) emitOperationEvent(eventType, message, messageType string, needRel
 
 	wailsRuntime.EventsEmit(a.ctx, "operation:result", event)
 	fmt.Printf("发送操作事件: %s - %s (%s)\n", eventType, message, messageType)
+}
+
+// GetSessionInfo 获取当前窗口会话信息
+func (a *App) GetSessionInfo() data.SessionState {
+	if a.sessionManager == nil {
+		return data.SessionState{}
+	}
+	return a.sessionManager.GetState()
+}
+
+// GetSystemSettings 获取系统设置
+func (a *App) GetSystemSettings() (*data.GlobalConfig, error) {
+	return a.configManager.GetGlobalConfig()
+}
+
+// SaveSystemSettings 保存系统设置
+func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
+	if err := a.configManager.SaveGlobalConfig(config); err != nil {
+		return err
+	}
+	a.refreshLogSettings()
+	if a.sessionManager != nil && config.ThemeSettings.Mode != "" {
+		_ = a.sessionManager.SetTheme(config.ThemeSettings.Mode, config.ThemeSettings.TerminalPreset)
+	}
+	return nil
+}
+
+// GetExecutionLogs 获取执行历史列表
+func (a *App) GetExecutionLogs(limit int) ([]data.LogEntry, error) {
+	return a.logManager.ListLogs(limit)
+}
+
+// ReadExecutionLog 读取执行日志内容
+func (a *App) ReadExecutionLog(fileName string) (string, error) {
+	return a.logManager.ReadLog(fileName)
+}
+
+// OpenExecutionLog 用系统默认程序打开日志文件
+func (a *App) OpenExecutionLog(fileName string) error {
+	logs, err := a.logManager.ListLogs(200)
+	if err != nil {
+		return err
+	}
+	for _, entry := range logs {
+		if entry.FileName == fileName {
+			return openWithSystemApp(entry.FullPath)
+		}
+	}
+	return fmt.Errorf("未找到日志文件: %s", fileName)
+}
+
+// OpenConfigEditor 打开业务配置编辑器
+func (a *App) OpenConfigEditor() {
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "open:config-editor", map[string]interface{}{
+			"timestamp": time.Now().Unix(),
+		})
+	}
+}
+
+// OpenSystemSettings 打开系统设置
+func (a *App) OpenSystemSettings() {
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "open:system-settings", map[string]interface{}{
+			"timestamp": time.Now().Unix(),
+		})
+	}
+}
+
+// OpenExecutionHistory 打开执行历史
+func (a *App) OpenExecutionHistory() {
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "open:execution-history", map[string]interface{}{
+			"timestamp": time.Now().Unix(),
+		})
+	}
+}
+
+// GetThemeSettings 获取当前主题设置（会话优先，其次全局）
+func (a *App) GetThemeSettings() data.ThemeSettings {
+	globalConfig, err := a.configManager.GetGlobalConfig()
+	settings := data.ThemeSettings{Mode: "light", TerminalPreset: "classic"}
+	if err == nil && globalConfig != nil {
+		settings = globalConfig.ThemeSettings
+	}
+	if a.sessionManager != nil {
+		state := a.sessionManager.GetState()
+		if state.Theme != "" {
+			settings.Mode = state.Theme
+		}
+		if state.TerminalPreset != "" {
+			settings.TerminalPreset = state.TerminalPreset
+		}
+	}
+	if settings.Mode == "" {
+		settings.Mode = "light"
+	}
+	if settings.TerminalPreset == "" {
+		settings.TerminalPreset = "classic"
+	}
+	return settings
+}
+
+// SaveThemeSettings 保存主题设置到会话与全局
+func (a *App) SaveThemeSettings(settings data.ThemeSettings) error {
+	if a.sessionManager != nil {
+		if err := a.sessionManager.SetTheme(settings.Mode, settings.TerminalPreset); err != nil {
+			return err
+		}
+	}
+	globalConfig, err := a.configManager.GetGlobalConfig()
+	if err != nil {
+		return err
+	}
+	globalConfig.ThemeSettings = settings
+	return a.configManager.SaveGlobalConfig(globalConfig)
+}
+
+func (a *App) applyWindowTheme(mode string) {
+	if a.ctx == nil {
+		return
+	}
+	switch mode {
+	case "dark":
+		wailsRuntime.WindowSetDarkTheme(a.ctx)
+		wailsRuntime.WindowSetBackgroundColour(a.ctx, 20, 20, 20, 255)
+	case "system":
+		wailsRuntime.WindowSetSystemDefaultTheme(a.ctx)
+	default:
+		wailsRuntime.WindowSetLightTheme(a.ctx)
+		wailsRuntime.WindowSetBackgroundColour(a.ctx, 255, 255, 255, 255)
+	}
+}
+
+func openWithSystemApp(path string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", path)
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", "", path)
+	case "linux":
+		cmd = exec.Command("xdg-open", path)
+	default:
+		return fmt.Errorf("不支持的操作系统: %s", runtime.GOOS)
+	}
+	return cmd.Run()
 }

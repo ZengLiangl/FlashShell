@@ -11,6 +11,18 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// LogSettings 执行日志落盘设置
+type LogSettings struct {
+	Enabled bool   `yaml:"enabled" json:"enabled"`
+	Path    string `yaml:"path" json:"path"`
+}
+
+// ThemeSettings 主题设置
+type ThemeSettings struct {
+	Mode           string `yaml:"mode" json:"mode"`                     // light, dark, system
+	TerminalPreset string `yaml:"terminalPreset" json:"terminalPreset"` // classic, monokai, solarized
+}
+
 // GlobalConfig 全局配置结构
 type GlobalConfig struct {
 	AppId          string            `yaml:"appId" json:"appId"`
@@ -19,6 +31,8 @@ type GlobalConfig struct {
 	LastOpenedFile string            `yaml:"lastOpenedFile" json:"lastOpenedFile"`
 	WorkPaths      map[string]string `yaml:"workPaths" json:"workPaths"`
 	Machines       []define.Machine  `yaml:"machines,omitempty" json:"machines,omitempty"`
+	LogSettings    LogSettings       `yaml:"logSettings" json:"logSettings"`
+	ThemeSettings  ThemeSettings     `yaml:"themeSettings" json:"themeSettings"`
 }
 
 // GlobalConfigManager 全局配置管理器
@@ -210,6 +224,14 @@ func (gcm *GlobalConfigManager) createDefaultGlobalConfig() error {
 		LastOpenedFile: "config.yaml",
 		WorkPaths: map[string]string{
 			"HOME": "~",
+		},
+		LogSettings: LogSettings{
+			Enabled: false,
+			Path:    "~/.cmd-config/logs",
+		},
+		ThemeSettings: ThemeSettings{
+			Mode:           "light",
+			TerminalPreset: "classic",
 		},
 	}
 
