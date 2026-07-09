@@ -30,16 +30,16 @@
 
 ```bash
 go install github.com/wailsapp/wails/v2/cmd/wails@latest
-make install-deps
-```
 
-Windows 用户请确保已安装 WebView2 运行时。
+# 安装项目依赖
+cd frontend && npm install && cd ..
+go mod tidy
+```
 
 ### 开发模式
 
 ```bash
-make dev
-# 等价于 ./dev.sh → wails dev
+wails dev
 ```
 
 支持前端热重载，适合调试配置与界面。
@@ -47,10 +47,8 @@ make dev
 ### 构建与运行
 
 ```bash
-make build
-# Windows: build/bin/quick-cmd.exe
-# macOS:   build/bin/quick-cmd.app
-# Linux:   build/bin/quick-cmd
+wails build
+./build/bin/quick-cmd.app/Contents/MacOS/quick-cmd
 ```
 
 ### 运行模式
@@ -58,7 +56,7 @@ make build
 | 参数 | 说明 |
 |------|------|
 | `-reg=desk` | 前台运行（默认） |
-| `-reg=back` | 后台守护（非 Windows） |
+| `-reg=back` | 后台守护 |
 
 后台模式日志：`/tmp/quick-cmd.out`、`/tmp/quick-cmd.err`。
 
@@ -70,13 +68,7 @@ Quick Cmd 将配置分为**全局配置**和**业务配置**两层。
 
 ### 全局配置 `global_config.yaml`
 
-**路径（固定）**：
-
-```
-Windows: C:\Users\<用户名>\.cmd-config\global_config.yaml
-macOS:   ~/.cmd-config/global_config.yaml
-Linux:   ~/.cmd-config/global_config.yaml
-```
+**路径**：`~/.cmd-config/global_config.yaml`
 
 > 全局配置保存在用户主目录，**不是**项目目录下的文件。在应用菜单中可通过「设置 → 配置文件 → 打开全局配置」直接打开。
 
@@ -87,7 +79,7 @@ Linux:   ~/.cmd-config/global_config.yaml
 - `workPaths`：路径变量表，供业务配置 `${KEY}` 引用
 - `machines`：远程机器清单（敏感信息加密存储）
 
-**默认示例**（仅首次创建文件不存在时生成）：
+**默认示例**（仅首次创建、文件不存在时生成）：
 
 ```yaml
 appId: com.runner
@@ -122,30 +114,30 @@ Project（项目）
 
 ```yaml
 projects:
-  - name: 我的项目
-    description: 本地 Go 项目
-    workdir: "${HOME}/workspace/myapp"
+  - name: demo-api
+    description: 示例 Go 服务
+    workdir: "${WORKSPACE}/demo-api"
     subprojects:
-      - name: 构建
+      - name: 本地构建
         description: 编译并测试
         commands:
           - name: 编译
             type: batch
             steps:
-              - go build .
+              - go build -o bin/demo-api .
           - name: 测试
             type: batch
             steps:
               - go test ./...
 
-      - name: 部署测试
+      - name: 部署到测试环境
         commands:
           - name: 上传并重启
             type: remote
-            machine: test-server
+            machine: staging-server
             steps:
-              - upload ./bin/app /opt/app/app
-              - systemctl restart myapp
+              - upload ./bin/demo-api /opt/demo-api/bin/demo-api
+              - systemctl restart demo-api
 ```
 
 ### 工作目录优先级
@@ -205,15 +197,15 @@ projects:
 
 - 新任务开始时**自动清空**终端
 - 输出通过 Wails 事件推送（`output:line`），无定时轮询
-- 虚拟滚动：大量日志时只渲染可见区域，降低卡顿
+- 虚拟滚动：大量日志时只渲染可见区域
 - **粘底跟随**：在底部附近时自动滚到最新行；向上翻看历史时不强制跳回
 
 ### 对话框
 
 | 入口 | 功能 |
 |------|------|
-| 设置 → 机器配置（Ctrl+M） | 增删改机器、测试 SSH、管理密钥 |
-| 设置 → 环境变量（Ctrl+E） | 管理 `workPaths` 变量 |
+| 设置 → 机器配置（Cmd+M） | 增删改机器、测试 SSH、管理密钥 |
+| 设置 → 环境变量（Cmd+E） | 管理 `workPaths` 变量 |
 | 帮助 → 关于 | 版本与简介 |
 
 ### 应用菜单
@@ -247,7 +239,7 @@ projects:
 
 | 类型 | 执行位置 | 适用场景 |
 |------|----------|----------|
-| `batch` | 本机 `cmd /C`（Windows）或 `bash -c` | Maven/Gradle/npm 构建、本地脚本 |
+| `batch` | 本机 shell（`bash -c`） | 构建、测试、本地脚本 |
 | `remote` | SSH 到指定 `machine` | 上传文件、重启服务、Docker 操作 |
 
 ---
@@ -266,8 +258,6 @@ projects:
     - echo 构建完成
 ```
 
-Windows 下通过隐藏窗口的 `cmd /C` 执行；停止时会 `taskkill /T /F` 结束进程树。
-
 ### remote（远程）
 
 通过 SSH 连接 `machine` 字段指定的机器执行步骤。
@@ -275,13 +265,13 @@ Windows 下通过隐藏窗口的 `cmd /C` 执行；停止时会 `taskkill /T /F`
 ```yaml
 - name: 重启服务
   type: remote
-  machine: jz
+  machine: staging-server
   steps:
-    - docker restart auth-service gateway
+    - docker restart api-gateway auth-service
 ```
 
 - 普通 shell 步骤：创建 SSH Session 执行
-- 仅当步骤包含 `upload` 时才建立 SFTP 连接（纯命令如 `docker restart` 不建 SFTP，连接更快）
+- 仅当步骤包含 `upload` 时才建立 SFTP 连接
 
 ### 远程特殊命令
 
@@ -297,8 +287,8 @@ Windows 下通过隐藏窗口的 `cmd /C` 执行；停止时会 `taskkill /T /F`
 
 ```yaml
 steps:
-  - upload D:\build\app.jar /home/app/app.jar
-  - upload D:\build\dist /usr/share/nginx/html/app
+  - upload ~/workspace/demo-api/target/demo-api.jar /opt/demo-api/app.jar
+  - upload ~/workspace/demo-web/dist /usr/share/nginx/html/demo-web
   - docker restart nginx
 ```
 
@@ -316,8 +306,8 @@ steps:
 
 ```yaml
 machines:
-  - name: jz
-    key_file: C:\Users\ll\.ssh\id_rsa
+  - name: staging-server
+    key_file: ~/.ssh/id_rsa
     encrypted_data: "..."   # UI 写入后自动生成，勿手动编辑
 ```
 
@@ -341,17 +331,17 @@ machines:
 
 | 键 | 值 |
 |----|-----|
-| `HOME` | `C:\Users\ll` |
-| `ACC-CLOUD` | `D:\IdeaProjects\acc-cloud` |
-| `MVM` | `mvn` |
+| `HOME` | `~` |
+| `WORKSPACE` | `~/workspace` |
+| `PROJECT_ROOT` | `~/workspace/demo-api` |
 
 业务配置中引用：
 
 ```yaml
-workdir: "${ACC-CLOUD}"
+workdir: "${PROJECT_ROOT}"
 steps:
-  - mvn package -pl my-module -am
-  - upload ${ACC-CLOUD}\target\app.jar /opt/app/app.jar
+  - mvn package -pl demo-service -am
+  - upload ${PROJECT_ROOT}/target/demo-service.jar /opt/demo-api/app.jar
 ```
 
 ---
@@ -360,11 +350,11 @@ steps:
 
 | 快捷键 | 功能 |
 |--------|------|
-| Ctrl/Cmd + C | 复制终端选中文本；无选中则复制全部 |
-| Ctrl/Cmd + K | 清空终端 |
-| Ctrl/Cmd + M | 打开机器配置 |
-| Ctrl/Cmd + E | 打开环境变量配置 |
-| Ctrl/Cmd + R | 刷新配置列表（菜单） |
+| Cmd + C | 复制终端选中文本；无选中则复制全部 |
+| Cmd + K | 清空终端 |
+| Cmd + M | 打开机器配置 |
+| Cmd + E | 打开环境变量配置 |
+| Cmd + R | 刷新配置列表（菜单） |
 | Escape | 关闭已打开对话框 |
 
 ---
@@ -374,17 +364,16 @@ steps:
 ### 输出机制
 
 - 后端通过 `output:line`、`execution:status` 事件推送，**已移除前端轮询**
-- 本地输出通道满时非阻塞丢弃，避免卡死
+- 本地输出通道满时非阻塞丢弃，避免阻塞
 - 执行新任务时自动清空终端，避免历史 DOM 堆积
 
-### Windows 使用建议
+### 使用建议
 
 | 场景 | 建议 |
 |------|------|
-| Maven/Gradle 构建 | 限制并行度（如 `-T 2`），日常可去掉 `clean` |
-| 杀毒软件占用高 | 将项目目录、`.m2` 仓库加入 Defender 排除项 |
-| 远程 docker restart | 本身不占本地 CPU；等待期间 UI 应保持流畅 |
-| 终端历史过多 | 新任务会自动清空；也可手动 Ctrl+K |
+| 大量构建日志 | 限制构建并行度，日常可去掉 `clean` |
+| 远程 docker restart | 等待期间 UI 应保持流畅（本地无构建负载） |
+| 终端历史过多 | 新任务会自动清空；也可手动 Cmd+K |
 
 ---
 
@@ -406,13 +395,13 @@ steps:
 
 1. 机器配置中点击「测试连接」
 2. 检查 host、port、user、密钥路径
-3. 确认密钥权限（Linux/macOS 上通常为 600）
+3. 确认密钥权限（`chmod 600 ~/.ssh/id_rsa`）
 4. 手动 `ssh user@host` 验证网络
 
 ### 本地命令执行失败
 
-- Windows 下命令通过 `cmd /C` 执行，复杂管道建议写成 `.bat` 或拆分步骤
 - 检查 `workdir` 是否存在
+- 复杂管道可拆分为多条 step 或写成脚本
 - 查看终端 `[STDERR]` 行
 
 ### 远程 upload 失败
@@ -423,9 +412,8 @@ steps:
 
 ### 界面无响应
 
-- 确认使用最新构建（含事件推送版本）
 - 菜单刷新配置或重启应用
-- Windows 任务管理器查看 `msedgewebview2` 占用
+- 确认使用 `wails build` 构建的最新版本
 
 ---
 
@@ -435,58 +423,57 @@ steps:
 
 ```yaml
 projects:
-  - name: XYJ
-    workdir: "${ACC-CLOUD}"
+  - name: sample-platform
+    workdir: "${WORKSPACE}/sample-platform"
     subprojects:
-      - name: 发布测试【merchant】
+      - name: 构建用户服务
         commands:
-          - name: 打包【merchant】
+          - name: 打包
             type: batch
             steps:
-              - mvn package -DskipTests -P dev -pl merchant-service -am
-          - name: 发布测试【merchant】
+              - mvn package -DskipTests -pl user-service -am
+          - name: 发布到测试环境
             type: remote
-            machine: jz
+            machine: staging-server
             steps:
-              - upload ${ACC-CLOUD}\merchant-service\target\app.jar /opt/merchant/app.jar
-              - docker restart merchant-service
+              - upload ${WORKSPACE}/sample-platform/user-service/target/user-service.jar /opt/user-service/app.jar
+              - docker restart user-service
 
-      - name: 发布测试【auth&gateway】
+      - name: 重启网关
         commands:
-          - name: 重启【auth&gateway】
+          - name: 重启 api-gateway
             type: remote
-            machine: jz
+            machine: staging-server
             steps:
-              - docker restart auth-service gateway
+              - docker restart api-gateway
 ```
 
 ### 纯本地脚本
 
 ```yaml
 projects:
-  - name: 工具
+  - name: dev-tools
     subprojects:
-      - name: 启动测试环境
+      - name: 启用 mock 环境
         commands:
-          - name: 启用服务
+          - name: 切换服务状态
             type: batch
             steps:
-              - curl https://example.com/api/setServers?status=1
+              - curl -s https://mock.example.com/api/v1/status?enabled=1
 ```
 
 ---
 
-## Make 任务速查
+## 命令速查
 
 ```bash
-make dev            # 开发模式
-make build          # 构建
-make install-deps   # 安装依赖
-make test           # Go 测试
-make fmt            # 格式化
-make lint           # 静态检查
-make clean          # 清理
-make config         # 复制 config.example.yaml → config.yaml（若示例存在）
+wails dev                              # 开发模式
+wails build                            # 构建
+cd frontend && npm install && cd ..    # 安装前端依赖
+go mod tidy                            # 整理 Go 依赖
+go test ./...                          # 运行测试
+go fmt ./...                           # 格式化
+go vet ./...                           # 静态检查
 ```
 
 ---
