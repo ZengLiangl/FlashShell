@@ -22,6 +22,8 @@ export function ConnectShell(arg1:string):Promise<void>;
 
 export function CreateApplicationMenu():Promise<menu.Menu>;
 
+export function CreateMachine(arg1:define.Machine,arg2:define.SensitiveData):Promise<string>;
+
 export function DeleteMachine(arg1:string):Promise<void>;
 
 export function DeleteMachineWithEvent(arg1:string):Promise<void>;
@@ -48,6 +50,8 @@ export function GetCurrentConfigPath():Promise<string>;
 
 export function GetExecutionLogs(arg1:number):Promise<Array<data.LogEntry>>;
 
+export function GetGlobalAccounts():Promise<Array<data.GlobalAccountDTO>>;
+
 export function GetGlobalConfig():Promise<data.GlobalConfig>;
 
 export function GetGlobalConfigForRefresh():Promise<data.GlobalConfig>;
@@ -73,6 +77,10 @@ export function GetSystemSettings():Promise<data.GlobalConfig>;
 export function GetThemeSettings():Promise<data.ThemeSettings>;
 
 export function GetWorkPaths():Promise<Record<string, string>>;
+
+export function ImportXshellFromFile(arg1:string,arg2:string):Promise<data.XshellImportResult>;
+
+export function ImportXshellFromFolder(arg1:string,arg2:string):Promise<data.XshellImportResult>;
 
 export function NewWindow():Promise<void>;
 
@@ -104,6 +112,10 @@ export function ResizeShell(arg1:string,arg2:number,arg3:number):Promise<void>;
 
 export function SaveConfig(arg1:define.Root):Promise<void>;
 
+export function SaveGlobalAccounts(arg1:Array<data.GlobalAccount>):Promise<void>;
+
+export function SaveGlobalAccountsFromDTO(arg1:Array<data.GlobalAccountDTO>):Promise<void>;
+
 export function SaveGlobalConfig(arg1:data.GlobalConfig):Promise<void>;
 
 export function SaveSystemSettings(arg1:data.GlobalConfig):Promise<void>;
@@ -111,6 +123,10 @@ export function SaveSystemSettings(arg1:data.GlobalConfig):Promise<void>;
 export function SaveThemeSettings(arg1:data.ThemeSettings):Promise<void>;
 
 export function SelectKeyFile():Promise<string>;
+
+export function SelectXshellFile():Promise<string>;
+
+export function SelectXshellFolder():Promise<string>;
 
 export function SendShellInput(arg1:string,arg2:string):Promise<void>;
 

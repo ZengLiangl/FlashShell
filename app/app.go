@@ -355,10 +355,10 @@ func (a *App) GetStatus() *define.CommandStatus {
 }
 
 // TestMachineConnection 测试机器连接
-func (a *App) TestMachineConnection(machineName string) error {
-	machineConfig := a.configManager.GetMachine(machineName)
+func (a *App) TestMachineConnection(machineID string) error {
+	machineConfig := a.configManager.GetMachineFromGlobal(machineID)
 	if machineConfig == nil {
-		return fmt.Errorf("未找到机器配置: %s", machineName)
+		return fmt.Errorf("未找到机器配置: %s", machineID)
 	}
 
 	sshClient := machine.NewSSHClient(machineConfig, a.configManager.GetWorkPathVars())
@@ -372,6 +372,7 @@ func (a *App) GetMachines() []define.Machine {
 
 // AddMachine 添加机器配置（到全局配置）
 func (a *App) AddMachine(machine define.Machine) error {
+	machine.EnsureID()
 	return a.configManager.AddMachineToGlobal(&machine)
 }
 
@@ -389,53 +390,50 @@ func (a *App) AddMachineWithEvent(machine define.Machine) error {
 	return nil
 }
 
-// UpdateMachine 更新机器配置（在全局配置中）
-func (a *App) UpdateMachine(machineName string, machine define.Machine) error {
-	// 先删除旧配置
-	if err := a.configManager.RemoveMachineFromGlobal(machineName); err != nil {
-		return fmt.Errorf("删除旧配置失败: %w", err)
+// UpdateMachine 更新机器配置（在全局配置中，按 ID）
+func (a *App) UpdateMachine(machineID string, machine define.Machine) error {
+	existing := a.configManager.GetMachineFromGlobal(machineID)
+	if existing == nil {
+		return fmt.Errorf("未找到机器配置: %s", machineID)
 	}
-
-	// 添加新配置
+	machine.ID = machineID
 	return a.configManager.AddMachineToGlobal(&machine)
 }
 
 // UpdateMachineWithEvent 更新机器配置（带事件通知）
-func (a *App) UpdateMachineWithEvent(machineName string, machine define.Machine) error {
-	// 先删除旧配置
-	if err := a.configManager.RemoveMachineFromGlobal(machineName); err != nil {
-		a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("删除旧配置失败: %s", err.Error()), define.MsgTypeError, false, nil)
-		return fmt.Errorf("删除旧配置失败: %w", err)
-	}
-
-	// 添加新配置
-	if err := a.configManager.AddMachineToGlobal(&machine); err != nil {
+func (a *App) UpdateMachineWithEvent(machineID string, machine define.Machine) error {
+	if err := a.UpdateMachine(machineID, machine); err != nil {
 		a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("更新机器配置失败: %s", err.Error()), define.MsgTypeError, false, nil)
 		return err
 	}
 
 	a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("成功更新机器配置: %s", machine.Name), define.MsgTypeSuccess, false, map[string]interface{}{
+		"machineId":   machine.ID,
 		"machineName": machine.Name,
-		"oldName":     machineName,
 	})
 	return nil
 }
 
-// DeleteMachine 删除机器配置（从全局配置）
-func (a *App) DeleteMachine(machineName string) error {
-	return a.configManager.RemoveMachineFromGlobal(machineName)
+// DeleteMachine 删除机器配置（从全局配置，按 ID）
+func (a *App) DeleteMachine(machineID string) error {
+	return a.configManager.RemoveMachineFromGlobal(machineID)
 }
 
 // DeleteMachineWithEvent 删除机器配置（带事件通知）
-func (a *App) DeleteMachineWithEvent(machineName string) error {
-	err := a.configManager.RemoveMachineFromGlobal(machineName)
+func (a *App) DeleteMachineWithEvent(machineID string) error {
+	machine := a.configManager.GetMachineFromGlobal(machineID)
+	err := a.configManager.RemoveMachineFromGlobal(machineID)
 	if err != nil {
 		a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("删除机器配置失败: %s", err.Error()), define.MsgTypeError, false, nil)
 		return err
 	}
 
-	a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("成功删除机器配置: %s", machineName), define.MsgTypeSuccess, false, map[string]interface{}{
-		"machineName": machineName,
+	name := machineID
+	if machine != nil {
+		name = machine.Name
+	}
+	a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("成功删除机器配置: %s", name), define.MsgTypeSuccess, false, map[string]interface{}{
+		"machineId": machineID,
 	})
 	return nil
 }
@@ -500,10 +498,10 @@ func (a *App) SwitchConfigFileWithEvent(configPath string) error {
 }
 
 // SetMachineSensitiveData 设置机器敏感数据
-func (a *App) SetMachineSensitiveData(machineName string, sensitiveData define.SensitiveData) error {
-	machine := a.configManager.GetMachineFromGlobal(machineName)
+func (a *App) SetMachineSensitiveData(machineID string, sensitiveData define.SensitiveData) error {
+	machine := a.configManager.GetMachineFromGlobal(machineID)
 	if machine == nil {
-		return fmt.Errorf("未找到机器: %s", machineName)
+		return fmt.Errorf("未找到机器: %s", machineID)
 	}
 
 	// 设置敏感数据并加密
@@ -515,20 +513,20 @@ func (a *App) SetMachineSensitiveData(machineName string, sensitiveData define.S
 }
 
 // GetMachineSensitiveData 获取机器敏感数据
-func (a *App) GetMachineSensitiveData(machineName string) (*define.SensitiveData, error) {
-	machine := a.configManager.GetMachineFromGlobal(machineName)
+func (a *App) GetMachineSensitiveData(machineID string) (*define.SensitiveData, error) {
+	machine := a.configManager.GetMachineFromGlobal(machineID)
 	if machine == nil {
-		return nil, fmt.Errorf("未找到机器: %s", machineName)
+		return nil, fmt.Errorf("未找到机器: %s", machineID)
 	}
 
 	return machine.GetSensitiveData()
 }
 
 // ClearMachineSensitiveData 清除机器敏感数据缓存
-func (a *App) ClearMachineSensitiveData(machineName string) error {
-	machine := a.configManager.GetMachineFromGlobal(machineName)
+func (a *App) ClearMachineSensitiveData(machineID string) error {
+	machine := a.configManager.GetMachineFromGlobal(machineID)
 	if machine == nil {
-		return fmt.Errorf("未找到机器: %s", machineName)
+		return fmt.Errorf("未找到机器: %s", machineID)
 	}
 
 	machine.ClearSensitiveData()
@@ -546,6 +544,85 @@ func (a *App) SelectKeyFile() (string, error) {
 	}
 
 	return filePath, nil
+}
+
+// SelectXshellFile 选择单个 Xshell 会话文件
+func (a *App) SelectXshellFile() (string, error) {
+	filePath, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
+		Title:   "选择 Xshell 会话文件",
+		Filters: []wailsRuntime.FileFilter{{DisplayName: "Xshell 会话 (*.xsh)", Pattern: "*.xsh"}},
+	})
+	if err != nil {
+		return "", fmt.Errorf("选择文件失败: %w", err)
+	}
+	return filePath, nil
+}
+
+// SelectXshellFolder 选择 Xshell 会话文件夹
+func (a *App) SelectXshellFolder() (string, error) {
+	dirPath, err := wailsRuntime.OpenDirectoryDialog(a.ctx, wailsRuntime.OpenDialogOptions{
+		Title: "选择 Xshell 会话文件夹",
+	})
+	if err != nil {
+		return "", fmt.Errorf("选择文件夹失败: %w", err)
+	}
+	return dirPath, nil
+}
+
+// ImportXshellFromFile 从单个 .xsh 文件导入
+func (a *App) ImportXshellFromFile(filePath, accountID string) (*data.XshellImportResult, error) {
+	if filePath == "" {
+		return nil, fmt.Errorf("未选择文件")
+	}
+	return a.configManager.ImportXshell(filePath, false, accountID)
+}
+
+// ImportXshellFromFolder 从文件夹批量导入 .xsh
+func (a *App) ImportXshellFromFolder(dirPath, accountID string) (*data.XshellImportResult, error) {
+	if dirPath == "" {
+		return nil, fmt.Errorf("未选择文件夹")
+	}
+	return a.configManager.ImportXshell(dirPath, true, accountID)
+}
+
+// GetGlobalAccounts 获取全局 SSH 帐号
+func (a *App) GetGlobalAccounts() []data.GlobalAccountDTO {
+	return a.configManager.GetGlobalAccounts()
+}
+
+// SaveGlobalAccounts 保存全局 SSH 帐号
+func (a *App) SaveGlobalAccounts(accounts []data.GlobalAccount) error {
+	return a.configManager.SaveGlobalAccounts(accounts)
+}
+
+// SaveGlobalAccountsFromDTO 保存全局 SSH 帐号（前端明文密码）
+func (a *App) SaveGlobalAccountsFromDTO(accounts []data.GlobalAccountDTO) error {
+	stored := make([]data.GlobalAccount, 0, len(accounts))
+	for _, dto := range accounts {
+		account := data.GlobalAccount{
+			ID:   dto.ID,
+			Name: dto.Name,
+			User: dto.User,
+		}
+		account.EnsureID()
+		if err := account.SetPassword(dto.Password); err != nil {
+			return err
+		}
+		stored = append(stored, account)
+	}
+	return a.configManager.SaveGlobalAccounts(stored)
+}
+
+// CreateMachine 创建机器并保存连接信息
+func (a *App) CreateMachine(machine define.Machine, sensitiveData define.SensitiveData) (string, error) {
+	machine.EnsureID()
+	if err := machine.SetSensitiveData(&sensitiveData); err != nil {
+		return "", fmt.Errorf("设置敏感数据失败: %w", err)
+	}
+	if err := a.configManager.AddMachineToGlobal(&machine); err != nil {
+		return "", err
+	}
+	return machine.ID, nil
 }
 
 // OpenMachineConfig 打开机器配置对话框（供菜单调用）

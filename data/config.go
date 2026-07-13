@@ -135,19 +135,20 @@ func (cm *ConfigManager) GetConfigPath() string {
 	return cm.configPath
 }
 
-// GetMachine 根据名称获取机器配置
+// GetMachine 根据名称获取机器配置（任务命令引用）
 func (cm *ConfigManager) GetMachine(name string) *define.Machine {
-	// fmt.Println("GetMachine", name)
 	if cm.globalConfigManager == nil {
 		return nil
 	}
+	return cm.globalConfigManager.GetMachineByName(name)
+}
 
-	for _, machine := range cm.globalConfigManager.config.Machines {
-		if machine.Name == name {
-			return &machine
-		}
+// GetMachineFromGlobal 从全局配置按 ID 获取机器
+func (cm *ConfigManager) GetMachineFromGlobal(id string) *define.Machine {
+	if cm.globalConfigManager == nil {
+		return nil
 	}
-	return nil
+	return cm.globalConfigManager.GetMachine(id)
 }
 
 // AddMachineToGlobal 添加机器配置到全局配置
@@ -156,14 +157,6 @@ func (cm *ConfigManager) AddMachineToGlobal(machine *define.Machine) error {
 		return fmt.Errorf("全局配置管理器未初始化")
 	}
 	return cm.globalConfigManager.AddMachine(machine)
-}
-
-// GetMachineFromGlobal 从全局配置获取机器配置
-func (cm *ConfigManager) GetMachineFromGlobal(name string) *define.Machine {
-	if cm.globalConfigManager == nil {
-		return nil
-	}
-	return cm.globalConfigManager.GetMachine(name)
 }
 
 // GetAllMachinesFromGlobal 从全局配置获取所有机器配置
@@ -175,11 +168,39 @@ func (cm *ConfigManager) GetAllMachinesFromGlobal() []define.Machine {
 }
 
 // RemoveMachineFromGlobal 从全局配置移除机器配置
-func (cm *ConfigManager) RemoveMachineFromGlobal(name string) error {
+func (cm *ConfigManager) RemoveMachineFromGlobal(id string) error {
 	if cm.globalConfigManager == nil {
 		return fmt.Errorf("全局配置管理器未初始化")
 	}
-	return cm.globalConfigManager.RemoveMachine(name)
+	return cm.globalConfigManager.RemoveMachine(id)
+}
+
+func (cm *ConfigManager) GetGlobalAccounts() []GlobalAccountDTO {
+	if cm.globalConfigManager == nil {
+		return []GlobalAccountDTO{}
+	}
+	return cm.globalConfigManager.GetGlobalAccounts()
+}
+
+func (cm *ConfigManager) SaveGlobalAccounts(accounts []GlobalAccount) error {
+	if cm.globalConfigManager == nil {
+		return fmt.Errorf("全局配置管理器未初始化")
+	}
+	return cm.globalConfigManager.SaveGlobalAccounts(accounts)
+}
+
+func (cm *ConfigManager) ImportXshell(path string, isDirectory bool, accountID string) (*XshellImportResult, error) {
+	if cm.globalConfigManager == nil {
+		return nil, fmt.Errorf("全局配置管理器未初始化")
+	}
+	files, err := CollectXshellFiles(path, isDirectory)
+	if err != nil {
+		return nil, err
+	}
+	if len(files) == 0 {
+		return nil, fmt.Errorf("未找到 .xsh 文件")
+	}
+	return cm.globalConfigManager.ImportXshellFiles(files, accountID)
 }
 
 // processPathVariables 处理路径变量替换

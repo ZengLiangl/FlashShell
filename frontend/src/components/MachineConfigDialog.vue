@@ -4,15 +4,35 @@
             <div class="machine-list">
                 <div class="list-header">
                     <h4>机器列表</h4>
-                    <el-button type="primary" @click="addMachine">
-                        <el-icon>
-                            <Plus />
-                        </el-icon>
-                        添加机器
-                    </el-button>
+                    <div class="header-actions">
+                        <el-select
+                            v-model="importAccountId"
+                            clearable
+                            placeholder="导入时使用全局帐号(可选)"
+                            style="width: 150px"
+                            size="small"
+                        >
+                            <el-option
+                                v-for="account in globalAccounts"
+                                :key="account.id"
+                                :label="account.name"
+                                :value="account.id"
+                            />
+                        </el-select>
+                        <el-dropdown split-button type="primary" @click="addMachine" @command="handleAddCommand">
+                            <el-icon><Plus /></el-icon>
+                            添加机器
+                            <template #dropdown>
+                                <el-dropdown-menu>
+                                    <el-dropdown-item command="import-file">导入 Xshell 文件</el-dropdown-item>
+                                    <el-dropdown-item command="import-folder">导入 Xshell 文件夹</el-dropdown-item>
+                                </el-dropdown-menu>
+                            </template>
+                        </el-dropdown>
+                    </div>
                 </div>
 
-                <el-table :data="machines" style="width: 100%" v-loading="machinesLoading">
+                <el-table :data="machines" row-key="id" style="width: 100%" v-loading="machinesLoading">
                     <el-table-column prop="name" label="机器名称" width="150" />
                     <el-table-column prop="group" label="分组" width="120">
                         <template #default="scope">
@@ -41,6 +61,23 @@
 
                 <el-form-item label="分组" prop="group">
                     <el-input v-model="machineForm.group" placeholder="留空则归入默认分组" />
+                </el-form-item>
+
+                <el-form-item label="全局帐号">
+                    <el-select
+                        v-model="selectedAccountId"
+                        clearable
+                        placeholder="选择后自动填充用户名和密码"
+                        style="width: 100%"
+                        @change="applyGlobalAccount"
+                    >
+                        <el-option
+                            v-for="account in globalAccounts"
+                            :key="account.id"
+                            :label="account.name"
+                            :value="account.id"
+                        />
+                    </el-select>
                 </el-form-item>
 
                 <el-form-item label="密钥文件" prop="key_file">
@@ -83,7 +120,7 @@
 
 <script>
 import { ref, reactive, watch } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import * as App from '../../wailsjs/go/app/App'
 
 export default {
@@ -96,16 +133,22 @@ export default {
         const visibleProxy = ref(props.modelValue)
         watch(() => props.modelValue, v => {
             visibleProxy.value = v
-            if (v) loadMachines()
+            if (v) {
+                loadMachines()
+                loadGlobalAccounts()
+            }
         })
         watch(visibleProxy, v => emit('update:modelValue', v))
 
         const machines = ref([])
+        const globalAccounts = ref([])
         const machinesLoading = ref(false)
         const machineEditVisible = ref(false)
         const savingMachine = ref(false)
         const editingMachine = ref(null)
         const machineFormRef = ref(null)
+        const selectedAccountId = ref('')
+        const importAccountId = ref('')
 
         const machineForm = reactive({
             name: '',
@@ -141,19 +184,37 @@ export default {
             }
         }
 
+        const loadGlobalAccounts = async () => {
+            try {
+                globalAccounts.value = await App.GetGlobalAccounts() || []
+            } catch {
+                globalAccounts.value = []
+            }
+        }
+
+        const applyGlobalAccount = (accountId) => {
+            if (!accountId) return
+            const account = globalAccounts.value.find((item) => item.id === accountId)
+            if (!account) return
+            machineForm.user = account.user || ''
+            machineForm.password = account.password || ''
+        }
+
         const addMachine = () => {
             editingMachine.value = null
+            selectedAccountId.value = ''
             resetMachineForm()
             machineEditVisible.value = true
         }
 
         const editMachine = async (machine) => {
             editingMachine.value = machine
+            selectedAccountId.value = ''
             machineForm.name = machine.name
             machineForm.group = machine.group || ''
             machineForm.key_file = machine.key_file || ''
             try {
-                const sensitiveData = await App.GetMachineSensitiveData(machine.name)
+                const sensitiveData = await App.GetMachineSensitiveData(machine.id)
                 if (sensitiveData) {
                     machineForm.host = sensitiveData.host || ''
                     machineForm.port = sensitiveData.port || 22
@@ -182,15 +243,24 @@ export default {
             try {
                 await machineFormRef.value.validate()
                 savingMachine.value = true
-                const machineData = { name: machineForm.name, group: machineForm.group, key_file: machineForm.key_file }
-                const sensitiveData = { host: machineForm.host, port: machineForm.port, user: machineForm.user, password: machineForm.password }
+                const machineData = {
+                    name: machineForm.name,
+                    group: machineForm.group,
+                    key_file: machineForm.key_file
+                }
+                const sensitiveData = {
+                    host: machineForm.host,
+                    port: machineForm.port,
+                    user: machineForm.user,
+                    password: machineForm.password
+                }
                 if (editingMachine.value) {
-                    await App.UpdateMachine(editingMachine.value.name, machineData)
-                    await App.SetMachineSensitiveData(machineForm.name, sensitiveData)
+                    machineData.id = editingMachine.value.id
+                    await App.UpdateMachine(editingMachine.value.id, machineData)
+                    await App.SetMachineSensitiveData(editingMachine.value.id, sensitiveData)
                     ElMessage.success('机器配置更新成功')
                 } else {
-                    await App.AddMachine(machineData)
-                    await App.SetMachineSensitiveData(machineForm.name, sensitiveData)
+                    await App.CreateMachine(machineData, sensitiveData)
                     ElMessage.success('机器配置添加成功')
                 }
                 machineEditVisible.value = false
@@ -205,10 +275,12 @@ export default {
 
         const deleteMachine = async (machine) => {
             try {
-                await App.DeleteMachine(machine.name)
+                await ElMessageBox.confirm(`确定删除机器「${machine.name}」吗？`, '确认删除', { type: 'warning' })
+                await App.DeleteMachine(machine.id)
                 ElMessage.success('机器配置删除成功')
                 await loadMachines()
             } catch (error) {
+                if (error === 'cancel') return
                 console.error('删除机器配置失败:', error)
                 ElMessage.error('删除机器配置失败: ' + error.message)
             }
@@ -217,7 +289,7 @@ export default {
         const testConnection = async (machine) => {
             try {
                 machine.testing = true
-                await App.TestMachineConnection(machine.name)
+                await App.TestMachineConnection(machine.id)
                 ElMessage.success('连接测试成功')
             } catch (error) {
                 console.error('连接测试失败:', error)
@@ -239,9 +311,44 @@ export default {
             }
         }
 
+        const showImportResult = (result) => {
+            const errors = result?.errors?.length ? `\n失败: ${result.errors.join('\n')}` : ''
+            ElMessage.success(`导入完成：成功 ${result?.imported || 0}，跳过 ${result?.skipped || 0}${errors}`)
+        }
+
+        const importXshellFile = async () => {
+            try {
+                const filePath = await App.SelectXshellFile()
+                if (!filePath) return
+                const result = await App.ImportXshellFromFile(filePath, importAccountId.value || '')
+                showImportResult(result)
+                await loadMachines()
+            } catch (error) {
+                ElMessage.error('导入失败: ' + error)
+            }
+        }
+
+        const importXshellFolder = async () => {
+            try {
+                const dirPath = await App.SelectXshellFolder()
+                if (!dirPath) return
+                const result = await App.ImportXshellFromFolder(dirPath, importAccountId.value || '')
+                showImportResult(result)
+                await loadMachines()
+            } catch (error) {
+                ElMessage.error('导入失败: ' + error)
+            }
+        }
+
+        const handleAddCommand = (command) => {
+            if (command === 'import-folder') importXshellFolder()
+            else if (command === 'import-file') importXshellFile()
+        }
+
         return {
             visibleProxy,
             machines,
+            globalAccounts,
             machinesLoading,
             machineEditVisible,
             savingMachine,
@@ -249,27 +356,38 @@ export default {
             machineFormRef,
             machineForm,
             machineRules,
+            selectedAccountId,
             handleClose,
             addMachine,
             editMachine,
             saveMachine,
             deleteMachine,
             testConnection,
-            selectKeyFile
+            selectKeyFile,
+            applyGlobalAccount,
+            handleAddCommand,
+            importAccountId
         }
     }
 }
 </script>
 
 <style scoped>
-.machine-config-container {}
-
-.machine-list {}
-
 .list-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: 12px;
+}
+
+.header-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.key-file-input {
+    display: flex;
+    gap: 8px;
+    width: 100%;
 }
 </style>

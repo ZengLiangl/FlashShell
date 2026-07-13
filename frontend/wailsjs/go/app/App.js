@@ -38,6 +38,10 @@ export function CreateApplicationMenu() {
   return window['go']['app']['App']['CreateApplicationMenu']();
 }
 
+export function CreateMachine(arg1, arg2) {
+  return window['go']['app']['App']['CreateMachine'](arg1, arg2);
+}
+
 export function DeleteMachine(arg1) {
   return window['go']['app']['App']['DeleteMachine'](arg1);
 }
@@ -90,6 +94,10 @@ export function GetExecutionLogs(arg1) {
   return window['go']['app']['App']['GetExecutionLogs'](arg1);
 }
 
+export function GetGlobalAccounts() {
+  return window['go']['app']['App']['GetGlobalAccounts']();
+}
+
 export function GetGlobalConfig() {
   return window['go']['app']['App']['GetGlobalConfig']();
 }
@@ -140,6 +148,14 @@ export function GetThemeSettings() {
 
 export function GetWorkPaths() {
   return window['go']['app']['App']['GetWorkPaths']();
+}
+
+export function ImportXshellFromFile(arg1, arg2) {
+  return window['go']['app']['App']['ImportXshellFromFile'](arg1, arg2);
+}
+
+export function ImportXshellFromFolder(arg1, arg2) {
+  return window['go']['app']['App']['ImportXshellFromFolder'](arg1, arg2);
 }
 
 export function NewWindow() {
@@ -202,6 +218,14 @@ export function SaveConfig(arg1) {
   return window['go']['app']['App']['SaveConfig'](arg1);
 }
 
+export function SaveGlobalAccounts(arg1) {
+  return window['go']['app']['App']['SaveGlobalAccounts'](arg1);
+}
+
+export function SaveGlobalAccountsFromDTO(arg1) {
+  return window['go']['app']['App']['SaveGlobalAccountsFromDTO'](arg1);
+}
+
 export function SaveGlobalConfig(arg1) {
   return window['go']['app']['App']['SaveGlobalConfig'](arg1);
 }
@@ -216,6 +240,14 @@ export function SaveThemeSettings(arg1) {
 
 export function SelectKeyFile() {
   return window['go']['app']['App']['SelectKeyFile']();
+}
+
+export function SelectXshellFile() {
+  return window['go']['app']['App']['SelectXshellFile']();
+}
+
+export function SelectXshellFolder() {
+  return window['go']['app']['App']['SelectXshellFolder']();
 }
 
 export function SendShellInput(arg1, arg2) {

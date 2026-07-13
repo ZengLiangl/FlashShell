@@ -3,6 +3,11 @@ import { ElMessage } from 'element-plus'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import { isMachineConnected } from '../utils/machineGroups'
+import {
+  pushShellOutput,
+  clearShellOutput,
+  removeShellOutput,
+} from '../utils/shellOutputBuffer'
 
 export function useShell() {
   const sessions = ref([])
@@ -67,6 +72,7 @@ export function useShell() {
   const disconnect = async (machineName) => {
     try {
       await App.DisconnectShell(machineName)
+      removeShellOutput(machineName)
       if (activeMachine.value === machineName) {
         activeMachine.value = connectedSessions.value[0]?.machineName || ''
       }
@@ -90,11 +96,24 @@ export function useShell() {
 
   const setupShellEvents = () => {
     EventsOn('shell:status', handleShellStatus)
+    EventsOn('shell:data', (payload) => {
+      if (payload?.machineName && payload?.data) {
+        pushShellOutput(payload.machineName, 'data', payload.data)
+      }
+    })
+    EventsOn('shell:line', (payload) => {
+      if (payload?.machineName && payload?.line) {
+        pushShellOutput(payload.machineName, 'line', payload.line)
+      }
+    })
+    EventsOn('shell:clear', (payload) => {
+      if (payload?.machineName) clearShellOutput(payload.machineName)
+    })
     syncSessions()
   }
 
   const teardownShellEvents = () => {
-    EventsOff('shell:status')
+    EventsOff('shell:status', 'shell:data', 'shell:line', 'shell:clear')
   }
 
   onMounted(() => {

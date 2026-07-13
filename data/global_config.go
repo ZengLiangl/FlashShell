@@ -31,6 +31,7 @@ type GlobalConfig struct {
 	LastOpenedFile string            `yaml:"lastOpenedFile" json:"lastOpenedFile"`
 	WorkPaths      map[string]string `yaml:"workPaths" json:"workPaths"`
 	Machines       []define.Machine  `yaml:"machines,omitempty" json:"machines,omitempty"`
+	GlobalAccounts []GlobalAccount   `yaml:"globalAccounts,omitempty" json:"globalAccounts,omitempty"`
 	LogSettings    LogSettings       `yaml:"logSettings" json:"logSettings"`
 	ThemeSettings  ThemeSettings     `yaml:"themeSettings" json:"themeSettings"`
 }
@@ -94,6 +95,11 @@ func (gcm *GlobalConfigManager) LoadGlobalConfig() (*GlobalConfig, error) {
 	}
 
 	gcm.config = &config
+	if gcm.ensureMachineIDs() || gcm.ensureGlobalAccountIDs() {
+		if err := gcm.SaveGlobalConfig(gcm.config); err != nil {
+			return nil, fmt.Errorf("迁移配置 ID 失败: %w", err)
+		}
+	}
 	return &config, nil
 }
 
@@ -238,7 +244,7 @@ func (gcm *GlobalConfigManager) createDefaultGlobalConfig() error {
 	return gcm.SaveGlobalConfig(defaultConfig)
 }
 
-// AddMachine 添加机器配置
+// AddMachine 添加或更新机器配置（按 ID）
 func (gcm *GlobalConfigManager) AddMachine(machine *define.Machine) error {
 	if gcm.config == nil {
 		if _, err := gcm.LoadGlobalConfig(); err != nil {
@@ -246,23 +252,35 @@ func (gcm *GlobalConfigManager) AddMachine(machine *define.Machine) error {
 		}
 	}
 
-	// 检查是否已存在同名机器
+	machine.EnsureID()
 	for i, existing := range gcm.config.Machines {
-		if existing.Name == machine.Name {
-			// 更新现有机器配置
+		if existing.ID == machine.ID {
 			gcm.config.Machines[i] = *machine
 			return gcm.SaveGlobalConfig(gcm.config)
 		}
 	}
 
-	// 添加新机器
 	gcm.config.Machines = append(gcm.config.Machines, *machine)
 	return gcm.SaveGlobalConfig(gcm.config)
 }
 
-// GetMachine 根据名称获取机器配置
-func (gcm *GlobalConfigManager) GetMachine(name string) *define.Machine {
-	if gcm.config == nil {
+// GetMachine 根据 ID 获取机器配置
+func (gcm *GlobalConfigManager) GetMachine(id string) *define.Machine {
+	if gcm.config == nil || id == "" {
+		return nil
+	}
+
+	for _, machine := range gcm.config.Machines {
+		if machine.ID == id {
+			return &machine
+		}
+	}
+	return nil
+}
+
+// GetMachineByName 根据名称获取机器配置
+func (gcm *GlobalConfigManager) GetMachineByName(name string) *define.Machine {
+	if gcm.config == nil || name == "" {
 		return nil
 	}
 
@@ -274,8 +292,8 @@ func (gcm *GlobalConfigManager) GetMachine(name string) *define.Machine {
 	return nil
 }
 
-// RemoveMachine 移除机器配置
-func (gcm *GlobalConfigManager) RemoveMachine(name string) error {
+// RemoveMachine 按 ID 移除机器配置
+func (gcm *GlobalConfigManager) RemoveMachine(id string) error {
 	if gcm.config == nil {
 		if _, err := gcm.LoadGlobalConfig(); err != nil {
 			return err
@@ -283,13 +301,27 @@ func (gcm *GlobalConfigManager) RemoveMachine(name string) error {
 	}
 
 	for i, machine := range gcm.config.Machines {
-		if machine.Name == name {
+		if machine.ID == id {
 			gcm.config.Machines = append(gcm.config.Machines[:i], gcm.config.Machines[i+1:]...)
 			return gcm.SaveGlobalConfig(gcm.config)
 		}
 	}
 
-	return fmt.Errorf("机器配置 '%s' 不存在", name)
+	return fmt.Errorf("机器配置 '%s' 不存在", id)
+}
+
+func (gcm *GlobalConfigManager) ensureMachineIDs() bool {
+	if gcm.config == nil {
+		return false
+	}
+	changed := false
+	for i := range gcm.config.Machines {
+		if gcm.config.Machines[i].ID == "" {
+			gcm.config.Machines[i].EnsureID()
+			changed = true
+		}
+	}
+	return changed
 }
 
 // GetAllMachines 获取所有机器配置

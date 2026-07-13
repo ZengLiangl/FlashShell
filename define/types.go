@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
@@ -46,12 +47,20 @@ type Command struct {
 
 // Machine 远程机器配置
 type Machine struct {
+	ID            string `yaml:"id" json:"id"`
 	EncryptedData string `yaml:"encrypted_data,omitempty" json:"encrypted_data,omitempty"` // 加密后内容
 	Name          string `yaml:"name" json:"name"`
 	Group         string `yaml:"group,omitempty" json:"group,omitempty"`
 	KeyFile       string `yaml:"key_file,omitempty" json:"key_file,omitempty"`
 	// 运行时数据（不序列化）
 	sensitiveData *SensitiveData `yaml:"-"`
+}
+
+// EnsureID 确保机器有唯一 ID
+func (m *Machine) EnsureID() {
+	if m != nil && m.ID == "" {
+		m.ID = uuid.NewString()
+	}
 }
 
 // SensitiveData 敏感数据

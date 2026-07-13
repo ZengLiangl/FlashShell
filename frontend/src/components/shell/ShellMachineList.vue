@@ -6,6 +6,9 @@
         返回首页
       </el-button>
       <h3>机器列表</h3>
+      <el-button size="small" text title="收起列表" @click="$emit('toggle-collapse')">
+        <el-icon><DArrowLeft /></el-icon>
+      </el-button>
       <el-button size="small" type="primary" text @click="$emit('add-machine')">
         <el-icon><Plus /></el-icon>
         添加
@@ -23,13 +26,12 @@
         <div class="machine-list">
           <div
             v-for="machine in group.machines"
-            :key="machine.name"
+            :key="machine.id"
             class="machine-item"
             :class="{ active: isConnected(machine.name) }"
           >
             <div class="machine-info" @click="onSelectMachine(machine.name)">
               <div class="machine-name">{{ machine.name }}</div>
-              <div class="machine-meta">{{ machine.key_file || '密钥/密码' }}</div>
             </div>
             <div class="machine-actions">
               <el-button
@@ -78,7 +80,7 @@ export default {
     connectingName: { type: String, default: '' },
     testingName: { type: String, default: '' },
   },
-  emits: ['back', 'connect', 'disconnect', 'test', 'add-machine', 'select-machine'],
+  emits: ['back', 'connect', 'disconnect', 'test', 'add-machine', 'select-machine', 'toggle-collapse'],
   setup(props, { emit }) {
     const expandedGroups = ref([])
 
@@ -107,7 +109,9 @@ export default {
   display: flex;
   flex-direction: column;
   height: 100%;
-  padding: 12px 16px;
+  min-width: 0;
+  padding: 8px 10px;
+  box-sizing: border-box;
   background: var(--app-panel-bg);
   color: var(--app-text);
   overflow: hidden;
@@ -116,15 +120,26 @@ export default {
 .panel-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 12px;
+  gap: 2px;
+  margin-bottom: 8px;
+  flex-shrink: 0;
+  min-width: 0;
 }
 
 .panel-header h3 {
   margin: 0;
   flex: 1;
-  font-size: 14px;
+  min-width: 0;
+  font-size: 13px;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.panel-header :deep(.el-button) {
+  padding: 4px 6px;
+  font-size: 12px;
 }
 
 .empty-hint {
@@ -137,16 +152,28 @@ export default {
 .group-collapse {
   flex: 1;
   min-height: 0;
+  min-width: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   border: none;
+}
+
+.group-collapse :deep(.el-collapse-item__content) {
+  padding-bottom: 0;
+  overflow: hidden;
 }
 
 .group-collapse :deep(.el-collapse-item__header) {
   background: transparent;
   color: var(--app-text);
   border-bottom-color: var(--app-border);
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
+  height: 32px;
+  line-height: 32px;
+  min-height: 32px;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .group-collapse :deep(.el-collapse-item__wrap) {
@@ -157,19 +184,21 @@ export default {
 .machine-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  padding-bottom: 8px;
+  gap: 4px;
+  padding-bottom: 4px;
 }
 
 .machine-item {
   display: flex;
-  justify-content: space-between;
+  flex-direction: row;
   align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
+  gap: 6px;
+  padding: 4px 8px;
+  min-height: 32px;
   border: 1px solid var(--app-border);
-  border-radius: 8px;
+  border-radius: 6px;
   background: var(--app-card-bg);
+  min-width: 0;
 }
 
 .machine-item.active {
@@ -184,13 +213,9 @@ export default {
 }
 
 .machine-name {
-  font-weight: 600;
-  font-size: 13px;
-}
-
-.machine-meta {
-  font-size: 11px;
-  color: var(--app-text-muted);
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -198,7 +223,14 @@ export default {
 
 .machine-actions {
   display: flex;
-  gap: 4px;
+  gap: 2px;
   flex-shrink: 0;
+  align-items: center;
+}
+
+.machine-actions :deep(.el-button) {
+  padding: 2px 6px;
+  height: 24px;
+  font-size: 12px;
 }
 </style>

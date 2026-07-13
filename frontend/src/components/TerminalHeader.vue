@@ -1,6 +1,6 @@
 <template>
     <div class="terminal-header">
-        <h3>终端输出</h3>
+        <h3>{{ title }}</h3>
         <div class="terminal-actions">
             <div class="actions-left">
                 <div v-if="searchVisible" class="search-bar">
@@ -48,6 +48,7 @@ import { ref, watch, nextTick } from 'vue'
 export default {
     name: 'TerminalHeader',
     props: {
+        title: { type: String, default: '终端输出' },
         showBack: { type: Boolean, default: false },
         searchVisible: { type: Boolean, default: false },
         searchQuery: { type: String, default: '' },

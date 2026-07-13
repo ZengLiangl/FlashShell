@@ -1,6 +1,12 @@
 <template>
   <div class="app-menu-bar">
-    <el-menu mode="horizontal" :ellipsis="false" class="menu-inner">
+    <el-menu
+      :key="menuKey"
+      mode="horizontal"
+      :ellipsis="false"
+      class="menu-inner"
+      @select="onMenuSelect"
+    >
       <el-sub-menu index="file">
         <template #title>文件</template>
         <el-menu-item index="file-new" @click="onNewWindow">
@@ -60,7 +66,7 @@
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, onMounted, onUnmounted, nextTick } from 'vue'
 import { Check } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
@@ -78,6 +84,17 @@ export default {
   setup() {
     const configFiles = ref([])
     const currentConfig = ref('')
+    const menuKey = ref(0)
+
+    const clearMenuHighlight = () => {
+      nextTick(() => {
+        menuKey.value += 1
+      })
+    }
+
+    const onMenuSelect = () => {
+      clearMenuHighlight()
+    }
 
     const loadMenuData = async () => {
       try {
@@ -115,10 +132,12 @@ export default {
       App,
       configFiles,
       currentConfig,
+      menuKey,
       basename,
       onNewWindow,
       refreshConfigList,
       switchConfig,
+      onMenuSelect,
     }
   },
 }
@@ -148,6 +167,16 @@ export default {
 .menu-inner :deep(.el-sub-menu__title:hover) {
   background: var(--app-accent-bg);
   color: var(--app-accent-color);
+}
+
+.menu-inner :deep(.el-menu-item.is-active) {
+  color: var(--app-text);
+  background: transparent;
+}
+
+.menu-inner :deep(.el-sub-menu.is-active > .el-sub-menu__title) {
+  color: var(--app-text);
+  border-bottom-color: transparent;
 }
 
 .menu-shortcut {

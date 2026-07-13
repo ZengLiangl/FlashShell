@@ -1,5 +1,41 @@
 export namespace data {
 	
+	export class GlobalAccount {
+	    id: string;
+	    name: string;
+	    user: string;
+	    encrypted_password?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GlobalAccount(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.user = source["user"];
+	        this.encrypted_password = source["encrypted_password"];
+	    }
+	}
+	export class GlobalAccountDTO {
+	    id: string;
+	    name: string;
+	    user: string;
+	    password: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new GlobalAccountDTO(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.user = source["user"];
+	        this.password = source["password"];
+	    }
+	}
 	export class ThemeSettings {
 	    mode: string;
 	    terminalPreset: string;
@@ -35,6 +71,7 @@ export namespace data {
 	    lastOpenedFile: string;
 	    workPaths: Record<string, string>;
 	    machines?: define.Machine[];
+	    globalAccounts?: GlobalAccount[];
 	    logSettings: LogSettings;
 	    themeSettings: ThemeSettings;
 	
@@ -50,6 +87,7 @@ export namespace data {
 	        this.lastOpenedFile = source["lastOpenedFile"];
 	        this.workPaths = source["workPaths"];
 	        this.machines = this.convertValues(source["machines"], define.Machine);
+	        this.globalAccounts = this.convertValues(source["globalAccounts"], GlobalAccount);
 	        this.logSettings = this.convertValues(source["logSettings"], LogSettings);
 	        this.themeSettings = this.convertValues(source["themeSettings"], ThemeSettings);
 	    }
@@ -113,6 +151,23 @@ export namespace data {
 	        this.lastOpenedFile = source["lastOpenedFile"];
 	        this.theme = source["theme"];
 	        this.terminalPreset = source["terminalPreset"];
+	    }
+	}
+	
+	export class XshellImportResult {
+	    imported: number;
+	    skipped: number;
+	    errors: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new XshellImportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.imported = source["imported"];
+	        this.skipped = source["skipped"];
+	        this.errors = source["errors"];
 	    }
 	}
 
@@ -195,6 +250,7 @@ export namespace define {
 	    }
 	}
 	export class Machine {
+	    id: string;
 	    encrypted_data?: string;
 	    name: string;
 	    group?: string;
@@ -206,6 +262,7 @@ export namespace define {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
 	        this.encrypted_data = source["encrypted_data"];
 	        this.name = source["name"];
 	        this.group = source["group"];

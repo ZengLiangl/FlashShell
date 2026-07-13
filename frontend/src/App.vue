@@ -154,9 +154,9 @@ export default {
     };
 
     // 左侧面板宽度控制
-    const leftPanelWidth = ref(400);
-    const minPanelWidth = 200;
-    const maxPanelWidth = 800;
+    const leftPanelWidth = ref(320);
+    const minPanelWidth = 180;
+    const maxPanelWidth = 640;
     const isResizing = ref(false);
 
     // 展开状态管理
@@ -722,7 +722,7 @@ export default {
         return;
       }
 
-      // 终端搜索 (Cmd+F 或 Ctrl+F) — 仅任务模式
+      // 终端搜索 (Cmd+F 或 Ctrl+F) — 任务模式；Shell 模式由 ShellWorkspace 处理
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
         e.preventDefault();
         if (!shellMode.value) {
@@ -1171,6 +1171,7 @@ export default {
           "output:line",
           "output:clear",
           "execution:status",
+          "shell:data",
           "shell:line",
           "shell:clear",
           "shell:status",

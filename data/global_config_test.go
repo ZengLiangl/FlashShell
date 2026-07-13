@@ -19,7 +19,8 @@ workPaths:
   ACC-CLOUD: D:\IdeaProjects\acc-cloud
   HOME: ~
 machines:
-  - name: jz
+  - id: machine-jz
+    name: jz
     key_file: ~/.ssh/id_rsa
     encrypted_data: "test-encrypted"
 `
@@ -97,7 +98,8 @@ lastOpenedFile: ` + businessConfigPath + `
 workPaths:
   HOME: ~
 machines:
-  - name: test-server
+  - id: machine-test-server
+    name: test-server
     key_file: ~/.ssh/id_rsa
 `
 	if err := os.WriteFile(globalConfigPath, []byte(globalYAML), 0644); err != nil {

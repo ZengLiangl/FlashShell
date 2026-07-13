@@ -26,6 +26,7 @@
           :machine-name="session.machineName"
           :connected="session.connected"
           :active="activeTab === session.machineName"
+          :search-query="searchQuery"
           :class="{ 'is-active': activeTab === session.machineName }"
         />
       </div>
@@ -43,6 +44,7 @@ export default {
   props: {
     sessions: { type: Array, default: () => [] },
     activeMachine: { type: String, default: '' },
+    searchQuery: { type: String, default: '' },
   },
   emits: ['update:activeMachine', 'disconnect', 'clear'],
   setup(props, { emit, expose }) {
@@ -72,7 +74,14 @@ export default {
       emit('clear', activeTab.value)
     }
 
-    expose({ clearActive })
+    const getActiveTerminal = () => terminalRefs.value[activeTab.value]
+
+    const findNext = () => getActiveTerminal()?.findNext?.() ?? false
+    const findPrevious = () => getActiveTerminal()?.findPrevious?.() ?? false
+    const clearSearch = () => getActiveTerminal()?.clearSearch?.()
+    const fitActive = () => getActiveTerminal()?.fitAndResize?.()
+
+    expose({ clearActive, findNext, findPrevious, clearSearch, fitActive })
 
     return { activeTab, setTerminalRef, onTabRemove, clearActive }
   },

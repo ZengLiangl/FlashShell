@@ -138,6 +138,7 @@ func TestApp_MachineManagement(t *testing.T) {
 		Name:    "测试机器",
 		KeyFile: "~/.ssh/id_rsa",
 	}
+	newMachine.EnsureID()
 
 	// 设置敏感数据
 	sensitiveData := &define.SensitiveData{
@@ -181,12 +182,12 @@ func TestApp_MachineManagement(t *testing.T) {
 		t.Fatalf("更新敏感数据失败: %v", err)
 	}
 
-	if err := app.UpdateMachine("测试机器", newMachine); err != nil {
+	if err := app.UpdateMachine(newMachine.ID, newMachine); err != nil {
 		t.Fatalf("更新机器失败: %v", err)
 	}
 
 	// 测试删除机器
-	if err := app.DeleteMachine("测试机器"); err != nil {
+	if err := app.DeleteMachine(newMachine.ID); err != nil {
 		t.Fatalf("删除机器失败: %v", err)
 	}
 
