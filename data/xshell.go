@@ -16,13 +16,6 @@ import (
 
 const defaultXshellPassword = "123456"
 
-// XshellImportResult Xshell 导入结果
-type XshellImportResult struct {
-	Imported int      `json:"imported"`
-	Skipped  int      `json:"skipped"`
-	Errors   []string `json:"errors"`
-}
-
 // ParsedXshellSession 解析后的 Xshell 会话
 type ParsedXshellSession struct {
 	Name string
@@ -103,39 +96,33 @@ func ParseXshellContent(data []byte) (*ParsedXshellSession, error) {
 	}, nil
 }
 
-// CollectXshellFiles 收集目录或单个文件中的 .xsh 路径
-func CollectXshellFiles(path string, isDirectory bool) ([]string, error) {
+// CollectXshellFiles 收集目录或路径列表中的 .xsh 文件
+func CollectXshellFiles(paths []string) ([]string, error) {
+	return CollectFilesFromPaths(paths, isXshellFile)
+}
+
+// CollectXshellFilesLegacy 兼容旧签名
+func CollectXshellFilesLegacy(path string, isDirectory bool) ([]string, error) {
 	if isDirectory {
-		entries, err := os.ReadDir(path)
-		if err != nil {
-			return nil, err
-		}
-		files := make([]string, 0)
-		for _, entry := range entries {
-			if entry.IsDir() {
-				continue
-			}
-			if strings.EqualFold(filepath.Ext(entry.Name()), ".xsh") {
-				files = append(files, filepath.Join(path, entry.Name()))
-			}
-		}
-		return files, nil
+		return CollectFilesFromPaths([]string{path}, isXshellFile)
 	}
-	if !strings.EqualFold(filepath.Ext(path), ".xsh") {
-		return nil, fmt.Errorf("不是 .xsh 文件: %s", path)
-	}
-	return []string{path}, nil
+	return CollectFilesFromPaths([]string{path}, isXshellFile)
 }
 
 // ImportXshellFiles 批量导入 Xshell 会话到全局机器配置
-func (gcm *GlobalConfigManager) ImportXshellFiles(paths []string, accountID string) (*XshellImportResult, error) {
+func (gcm *GlobalConfigManager) ImportXshellFiles(paths []string, accountID string) (*MachineImportResult, error) {
 	if gcm.config == nil {
 		if _, err := gcm.LoadGlobalConfig(); err != nil {
 			return nil, err
 		}
 	}
 
-	result := &XshellImportResult{}
+	files, err := CollectXshellFiles(paths)
+	if err != nil {
+		return nil, err
+	}
+
+	result := &MachineImportResult{}
 	accountUser, accountPassword := "", defaultXshellPassword
 	if accountID != "" {
 		user, password, err := gcm.GetGlobalAccountCredentials(accountID)
@@ -145,7 +132,7 @@ func (gcm *GlobalConfigManager) ImportXshellFiles(paths []string, accountID stri
 		accountUser, accountPassword = user, password
 	}
 
-	for _, path := range paths {
+	for _, path := range files {
 		session, err := ParseXshellFile(path)
 		if err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", filepath.Base(path), err))

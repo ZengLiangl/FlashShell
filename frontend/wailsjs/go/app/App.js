@@ -150,12 +150,20 @@ export function GetWorkPaths() {
   return window['go']['app']['App']['GetWorkPaths']();
 }
 
+export function ImportFinalShellPick(arg1) {
+  return window['go']['app']['App']['ImportFinalShellPick'](arg1);
+}
+
 export function ImportXshellFromFile(arg1, arg2) {
   return window['go']['app']['App']['ImportXshellFromFile'](arg1, arg2);
 }
 
 export function ImportXshellFromFolder(arg1, arg2) {
   return window['go']['app']['App']['ImportXshellFromFolder'](arg1, arg2);
+}
+
+export function ImportXshellPick(arg1) {
+  return window['go']['app']['App']['ImportXshellPick'](arg1);
 }
 
 export function NewWindow() {

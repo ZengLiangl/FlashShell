@@ -9,8 +9,7 @@
                             v-model="importAccountId"
                             clearable
                             placeholder="导入时使用全局帐号(可选)"
-                            style="width: 150px"
-                            size="small"
+                            class="import-account-select"
                         >
                             <el-option
                                 v-for="account in globalAccounts"
@@ -24,8 +23,8 @@
                             添加机器
                             <template #dropdown>
                                 <el-dropdown-menu>
-                                    <el-dropdown-item command="import-file">导入 Xshell 文件</el-dropdown-item>
-                                    <el-dropdown-item command="import-folder">导入 Xshell 文件夹</el-dropdown-item>
+                                    <el-dropdown-item command="import-xshell">导入 Xshell</el-dropdown-item>
+                                    <el-dropdown-item command="import-finalshell">导入 FinalShell</el-dropdown-item>
                                 </el-dropdown-menu>
                             </template>
                         </el-dropdown>
@@ -121,7 +120,19 @@
 <script>
 import { ref, reactive, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import * as App from '../../wailsjs/go/app/App'
+import {
+    GetMachines,
+    GetGlobalAccounts,
+    GetMachineSensitiveData,
+    UpdateMachine,
+    SetMachineSensitiveData,
+    CreateMachine,
+    DeleteMachine,
+    TestMachineConnection,
+    SelectKeyFile,
+    ImportXshellPick,
+    ImportFinalShellPick,
+} from '../../wailsjs/go/app/App'
 
 export default {
     name: 'MachineConfigDialog',
@@ -174,7 +185,7 @@ export default {
         const loadMachines = async () => {
             try {
                 machinesLoading.value = true
-                const machinesData = await App.GetMachines()
+                const machinesData = await GetMachines()
                 machines.value = machinesData || []
             } catch (error) {
                 console.error('加载机器配置失败:', error)
@@ -186,7 +197,7 @@ export default {
 
         const loadGlobalAccounts = async () => {
             try {
-                globalAccounts.value = await App.GetGlobalAccounts() || []
+                globalAccounts.value = await GetGlobalAccounts() || []
             } catch {
                 globalAccounts.value = []
             }
@@ -214,7 +225,7 @@ export default {
             machineForm.group = machine.group || ''
             machineForm.key_file = machine.key_file || ''
             try {
-                const sensitiveData = await App.GetMachineSensitiveData(machine.id)
+                const sensitiveData = await GetMachineSensitiveData(machine.id)
                 if (sensitiveData) {
                     machineForm.host = sensitiveData.host || ''
                     machineForm.port = sensitiveData.port || 22
@@ -256,11 +267,11 @@ export default {
                 }
                 if (editingMachine.value) {
                     machineData.id = editingMachine.value.id
-                    await App.UpdateMachine(editingMachine.value.id, machineData)
-                    await App.SetMachineSensitiveData(editingMachine.value.id, sensitiveData)
+                    await UpdateMachine(editingMachine.value.id, machineData)
+                    await SetMachineSensitiveData(editingMachine.value.id, sensitiveData)
                     ElMessage.success('机器配置更新成功')
                 } else {
-                    await App.CreateMachine(machineData, sensitiveData)
+                    await CreateMachine(machineData, sensitiveData)
                     ElMessage.success('机器配置添加成功')
                 }
                 machineEditVisible.value = false
@@ -276,7 +287,7 @@ export default {
         const deleteMachine = async (machine) => {
             try {
                 await ElMessageBox.confirm(`确定删除机器「${machine.name}」吗？`, '确认删除', { type: 'warning' })
-                await App.DeleteMachine(machine.id)
+                await DeleteMachine(machine.id)
                 ElMessage.success('机器配置删除成功')
                 await loadMachines()
             } catch (error) {
@@ -289,7 +300,7 @@ export default {
         const testConnection = async (machine) => {
             try {
                 machine.testing = true
-                await App.TestMachineConnection(machine.id)
+                await TestMachineConnection(machine.id)
                 ElMessage.success('连接测试成功')
             } catch (error) {
                 console.error('连接测试失败:', error)
@@ -301,7 +312,7 @@ export default {
 
         const selectKeyFile = async () => {
             try {
-                const filePath = await App.SelectKeyFile()
+                const filePath = await SelectKeyFile()
                 if (filePath) {
                     machineForm.key_file = filePath
                 }
@@ -316,11 +327,19 @@ export default {
             ElMessage.success(`导入完成：成功 ${result?.imported || 0}，跳过 ${result?.skipped || 0}${errors}`)
         }
 
-        const importXshellFile = async () => {
+        const ensureImportApi = (fn, label) => {
+            if (typeof fn !== 'function') {
+                ElMessage.error(`${label} 不可用，请停止后重新运行 wails dev`)
+                return false
+            }
+            return true
+        }
+
+        const importXshell = async () => {
+            if (!ensureImportApi(ImportXshellPick, 'Xshell 导入')) return
             try {
-                const filePath = await App.SelectXshellFile()
-                if (!filePath) return
-                const result = await App.ImportXshellFromFile(filePath, importAccountId.value || '')
+                const result = await ImportXshellPick(importAccountId.value || '')
+                if (!result) return
                 showImportResult(result)
                 await loadMachines()
             } catch (error) {
@@ -328,11 +347,11 @@ export default {
             }
         }
 
-        const importXshellFolder = async () => {
+        const importFinalShell = async () => {
+            if (!ensureImportApi(ImportFinalShellPick, 'FinalShell 导入')) return
             try {
-                const dirPath = await App.SelectXshellFolder()
-                if (!dirPath) return
-                const result = await App.ImportXshellFromFolder(dirPath, importAccountId.value || '')
+                const result = await ImportFinalShellPick(importAccountId.value || '')
+                if (!result) return
                 showImportResult(result)
                 await loadMachines()
             } catch (error) {
@@ -341,8 +360,8 @@ export default {
         }
 
         const handleAddCommand = (command) => {
-            if (command === 'import-folder') importXshellFolder()
-            else if (command === 'import-file') importXshellFile()
+            if (command === 'import-finalshell') importFinalShell()
+            else if (command === 'import-xshell') importXshell()
         }
 
         return {
@@ -382,7 +401,16 @@ export default {
 
 .header-actions {
     display: flex;
+    align-items: center;
     gap: 8px;
+}
+
+.import-account-select {
+    width: 220px;
+}
+
+.import-account-select :deep(.el-select__wrapper) {
+    min-height: 32px;
 }
 
 .key-file-input {

@@ -78,9 +78,13 @@ export function GetThemeSettings():Promise<data.ThemeSettings>;
 
 export function GetWorkPaths():Promise<Record<string, string>>;
 
-export function ImportXshellFromFile(arg1:string,arg2:string):Promise<data.XshellImportResult>;
+export function ImportFinalShellPick(arg1:string):Promise<data.MachineImportResult>;
 
-export function ImportXshellFromFolder(arg1:string,arg2:string):Promise<data.XshellImportResult>;
+export function ImportXshellFromFile(arg1:string,arg2:string):Promise<data.MachineImportResult>;
+
+export function ImportXshellFromFolder(arg1:string,arg2:string):Promise<data.MachineImportResult>;
+
+export function ImportXshellPick(arg1:string):Promise<data.MachineImportResult>;
 
 export function NewWindow():Promise<void>;
 

@@ -135,6 +135,22 @@ export namespace data {
 	    }
 	}
 	
+	export class MachineImportResult {
+	    imported: number;
+	    skipped: number;
+	    errors: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new MachineImportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.imported = source["imported"];
+	        this.skipped = source["skipped"];
+	        this.errors = source["errors"];
+	    }
+	}
 	export class SessionState {
 	    sessionId: string;
 	    lastOpenedFile: string;
@@ -151,23 +167,6 @@ export namespace data {
 	        this.lastOpenedFile = source["lastOpenedFile"];
 	        this.theme = source["theme"];
 	        this.terminalPreset = source["terminalPreset"];
-	    }
-	}
-	
-	export class XshellImportResult {
-	    imported: number;
-	    skipped: number;
-	    errors: string[];
-	
-	    static createFrom(source: any = {}) {
-	        return new XshellImportResult(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.imported = source["imported"];
-	        this.skipped = source["skipped"];
-	        this.errors = source["errors"];
 	    }
 	}
 

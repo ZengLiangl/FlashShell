@@ -548,14 +548,13 @@ func (a *App) SelectKeyFile() (string, error) {
 
 // SelectXshellFile 选择单个 Xshell 会话文件
 func (a *App) SelectXshellFile() (string, error) {
-	filePath, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
-		Title:   "选择 Xshell 会话文件",
-		Filters: []wailsRuntime.FileFilter{{DisplayName: "Xshell 会话 (*.xsh)", Pattern: "*.xsh"}},
+	paths, err := a.pickImportSources("选择 Xshell 文件或文件夹", []wailsRuntime.FileFilter{
+		{DisplayName: "Xshell 会话 (*.xsh)", Pattern: "*.xsh"},
 	})
-	if err != nil {
-		return "", fmt.Errorf("选择文件失败: %w", err)
+	if err != nil || len(paths) == 0 {
+		return "", err
 	}
-	return filePath, nil
+	return paths[0], nil
 }
 
 // SelectXshellFolder 选择 Xshell 会话文件夹
@@ -569,20 +568,72 @@ func (a *App) SelectXshellFolder() (string, error) {
 	return dirPath, nil
 }
 
-// ImportXshellFromFile 从单个 .xsh 文件导入
-func (a *App) ImportXshellFromFile(filePath, accountID string) (*data.XshellImportResult, error) {
+func (a *App) pickImportSources(title string, filters []wailsRuntime.FileFilter) ([]string, error) {
+	files, err := wailsRuntime.OpenMultipleFilesDialog(a.ctx, wailsRuntime.OpenDialogOptions{
+		Title:   title,
+		Filters: filters,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("选择文件失败: %w", err)
+	}
+	if len(files) > 0 {
+		return files, nil
+	}
+
+	dirPath, err := wailsRuntime.OpenDirectoryDialog(a.ctx, wailsRuntime.OpenDialogOptions{
+		Title: title,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("选择文件夹失败: %w", err)
+	}
+	if dirPath == "" {
+		return nil, nil
+	}
+	return []string{dirPath}, nil
+}
+
+// ImportXshellPick 选择并导入 Xshell 配置（支持多文件或文件夹）
+func (a *App) ImportXshellPick(accountID string) (*data.MachineImportResult, error) {
+	paths, err := a.pickImportSources("选择 Xshell 文件或文件夹", []wailsRuntime.FileFilter{
+		{DisplayName: "Xshell 会话 (*.xsh)", Pattern: "*.xsh"},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(paths) == 0 {
+		return nil, nil
+	}
+	return a.configManager.ImportXshell(paths, accountID)
+}
+
+// ImportFinalShellPick 选择并导入 FinalShell 配置（支持多文件或文件夹）
+func (a *App) ImportFinalShellPick(accountID string) (*data.MachineImportResult, error) {
+	paths, err := a.pickImportSources("选择 FinalShell 文件或文件夹", []wailsRuntime.FileFilter{
+		{DisplayName: "FinalShell (*_connect_config.json)", Pattern: "*_connect_config.json"},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if len(paths) == 0 {
+		return nil, nil
+	}
+	return a.configManager.ImportFinalShell(paths, accountID)
+}
+
+// ImportXshellFromFile 从路径导入 Xshell
+func (a *App) ImportXshellFromFile(filePath, accountID string) (*data.MachineImportResult, error) {
 	if filePath == "" {
 		return nil, fmt.Errorf("未选择文件")
 	}
-	return a.configManager.ImportXshell(filePath, false, accountID)
+	return a.configManager.ImportXshell([]string{filePath}, accountID)
 }
 
-// ImportXshellFromFolder 从文件夹批量导入 .xsh
-func (a *App) ImportXshellFromFolder(dirPath, accountID string) (*data.XshellImportResult, error) {
+// ImportXshellFromFolder 从文件夹导入 Xshell
+func (a *App) ImportXshellFromFolder(dirPath, accountID string) (*data.MachineImportResult, error) {
 	if dirPath == "" {
 		return nil, fmt.Errorf("未选择文件夹")
 	}
-	return a.configManager.ImportXshell(dirPath, true, accountID)
+	return a.configManager.ImportXshell([]string{dirPath}, accountID)
 }
 
 // GetGlobalAccounts 获取全局 SSH 帐号

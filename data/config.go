@@ -189,18 +189,18 @@ func (cm *ConfigManager) SaveGlobalAccounts(accounts []GlobalAccount) error {
 	return cm.globalConfigManager.SaveGlobalAccounts(accounts)
 }
 
-func (cm *ConfigManager) ImportXshell(path string, isDirectory bool, accountID string) (*XshellImportResult, error) {
+func (cm *ConfigManager) ImportXshell(paths []string, accountID string) (*MachineImportResult, error) {
 	if cm.globalConfigManager == nil {
 		return nil, fmt.Errorf("全局配置管理器未初始化")
 	}
-	files, err := CollectXshellFiles(path, isDirectory)
-	if err != nil {
-		return nil, err
+	return cm.globalConfigManager.ImportXshellFiles(paths, accountID)
+}
+
+func (cm *ConfigManager) ImportFinalShell(paths []string, accountID string) (*MachineImportResult, error) {
+	if cm.globalConfigManager == nil {
+		return nil, fmt.Errorf("全局配置管理器未初始化")
 	}
-	if len(files) == 0 {
-		return nil, fmt.Errorf("未找到 .xsh 文件")
-	}
-	return cm.globalConfigManager.ImportXshellFiles(files, accountID)
+	return cm.globalConfigManager.ImportFinalShellFiles(paths, accountID)
 }
 
 // processPathVariables 处理路径变量替换
