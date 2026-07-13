@@ -4,38 +4,47 @@
     <section class="home-section">
       <div class="section-header">
         <div class="section-title">
-          <el-icon class="section-icon task-icon"><Folder /></el-icon>
-          <h3>任务模式</h3>
-          <span class="section-desc">执行预设的子项目与命令流程</span>
+          <el-icon class="section-icon task-icon">
+            <Folder />
+          </el-icon>
+          <div class="section-text">
+            <h3>任务模式</h3>
+            <span class="section-desc">执行预设的子项目与命令流程</span>
+          </div>
         </div>
         <div class="header-actions">
-          <el-button size="small" @click="$emit('open-system-settings')">系统设置</el-button>
           <el-button size="small" @click="$emit('open-execution-history')">执行历史</el-button>
           <el-button size="small" @click="handleRefresh">
-            <el-icon><Refresh /></el-icon>
+            <el-icon>
+              <Refresh />
+            </el-icon>
           </el-button>
         </div>
       </div>
 
-      <div v-if="projects.length === 0" class="empty-hint">暂无项目配置</div>
-      <div v-else class="card-grid">
-        <div
-          v-for="project in projects"
-          :key="project.name"
-          class="entry-card task-card"
-          @click="$emit('select-project', project)"
-        >
-          <div class="card-header">
-            <div class="avatar-icon task-avatar">
-              <el-icon><Folder /></el-icon>
+      <div class="mode-panel task-panel">
+        <div v-if="projects.length === 0" class="empty-hint">暂无项目配置</div>
+        <div v-else class="card-grid">
+          <div
+            v-for="project in projects"
+            :key="project.name"
+            class="entry-card task-card"
+            @click="$emit('select-project', project)"
+          >
+            <div class="card-header">
+              <div class="avatar-icon task-avatar">
+                <el-icon>
+                  <Folder />
+                </el-icon>
+              </div>
+              <div class="header-meta">
+                <div class="card-name">{{ project.name }}</div>
+                <div class="card-desc">{{ project.description || '暂无描述' }}</div>
+              </div>
             </div>
-            <div class="header-meta">
-              <div class="card-name">{{ project.name }}</div>
-              <div class="card-desc">{{ project.description }}</div>
+            <div class="card-footer">
+              <el-tag size="small" type="info" effect="plain">{{ (project.subprojects || []).length }} 子项目</el-tag>
             </div>
-          </div>
-          <div class="card-footer">
-            <el-tag size="small" type="info" effect="plain">{{ (project.subprojects || []).length }} 子项目</el-tag>
           </div>
         </div>
       </div>
@@ -45,9 +54,13 @@
     <section class="home-section shell-section">
       <div class="section-header">
         <div class="section-title">
-          <el-icon class="section-icon shell-icon"><Monitor /></el-icon>
-          <h3>Shell 模式</h3>
-          <span class="section-desc">SSH 连接机器，交互式执行命令</span>
+          <el-icon class="section-icon shell-icon">
+            <Monitor />
+          </el-icon>
+          <div class="section-text">
+            <h3>Shell 模式</h3>
+            <span class="section-desc">SSH 连接机器，交互式执行命令</span>
+          </div>
           <el-tag v-if="connectedCount > 0" size="small" type="success" effect="plain">
             {{ connectedCount }} 个会话进行中
           </el-tag>
@@ -57,11 +70,13 @@
         </el-button>
       </div>
 
-      <div class="shell-panel">
+      <div class="mode-panel shell-panel">
         <div class="shell-panel-header">
           <div class="shell-panel-title" @click="$emit('open-shell')">
             <div class="avatar-icon shell-avatar">
-              <el-icon><Monitor /></el-icon>
+              <el-icon>
+                <Monitor />
+              </el-icon>
             </div>
             <div>
               <div class="card-name">远程 Shell</div>
@@ -70,10 +85,14 @@
           </div>
           <div class="shell-panel-actions">
             <el-button size="small" text type="primary" @click="$emit('add-machine')">
-              <el-icon><Plus /></el-icon>
+              <el-icon>
+                <Plus />
+              </el-icon>
               添加机器
             </el-button>
-            <el-icon class="shell-enter-icon" @click="$emit('open-shell')"><ArrowRight /></el-icon>
+            <el-icon class="shell-enter-icon" @click="$emit('open-shell')">
+              <ArrowRight />
+            </el-icon>
           </div>
         </div>
 
@@ -90,7 +109,9 @@
               >
                 <div class="card-header">
                   <div class="avatar-icon machine-avatar">
-                    <el-icon><Connection /></el-icon>
+                    <el-icon>
+                      <Connection />
+                    </el-icon>
                   </div>
                   <div class="header-meta">
                     <div class="card-name">{{ machine.name }}</div>
@@ -156,7 +177,7 @@ export default {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 20px 32px 32px;
+  padding: 24px 28px 36px;
   background: var(--app-bg);
 }
 
@@ -165,15 +186,23 @@ export default {
 }
 
 .shell-section {
-  padding-top: 8px;
-  border-top: 1px solid var(--app-border);
+  margin-bottom: 0;
 }
 
-.shell-panel {
-  border: 1px solid rgba(103, 194, 58, 0.45);
+.mode-panel {
+  border: 1px solid var(--app-border);
   border-radius: 12px;
   background: var(--app-panel-bg);
   overflow: hidden;
+}
+
+.task-panel {
+  padding: 16px;
+  border-color: rgba(64, 158, 255, 0.35);
+}
+
+.shell-panel {
+  border-color: rgba(103, 194, 58, 0.45);
 }
 
 .shell-panel-header {
@@ -233,8 +262,9 @@ export default {
 
 .group-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 200px));
-  gap: 12px 16px;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  justify-content: start;
+  gap: 12px;
 }
 
 .compact-card {
@@ -246,13 +276,22 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 16px;
+  margin-bottom: 14px;
+  gap: 12px;
 }
 
 .section-title {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+  min-width: 0;
+}
+
+.section-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .section-title h3 {
@@ -260,16 +299,18 @@ export default {
   font-size: 16px;
   font-weight: 600;
   color: var(--app-text);
+  line-height: 1.3;
 }
 
 .section-desc {
   font-size: 12px;
   color: var(--app-text-muted);
-  margin-left: 4px;
+  line-height: 1.3;
 }
 
 .section-icon {
-  font-size: 18px;
+  font-size: 20px;
+  flex-shrink: 0;
 }
 
 .task-icon {
@@ -283,29 +324,30 @@ export default {
 .header-actions {
   display: flex;
   gap: 8px;
+  flex-shrink: 0;
 }
 
 .empty-hint {
   text-align: center;
   color: var(--app-text-muted);
-  padding: 24px;
+  padding: 28px 16px;
 }
 
 .card-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 220px));
-  justify-content: center;
-  gap: 16px 24px;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  justify-content: start;
+  gap: 14px;
 }
 
 .entry-card {
-  padding: 12px;
+  padding: 14px;
   background: var(--app-card-bg);
   border-radius: 10px;
   border: 1px solid var(--app-card-border);
   cursor: pointer;
-  transition: all 0.2s ease;
-  aspect-ratio: 1 / 1;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+  min-height: 120px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
@@ -376,6 +418,6 @@ export default {
 .card-footer {
   display: flex;
   gap: 6px;
-  margin-top: 10px;
+  margin-top: 12px;
 }
 </style>

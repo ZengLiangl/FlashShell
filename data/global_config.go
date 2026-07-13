@@ -19,8 +19,10 @@ type LogSettings struct {
 
 // ThemeSettings 主题设置
 type ThemeSettings struct {
-	Mode           string `yaml:"mode" json:"mode"`                     // light, dark, system
-	TerminalPreset string `yaml:"terminalPreset" json:"terminalPreset"` // classic, monokai, solarized
+	Mode            string  `yaml:"mode" json:"mode"`                         // light, dark, system
+	TerminalPreset  string  `yaml:"terminalPreset" json:"terminalPreset"`     // classic, monokai, solarized
+	ShellFontSize   int     `yaml:"shellFontSize" json:"shellFontSize"`       // Shell 终端字号，默认 13
+	ShellLineHeight float64 `yaml:"shellLineHeight" json:"shellLineHeight"`   // Shell 终端行高倍数，默认 1.2
 }
 
 // GlobalConfig 全局配置结构
@@ -236,8 +238,10 @@ func (gcm *GlobalConfigManager) createDefaultGlobalConfig() error {
 			Path:    "~/.cmd-config/logs",
 		},
 		ThemeSettings: ThemeSettings{
-			Mode:           "light",
-			TerminalPreset: "classic",
+			Mode:            "light",
+			TerminalPreset:  "classic",
+			ShellFontSize:   13,
+			ShellLineHeight: 1.2,
 		},
 	}
 

@@ -25,11 +25,14 @@
           环境变量
           <span class="menu-shortcut">Ctrl+E</span>
         </el-menu-item>
-        <el-menu-item divided index="settings-config-editor" @click="App.OpenConfigEditor()">
+        <!-- <el-menu-item divided index="settings-config-editor" @click="App.OpenConfigEditor()">
           业务配置编辑
           <span class="menu-shortcut">Ctrl+,</span>
+        </el-menu-item> -->
+        <el-menu-item divided index="settings-system" @click="App.OpenSystemSettings()">
+          系统设置
+          <span class="menu-shortcut">Ctrl+,</span>
         </el-menu-item>
-        <el-menu-item index="settings-system" @click="App.OpenSystemSettings()">系统设置</el-menu-item>
         <el-menu-item index="settings-history" @click="App.OpenExecutionHistory()">执行历史</el-menu-item>
       </el-sub-menu>
 
@@ -148,11 +151,12 @@ export default {
   flex-shrink: 0;
   border-bottom: 1px solid var(--app-border);
   background: var(--app-panel-bg);
+  color: var(--app-text);
 }
 
 .menu-inner {
-  border-bottom: none;
-  background: transparent;
+  border-bottom: none !important;
+  background: var(--app-panel-bg) !important;
   height: 36px;
 }
 
@@ -161,12 +165,25 @@ export default {
   height: 36px;
   line-height: 36px;
   color: var(--app-text);
+  background: transparent;
+}
+
+.menu-inner :deep(.el-sub-menu .el-menu),
+.menu-inner :deep(.el-menu--popup) {
+  background: var(--app-panel-bg);
+  border: 1px solid var(--app-border);
+}
+
+.menu-inner :deep(.el-menu--popup .el-menu-item) {
+  color: var(--app-text);
+  background: var(--app-panel-bg);
 }
 
 .menu-inner :deep(.el-menu-item:hover),
-.menu-inner :deep(.el-sub-menu__title:hover) {
-  background: var(--app-accent-bg);
-  color: var(--app-accent-color);
+.menu-inner :deep(.el-sub-menu__title:hover),
+.menu-inner :deep(.el-menu--popup .el-menu-item:hover) {
+  background: var(--app-accent-bg) !important;
+  color: var(--app-accent-color) !important;
 }
 
 .menu-inner :deep(.el-menu-item.is-active) {

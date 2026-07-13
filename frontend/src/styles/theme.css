@@ -133,4 +133,15 @@ html.dark .app-container {
   --el-menu-hover-text-color: var(--app-accent-color);
   --el-menu-hover-bg-color: var(--app-accent-bg);
   --el-menu-active-color: var(--app-accent-color);
+  --el-bg-color-overlay: var(--app-panel-bg);
+  --el-border-color-light: var(--app-border);
+  --el-text-color-primary: var(--app-text);
+  --el-fill-color-blank: var(--app-panel-bg);
+}
+
+html.dark .app-menu-bar,
+html.dark .app-menu-bar .menu-inner {
+  background: var(--app-panel-bg);
+  color: var(--app-text);
+  border-bottom-color: var(--app-border);
 }

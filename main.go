@@ -15,6 +15,8 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/mac"
+	"github.com/wailsapp/wails/v2/pkg/options/windows"
 )
 
 //go:embed all:frontend/dist
@@ -71,6 +73,14 @@ func main() {
 		windowsName = fmt.Sprintf("%s [%s]", windowsName, (*sessionID)[:8])
 	}
 
+	// 按主题初始化窗口背景，避免标题栏/边缘与主题不一致
+	bg := &options.RGBA{R: 255, G: 255, B: 255, A: 255}
+	macAppearance := mac.NSAppearanceNameAqua
+	if err == nil && globalConfig != nil && globalConfig.ThemeSettings.Mode == "dark" {
+		bg = &options.RGBA{R: 20, G: 20, B: 20, A: 255}
+		macAppearance = mac.NSAppearanceNameDarkAqua
+	}
+
 	// Create application with options
 	err = wails.Run(&options.App{
 		Title:  windowsName,
@@ -79,7 +89,7 @@ func main() {
 		AssetServer: &assetserver.Options{
 			Assets: assets,
 		},
-		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 1},
+		BackgroundColour: bg,
 		OnStartup:        appInstance.Startup,
 		OnDomReady:       appInstance.DomReady,
 		OnBeforeClose:    appInstance.BeforeClose,
@@ -88,6 +98,21 @@ func main() {
 		MinWidth:         1200,
 		MinHeight:        768,
 		Menu:             nil,
+		Mac: &mac.Options{
+			TitleBar:   mac.TitleBarDefault(),
+			Appearance: macAppearance,
+		},
+		Windows: &windows.Options{
+			Theme: func() windows.Theme {
+				if err == nil && globalConfig != nil && globalConfig.ThemeSettings.Mode == "dark" {
+					return windows.Dark
+				}
+				if err == nil && globalConfig != nil && globalConfig.ThemeSettings.Mode == "system" {
+					return windows.SystemDefault
+				}
+				return windows.Light
+			}(),
+		},
 		// 绑定后端结构体到前端
 		Bind: []interface{}{
 			appInstance,

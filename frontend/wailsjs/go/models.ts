@@ -39,6 +39,8 @@ export namespace data {
 	export class ThemeSettings {
 	    mode: string;
 	    terminalPreset: string;
+	    shellFontSize: number;
+	    shellLineHeight: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new ThemeSettings(source);
@@ -48,6 +50,8 @@ export namespace data {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.mode = source["mode"];
 	        this.terminalPreset = source["terminalPreset"];
+	        this.shellFontSize = source["shellFontSize"];
+	        this.shellLineHeight = source["shellLineHeight"];
 	    }
 	}
 	export class LogSettings {
@@ -390,6 +394,129 @@ export namespace define {
 	        this.password = source["password"];
 	    }
 	}
+	export class SftpEntry {
+	    name: string;
+	    path: string;
+	    isDir: boolean;
+	    size: number;
+	    mode: string;
+	    modTime: number;
+	    owner: string;
+	    group: string;
+	    type: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SftpEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.path = source["path"];
+	        this.isDir = source["isDir"];
+	        this.size = source["size"];
+	        this.mode = source["mode"];
+	        this.modTime = source["modTime"];
+	        this.owner = source["owner"];
+	        this.group = source["group"];
+	        this.type = source["type"];
+	    }
+	}
+	export class ShellHistoryRecord {
+	    machineId: string;
+	    machineName: string;
+	    host: string;
+	    port: number;
+	    user: string;
+	    lastConnectedAt: number;
+	    connectCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShellHistoryRecord(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.machineId = source["machineId"];
+	        this.machineName = source["machineName"];
+	        this.host = source["host"];
+	        this.port = source["port"];
+	        this.user = source["user"];
+	        this.lastConnectedAt = source["lastConnectedAt"];
+	        this.connectCount = source["connectCount"];
+	    }
+	}
+	export class ShellProcessStat {
+	    pid: string;
+	    user: string;
+	    cpu: number;
+	    mem: number;
+	    command: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShellProcessStat(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.pid = source["pid"];
+	        this.user = source["user"];
+	        this.cpu = source["cpu"];
+	        this.mem = source["mem"];
+	        this.command = source["command"];
+	    }
+	}
+	export class ShellMonitorSnapshot {
+	    machineName: string;
+	    host: string;
+	    uptimeSec: number;
+	    uptimeText: string;
+	    cpuPercent: number;
+	    memPercent: number;
+	    memUsed: string;
+	    memTotal: string;
+	    topMem: ShellProcessStat[];
+	    error?: string;
+	    updatedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShellMonitorSnapshot(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.machineName = source["machineName"];
+	        this.host = source["host"];
+	        this.uptimeSec = source["uptimeSec"];
+	        this.uptimeText = source["uptimeText"];
+	        this.cpuPercent = source["cpuPercent"];
+	        this.memPercent = source["memPercent"];
+	        this.memUsed = source["memUsed"];
+	        this.memTotal = source["memTotal"];
+	        this.topMem = this.convertValues(source["topMem"], ShellProcessStat);
+	        this.error = source["error"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class ShellStatus {
 	    connected: boolean;
 	    machineName: string;

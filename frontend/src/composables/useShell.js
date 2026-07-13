@@ -50,10 +50,24 @@ export function useShell() {
       ElMessage.warning('任务正在执行，请先停止')
       return false
     }
+    if (!machineName) return false
+
+    // 先同步一次，避免本地 sessions 过期误判
+    await syncSessions()
     if (isMachineConnected(machineName, sessions.value)) {
       activeMachine.value = machineName
       return true
     }
+
+    // 防止连点/并发重复 ConnectShell
+    if (connectingName.value === machineName) {
+      return false
+    }
+    if (connectingName.value) {
+      ElMessage.warning(`正在连接 ${connectingName.value}，请稍候`)
+      return false
+    }
+
     connectingName.value = machineName
     try {
       await App.ConnectShell(machineName)
@@ -62,6 +76,13 @@ export function useShell() {
       ElMessage.success(`已连接 ${machineName}`)
       return true
     } catch (error) {
+      const msg = String(error || '')
+      // 后端幂等/竞态：已连接视为成功，切到该会话
+      if (msg.includes('已连接')) {
+        activeMachine.value = machineName
+        await syncSessions()
+        return true
+      }
       ElMessage.error('连接失败: ' + error)
       return false
     } finally {

@@ -18,12 +18,20 @@ export function AddWorkPathWithEvent(arg1, arg2) {
   return window['go']['app']['App']['AddWorkPathWithEvent'](arg1, arg2);
 }
 
+export function ApplyShellCd(arg1, arg2, arg3) {
+  return window['go']['app']['App']['ApplyShellCd'](arg1, arg2, arg3);
+}
+
 export function ClearMachineSensitiveData(arg1) {
   return window['go']['app']['App']['ClearMachineSensitiveData'](arg1);
 }
 
 export function ClearOutput() {
   return window['go']['app']['App']['ClearOutput']();
+}
+
+export function ClearShellHistory() {
+  return window['go']['app']['App']['ClearShellHistory']();
 }
 
 export function ClearShellOutput(arg1) {
@@ -48,6 +56,10 @@ export function DeleteMachine(arg1) {
 
 export function DeleteMachineWithEvent(arg1) {
   return window['go']['app']['App']['DeleteMachineWithEvent'](arg1);
+}
+
+export function DeleteShellFile(arg1, arg2) {
+  return window['go']['app']['App']['DeleteShellFile'](arg1, arg2);
 }
 
 export function DeleteWorkPath(arg1) {
@@ -122,6 +134,22 @@ export function GetSessionInfo() {
   return window['go']['app']['App']['GetSessionInfo']();
 }
 
+export function GetShellHistory() {
+  return window['go']['app']['App']['GetShellHistory']();
+}
+
+export function GetShellMonitor(arg1) {
+  return window['go']['app']['App']['GetShellMonitor'](arg1);
+}
+
+export function GetShellRemoteHome(arg1) {
+  return window['go']['app']['App']['GetShellRemoteHome'](arg1);
+}
+
+export function GetShellRemotePwd(arg1) {
+  return window['go']['app']['App']['GetShellRemotePwd'](arg1);
+}
+
 export function GetShellSessions() {
   return window['go']['app']['App']['GetShellSessions']();
 }
@@ -164,6 +192,10 @@ export function ImportXshellFromFolder(arg1, arg2) {
 
 export function ImportXshellPick(arg1) {
   return window['go']['app']['App']['ImportXshellPick'](arg1);
+}
+
+export function ListShellFiles(arg1, arg2, arg3) {
+  return window['go']['app']['App']['ListShellFiles'](arg1, arg2, arg3);
 }
 
 export function NewWindow() {
@@ -218,8 +250,16 @@ export function RefreshConfigMenuWithEvent() {
   return window['go']['app']['App']['RefreshConfigMenuWithEvent']();
 }
 
+export function RemoveShellHistory(arg1, arg2) {
+  return window['go']['app']['App']['RemoveShellHistory'](arg1, arg2);
+}
+
 export function ResizeShell(arg1, arg2, arg3) {
   return window['go']['app']['App']['ResizeShell'](arg1, arg2, arg3);
+}
+
+export function ResolveShellPath(arg1, arg2, arg3) {
+  return window['go']['app']['App']['ResolveShellPath'](arg1, arg2, arg3);
 }
 
 export function SaveConfig(arg1) {
@@ -268,6 +308,10 @@ export function SendShellInterrupt(arg1) {
 
 export function SetMachineSensitiveData(arg1, arg2) {
   return window['go']['app']['App']['SetMachineSensitiveData'](arg1, arg2);
+}
+
+export function ShellDirExists(arg1, arg2) {
+  return window['go']['app']['App']['ShellDirExists'](arg1, arg2);
 }
 
 export function StopAllCommands() {

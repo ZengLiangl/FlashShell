@@ -12,9 +12,13 @@ export function AddWorkPath(arg1:string,arg2:string):Promise<void>;
 
 export function AddWorkPathWithEvent(arg1:string,arg2:string):Promise<void>;
 
+export function ApplyShellCd(arg1:string,arg2:string,arg3:string):Promise<string>;
+
 export function ClearMachineSensitiveData(arg1:string):Promise<void>;
 
 export function ClearOutput():Promise<void>;
+
+export function ClearShellHistory():Promise<void>;
 
 export function ClearShellOutput(arg1:string):Promise<void>;
 
@@ -27,6 +31,8 @@ export function CreateMachine(arg1:define.Machine,arg2:define.SensitiveData):Pro
 export function DeleteMachine(arg1:string):Promise<void>;
 
 export function DeleteMachineWithEvent(arg1:string):Promise<void>;
+
+export function DeleteShellFile(arg1:string,arg2:string):Promise<void>;
 
 export function DeleteWorkPath(arg1:string):Promise<void>;
 
@@ -64,6 +70,14 @@ export function GetOutput():Promise<Array<string>>;
 
 export function GetSessionInfo():Promise<data.SessionState>;
 
+export function GetShellHistory():Promise<Array<define.ShellHistoryRecord>>;
+
+export function GetShellMonitor(arg1:string):Promise<define.ShellMonitorSnapshot>;
+
+export function GetShellRemoteHome(arg1:string):Promise<string>;
+
+export function GetShellRemotePwd(arg1:string):Promise<string>;
+
 export function GetShellSessions():Promise<Array<define.ShellStatus>>;
 
 export function GetShellStatus():Promise<define.ShellStatus>;
@@ -85,6 +99,8 @@ export function ImportXshellFromFile(arg1:string,arg2:string):Promise<data.Machi
 export function ImportXshellFromFolder(arg1:string,arg2:string):Promise<data.MachineImportResult>;
 
 export function ImportXshellPick(arg1:string):Promise<data.MachineImportResult>;
+
+export function ListShellFiles(arg1:string,arg2:string,arg3:boolean):Promise<Array<define.SftpEntry>>;
 
 export function NewWindow():Promise<void>;
 
@@ -112,7 +128,11 @@ export function RefreshConfigMenu():Promise<void>;
 
 export function RefreshConfigMenuWithEvent():Promise<void>;
 
+export function RemoveShellHistory(arg1:string,arg2:string):Promise<void>;
+
 export function ResizeShell(arg1:string,arg2:number,arg3:number):Promise<void>;
+
+export function ResolveShellPath(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function SaveConfig(arg1:define.Root):Promise<void>;
 
@@ -137,6 +157,8 @@ export function SendShellInput(arg1:string,arg2:string):Promise<void>;
 export function SendShellInterrupt(arg1:string):Promise<void>;
 
 export function SetMachineSensitiveData(arg1:string,arg2:define.SensitiveData):Promise<void>;
+
+export function ShellDirExists(arg1:string,arg2:string):Promise<boolean>;
 
 export function StopAllCommands():Promise<void>;
 

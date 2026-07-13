@@ -1,10 +1,11 @@
 <template>
   <div class="shell-terminal-tabs">
-    <div v-if="sessions.length === 0" class="empty-terminal">
-      <p>请从左侧连接机器</p>
-    </div>
-    <template v-else>
+    <div class="tabs-bar">
+      <el-button class="folder-btn" size="small" text title="连接管理器" @click="$emit('open-picker')">
+        <el-icon :size="16"><Folder /></el-icon>
+      </el-button>
       <el-tabs
+        v-if="sessions.length"
         v-model="activeTab"
         type="card"
         class="session-tabs"
@@ -18,6 +19,13 @@
           :closable="true"
         />
       </el-tabs>
+      <div v-else class="tabs-placeholder">未连接</div>
+    </div>
+
+    <div v-if="sessions.length === 0" class="empty-slot">
+      <slot name="empty" />
+    </div>
+    <template v-else>
       <div class="terminal-stack">
         <ShellTerminal
           v-for="session in sessions"
@@ -28,8 +36,10 @@
           :active="activeTab === session.machineName"
           :search-query="searchQuery"
           :class="{ 'is-active': activeTab === session.machineName }"
+          @cd-hint="(payload) => $emit('cd-hint', payload)"
         />
       </div>
+      <slot name="footer" :active-machine="activeTab" />
     </template>
   </div>
 </template>
@@ -46,7 +56,7 @@ export default {
     activeMachine: { type: String, default: '' },
     searchQuery: { type: String, default: '' },
   },
-  emits: ['update:activeMachine', 'disconnect', 'clear'],
+  emits: ['update:activeMachine', 'disconnect', 'clear', 'open-picker', 'cd-hint'],
   setup(props, { emit, expose }) {
     const activeTab = ref(props.activeMachine)
     const terminalRefs = ref({})
@@ -99,30 +109,54 @@ export default {
   overflow: hidden;
 }
 
-.empty-terminal {
-  flex: 1;
+.tabs-bar {
   display: flex;
   align-items: center;
-  justify-content: center;
-  color: var(--app-text-muted);
-  background: #0d1117;
+  gap: 4px;
+  flex-shrink: 0;
+  background: var(--app-panel-bg);
+  border-bottom: 1px solid var(--app-border);
+  padding: 0 4px;
+  min-height: 36px;
+}
+
+.folder-btn {
+  flex-shrink: 0;
+  margin: 0 2px;
 }
 
 .session-tabs {
-  flex-shrink: 0;
-  background: var(--app-panel-bg);
-  padding: 0 8px;
+  flex: 1;
+  min-width: 0;
 }
 
 .session-tabs :deep(.el-tabs__header) {
   margin-bottom: 0;
 }
 
+.session-tabs :deep(.el-tabs__nav-wrap::after) {
+  display: none;
+}
+
+.tabs-placeholder {
+  flex: 1;
+  font-size: 12px;
+  color: var(--app-text-muted);
+  padding-left: 8px;
+}
+
+.empty-slot {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .terminal-stack {
   flex: 1;
   min-height: 0;
   width: 100%;
-  height: 100%;
   position: relative;
 }
 

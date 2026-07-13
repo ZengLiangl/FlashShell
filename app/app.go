@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"runtime"
 	"strings"
 	"sync"
@@ -26,8 +27,10 @@ type App struct {
 	configManager    *data.ConfigManager
 	sessionManager   *data.SessionManager
 	logManager       *data.LogManager
+	shellHistory     *data.ShellHistoryManager
 	subProjectRunner *machine.SubProjectRunner
 	shellPool        *machine.ShellSessionPool
+	shellAuxPool     *machine.ShellAuxPool
 	outputChannel    chan string
 	outputIngress    chan string
 	executionMutex   sync.RWMutex
@@ -51,7 +54,9 @@ func NewApp(sessionID string) *App {
 		configManager:  configManager,
 		sessionManager: sessionManager,
 		logManager:     logManager,
+		shellHistory:   data.NewShellHistoryManager(),
 		shellPool:      machine.NewShellSessionPool(),
+		shellAuxPool:   machine.NewShellAuxPool(),
 	}
 	app.refreshLogSettings()
 	go app.outputEventLoop()
@@ -105,6 +110,7 @@ func (a *App) BeforeClose(ctx context.Context) (prevent bool) {
 	for _, session := range a.shellPool.ListSessions() {
 		_ = a.shellPool.Disconnect(session.MachineName, a.shellHandlerFor(session.MachineName))
 	}
+	a.shellAuxPool.DisconnectAll()
 	return false
 }
 
@@ -164,12 +170,16 @@ func (a *App) shellHandlerFor(machineName string) machine.ShellOutputHandler {
 		OnData: func(data []byte) {
 			a.pushShellData(machineName, data)
 		},
+		OnCwd: func(cwd string) {
+			a.pushShellCwd(machineName, cwd)
+		},
 		OnStatus: func(_ *define.ShellStatus) {
 			go a.emitShellSessions()
 		},
 		OnClose: func() {
 			if machineName != "" {
 				a.shellPool.RemoveSession(machineName)
+				_ = a.shellAuxPool.Disconnect(machineName)
 			}
 			go a.emitShellSessions()
 		},
@@ -183,6 +193,17 @@ func (a *App) pushShellData(machineName string, data []byte) {
 			"data":        base64.StdEncoding.EncodeToString(data),
 		})
 	}
+}
+
+func (a *App) pushShellCwd(machineName, cwd string) {
+	cwd = NormalizeRemoteAbs(cwd)
+	if a.ctx == nil || machineName == "" || cwd == "" {
+		return
+	}
+	wailsRuntime.EventsEmit(a.ctx, "shell:cwd", map[string]interface{}{
+		"machineName": machineName,
+		"cwd":         cwd,
+	})
 }
 
 func (a *App) pushShellOutput(machineName, msg string) {
@@ -576,20 +597,8 @@ func (a *App) pickImportSources(title string, filters []wailsRuntime.FileFilter)
 	if err != nil {
 		return nil, fmt.Errorf("选择文件失败: %w", err)
 	}
-	if len(files) > 0 {
-		return files, nil
-	}
-
-	dirPath, err := wailsRuntime.OpenDirectoryDialog(a.ctx, wailsRuntime.OpenDialogOptions{
-		Title: title,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("选择文件夹失败: %w", err)
-	}
-	if dirPath == "" {
-		return nil, nil
-	}
-	return []string{dirPath}, nil
+	// 取消时 Wails 返回空切片；不要再弹文件夹选择框
+	return files, nil
 }
 
 // ImportXshellPick 选择并导入 Xshell 配置（支持多文件或文件夹）
@@ -608,8 +617,11 @@ func (a *App) ImportXshellPick(accountID string) (*data.MachineImportResult, err
 
 // ImportFinalShellPick 选择并导入 FinalShell 配置（支持多文件或文件夹）
 func (a *App) ImportFinalShellPick(accountID string) (*data.MachineImportResult, error) {
+	// Pattern 必须是 macOS UTType 能识别的扩展名（如 *.json）。
+	// 使用 *_connect_config.json 这类通配会在 Wails OpenFileDialog 中
+	// 因 UTType 返回 nil 而崩溃：insertObject: object cannot be nil。
 	paths, err := a.pickImportSources("选择 FinalShell 文件或文件夹", []wailsRuntime.FileFilter{
-		{DisplayName: "FinalShell (*_connect_config.json)", Pattern: "*_connect_config.json"},
+		{DisplayName: "FinalShell (*_connect_config.json)", Pattern: "*.json"},
 	})
 	if err != nil {
 		return nil, err
@@ -818,10 +830,10 @@ func (a *App) CreateApplicationMenu() *menu.Menu {
 	})
 
 	configMenu.AddSeparator()
-	configMenu.AddText("业务配置编辑", keys.CmdOrCtrl(","), func(_ *menu.CallbackData) {
-		a.OpenConfigEditor()
-	})
-	configMenu.AddText("系统设置", nil, func(_ *menu.CallbackData) {
+	// configMenu.AddText("业务配置编辑", keys.CmdOrCtrl(","), func(_ *menu.CallbackData) {
+	// 	a.OpenConfigEditor()
+	// })
+	configMenu.AddText("系统设置", keys.CmdOrCtrl(","), func(_ *menu.CallbackData) {
 		a.OpenSystemSettings()
 	})
 	configMenu.AddText("执行历史", nil, func(_ *menu.CallbackData) {
@@ -1112,12 +1124,17 @@ func (a *App) GetSystemSettings() (*data.GlobalConfig, error) {
 
 // SaveSystemSettings 保存系统设置
 func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
+	a.normalizeThemeSettings(&config.ThemeSettings)
 	if err := a.configManager.SaveGlobalConfig(config); err != nil {
 		return err
 	}
 	a.refreshLogSettings()
 	if a.sessionManager != nil && config.ThemeSettings.Mode != "" {
 		_ = a.sessionManager.SetTheme(config.ThemeSettings.Mode, config.ThemeSettings.TerminalPreset)
+	}
+	a.applyWindowTheme(config.ThemeSettings.Mode)
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "theme:changed", config.ThemeSettings)
 	}
 	return nil
 }
@@ -1176,7 +1193,7 @@ func (a *App) OpenExecutionHistory() {
 // GetThemeSettings 获取当前主题设置（会话优先，其次全局）
 func (a *App) GetThemeSettings() data.ThemeSettings {
 	globalConfig, err := a.configManager.GetGlobalConfig()
-	settings := data.ThemeSettings{Mode: "light", TerminalPreset: "classic"}
+	settings := data.ThemeSettings{Mode: "light", TerminalPreset: "classic", ShellFontSize: 13, ShellLineHeight: 1.2}
 	if err == nil && globalConfig != nil {
 		settings = globalConfig.ThemeSettings
 	}
@@ -1189,17 +1206,28 @@ func (a *App) GetThemeSettings() data.ThemeSettings {
 			settings.TerminalPreset = state.TerminalPreset
 		}
 	}
+	a.normalizeThemeSettings(&settings)
+	return settings
+}
+
+func (a *App) normalizeThemeSettings(settings *data.ThemeSettings) {
 	if settings.Mode == "" {
 		settings.Mode = "light"
 	}
 	if settings.TerminalPreset == "" {
 		settings.TerminalPreset = "classic"
 	}
-	return settings
+	if settings.ShellFontSize <= 0 {
+		settings.ShellFontSize = 13
+	}
+	if settings.ShellLineHeight <= 0 {
+		settings.ShellLineHeight = 1.2
+	}
 }
 
 // SaveThemeSettings 保存主题设置到会话与全局
 func (a *App) SaveThemeSettings(settings data.ThemeSettings) error {
+	a.normalizeThemeSettings(&settings)
 	if a.sessionManager != nil {
 		if err := a.sessionManager.SetTheme(settings.Mode, settings.TerminalPreset); err != nil {
 			return err
@@ -1210,7 +1238,14 @@ func (a *App) SaveThemeSettings(settings data.ThemeSettings) error {
 		return err
 	}
 	globalConfig.ThemeSettings = settings
-	return a.configManager.SaveGlobalConfig(globalConfig)
+	if err := a.configManager.SaveGlobalConfig(globalConfig); err != nil {
+		return err
+	}
+	a.applyWindowTheme(settings.Mode)
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "theme:changed", settings)
+	}
+	return nil
 }
 
 func (a *App) applyWindowTheme(mode string) {
@@ -1244,11 +1279,28 @@ func (a *App) ConnectShell(machineName string) error {
 		return fmt.Errorf("未找到机器配置: %s", machineName)
 	}
 
-	err := a.shellPool.Connect(machineName, machineConfig, a.configManager.GetWorkPathVars(), a.shellHandlerFor(machineName))
-	if err == nil {
+	// 已连接：直接返回，避免重复建连/重连辅助通道
+	if a.shellPool.IsConnected(machineName) {
 		a.emitShellSessions()
+		return nil
 	}
-	return err
+
+	err := a.shellPool.Connect(machineName, machineConfig, a.configManager.GetWorkPathVars(), a.shellHandlerFor(machineName))
+	if err != nil {
+		return err
+	}
+
+	// 辅助通道失败不阻断终端
+	if auxErr := a.shellAuxPool.Connect(machineName, machineConfig, a.configManager.GetWorkPathVars()); auxErr != nil {
+		fmt.Printf("辅助连接失败(%s): %v\n", machineName, auxErr)
+	}
+
+	if sensitive, sErr := machineConfig.GetSensitiveData(); sErr == nil && a.shellHistory != nil {
+		_ = a.shellHistory.RecordConnect(machineConfig, sensitive.Host, sensitive.Port, sensitive.User)
+	}
+
+	a.emitShellSessions()
+	return nil
 }
 
 // DisconnectShell 断开指定机器的 Shell
@@ -1256,8 +1308,173 @@ func (a *App) DisconnectShell(machineName string) error {
 	a.executionMutex.Lock()
 	defer a.executionMutex.Unlock()
 	err := a.shellPool.Disconnect(machineName, a.shellHandlerFor(machineName))
+	_ = a.shellAuxPool.Disconnect(machineName)
 	a.emitShellSessions()
 	return err
+}
+
+// GetShellHistory 获取连接历史
+func (a *App) GetShellHistory() []define.ShellHistoryRecord {
+	if a.shellHistory == nil {
+		return nil
+	}
+	return a.shellHistory.List()
+}
+
+// ClearShellHistory 清空连接历史
+func (a *App) ClearShellHistory() error {
+	if a.shellHistory == nil {
+		return nil
+	}
+	return a.shellHistory.Clear()
+}
+
+// RemoveShellHistory 删除一条连接历史
+func (a *App) RemoveShellHistory(machineID, machineName string) error {
+	if a.shellHistory == nil {
+		return nil
+	}
+	return a.shellHistory.Remove(machineID, machineName)
+}
+
+// GetShellMonitor 获取机器监控快照
+func (a *App) GetShellMonitor(machineName string) *define.ShellMonitorSnapshot {
+	aux, err := a.shellAuxPool.Get(machineName)
+	if err != nil {
+		host := ""
+		if m := a.configManager.GetMachine(machineName); m != nil {
+			if s, e := m.GetSensitiveData(); e == nil {
+				host = s.Host
+			}
+		}
+		return &define.ShellMonitorSnapshot{
+			MachineName: machineName,
+			Host:        host,
+			Error:       err.Error(),
+			UpdatedAt:   time.Now().Unix(),
+			TopMem:      []define.ShellProcessStat{},
+		}
+	}
+	snap := aux.FetchMonitor()
+	if m := a.configManager.GetMachine(machineName); m != nil {
+		if s, e := m.GetSensitiveData(); e == nil && s.Host != "" {
+			snap.Host = s.Host
+		}
+	}
+	return snap
+}
+
+// ListShellFiles 列出远端目录
+func (a *App) ListShellFiles(machineName, dirPath string, showHidden bool) ([]define.SftpEntry, error) {
+	aux, err := a.shellAuxPool.Get(machineName)
+	if err != nil {
+		return nil, err
+	}
+	return aux.ListDir(dirPath, showHidden)
+}
+
+// DeleteShellFile 删除远端文件或目录
+func (a *App) DeleteShellFile(machineName, remotePath string) error {
+	if strings.TrimSpace(remotePath) == "" || remotePath == "/" {
+		return fmt.Errorf("非法路径")
+	}
+	aux, err := a.shellAuxPool.Get(machineName)
+	if err != nil {
+		return err
+	}
+	return aux.RemovePath(remotePath)
+}
+
+// GetShellRemoteHome 远端登录 home（SFTP 初始目录）
+func (a *App) GetShellRemoteHome(machineName string) (string, error) {
+	return a.getRemoteHome(machineName)
+}
+
+// GetShellRemotePwd 获取辅助通道 pwd（兼容旧调用；新逻辑请用 home + 客户端 cd 跟踪）
+func (a *App) GetShellRemotePwd(machineName string) (string, error) {
+	aux, err := a.shellAuxPool.Get(machineName)
+	if err != nil {
+		return "", err
+	}
+	return aux.Pwd()
+}
+
+// ShellDirExists 远端路径是否为目录
+func (a *App) ShellDirExists(machineName, dirPath string) (bool, error) {
+	aux, err := a.shellAuxPool.Get(machineName)
+	if err != nil {
+		return false, err
+	}
+	return aux.DirExists(dirPath)
+}
+
+// ResolveShellPath 规范化远端路径（相对 → 基于 base；空 base 回退 home）
+func (a *App) ResolveShellPath(machineName, basePath, target string) (string, error) {
+	home, err := a.getRemoteHome(machineName)
+	if err != nil {
+		home = ""
+	}
+	return ResolveRemotePath(basePath, target, home)
+}
+
+// ApplyShellCd 解析 cd 目标并用 SFTP 校验；目录不存在则返回原 current。
+func (a *App) ApplyShellCd(machineName, current, target string) (string, error) {
+	home, err := a.getRemoteHome(machineName)
+	if err != nil {
+		return "", fmt.Errorf("获取 home 失败: %w", err)
+	}
+	if strings.TrimSpace(current) == "" {
+		current = home
+	}
+	current = NormalizeRemoteAbs(current)
+	resolved, err := ResolveRemotePath(current, target, home)
+	if err != nil {
+		return "", err
+	}
+	if resolved == current {
+		return current, nil
+	}
+	exists, err := a.shellDirExistsReliable(machineName, resolved)
+	if err != nil {
+		return "", fmt.Errorf("校验目录失败 %s: %w", resolved, err)
+	}
+	return ChooseCdPath(current, resolved, exists), nil
+}
+
+// shellDirExistsReliable：Stat/ReadDir，失败时再扫父目录子项（相对 cd 更稳）
+func (a *App) shellDirExistsReliable(machineName, dirPath string) (bool, error) {
+	exists, err := a.ShellDirExists(machineName, dirPath)
+	if err == nil {
+		return exists, nil
+	}
+	// Stat 链路异常时，用父目录列表核对
+	parent := path.Dir(dirPath)
+	base := path.Base(dirPath)
+	if dirPath == "/" || base == "." || base == "/" {
+		return false, err
+	}
+	entries, listErr := a.ListShellFiles(machineName, parent, true)
+	if listErr != nil {
+		return false, err
+	}
+	for _, e := range entries {
+		if e.Name == base && e.IsDir {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func (a *App) getRemoteHome(machineName string) (string, error) {
+	aux, err := a.shellAuxPool.Get(machineName)
+	if err != nil {
+		return "", err
+	}
+	home, err := aux.Home()
+	if err != nil {
+		return "", err
+	}
+	return NormalizeRemoteAbs(home), nil
 }
 
 // SendShellInput 向指定 PTY Shell 发送输入

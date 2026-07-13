@@ -20,13 +20,13 @@ func NewShellSessionPool() *ShellSessionPool {
 	}
 }
 
-// Connect 连接指定机器（允许多会话并存）
+// Connect 连接指定机器（允许多会话并存；已连接则幂等成功）
 func (p *ShellSessionPool) Connect(machineName string, machine *define.Machine, workVars map[string]string, handler ShellOutputHandler) error {
 	p.mu.Lock()
 	if existing, ok := p.sessions[machineName]; ok {
 		if existing.IsConnected() {
 			p.mu.Unlock()
-			return fmt.Errorf("已连接到 %s", machineName)
+			return nil // 已连接，视为成功（前端切到该会话即可）
 		}
 		delete(p.sessions, machineName)
 	}

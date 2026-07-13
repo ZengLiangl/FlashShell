@@ -1,62 +1,40 @@
 <template>
   <div class="shell-machine-list">
     <div class="panel-header">
-      <el-button size="small" text @click="$emit('back')">
-        <el-icon><ArrowLeft /></el-icon>
-        返回首页
-      </el-button>
       <h3>机器列表</h3>
-      <el-button size="small" text title="收起列表" @click="$emit('toggle-collapse')">
-        <el-icon><DArrowLeft /></el-icon>
-      </el-button>
       <el-button size="small" type="primary" text @click="$emit('add-machine')">
-        <el-icon><Plus /></el-icon>
+        <el-icon>
+          <Plus />
+        </el-icon>
         添加
+      </el-button>
+      <el-button size="small" type="primary" text @click="$emit('back')">
+        <el-icon>
+          <ArrowLeft />
+        </el-icon>
+        返回
       </el-button>
     </div>
 
     <div v-if="machineGroups.length === 0" class="empty-hint">暂无机器，请先添加</div>
     <el-collapse v-else v-model="expandedGroups" class="group-collapse">
-      <el-collapse-item
-        v-for="group in machineGroups"
-        :key="group.name"
-        :title="`${group.name} (${group.machines.length})`"
-        :name="group.name"
-      >
+      <el-collapse-item v-for="group in machineGroups" :key="group.name"
+        :title="`${group.name} (${group.machines.length})`" :name="group.name">
         <div class="machine-list">
-          <div
-            v-for="machine in group.machines"
-            :key="machine.id"
-            class="machine-item"
-            :class="{ active: isConnected(machine.name) }"
-          >
+          <div v-for="machine in group.machines" :key="machine.id" class="machine-item"
+            :class="{ active: isConnected(machine.name) }">
             <div class="machine-info" @click="onSelectMachine(machine.name)">
               <div class="machine-name">{{ machine.name }}</div>
             </div>
             <div class="machine-actions">
-              <el-button
-                v-if="!isConnected(machine.name)"
-                size="small"
-                type="primary"
-                :loading="connectingName === machine.name"
-                @click="$emit('connect', machine.name)"
-              >
+              <el-button v-if="!isConnected(machine.name)" size="small" type="primary"
+                :loading="connectingName === machine.name" @click="$emit('connect', machine.name)">
                 连接
               </el-button>
-              <el-button
-                v-else
-                size="small"
-                type="danger"
-                @click="$emit('disconnect', machine.name)"
-              >
+              <el-button v-else size="small" type="danger" @click="$emit('disconnect', machine.name)">
                 断开
               </el-button>
-              <el-button
-                size="small"
-                text
-                :loading="testingName === machine.name"
-                @click="$emit('test', machine.name)"
-              >
+              <el-button size="small" text :loading="testingName === machine.name" @click="$emit('test', machine.name)">
                 测试
               </el-button>
             </div>
@@ -68,7 +46,7 @@
 </template>
 
 <script>
-import { ref, computed, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { groupMachines } from '../../utils/machineGroups'
 
 export default {
@@ -80,7 +58,7 @@ export default {
     connectingName: { type: String, default: '' },
     testingName: { type: String, default: '' },
   },
-  emits: ['back', 'connect', 'disconnect', 'test', 'add-machine', 'select-machine', 'toggle-collapse'],
+  emits: ['back', 'connect', 'disconnect', 'test', 'add-machine', 'select-machine'],
   setup(props, { emit }) {
     const expandedGroups = ref([])
 
@@ -140,6 +118,7 @@ export default {
 .panel-header :deep(.el-button) {
   padding: 4px 6px;
   font-size: 12px;
+  margin-left: 0px;
 }
 
 .empty-hint {

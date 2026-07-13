@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"time"
 
 	"quick-cmd/define"
 
@@ -15,6 +16,7 @@ import (
 type ShellOutputHandler struct {
 	OnLine   func(line string)
 	OnData   func(data []byte)
+	OnCwd    func(cwd string) // PTY 真实工作目录（OSC 7/777）
 	OnStatus func(status *define.ShellStatus)
 	OnClose  func()
 }
@@ -71,7 +73,7 @@ func (sm *ShellSessionManager) Connect(machine *define.Machine, workVars map[str
 
 	if sm.client != nil && sm.client.IsConnected() {
 		sm.mu.Unlock()
-		return fmt.Errorf("已连接到 %s，请先断开", sm.machineName)
+		return nil // 幂等
 	}
 
 	client := NewSSHClient(machine, workVars)
@@ -143,6 +145,9 @@ func (sm *ShellSessionManager) Connect(machine *define.Machine, workVars map[str
 
 	go sm.readPTY(stdout, handler, ctx, readDone)
 
+	// 注入 cwd 上报钩子（bash/zsh）；输出经 OSC 过滤，不污染终端显示
+	go sm.installCwdHook(ctx)
+
 	connectMsg := fmt.Sprintf("已连接到 %s (%s@%s:%d)", machine.Name, sensitive.User, sensitive.Host, sensitive.Port)
 	sm.mu.Unlock()
 
@@ -153,8 +158,24 @@ func (sm *ShellSessionManager) Connect(machine *define.Machine, workVars map[str
 	return nil
 }
 
+func (sm *ShellSessionManager) installCwdHook(ctx context.Context) {
+	// 等首屏登录输出稍稳定
+	select {
+	case <-ctx.Done():
+		return
+	case <-time.After(450 * time.Millisecond):
+	}
+	_ = sm.SendInput(CwdHookScript())
+}
+
 func (sm *ShellSessionManager) readPTY(stdout io.Reader, handler ShellOutputHandler, ctx context.Context, done chan struct{}) {
 	defer close(done)
+
+	filter := newOscCwdFilter(func(cwd string) {
+		if handler.OnCwd != nil {
+			handler.OnCwd(cwd)
+		}
+	})
 
 	buf := make([]byte, 4096)
 	for {
@@ -165,10 +186,13 @@ func (sm *ShellSessionManager) readPTY(stdout io.Reader, handler ShellOutputHand
 		}
 
 		n, err := stdout.Read(buf)
-		if n > 0 && handler.OnData != nil {
-			chunk := make([]byte, n)
-			copy(chunk, buf[:n])
-			handler.OnData(chunk)
+		if n > 0 {
+			cleaned := filter.Feed(buf[:n])
+			if len(cleaned) > 0 && handler.OnData != nil {
+				chunk := make([]byte, len(cleaned))
+				copy(chunk, cleaned)
+				handler.OnData(chunk)
+			}
 		}
 		if err != nil {
 			var disconnectMsg string

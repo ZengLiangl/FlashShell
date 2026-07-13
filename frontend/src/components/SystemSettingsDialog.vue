@@ -44,6 +44,25 @@
                     <el-option label="Solarized" value="solarized" />
                 </el-select>
             </el-form-item>
+            <el-form-item label="Shell 字号">
+                <el-input-number
+                    v-model="form.themeSettings.shellFontSize"
+                    :min="10"
+                    :max="28"
+                    :step="1"
+                />
+                <span class="field-hint">px</span>
+            </el-form-item>
+            <el-form-item label="Shell 行高">
+                <el-input-number
+                    v-model="form.themeSettings.shellLineHeight"
+                    :min="1"
+                    :max="2.5"
+                    :step="0.1"
+                    :precision="1"
+                />
+                <span class="field-hint">倍数</span>
+            </el-form-item>
 
             <el-divider content-position="left">窗口会话</el-divider>
             <el-form-item label="会话 ID">
@@ -96,10 +115,10 @@ export default {
         const accountEditVisible = ref(false)
         const editingAccountIndex = ref(-1)
         const accountForm = reactive({ id: '', name: '', user: '', password: '' })
-        const { saveTheme } = useTheme()
+        const { applyThemeSettings } = useTheme()
         const form = reactive({
             logSettings: { enabled: false, path: '~/.cmd-config/logs' },
-            themeSettings: { mode: 'light', terminalPreset: 'classic' }
+            themeSettings: { mode: 'light', terminalPreset: 'classic', shellFontSize: 13, shellLineHeight: 1.2 }
         })
 
         const visibleProxy = computed({
@@ -110,7 +129,12 @@ export default {
         const load = async () => {
             const config = await App.GetSystemSettings()
             form.logSettings = { ...config.logSettings }
-            form.themeSettings = { ...config.themeSettings }
+            form.themeSettings = {
+                mode: config.themeSettings?.mode || 'light',
+                terminalPreset: config.themeSettings?.terminalPreset || 'classic',
+                shellFontSize: config.themeSettings?.shellFontSize > 0 ? config.themeSettings.shellFontSize : 13,
+                shellLineHeight: config.themeSettings?.shellLineHeight > 0 ? config.themeSettings.shellLineHeight : 1.2,
+            }
             accounts.value = await App.GetGlobalAccounts() || []
             const session = await App.GetSessionInfo()
             sessionId.value = session.sessionId || ''
@@ -195,7 +219,7 @@ export default {
                 config.logSettings = { ...form.logSettings }
                 config.themeSettings = { ...form.themeSettings }
                 await App.SaveSystemSettings(config)
-                await saveTheme(form.themeSettings.mode, form.themeSettings.terminalPreset)
+                applyThemeSettings(form.themeSettings)
                 ElMessage.success('系统设置已保存')
                 visibleProxy.value = false
             } catch (e) {
@@ -231,5 +255,11 @@ export default {
 <style scoped>
 .account-toolbar {
     margin-bottom: 8px;
+}
+
+.field-hint {
+    margin-left: 8px;
+    color: var(--app-text-muted);
+    font-size: 12px;
 }
 </style>

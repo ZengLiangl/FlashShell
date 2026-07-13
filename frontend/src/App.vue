@@ -52,7 +52,7 @@
     <!-- Shell 视图 -->
     <ShellWorkspace
       v-else-if="shellMode"
-      :left-panel-width="leftPanelWidth"
+      :left-panel-width="Math.min(leftPanelWidth, 320)"
       :is-resizing="isResizing"
       :app-info="statusBarInfo"
       :machines="shellMachines"
@@ -67,6 +67,7 @@
       @disconnect="disconnectShell"
       @test="testShellConnection"
       @add-machine="openShellMachineDialog"
+      @edit-machine="openShellMachineEdit"
       @start-resize="startResize"
     />
 
@@ -74,6 +75,7 @@
     <template v-else>
       <div class="projectlist-fullscreen">
         <HomePage
+          ref="homePageRef"
           :projects="projects"
           :connected-count="connectedCount"
           @refresh="refreshConfig"
@@ -88,7 +90,12 @@
     </template>
 
     <!-- 机器配置弹框 -->
-    <MachineConfigDialog v-model="machineConfigVisible" />
+    <MachineConfigDialog
+      v-model="machineConfigVisible"
+      :edit-machine-id="machineEditId"
+      @closed="machineEditId = ''"
+      @changed="onMachinesChanged"
+    />
 
     <!-- 环境变量配置弹框 -->
     <WorkPathConfigDialog v-model="workPathConfigVisible" />
@@ -129,7 +136,7 @@ export default {
   name: "App",
   components: { AppMenuBar, TerminalOutput, StatusBar, ProjectList, HomePage, ShellWorkspace, SubProjectList, MachineConfigDialog, WorkPathConfigDialog, TerminalHeader, AboutDialog, ConfigEditorDialog, SystemSettingsDialog, ExecutionHistoryDialog },
   setup() {
-    const { isDark, themeMode, terminalPreset, loadTheme } = useTheme();
+    const { isDark, themeMode, terminalPreset, loadTheme, applyThemeSettings } = useTheme();
     const projects = ref([]);
     const subProjects = ref([]);
     const outputLines = ref([]);
@@ -165,6 +172,7 @@ export default {
 
     // 机器配置相关
     const machineConfigVisible = ref(false);
+    const machineEditId = ref('');
     const machineEditVisible = ref(false);
     const machines = ref([]);
     const machinesLoading = ref(false);
@@ -181,6 +189,7 @@ export default {
     const systemSettingsVisible = ref(false);
     const executionHistoryVisible = ref(false);
     const shellMode = ref(false);
+    const homePageRef = ref(null);
     const {
       sessions: shellSessions,
       activeMachine,
@@ -440,9 +449,23 @@ export default {
     };
 
     const openShellMachineDialog = async () => {
+      machineEditId.value = '';
       machineConfigVisible.value = true;
       await loadMachines();
       await loadShellMachines();
+    };
+
+    const openShellMachineEdit = async (machine) => {
+      machineEditId.value = machine?.id || '';
+      machineConfigVisible.value = true;
+      await loadMachines();
+      await loadShellMachines();
+    };
+
+    const onMachinesChanged = async () => {
+      await loadMachines();
+      await loadShellMachines();
+      await homePageRef.value?.loadMachines?.();
     };
 
     // 切换 SubProject 展开状态
@@ -773,10 +796,10 @@ export default {
         return;
       }
 
-      // 业务配置编辑 (Cmd+, 或 Ctrl+,)
+      // 系统设置 (Cmd+, 或 Ctrl+,)
       if ((e.metaKey || e.ctrlKey) && e.key === ',') {
         e.preventDefault();
-        App.OpenConfigEditor();
+        App.OpenSystemSettings();
         return;
       }
 
@@ -860,6 +883,7 @@ export default {
       EventsOn("output:line", handleOutputLine);
       EventsOn("output:clear", handleOutputClear);
       EventsOn("execution:status", handleExecutionStatus);
+      EventsOn("theme:changed", applyThemeSettings);
 
       // 添加全局键盘事件监听器
       document.addEventListener('keydown', handleKeyDown);
@@ -1168,6 +1192,10 @@ export default {
           "open:machine-config",
           "open:workpath-config",
           "open:about",
+          "open:config-editor",
+          "open:system-settings",
+          "open:execution-history",
+          "theme:changed",
           "output:line",
           "output:clear",
           "execution:status",
@@ -1216,6 +1244,7 @@ export default {
       startResize,
       // 机器配置相关
       machineConfigVisible,
+      machineEditId,
       machineEditVisible,
       machines,
       machinesLoading,
@@ -1288,6 +1317,9 @@ export default {
       connectShell,
       disconnectShell,
       openShellMachineDialog,
+      openShellMachineEdit,
+      onMachinesChanged,
+      homePageRef,
       testShellConnection,
     };
   },

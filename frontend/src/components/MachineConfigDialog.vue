@@ -137,16 +137,23 @@ import {
 export default {
     name: 'MachineConfigDialog',
     props: {
-        modelValue: { type: Boolean, required: true }
+        modelValue: { type: Boolean, required: true },
+        editMachineId: { type: String, default: '' },
     },
-    emits: ['update:modelValue'],
+    emits: ['update:modelValue', 'closed', 'changed'],
     setup(props, { emit }) {
         const visibleProxy = ref(props.modelValue)
-        watch(() => props.modelValue, v => {
+        watch(() => props.modelValue, async (v) => {
             visibleProxy.value = v
             if (v) {
-                loadMachines()
-                loadGlobalAccounts()
+                await loadMachines()
+                await loadGlobalAccounts()
+                if (props.editMachineId) {
+                    const target = machines.value.find((m) => m.id === props.editMachineId)
+                    if (target) await editMachine(target)
+                }
+            } else {
+                emit('closed')
             }
         })
         watch(visibleProxy, v => emit('update:modelValue', v))
@@ -276,6 +283,7 @@ export default {
                 }
                 machineEditVisible.value = false
                 await loadMachines()
+                emit('changed')
             } catch (error) {
                 console.error('保存机器配置失败:', error)
                 ElMessage.error('保存机器配置失败: ' + error.message)
@@ -290,6 +298,7 @@ export default {
                 await DeleteMachine(machine.id)
                 ElMessage.success('机器配置删除成功')
                 await loadMachines()
+                emit('changed')
             } catch (error) {
                 if (error === 'cancel') return
                 console.error('删除机器配置失败:', error)
@@ -342,6 +351,7 @@ export default {
                 if (!result) return
                 showImportResult(result)
                 await loadMachines()
+                emit('changed')
             } catch (error) {
                 ElMessage.error('导入失败: ' + error)
             }
@@ -354,6 +364,7 @@ export default {
                 if (!result) return
                 showImportResult(result)
                 await loadMachines()
+                emit('changed')
             } catch (error) {
                 ElMessage.error('导入失败: ' + error)
             }
