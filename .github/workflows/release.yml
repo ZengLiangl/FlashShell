@@ -1,0 +1,305 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+env:
+  NODE_OPTIONS: '--max-old-space-size=4096'
+  APP_NAME: FlashDock
+  WAILS_VERSION: v2.11.0
+
+jobs:
+  frontend:
+    name: Build frontend
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Setup Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+          registry-url: https://registry.npmjs.org
+
+      - name: Install Linux build deps
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev pkg-config
+
+      - name: Install Wails
+        run: go install -v "github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}"
+
+      - name: Build frontend dist
+        shell: bash
+        working-directory: frontend
+        env:
+          npm_config_registry: https://registry.npmjs.org/
+        run: |
+          set -euo pipefail
+          npm ci --registry=https://registry.npmjs.org/
+          # 生成 bindings，确保前端构建与后端一致
+          (cd .. && wails generate module)
+          npm run build
+          test -s dist/index.html
+
+      - name: Pack frontend dist
+        shell: bash
+        run: tar -cf frontend-dist.tar -C frontend/dist .
+
+      - name: Upload frontend dist
+        uses: actions/upload-artifact@v6
+        with:
+          name: frontend-dist
+          path: frontend-dist.tar
+          if-no-files-found: error
+          retention-days: 1
+
+  build:
+    name: Build ${{ matrix.platform }}
+    needs: frontend
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: darwin/amd64
+            os_name: MacOS
+            arch_name: Amd64
+            kind: macos
+            build_name: flashdock-darwin-amd64
+          - os: macos-latest
+            platform: darwin/arm64
+            os_name: MacOS
+            arch_name: Arm64
+            kind: macos
+            build_name: flashdock-darwin-arm64
+          - os: windows-latest
+            platform: windows/amd64
+            os_name: Windows
+            arch_name: Amd64
+            kind: windows
+            build_name: flashdock-windows-amd64
+          - os: windows-latest
+            platform: windows/arm64
+            os_name: Windows
+            arch_name: Arm64
+            kind: windows
+            build_name: flashdock-windows-arm64
+          - os: ubuntu-22.04
+            platform: linux/amd64
+            os_name: Linux
+            arch_name: Amd64
+            kind: linux
+            build_name: flashdock-linux-amd64
+            linux_webkit: '4.0'
+          - os: ubuntu-22.04-arm
+            platform: linux/arm64
+            os_name: Linux
+            arch_name: Arm64
+            kind: linux
+            build_name: flashdock-linux-arm64
+            linux_webkit: '4.0'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+
+      - name: Download frontend dist
+        uses: actions/download-artifact@v6
+        with:
+          name: frontend-dist
+          path: frontend-artifact
+
+      - name: Extract frontend dist
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p frontend/dist
+          tar -xf frontend-artifact/frontend-dist.tar -C frontend/dist
+          test -s frontend/dist/index.html
+
+      - name: Resolve version
+        shell: bash
+        run: |
+          set -euo pipefail
+          RAW="${{ github.ref_name }}"
+          export APP_VERSION="${RAW#v}"
+          echo "APP_VERSION=${APP_VERSION}" >> "$GITHUB_ENV"
+          echo "TAG_NAME=${RAW}" >> "$GITHUB_ENV"
+          python3 - <<'PY'
+          import json, os
+          ver = os.environ["APP_VERSION"]
+          path = "wails.json"
+          with open(path, encoding="utf-8") as f:
+              cfg = json.load(f)
+          cfg.setdefault("info", {})["productVersion"] = ver
+          # 避免 Info.plist XML 因裸 & 损坏（会导致 macOS 无图标）
+          comments = cfg.get("info", {}).get("comments") or ""
+          cfg["info"]["comments"] = comments.replace("&", "and")
+          with open(path, "w", encoding="utf-8") as f:
+              json.dump(cfg, f, indent=4, ensure_ascii=False)
+              f.write("\n")
+          print(f"wails.json productVersion -> {ver}")
+          PY
+
+      - name: Install Linux dependencies
+        if: matrix.kind == 'linux'
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev pkg-config
+
+      - name: Install Wails
+        run: go install -v "github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}"
+
+      - name: Build with Wails
+        shell: bash
+        run: |
+          set -euo pipefail
+          wails build \
+            -s \
+            -skipbindings \
+            -clean \
+            -platform "${{ matrix.platform }}" \
+            -o "${{ matrix.build_name }}" \
+            -ldflags "-s -w -X FlashDock/app.Version=${APP_VERSION}"
+
+      - name: Package macOS DMG
+        if: matrix.kind == 'macos'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          APP_PATH=$(find build/bin -maxdepth 2 -name '*.app' | head -n 1)
+          if [ -z "$APP_PATH" ]; then
+            echo "未找到 .app"
+            ls -laR build/bin
+            exit 1
+          fi
+          # Ad-hoc 签名，提升部分 Mac 上的可打开性
+          if command -v xattr >/dev/null 2>&1; then
+            xattr -cr "$APP_PATH" || true
+          fi
+          codesign --force --deep --sign - "$APP_PATH" || true
+
+          OUT_NAME="FlashDock-${APP_VERSION}-${{ matrix.os_name }}-${{ matrix.arch_name }}.dmg"
+          hdiutil create \
+            -volname "FlashDock ${APP_VERSION}" \
+            -srcfolder "$APP_PATH" \
+            -ov \
+            -format UDZO \
+            "dist/${OUT_NAME}"
+          ls -lah "dist/${OUT_NAME}"
+          echo "RELEASE_ASSET=${OUT_NAME}" >> "$GITHUB_ENV"
+
+      - name: Package Windows EXE
+        if: matrix.kind == 'windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $target = "${{ matrix.build_name }}"
+          $exe = $null
+          if (Test-Path "build/bin/$target.exe") {
+            $exe = Get-Item "build/bin/$target.exe"
+          } elseif (Test-Path "build/bin/$target") {
+            Rename-Item "build/bin/$target" "$target.exe"
+            $exe = Get-Item "build/bin/$target.exe"
+          } else {
+            $exe = Get-ChildItem -Path build/bin -Filter *.exe -Recurse | Select-Object -First 1
+          }
+          if (-not $exe) { throw "未找到 Windows 可执行文件" }
+          $outName = "FlashDock-$env:APP_VERSION-${{ matrix.os_name }}-${{ matrix.arch_name }}.exe"
+          Copy-Item $exe.FullName "dist/$outName" -Force
+          Get-Item "dist/$outName"
+          "RELEASE_ASSET=$outName" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      - name: Package Linux tar.gz
+        if: matrix.kind == 'linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          TARGET="build/bin/${{ matrix.build_name }}"
+          if [ ! -f "$TARGET" ]; then
+            TARGET=$(find build/bin -maxdepth 2 -type f ! -name '*.json' | head -n 1)
+          fi
+          if [ -z "${TARGET}" ] || [ ! -f "$TARGET" ]; then
+            echo "未找到 Linux 可执行文件"
+            ls -laR build/bin
+            exit 1
+          fi
+          chmod +x "$TARGET"
+          OUT_NAME="FlashDock-${APP_VERSION}-${{ matrix.os_name }}-${{ matrix.arch_name }}.tar.gz"
+          tar -C "$(dirname "$TARGET")" -czvf "dist/${OUT_NAME}" "$(basename "$TARGET")"
+          ls -lah "dist/${OUT_NAME}"
+          echo "RELEASE_ASSET=${OUT_NAME}" >> "$GITHUB_ENV"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ env.RELEASE_ASSET }}
+          path: dist/${{ env.RELEASE_ASSET }}
+          if-no-files-found: error
+          retention-days: 5
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v6
+        with:
+          path: release-assets
+
+      - name: Flatten release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p upload
+          find release-assets -type f \( \
+            -name 'FlashDock-*-Windows-*.exe' -o \
+            -name 'FlashDock-*-MacOS-*.dmg' -o \
+            -name 'FlashDock-*-Linux-*.tar.gz' \
+          \) -exec cp -v {} upload/ \;
+          echo "---- upload ----"
+          ls -lah upload
+          test "$(find upload -type f | wc -l)" -ge 1
+
+      - name: Create Release and upload assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: FlashDock ${{ github.ref_name }}
+          draft: false
+          make_latest: true
+          generate_release_notes: true
+          files: upload/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
