@@ -175,6 +175,7 @@ export default {
     const terminalMatchIndices = ref([]);
     const terminalActiveMatchIndex = ref(-1);
     const sessionId = ref('');
+    const appVersion = ref('');
     const shortcutMap = ref(mergeShortcuts());
 
     const loadShortcutMap = async () => {
@@ -185,7 +186,8 @@ export default {
       }
     };
     const statusBarInfo = computed(() => {
-      const base = 'FlashDock v1.0.0';
+      const ver = appVersion.value || '…';
+      const base = `FlashDock ${ver}`;
       if (!sessionId.value) return base;
       return `${base} · 会话 ${sessionId.value.slice(0, 8)}`;
     });
@@ -846,6 +848,7 @@ export default {
       loadTheme();
       loadShortcutMap();
       App.GetSessionInfo().then((info) => { sessionId.value = info.sessionId || ''; }).catch(() => { });
+      App.GetAppVersion().then((v) => { appVersion.value = v || ''; }).catch(() => { appVersion.value = ''; });
 
       // 监听输出与执行状态事件（替代轮询）
       EventsOn("output:line", handleOutputLine);
