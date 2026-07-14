@@ -32,29 +32,45 @@ export default {
   props: {
     machineName: { type: String, required: true },
     active: { type: Boolean, default: false },
+    /** Shell 工作区是否可见（回首页时为 false，避免 display:none 下 fit 成极窄列宽） */
+    viewVisible: { type: Boolean, default: true },
     connected: { type: Boolean, default: false },
     searchQuery: { type: String, default: '' },
   },
-  emits: ['cd-hint', 'open-search', 'clear-cache'],
+  emits: ['cd-hint', 'open-search', 'clear-cache', 'reconnect', 'search-result'],
   setup(props, { expose, emit }) {
     const containerRef = ref(null)
     const terminalRef = ref(null)
     const term = ref(null)
     const fitAddon = ref(null)
     const searchAddon = ref(null)
-    const ctx = reactive({ visible: false, x: 0, y: 0 })
+    const ctx = reactive({ visible: false, x: 0, y: 0, selection: '' })
     const { shellFontSize, shellLineHeight, terminalPreset } = useTheme()
     let resizeObserver = null
     let fitTimers = []
     let initialized = false
     let unregisterWriter = null
     let inputLineBuf = ''
+    let searchResultsListener = null
+    let lastSearchResults = { resultIndex: -1, resultCount: 0 }
+
+    const SEARCH_DECORATIONS = {
+      // 柔和对比：普通匹配偏暗黄，当前匹配偏暖褐，避免过亮抢眼
+      matchBackground: '#5c5346',
+      matchBorder: '#8a7f6e',
+      matchOverviewRuler: '#8a7f6e',
+      activeMatchBackground: '#7a5c3a',
+      activeMatchBorder: '#a67c52',
+      activeMatchColorOverviewRuler: '#a67c52',
+    }
 
     const hideContextMenu = () => {
       ctx.visible = false
     }
 
     const onContextMenu = (e) => {
+      // 右键时先保存选区：点击菜单项可能触发 mousedown 清掉 xterm 选区
+      ctx.selection = term.value?.getSelection?.() || ''
       ctx.x = e.clientX
       ctx.y = e.clientY
       ctx.visible = true
@@ -77,6 +93,10 @@ export default {
 
     const onPaste = async () => {
       hideContextMenu()
+      if (!props.connected) {
+        ElMessage.info('当前未连接，请先连接')
+        return
+      }
       try {
         const text = await navigator.clipboard.readText()
         if (!text) return
@@ -87,10 +107,12 @@ export default {
       }
     }
 
+    const getSelection = () => term.value?.getSelection?.() || ''
+
     const onFind = () => {
+      const selected = ctx.selection || getSelection()
       hideContextMenu()
-      // 与 Ctrl/Cmd+F 一致：打开终端搜索条
-      nextTick(() => emit('open-search'))
+      nextTick(() => emit('open-search', selected))
     }
 
     const onClearCache = () => {
@@ -198,13 +220,26 @@ export default {
       fitTimers = []
     }
 
+    const canFit = () => {
+      if (!term.value || !fitAddon.value) return false
+      if (!props.active || !props.viewVisible) return false
+      const el = containerRef.value || terminalRef.value
+      if (!el) return false
+      // display:none / 折叠后宽高为 0，此时 fit 会得到极小 cols，远端提示符会折行残留主机名碎片
+      if (el.clientWidth < 80 || el.clientHeight < 60) return false
+      return true
+    }
+
     const scheduleFit = () => {
       clearFitTimers()
       const run = () => {
-        if (!term.value || !fitAddon.value || !props.active || !props.connected) return
+        if (!canFit()) return
         try {
           fitAddon.value.fit()
+          if (!props.connected) return
           const { cols, rows } = term.value
+          // 拒绝异常尺寸，避免把远端 PTY 缩成几列
+          if (!cols || !rows || cols < 20 || rows < 5) return
           App.ResizeShell(props.machineName, cols, rows).catch(() => {})
         } catch {
           // ignore
@@ -231,7 +266,7 @@ export default {
     }
 
     const initTerminal = async () => {
-      if (initialized || !terminalRef.value || !props.connected || !props.active) return
+      if (initialized || !terminalRef.value || !props.active || !props.viewVisible) return
       await nextTick()
       const terminal = new Terminal({
         cursorBlink: true,
@@ -239,6 +274,9 @@ export default {
         lineHeight: shellLineHeight.value || 1.2,
         fontFamily: 'Consolas, "Courier New", monospace',
         theme: terminalThemeForPreset(terminalPreset.value),
+        // SearchAddon 高亮依赖 experimental decoration API
+        allowProposedApi: true,
+        overviewRulerWidth: 14,
       })
       const fit = new FitAddon()
       const search = new SearchAddon()
@@ -247,15 +285,36 @@ export default {
       terminal.open(terminalRef.value)
 
       terminal.onData((data) => {
+        if (!props.connected) {
+          // 断开后：Enter 触发重连，其余输入忽略
+          if (data === '\r' || data === '\n') {
+            emit('reconnect', props.machineName)
+          }
+          return
+        }
         App.SendShellInput(props.machineName, data).catch(() => {})
         trackInputForCd(data)
       })
+
+      searchResultsListener?.dispose?.()
+      searchResultsListener = search.onDidChangeResults?.((e) => {
+        lastSearchResults = {
+          resultIndex: e?.resultIndex ?? -1,
+          resultCount: e?.resultCount ?? 0,
+        }
+        if (props.active) {
+          emit('search-result', {
+            found: (e?.resultCount ?? 0) > 0 && (e?.resultIndex ?? -1) >= 0,
+            ...lastSearchResults,
+          })
+        }
+      }) || null
 
       term.value = terminal
       fitAddon.value = fit
       searchAddon.value = search
       initialized = true
-      attachWriter(terminal)
+      if (props.connected) attachWriter(terminal)
       setupObservers()
       scheduleFit()
       terminal.focus()
@@ -264,6 +323,8 @@ export default {
     const destroyTerminal = () => {
       clearFitTimers()
       detachWriter()
+      searchResultsListener?.dispose?.()
+      searchResultsListener = null
       if (resizeObserver) {
         resizeObserver.disconnect()
         resizeObserver = null
@@ -275,6 +336,7 @@ export default {
         searchAddon.value = null
       }
       initialized = false
+      lastSearchResults = { resultIndex: -1, resultCount: 0 }
     }
 
     const clear = () => term.value?.clear()
@@ -283,22 +345,48 @@ export default {
       caseSensitive: false,
       regex: false,
       incremental: false,
+      decorations: SEARCH_DECORATIONS,
+    })
+
+    const toSearchResult = (found) => ({
+      found: !!found,
+      resultIndex: lastSearchResults.resultIndex,
+      resultCount: lastSearchResults.resultCount,
     })
 
     const findNext = () => {
       const query = props.searchQuery.trim()
-      if (!searchAddon.value || !query) return false
-      return searchAddon.value.findNext(query, searchOptions())
+      if (!searchAddon.value || !query) {
+        lastSearchResults = { resultIndex: -1, resultCount: 0 }
+        return toSearchResult(false)
+      }
+      try {
+        const found = searchAddon.value.findNext(query, searchOptions())
+        return toSearchResult(found)
+      } catch (err) {
+        console.warn('[shell-search] findNext failed:', err)
+        return toSearchResult(false)
+      }
     }
 
     const findPrevious = () => {
       const query = props.searchQuery.trim()
-      if (!searchAddon.value || !query) return false
-      return searchAddon.value.findPrevious(query, searchOptions())
+      if (!searchAddon.value || !query) {
+        lastSearchResults = { resultIndex: -1, resultCount: 0 }
+        return toSearchResult(false)
+      }
+      try {
+        const found = searchAddon.value.findPrevious(query, searchOptions())
+        return toSearchResult(found)
+      } catch (err) {
+        console.warn('[shell-search] findPrevious failed:', err)
+        return toSearchResult(false)
+      }
     }
 
     const clearSearch = () => {
       searchAddon.value?.clearDecorations()
+      lastSearchResults = { resultIndex: -1, resultCount: 0 }
     }
 
     const attachWriter = (terminal) => {
@@ -326,16 +414,24 @@ export default {
     }
 
     watch(() => props.connected, async (val) => {
+      if (!term.value) {
+        if (val && props.active) await initTerminal()
+        return
+      }
       if (val) {
-        if (props.active) await initTerminal()
+        attachWriter(term.value)
+        scheduleFit()
+        if (props.active) {
+          await nextTick()
+          term.value.focus()
+        }
       } else {
-        window.removeEventListener('resize', scheduleFit)
-        destroyTerminal()
+        detachWriter()
       }
     })
 
     watch(() => props.active, async (val) => {
-      if (val && props.connected) {
+      if (val && props.viewVisible) {
         if (!initialized) await initTerminal()
         else {
           setupObservers()
@@ -346,12 +442,24 @@ export default {
       }
     })
 
+    watch(() => props.viewVisible, async (visible) => {
+      if (!visible) {
+        clearFitTimers()
+        return
+      }
+      if (!props.active) return
+      await nextTick()
+      if (!initialized) await initTerminal()
+      else scheduleFit()
+      await nextTick()
+      term.value?.focus()
+    })
+
     watch(() => props.searchQuery, (query) => {
       if (!props.active || !query.trim()) {
         clearSearch()
-        return
       }
-      findNext()
+      // 查找与匹配计数由工作区触发（findNext/findPrevious），避免重复前进
     })
 
     watch([shellFontSize, shellLineHeight, terminalPreset], () => {
@@ -366,7 +474,7 @@ export default {
     }
 
     onMounted(() => {
-      if (props.connected && props.active) initTerminal()
+      if (props.active && props.viewVisible) initTerminal()
       EventsOn('theme:changed', onThemeChanged)
       window.addEventListener('click', hideContextMenu)
       window.addEventListener('blur', hideContextMenu)
@@ -380,7 +488,7 @@ export default {
       destroyTerminal()
     })
 
-    expose({ clear, fitAndResize, findNext, findPrevious, clearSearch })
+    expose({ clear, fitAndResize, findNext, findPrevious, clearSearch, getSelection })
 
     return {
       containerRef,

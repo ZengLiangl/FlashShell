@@ -2,6 +2,15 @@
   <div class="shell-monitor">
     <div class="monitor-header">
       <h3>机器监控</h3>
+      <el-button v-if="activeMachine" class="conn-toggle" size="small" :type="activeConnected ? 'danger' : 'primary'"
+        plain :title="activeConnected ? '断开连接（保留终端）' : '重新连接'" :loading="connecting"
+        @click="$emit('toggle-connection')">
+        <el-icon :size="14">
+          <SwitchButton v-if="activeConnected" />
+          <Connection v-else />
+        </el-icon>
+        <!-- <span>{{ activeConnected ? '断开' : '连接' }}</span> -->
+      </el-button>
     </div>
 
     <div v-if="!activeMachine" class="empty">连接机器后显示监控信息</div>
@@ -32,9 +41,11 @@
       <div class="metric">
         <div class="metric-head">
           <span>内存</span>
-          <span>{{ formatPct(snapshot?.memPercent) }} · {{ snapshot?.memUsed || '-' }}/{{ snapshot?.memTotal || '-' }}</span>
+          <span>{{ formatPct(snapshot?.memPercent) }} · {{ snapshot?.memUsed || '-' }}/{{ snapshot?.memTotal || '-'
+            }}</span>
         </div>
-        <el-progress :percentage="clampPct(snapshot?.memPercent)" :stroke-width="10" status="warning" :show-text="false" />
+        <el-progress :percentage="clampPct(snapshot?.memPercent)" :stroke-width="10" status="warning"
+          :show-text="false" />
       </div>
 
       <div class="top-block">
@@ -55,32 +66,29 @@
       </div>
 
       <div v-if="snapshot?.error" class="error">{{ snapshot.error }}</div>
-      <div class="updated">{{ loading ? '刷新中…' : updateText }}</div>
     </template>
   </div>
 </template>
 
 <script>
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Connection, SwitchButton } from '@element-plus/icons-vue'
 import * as App from '../../../wailsjs/go/app/App'
 
 export default {
   name: 'ShellMonitorPanel',
+  components: { Connection, SwitchButton },
   props: {
     activeMachine: { type: String, default: '' },
+    activeConnected: { type: Boolean, default: false },
+    connecting: { type: Boolean, default: false },
   },
-  emits: [],
+  emits: ['toggle-connection'],
   setup(props) {
     const snapshot = ref(null)
     const loading = ref(false)
     let timer = null
-
-    const updateText = computed(() => {
-      const ts = snapshot.value?.updatedAt
-      if (!ts) return ''
-      return `更新于 ${new Date(ts * 1000).toLocaleTimeString()}`
-    })
 
     const clampPct = (v) => {
       const n = Number(v) || 0
@@ -140,7 +148,7 @@ export default {
     onMounted(startTimer)
     onUnmounted(stopTimer)
 
-    return { snapshot, loading, updateText, clampPct, formatPct, formatPct1, copyHost }
+    return { snapshot, loading, clampPct, formatPct, formatPct1, copyHost }
   },
 }
 </script>
@@ -161,6 +169,8 @@ export default {
 .monitor-header {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
   margin-bottom: 10px;
 }
 
@@ -170,13 +180,20 @@ export default {
   font-weight: 600;
 }
 
+.conn-toggle {
+  flex-shrink: 0;
+  gap: 4px;
+}
+
 .machine-title {
   font-size: 15px;
   font-weight: 600;
   margin-bottom: 12px;
 }
 
-.field, .metric, .top-block {
+.field,
+.metric,
+.top-block {
   margin-bottom: 14px;
 }
 
@@ -193,7 +210,8 @@ export default {
   gap: 8px;
 }
 
-.mono, .value {
+.mono,
+.value {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 13px;
 }
@@ -240,7 +258,8 @@ export default {
   white-space: nowrap;
 }
 
-.empty, .empty-sm {
+.empty,
+.empty-sm {
   color: var(--app-text-muted);
   font-size: 12px;
   padding: 16px 0;
@@ -256,11 +275,5 @@ export default {
   color: var(--terminal-error);
   font-size: 12px;
   margin-top: 8px;
-}
-
-.updated {
-  margin-top: auto;
-  font-size: 11px;
-  color: var(--app-text-muted);
 }
 </style>

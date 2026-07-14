@@ -28,15 +28,10 @@
 
         <!-- 右侧终端输出 -->
         <el-main class="terminal-container">
-          <TerminalHeader :show-back="false"
-            :search-visible="terminalSearchVisible"
-            v-model:search-query="terminalSearchQuery"
-            :match-summary="terminalMatchSummary"
-            @clear="clearOutput" @refresh="refreshOutput"
-            @toggle-search="toggleTerminalSearch"
-            @search-next="gotoNextSearchMatch"
-            @search-prev="gotoPrevSearchMatch"
-            @close-search="closeTerminalSearch" />
+          <TerminalHeader :show-back="false" :search-visible="terminalSearchVisible"
+            v-model:search-query="terminalSearchQuery" :match-summary="terminalMatchSummary" @clear="clearOutput"
+            @refresh="refreshOutput" @toggle-search="toggleTerminalSearch" @search-next="gotoNextSearchMatch"
+            @search-prev="gotoPrevSearchMatch" @close-search="closeTerminalSearch" />
           <TerminalOutput ref="terminalOutputRef" :status="status" :output-lines="outputLines"
             :progress-percentage="progressPercentage" :progress-status="progressStatus"
             :search-query="terminalSearchQuery" :active-match-index="terminalActiveMatchIndex"
@@ -51,57 +46,29 @@
 
     <!-- Shell 视图：挂载后用 v-show 保留会话，可与任务并行 -->
     <div v-show="activeView === 'shell'" class="shell-view-host">
-      <ShellWorkspace
-        v-if="shellMounted"
-        :active="activeView === 'shell'"
-        :left-panel-width="Math.min(leftPanelWidth, 320)"
-        :is-resizing="isResizing"
-        :app-info="statusBarInfo"
-        :machines="shellMachines"
-        :sessions="shellSessions"
-        :connected-sessions="connectedSessions"
-        :connected-count="connectedCount"
-        v-model:active-machine="activeMachine"
-        :connecting-name="connectingName"
-        :testing-name="testingName"
-        @back="leaveShellMode"
-        @connect="(name) => connectShell(name)"
-        @disconnect="disconnectShell"
-        @test="testShellConnection"
-        @add-machine="openShellMachineDialog"
-        @edit-machine="openShellMachineEdit"
-        @start-resize="startResize"
-      />
+      <ShellWorkspace v-if="shellMounted" :active="activeView === 'shell'"
+        :left-panel-width="Math.min(leftPanelWidth, 320)" :is-resizing="isResizing" :app-info="statusBarInfo"
+        :machines="shellMachines" :sessions="shellSessions" :workspace-sessions="workspaceSessions"
+        :connected-count="connectedCount" :open-session-count="openSessionCount" v-model:active-machine="activeMachine"
+        :connecting-name="connectingName" :testing-name="testingName" @back="leaveShellMode"
+        @connect="(name) => connectShell(name)" @disconnect="disconnectShell" @close-session="closeShellSession"
+        @test="testShellConnection" @add-machine="openShellMachineDialog" @edit-machine="openShellMachineEdit"
+        @start-resize="startResize" />
     </div>
 
     <!-- 首页：任务模式 + Shell 模式入口 -->
     <template v-if="activeView === 'home'">
       <div class="projectlist-fullscreen">
-        <HomePage
-          ref="homePageRef"
-          :projects="projects"
-          :connected-count="connectedCount"
-          :has-task="!!selectedProject"
-          :task-running="status.isRunning"
-          @refresh="refreshConfig"
-          @select-project="selectProject"
-          @resume-task="resumeTaskView"
-          @open-shell="enterShellMode"
-          @connect-machine="openShellAndConnect"
-          @add-machine="openShellMachineDialog"
-          @open-system-settings="openSettingsHub('general')"
-          @open-execution-history="openSettingsHub('history')"
-        />
+        <HomePage ref="homePageRef" :projects="projects" :connected-count="connectedCount" :has-task="!!selectedProject"
+          :task-running="status.isRunning" @refresh="refreshConfig" @select-project="selectProject"
+          @resume-task="resumeTaskView" @open-shell="enterShellMode" @connect-machine="openShellAndConnect"
+          @add-machine="openShellMachineDialog" @open-system-settings="openSettingsHub('general')"
+          @open-execution-history="openSettingsHub('history')" />
       </div>
     </template>
 
-    <SettingsHubDialog
-      v-model="settingsHubVisible"
-      :initial-section="settingsSection"
-      :edit-machine-id="machineEditId"
-      @machines-changed="onMachinesChanged"
-      @machines-closed="machineEditId = ''"
-    />
+    <SettingsHubDialog v-model="settingsHubVisible" :initial-section="settingsSection" :edit-machine-id="machineEditId"
+      @machines-changed="onMachinesChanged" @machines-closed="machineEditId = ''" />
 
     <!-- 关于弹框 -->
     <AboutDialog v-model="aboutVisible" :intro-html="aboutIntroHtml" />
@@ -191,12 +158,15 @@ export default {
       shellMachines,
       connectingName,
       testingName,
+      workspaceSessions,
       connectedSessions,
       connectedCount,
+      openSessionCount,
       syncSessions,
       loadMachines: loadShellMachines,
       connect: connectShell,
       disconnect: disconnectShell,
+      closeSession: closeShellSession,
       testMachine: testShellConnection,
     } = useShell();
     const terminalOutputRef = ref(null);
@@ -215,7 +185,7 @@ export default {
       }
     };
     const statusBarInfo = computed(() => {
-      const base = 'FlashDock v1.2.0';
+      const base = 'FlashDock v1.0.0';
       if (!sessionId.value) return base;
       return `${base} · 会话 ${sessionId.value.slice(0, 8)}`;
     });
@@ -443,8 +413,9 @@ export default {
     };
 
     const openShellAndConnect = async (machineName) => {
+      const ok = await connectShell(machineName);
+      if (!ok) return;
       await enterShellMode();
-      await connectShell(machineName);
     };
 
     const openSettingsHub = (section = 'general') => {
@@ -874,7 +845,7 @@ export default {
       loadConfig();
       loadTheme();
       loadShortcutMap();
-      App.GetSessionInfo().then((info) => { sessionId.value = info.sessionId || ''; }).catch(() => {});
+      App.GetSessionInfo().then((info) => { sessionId.value = info.sessionId || ''; }).catch(() => { });
 
       // 监听输出与执行状态事件（替代轮询）
       EventsOn("output:line", handleOutputLine);
@@ -1268,12 +1239,15 @@ export default {
       connectingName,
       testingName,
       connectedSessions,
+      workspaceSessions,
       connectedCount,
+      openSessionCount,
       enterShellMode,
       leaveShellMode,
       openShellAndConnect,
       connectShell,
       disconnectShell,
+      closeShellSession,
       openShellMachineDialog,
       openShellMachineEdit,
       onMachinesChanged,

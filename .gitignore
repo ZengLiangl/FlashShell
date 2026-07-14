@@ -36,5 +36,9 @@ Thumbs.db
 # Config files (may contain sensitive information)
 config.yaml
 
+# Local secrets (GitHub PAT for private release checks, etc.)
+secrets/*
+!secrets/README.md
+
 # Logs
 *.log

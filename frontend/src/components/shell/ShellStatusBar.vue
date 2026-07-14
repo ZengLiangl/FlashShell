@@ -1,10 +1,6 @@
 <template>
   <div class="shell-status-bar">
     <div class="status-info">
-      <el-tag v-if="connectedCount > 0" type="success" size="small">
-        {{ connectedCount }} 个会话
-      </el-tag>
-      <el-tag v-else type="info" size="small">无活动会话</el-tag>
       <el-tag v-if="activeMachine" size="small" type="info">{{ activeMachine }}</el-tag>
     </div>
     <span class="app-info">{{ appInfo }}</span>

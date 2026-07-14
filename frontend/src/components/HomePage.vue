@@ -1,143 +1,121 @@
 <template>
   <div class="home-page">
-    <!-- 任务模式 -->
-    <section class="home-section">
-      <div class="section-header">
-        <div class="section-title">
-          <el-icon class="section-icon task-icon">
-            <Folder />
-          </el-icon>
-          <div class="section-text">
-            <h3>任务模式</h3>
-            <span class="section-desc">执行预设的子项目与命令流程</span>
+    <header class="home-hero">
+      <div class="hero-copy">
+        <h2 class="hero-title">FlashDock</h2>
+        <p class="hero-subtitle">
+          {{ hasProjects ? '选择一种方式开始：跑任务，或连机器进 Shell' : '连接机器，进入 Shell 开始工作' }}
+        </p>
+      </div>
+      <div class="hero-actions">
+        <!-- <el-button
+          v-if="hasTask"
+          type="primary"
+          @click="$emit('resume-task')"
+        >
+          {{ taskRunning ? '返回执行中任务' : '继续当前任务' }}
+        </el-button> -->
+        <!-- <el-button @click="$emit('open-execution-history')">执行历史</el-button> -->
+        <el-button :icon="Refresh" circle title="刷新" @click="handleRefresh" />
+      </div>
+    </header>
+
+    <div class="home-zones" :class="{ 'shell-only': !hasProjects }">
+      <!-- 任务区：有项目时才展示 -->
+      <section v-if="hasProjects" class="zone zone-task" aria-labelledby="zone-task-title">
+        <div class="zone-head">
+          <div class="zone-label">
+            <span class="zone-dot task-dot" aria-hidden="true"></span>
+            <div>
+              <h3 id="zone-task-title">任务模式</h3>
+              <p>选择项目，按预设流程执行命令</p>
+            </div>
           </div>
         </div>
-        <div class="header-actions">
-          <el-button
-            v-if="hasTask"
-            size="small"
-            type="primary"
-            plain
-            @click="$emit('resume-task')"
-          >
-            {{ taskRunning ? '返回执行中任务' : '继续当前任务' }}
-          </el-button>
-          <el-button size="small" @click="$emit('open-execution-history')">执行历史</el-button>
-          <el-button size="small" @click="handleRefresh">
-            <el-icon>
-              <Refresh />
-            </el-icon>
-          </el-button>
-        </div>
-      </div>
 
-      <div class="mode-panel task-panel">
-        <div v-if="projects.length === 0" class="empty-hint">暂无项目配置</div>
-        <div v-else class="card-grid">
-          <div
-            v-for="project in projects"
-            :key="project.name"
-            class="entry-card task-card"
-            @click="$emit('select-project', project)"
-          >
-            <div class="card-header">
-              <div class="avatar-icon task-avatar">
-                <el-icon>
+        <div class="zone-body">
+          <div class="item-grid">
+            <button v-for="project in projects" :key="project.name" type="button" class="item-card"
+              @click="$emit('select-project', project)">
+              <div class="item-icon task-icon">
+                <el-icon :size="18">
                   <Folder />
                 </el-icon>
               </div>
-              <div class="header-meta">
-                <div class="card-name">{{ project.name }}</div>
-                <div class="card-desc">{{ project.description || '暂无描述' }}</div>
+              <div class="item-meta">
+                <span class="item-name">{{ project.name }}</span>
+                <span class="item-desc">{{ project.description || '暂无描述' }}</span>
               </div>
-            </div>
-            <div class="card-footer">
-              <el-tag size="small" type="info" effect="plain">{{ (project.subprojects || []).length }} 子项目</el-tag>
-            </div>
+              <span class="item-badge">{{ (project.subprojects || []).length }} 子项目</span>
+            </button>
           </div>
         </div>
-      </div>
-    </section>
+      </section>
 
-    <!-- Shell 模式 -->
-    <section class="home-section shell-section">
-      <div class="section-header">
-        <div class="section-title">
-          <el-icon class="section-icon shell-icon">
-            <Monitor />
-          </el-icon>
-          <div class="section-text">
-            <h3>Shell 模式</h3>
-            <span class="section-desc">SSH 连接机器，交互式执行命令</span>
-          </div>
-          <el-tag v-if="connectedCount > 0" size="small" type="success" effect="plain">
-            {{ connectedCount }} 个会话进行中
-          </el-tag>
-        </div>
-        <el-button size="small" type="primary" plain @click="$emit('open-shell')">
-          进入 Shell 终端
-        </el-button>
-      </div>
-
-      <div class="mode-panel shell-panel">
-        <div class="shell-panel-header">
-          <div class="shell-panel-title" @click="$emit('open-shell')">
-            <div class="avatar-icon shell-avatar">
-              <el-icon>
-                <Monitor />
-              </el-icon>
-            </div>
+      <!-- Shell 区 -->
+      <section class="zone zone-shell" aria-labelledby="zone-shell-title">
+        <div class="zone-head">
+          <div class="zone-label">
+            <span class="zone-dot shell-dot" aria-hidden="true"></span>
             <div>
-              <div class="card-name">远程 Shell</div>
-              <div class="card-desc">管理多个 SSH 会话，点击标题进入终端</div>
+              <h3 id="zone-shell-title">
+                Shell 模式
+                <el-tag v-if="connectedCount > 0" size="small" type="success" effect="plain" class="session-tag">
+                  {{ connectedCount }} 会话进行中
+                </el-tag>
+              </h3>
+              <p>点机器直接连接；或先进终端再选机器</p>
             </div>
           </div>
-          <div class="shell-panel-actions">
+          <div class="zone-actions">
             <el-button size="small" text type="primary" @click="$emit('add-machine')">
               <el-icon>
                 <Plus />
               </el-icon>
               添加机器
             </el-button>
-            <el-icon class="shell-enter-icon" @click="$emit('open-shell')">
-              <ArrowRight />
-            </el-icon>
+            <el-button size="small" type="success" plain @click="$emit('open-shell')">
+              进入终端
+            </el-button>
           </div>
         </div>
 
-        <div class="shell-panel-body">
-          <div v-if="machineGroups.length === 0" class="empty-hint">暂无机器，请点击右上角添加</div>
-          <div v-for="group in machineGroups" :key="group.name" class="machine-group">
-            <div class="group-title">{{ group.name }}</div>
-            <div class="group-cards">
-              <div
-                v-for="machine in group.machines"
-                :key="machine.name"
-                class="entry-card machine-card compact-card"
-                @click="$emit('connect-machine', machine.name)"
-              >
-                <div class="card-header">
-                  <div class="avatar-icon machine-avatar">
-                    <el-icon>
-                      <Connection />
+        <div class="zone-body">
+          <div v-if="machineGroups.length === 0" class="empty-hint">
+            <p>暂无机器</p>
+            <span>点击右上角「添加机器」开始</span>
+          </div>
+          <template v-else>
+            <div v-for="group in machineGroups" :key="group.name" class="machine-group">
+              <div class="group-title">{{ group.name }}</div>
+              <div class="item-grid machines">
+                <button v-for="machine in group.machines" :key="machine.name" type="button"
+                  class="item-card machine-card" @click="$emit('connect-machine', machine.name)">
+                  <div class="item-icon machine-icon">
+                    <el-icon :size="18">
+                      <Monitor />
                     </el-icon>
                   </div>
-                  <div class="header-meta">
-                    <div class="card-name">{{ machine.name }}</div>
-                    <div class="card-desc">{{ machine.key_file || '密钥/密码' }}</div>
+                  <div class="item-meta">
+                    <span class="item-name">{{ machine.name }}</span>
+                    <span class="item-desc">{{ machineHost(machine) }}</span>
                   </div>
-                </div>
+                  <el-icon class="item-chevron">
+                    <ArrowRight />
+                  </el-icon>
+                </button>
               </div>
             </div>
-          </div>
+          </template>
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
   </div>
 </template>
 
 <script>
 import { ref, computed, onMounted } from 'vue'
+import { Refresh } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
 import { groupMachines } from '../utils/machineGroups'
 
@@ -159,7 +137,7 @@ export default {
     'open-system-settings',
     'open-execution-history',
   ],
-  setup(_, { emit }) {
+  setup(props, { emit }) {
     const machines = ref([])
 
     const loadMachines = async () => {
@@ -171,6 +149,14 @@ export default {
     }
 
     const machineGroups = computed(() => groupMachines(machines.value))
+    const hasProjects = computed(() => (props.projects || []).length > 0)
+
+    const machineHost = (machine) => {
+      const host = machine.host || machine.ip || ''
+      const port = machine.port ? `:${machine.port}` : ''
+      if (host) return `${host}${port}`
+      return machine.key_file || '点击连接'
+    }
 
     const handleRefresh = async () => {
       await loadMachines()
@@ -179,7 +165,15 @@ export default {
 
     onMounted(loadMachines)
 
-    return { machines, machineGroups, loadMachines, handleRefresh }
+    return {
+      Refresh,
+      machines,
+      machineGroups,
+      hasProjects,
+      machineHost,
+      loadMachines,
+      handleRefresh,
+    }
   },
 }
 </script>
@@ -189,247 +183,305 @@ export default {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 24px 28px 36px;
-  background: var(--app-bg);
+  padding: 28px 32px 40px;
+  background:
+    radial-gradient(ellipse 80% 50% at 0% 0%, color-mix(in srgb, var(--app-accent-color) 8%, transparent), transparent 55%),
+    radial-gradient(ellipse 70% 45% at 100% 0%, color-mix(in srgb, #67c23a 7%, transparent), transparent 50%),
+    var(--app-bg);
 }
 
-.home-section {
-  margin-bottom: 28px;
+.home-hero {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 24px;
 }
 
-.shell-section {
-  margin-bottom: 0;
+.hero-title {
+  margin: 0 0 6px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--app-text);
+  line-height: 1.2;
 }
 
-.mode-panel {
+.hero-subtitle {
+  margin: 0;
+  font-size: 14px;
+  color: var(--app-text-muted);
+  line-height: 1.45;
+}
+
+.hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.home-zones {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: stretch;
+  min-height: min(560px, calc(100vh - 180px));
+}
+
+.home-zones.shell-only {
+  grid-template-columns: 1fr;
+}
+
+.home-zones.shell-only .zone-shell {
+  /* 无任务配置时 Shell 占满可用区域 */
+  min-height: min(640px, calc(100vh - 170px));
+}
+
+.home-zones.shell-only .item-grid.machines {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 10px;
+}
+
+.zone {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
   border: 1px solid var(--app-border);
-  border-radius: 12px;
+  border-radius: 14px;
   background: var(--app-panel-bg);
   overflow: hidden;
 }
 
-.task-panel {
-  padding: 16px;
-  border-color: rgba(64, 158, 255, 0.35);
+.zone-task {
+  border-top: 3px solid var(--app-accent-color);
 }
 
-.shell-panel {
-  border-color: rgba(103, 194, 58, 0.45);
+.zone-shell {
+  border-top: 3px solid #67c23a;
 }
 
-.shell-panel-header {
+.zone-head {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 16px;
+  padding: 16px 18px 12px;
   border-bottom: 1px solid var(--app-border);
-  background: rgba(103, 194, 58, 0.06);
 }
 
-.shell-panel-title {
+.zone-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-width: 0;
+}
+
+.zone-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 7px;
+  flex-shrink: 0;
+}
+
+.task-dot {
+  background: var(--app-accent-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-accent-color) 22%, transparent);
+}
+
+.shell-dot {
+  background: #67c23a;
+  box-shadow: 0 0 0 3px rgba(103, 194, 58, 0.22);
+}
+
+.zone-label h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--app-text);
+  line-height: 1.35;
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-width: 0;
-  flex: 1;
-  cursor: pointer;
-  transition: opacity 0.2s ease;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
-.shell-panel-title:hover {
-  opacity: 0.85;
+.zone-label p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--app-text-muted);
+  line-height: 1.4;
 }
 
-.shell-panel-actions {
+.session-tag {
+  vertical-align: middle;
+}
+
+.zone-actions {
   display: flex;
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
 }
 
-.shell-enter-icon {
-  color: #67c23a;
-  font-size: 18px;
-  cursor: pointer;
-  padding: 4px;
-}
-
-.shell-panel-body {
-  padding: 16px;
-}
-
-.machine-group + .machine-group {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px dashed var(--app-border);
-}
-
-.machine-group .group-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--app-text-secondary);
-  margin-bottom: 10px;
-}
-
-.group-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  justify-content: start;
-  gap: 12px;
-}
-
-.compact-card {
-  aspect-ratio: auto;
-  min-height: 72px;
-}
-
-.section-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 14px;
-  gap: 12px;
-}
-
-.section-title {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.section-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-
-.section-title h3 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--app-text);
-  line-height: 1.3;
-}
-
-.section-desc {
-  font-size: 12px;
-  color: var(--app-text-muted);
-  line-height: 1.3;
-}
-
-.section-icon {
-  font-size: 20px;
-  flex-shrink: 0;
-}
-
-.task-icon {
-  color: var(--app-accent-color);
-}
-
-.shell-icon {
-  color: #67c23a;
-}
-
-.header-actions {
-  display: flex;
-  gap: 8px;
-  flex-shrink: 0;
+.zone-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 14px 16px 18px;
 }
 
 .empty-hint {
-  text-align: center;
-  color: var(--app-text-muted);
-  padding: 28px 16px;
-}
-
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  justify-content: start;
-  gap: 14px;
-}
-
-.entry-card {
-  padding: 14px;
-  background: var(--app-card-bg);
-  border-radius: 10px;
-  border: 1px solid var(--app-card-border);
-  cursor: pointer;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
-  min-height: 120px;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 180px;
+  color: var(--app-text-muted);
+  text-align: center;
 }
 
-.entry-card:hover {
+.empty-hint p {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 560;
+  color: var(--app-text-secondary);
+}
+
+.empty-hint span {
+  font-size: 12px;
+}
+
+.item-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.item-grid.machines {
+  gap: 8px;
+}
+
+.machine-group+.machine-group {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--app-border);
+}
+
+.group-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--app-text-muted);
+  letter-spacing: 0.02em;
+  margin-bottom: 8px;
+  text-transform: none;
+}
+
+.item-card {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 12px;
+  border: 1px solid var(--app-card-border);
+  border-radius: 10px;
+  background: var(--app-card-bg);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.item-card:hover {
   border-color: var(--app-accent-color);
-  box-shadow: 0 6px 18px var(--app-card-hover-shadow);
-  transform: translateY(-2px);
+  background: var(--app-card-active-bg);
+  transform: translateY(-1px);
 }
 
 .machine-card:hover {
-  border-color: #e6a23c;
+  border-color: #67c23a;
 }
 
-.card-header {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-}
-
-.avatar-icon {
+.item-icon {
   width: 36px;
   height: 36px;
-  border-radius: 8px;
+  border-radius: 9px;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 
-.task-avatar {
+.task-icon {
   background: var(--app-accent-bg);
   color: var(--app-accent-color);
 }
 
-.shell-avatar {
-  background: rgba(103, 194, 58, 0.15);
+.machine-icon {
+  background: rgba(103, 194, 58, 0.14);
   color: #67c23a;
 }
 
-.machine-avatar {
-  background: rgba(230, 162, 60, 0.15);
-  color: #e6a23c;
-}
-
-.header-meta {
+.item-meta {
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.card-name {
+.item-name {
+  font-size: 14px;
   font-weight: 600;
   color: var(--app-text);
-  margin-bottom: 4px;
-  word-break: break-all;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.card-desc {
+.item-desc {
   font-size: 12px;
   color: var(--app-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
 }
 
-.card-footer {
-  display: flex;
-  gap: 6px;
-  margin-top: 12px;
+.item-badge {
+  font-size: 11px;
+  color: var(--app-text-muted);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-text-muted) 12%, transparent);
+  white-space: nowrap;
+}
+
+.item-chevron {
+  color: var(--app-text-muted);
+  font-size: 14px;
+  opacity: 0.7;
+}
+
+.machine-card:hover .item-chevron {
+  color: #67c23a;
+  opacity: 1;
+}
+
+@media (max-width: 960px) {
+  .home-page {
+    padding: 20px 16px 28px;
+  }
+
+  .home-hero {
+    flex-direction: column;
+  }
+
+  .home-zones {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
 }
 </style>

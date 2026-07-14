@@ -2,7 +2,7 @@
   <div class="shell-workspace">
     <el-container class="shell-body main-container">
       <el-aside
-        v-if="connectedCount > 0"
+        v-if="openSessionCount > 0"
         :width="leftCollapsed ? '0px' : leftPanelWidth + 'px'"
         class="left-panel shell-left-panel"
         :class="{ collapsed: leftCollapsed, resizing: isResizing }"
@@ -11,12 +11,15 @@
         <ShellMonitorPanel
           v-show="!leftCollapsed"
           :active-machine="activeMachine"
+          :active-connected="activeConnected"
+          :connecting="connectingName === activeMachine"
+          @toggle-connection="onToggleConnection"
         />
       </el-aside>
 
       <el-main class="terminal-container shell-terminal-container">
         <button
-          v-if="connectedCount > 0"
+          v-if="openSessionCount > 0"
           class="panel-expand-btn"
           type="button"
           :title="leftCollapsed ? '展开监控' : '收起监控'"
@@ -31,16 +34,19 @@
         <ShellTerminalTabs
           ref="tabsRef"
           class="shell-tabs-area"
-          :sessions="connectedSessions"
+          :sessions="workspaceSessions"
           :active-machine="activeMachine"
           :search-query="searchQuery"
+          :view-visible="active"
           @update:active-machine="(name) => $emit('update:activeMachine', name)"
-          @disconnect="(name) => $emit('disconnect', name)"
+          @close-session="(name) => $emit('close-session', name)"
+          @reconnect="onReconnect"
           @clear="onClear"
           @open-picker="pickerVisible = true"
           @cd-hint="onCdHint"
           @back="$emit('back')"
           @open-search="openSearch"
+          @search-result="onSearchResult"
         >
           <template #empty>
             <ShellConnectionHistory
@@ -93,7 +99,7 @@
 </template>
 
 <script>
-import { ref, reactive, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import ShellMonitorPanel from '../components/shell/ShellMonitorPanel.vue'
 import ShellTerminalTabs from '../components/shell/ShellTerminalTabs.vue'
@@ -122,14 +128,15 @@ export default {
     appInfo: { type: String, default: '' },
     machines: { type: Array, default: () => [] },
     sessions: { type: Array, default: () => [] },
-    connectedSessions: { type: Array, default: () => [] },
+    workspaceSessions: { type: Array, default: () => [] },
     connectedCount: { type: Number, default: 0 },
+    openSessionCount: { type: Number, default: 0 },
     activeMachine: { type: String, default: '' },
     connectingName: { type: String, default: '' },
     testingName: { type: String, default: '' },
   },
   emits: [
-    'back', 'connect', 'disconnect', 'test', 'add-machine', 'edit-machine',
+    'back', 'connect', 'disconnect', 'close-session', 'test', 'add-machine', 'edit-machine',
     'start-resize', 'update:activeMachine', 'history-changed',
   ],
   setup(props, { emit }) {
@@ -143,6 +150,26 @@ export default {
     const historyRecords = ref([])
     const cwdHints = reactive({})
     const ptyCwds = reactive({})
+
+    const activeConnected = computed(() => {
+      const name = props.activeMachine
+      if (!name) return false
+      return (props.workspaceSessions || []).some((s) => s.machineName === name && s.connected)
+    })
+
+    const formatSearchSummary = (result) => {
+      if (!result) return '未找到'
+      const total = Number(result.resultCount) || 0
+      if (!total) return '未找到'
+      const idx = Number(result.resultIndex)
+      if (idx < 0) return `${total}+`
+      return `${idx + 1}/${total}`
+    }
+
+    const onSearchResult = (result) => {
+      if (!searchVisible.value) return
+      searchMatchSummary.value = formatSearchSummary(result)
+    }
 
     const ensurePtyCwd = async (machineName) => {
       if (ptyCwds[machineName]) return ptyCwds[machineName]
@@ -172,15 +199,35 @@ export default {
     }
 
     const toggleSearch = () => {
-      searchVisible.value = !searchVisible.value
-      if (!searchVisible.value) {
-        searchQuery.value = ''
-        tabsRef.value?.clearSearch?.()
+      if (searchVisible.value) {
+        closeSearch()
+        return
       }
+      openSearch()
     }
 
-    const openSearch = () => {
+    const openSearch = (prefill) => {
       searchVisible.value = true
+      // Vue 事件参数：右键查找会传入选中文本；快捷键无参时从终端读取选区
+      let text = ''
+      if (typeof prefill === 'string') {
+        text = prefill
+      } else if (Array.isArray(prefill)) {
+        text = prefill[0] || ''
+      }
+      if (!text) {
+        text = tabsRef.value?.getSelection?.() || ''
+      }
+      if (text) {
+        searchQuery.value = text
+      }
+      nextTick(() => {
+        filePanelRef.value?.focusSearch?.()
+        if (searchQuery.value.trim()) {
+          const result = tabsRef.value?.findNext?.()
+          searchMatchSummary.value = formatSearchSummary(result)
+        }
+      })
     }
 
     const findShortcut = ref(mergeShortcuts().find)
@@ -237,16 +284,17 @@ export default {
       searchVisible.value = false
       searchQuery.value = ''
       tabsRef.value?.clearSearch?.()
+      searchMatchSummary.value = ''
     }
 
     const findNext = () => {
-      const found = tabsRef.value?.findNext?.()
-      searchMatchSummary.value = found ? '已匹配' : '未找到'
+      const result = tabsRef.value?.findNext?.()
+      searchMatchSummary.value = formatSearchSummary(result)
     }
 
     const findPrevious = () => {
-      const found = tabsRef.value?.findPrevious?.()
-      searchMatchSummary.value = found ? '已匹配' : '未找到'
+      const result = tabsRef.value?.findPrevious?.()
+      searchMatchSummary.value = formatSearchSummary(result)
     }
 
     const refreshSearch = () => {
@@ -274,6 +322,20 @@ export default {
       pickerVisible.value = false
       await nextTick()
       await loadHistory()
+    }
+
+    const onReconnect = (name) => {
+      emit('connect', name || props.activeMachine)
+    }
+
+    const onToggleConnection = () => {
+      const name = props.activeMachine
+      if (!name) return
+      if (activeConnected.value) {
+        emit('disconnect', name)
+      } else {
+        emit('connect', name)
+      }
     }
 
     const clearHistory = async () => {
@@ -323,7 +385,7 @@ export default {
       tabsRef.value?.fitActive?.()
     }
 
-    watch(() => props.connectedSessions, async (sessions) => {
+    watch(() => props.workspaceSessions, async (sessions) => {
       const alive = new Set((sessions || []).map((s) => s?.machineName).filter(Boolean))
       for (const name of Object.keys(ptyCwds)) {
         if (!alive.has(name)) {
@@ -332,9 +394,8 @@ export default {
         }
       }
       for (const s of sessions || []) {
-        if (s?.machineName && !ptyCwds[s.machineName]) {
+        if (s?.machineName && s.connected && !ptyCwds[s.machineName]) {
           const home = await ensurePtyCwd(s.machineName)
-          // 初始 hint = login home，供 SFTP 面板打开时使用
           if (!cwdHints[s.machineName]) {
             cwdHints[s.machineName] = home
           }
@@ -342,7 +403,7 @@ export default {
       }
     }, { immediate: true, deep: true })
 
-    watch(() => props.connectedCount, async () => {
+    watch(() => props.openSessionCount, async () => {
       await loadHistory()
       await nextTick()
       tabsRef.value?.fitActive?.()
@@ -360,6 +421,20 @@ export default {
       tabsRef.value?.fitActive?.()
     })
 
+    watch(searchQuery, (q) => {
+      if (!searchVisible.value) return
+      if (!q.trim()) {
+        searchMatchSummary.value = ''
+        tabsRef.value?.clearSearch?.()
+        return
+      }
+      // 输入时由终端 watch 触发 find；summary 在下一帧由 findNext 结果更新
+      nextTick(() => {
+        const result = tabsRef.value?.findNext?.()
+        searchMatchSummary.value = formatSearchSummary(result)
+      })
+    })
+
     return {
       tabsRef,
       filePanelRef,
@@ -370,6 +445,7 @@ export default {
       pickerVisible,
       historyRecords,
       cwdHints,
+      activeConnected,
       clearTerminal,
       onClear,
       toggleSearch,
@@ -381,6 +457,9 @@ export default {
       toggleLeftPanel,
       onHistoryConnect,
       onPickerConnect,
+      onReconnect,
+      onToggleConnection,
+      onSearchResult,
       clearHistory,
       removeHistory,
       onCdHint,

@@ -55,8 +55,41 @@ jobs:
         run: npm install
         working-directory: frontend
 
+      - name: Inject app version from tag
+        shell: bash
+        run: |
+          RAW="${{ github.ref_name }}"
+          if [[ "$RAW" == v* ]]; then
+            VER="${RAW#v}"
+          else
+            VER="$RAW"
+          fi
+          echo "APP_VERSION=$VER" >> "$GITHUB_ENV"
+          # 同步 wails.json productVersion（安装包元数据）
+          python3 - <<'PY'
+          import json, os
+          ver = os.environ["APP_VERSION"]
+          path = "wails.json"
+          with open(path, encoding="utf-8") as f:
+              cfg = json.load(f)
+          cfg.setdefault("info", {})["productVersion"] = ver
+          with open(path, "w", encoding="utf-8") as f:
+              json.dump(cfg, f, indent=4, ensure_ascii=False)
+              f.write("\n")
+          print(f"wails.json productVersion -> {ver}")
+          PY
+
       - name: Build
-        run: wails build -clean -platform ${{ matrix.platform }}
+        run: |
+          wails build -clean -platform ${{ matrix.platform }} \
+            -ldflags "-X FlashDock/app.Version=${APP_VERSION}"
+        env:
+          APP_VERSION: ${{ env.APP_VERSION }}
+          # 可选：仓库 Settings → Secrets 配置 FLASHDOCK_GITHUB_TOKEN，用于嵌入更新检查
+          # 运行时也可由环境变量 FLASHDOCK_GITHUB_TOKEN 提供
+          FLASHDOCK_GITHUB_TOKEN: ${{ secrets.FLASHDOCK_GITHUB_TOKEN }}
+        # 若需把 token 编进二进制（不推荐默认开启），可改用：
+        # -ldflags "-X FlashDock/app.Version=${APP_VERSION} -X FlashDock/app.GitHubToken=${FLASHDOCK_GITHUB_TOKEN}"
 
       - name: Package Windows exe
         if: matrix.kind == 'windows'

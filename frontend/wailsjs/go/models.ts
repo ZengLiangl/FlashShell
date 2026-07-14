@@ -1,3 +1,36 @@
+export namespace app {
+	
+	export class UpdateCheckResult {
+	    currentVersion: string;
+	    latestVersion: string;
+	    hasUpdate: boolean;
+	    releaseName: string;
+	    releaseNotes: string;
+	    releaseURL: string;
+	    publishedAt: string;
+	    checkedAt: string;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateCheckResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.currentVersion = source["currentVersion"];
+	        this.latestVersion = source["latestVersion"];
+	        this.hasUpdate = source["hasUpdate"];
+	        this.releaseName = source["releaseName"];
+	        this.releaseNotes = source["releaseNotes"];
+	        this.releaseURL = source["releaseURL"];
+	        this.publishedAt = source["publishedAt"];
+	        this.checkedAt = source["checkedAt"];
+	        this.error = source["error"];
+	    }
+	}
+
+}
+
 export namespace data {
 	
 	export class GlobalAccount {

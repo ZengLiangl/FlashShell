@@ -68,6 +68,33 @@
             <el-form-item label="会话 ID">
                 <el-input :model-value="sessionId" readonly />
             </el-form-item>
+
+            <el-divider content-position="left">版本更新</el-divider>
+            <el-form-item label="当前版本">
+                <span class="version-text">{{ appVersion }}</span>
+            </el-form-item>
+            <el-form-item label="检查更新">
+                <div class="update-row">
+                    <el-button size="small" :loading="checkingUpdate" @click="checkUpdate">检查更新</el-button>
+                    <el-button
+                        v-if="updateResult?.hasUpdate && updateResult?.releaseURL"
+                        size="small"
+                        type="primary"
+                        @click="openRelease"
+                    >
+                        打开下载页
+                    </el-button>
+                </div>
+                <div v-if="updateResult?.hasUpdate" class="update-tip warn">
+                    发现新版本 {{ updateResult.latestVersion }}
+                </div>
+                <div v-else-if="updateResult && !updateResult.error" class="update-tip ok">
+                    已是最新版本
+                </div>
+                <div v-else-if="updateResult?.error" class="update-tip err">
+                    {{ updateResult.error }}
+                </div>
+            </el-form-item>
         </el-form>
 
         <div class="panel-actions">
@@ -112,6 +139,9 @@ export default {
         const saving = ref(false)
         const savingAccount = ref(false)
         const sessionId = ref('')
+        const appVersion = ref('')
+        const checkingUpdate = ref(false)
+        const updateResult = ref(null)
         const accounts = ref([])
         const accountEditVisible = ref(false)
         const editingAccountIndex = ref(-1)
@@ -139,6 +169,28 @@ export default {
             accounts.value = await App.GetGlobalAccounts() || []
             const session = await App.GetSessionInfo()
             sessionId.value = session.sessionId || ''
+            try {
+                appVersion.value = await App.GetAppVersion() || ''
+            } catch {
+                appVersion.value = ''
+            }
+            updateResult.value = null
+        }
+
+        const checkUpdate = async () => {
+            checkingUpdate.value = true
+            try {
+                updateResult.value = await App.CheckForUpdates()
+            } catch (e) {
+                updateResult.value = { error: String(e), hasUpdate: false }
+            } finally {
+                checkingUpdate.value = false
+            }
+        }
+
+        const openRelease = () => {
+            const url = updateResult.value?.releaseURL
+            if (url) App.OpenReleaseURL(url)
         }
 
         watch(() => props.modelValue, (open) => {
@@ -241,6 +293,11 @@ export default {
             saving,
             savingAccount,
             sessionId,
+            appVersion,
+            checkingUpdate,
+            updateResult,
+            checkUpdate,
+            openRelease,
             accountEditVisible,
             editingAccountIndex,
             accountForm,
@@ -269,6 +326,36 @@ export default {
 
 .account-toolbar {
     margin-bottom: 8px;
+}
+
+.version-text {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 13px;
+}
+
+.update-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.update-tip {
+    margin-top: 8px;
+    font-size: 12px;
+    line-height: 1.45;
+}
+
+.update-tip.warn {
+    color: #e6a23c;
+}
+
+.update-tip.ok {
+    color: #67c23a;
+}
+
+.update-tip.err {
+    color: #f56c6c;
 }
 
 .field-hint {

@@ -15,9 +15,18 @@
                         @keydown.esc.prevent="$emit('close-search')"
                     />
                     <span v-if="localQuery" class="search-count">{{ matchSummary }}</span>
-                    <el-button size="small" text @click="$emit('search-prev')">上一个</el-button>
-                    <el-button size="small" text @click="$emit('search-next')">下一个</el-button>
-                    <el-button size="small" text @click="$emit('close-search')">关闭</el-button>
+                    <div class="search-actions">
+                        <button type="button" class="search-icon-btn" title="上一个" @click="$emit('search-prev')">
+                            <el-icon :size="14"><CaretTop /></el-icon>
+                        </button>
+                        <button type="button" class="search-icon-btn" title="下一个" @click="$emit('search-next')">
+                            <el-icon :size="14"><CaretBottom /></el-icon>
+                        </button>
+                        <span class="search-sep" aria-hidden="true"></span>
+                        <button type="button" class="search-icon-btn search-close" title="关闭" @click="$emit('close-search')">
+                            <el-icon :size="14"><Close /></el-icon>
+                        </button>
+                    </div>
                 </div>
             </div>
             <div class="actions-right">
@@ -118,5 +127,51 @@ export default {
     font-size: 12px;
     color: var(--app-text-secondary, #909399);
     white-space: nowrap;
+    min-width: 2.5em;
+}
+
+.search-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+}
+
+.search-sep {
+    width: 1px;
+    height: 12px;
+    margin: 0 2px;
+    background: color-mix(in srgb, var(--app-text-muted, #909399) 35%, transparent);
+}
+
+.search-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 26px;
+    height: 26px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: transparent;
+    color: var(--app-text-secondary, #909399);
+    cursor: pointer;
+    transition: color 0.15s ease, background 0.15s ease;
+}
+
+.search-icon-btn:hover {
+    color: var(--app-accent-color, #409eff);
+    background: color-mix(in srgb, var(--app-accent-color, #409eff) 14%, transparent);
+}
+
+.search-icon-btn:active {
+    transform: translateY(0.5px);
+}
+
+.search-close:hover {
+    color: #f56c6c;
+    background: rgba(245, 108, 108, 0.12);
 }
 </style>

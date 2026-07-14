@@ -16,9 +16,25 @@
             <el-divider />
 
             <div class="meta">
-                <p><strong>版本</strong>：v1.2.0</p>
+                <p><strong>版本</strong>：{{ versionLabel }}</p>
                 <p><strong>框架</strong>：Wails v2 + Vue 3 + Element Plus + xterm.js</p>
                 <p><strong>开源协议</strong>：MIT</p>
+            </div>
+
+            <div class="update-block" v-loading="checking">
+                <div v-if="updateResult?.hasUpdate" class="update-banner">
+                    <div class="update-banner-title">发现新版本 {{ updateResult.latestVersion }}</div>
+                    <div class="update-banner-sub">当前 {{ updateResult.currentVersion }}</div>
+                    <pre v-if="updateResult.releaseNotes" class="update-notes">{{ updateResult.releaseNotes }}</pre>
+                    <el-button type="primary" size="small" @click="openRelease">查看 Release / 下载</el-button>
+                </div>
+                <div v-else-if="updateResult && !updateResult.error" class="update-ok">
+                    已是最新版本
+                </div>
+                <div v-else-if="updateResult?.error" class="update-err">
+                    {{ updateResult.error }}
+                </div>
+                <el-button size="small" text :loading="checking" @click="checkUpdate">检查更新</el-button>
             </div>
         </div>
         <template #footer>
@@ -31,6 +47,7 @@
 
 <script>
 import { ref, watch, computed } from 'vue'
+import * as App from '../../wailsjs/go/app/App'
 
 export default {
     name: 'AboutDialog',
@@ -41,6 +58,10 @@ export default {
     emits: ['update:modelValue'],
     setup(props, { emit }) {
         const visibleProxy = ref(props.modelValue)
+        const versionLabel = ref('…')
+        const checking = ref(false)
+        const updateResult = ref(null)
+
         watch(() => props.modelValue, v => (visibleProxy.value = v))
         watch(visibleProxy, v => emit('update:modelValue', v))
 
@@ -57,9 +78,49 @@ export default {
 
         const projectIntro = computed(() => props.introHtml || defaultIntro)
 
+        const loadVersion = async () => {
+            try {
+                versionLabel.value = await App.GetAppVersion() || 'v—'
+            } catch {
+                versionLabel.value = 'v—'
+            }
+        }
+
+        const checkUpdate = async () => {
+            checking.value = true
+            try {
+                updateResult.value = await App.CheckForUpdates()
+            } catch (e) {
+                updateResult.value = { error: String(e), hasUpdate: false }
+            } finally {
+                checking.value = false
+            }
+        }
+
+        const openRelease = () => {
+            const url = updateResult.value?.releaseURL
+            if (url) App.OpenReleaseURL(url)
+        }
+
+        watch(visibleProxy, async (open) => {
+            if (!open) return
+            updateResult.value = null
+            await loadVersion()
+            await checkUpdate()
+        })
+
         const handleClose = () => { visibleProxy.value = false }
 
-        return { visibleProxy, handleClose, projectIntro }
+        return {
+            visibleProxy,
+            handleClose,
+            projectIntro,
+            versionLabel,
+            checking,
+            updateResult,
+            checkUpdate,
+            openRelease,
+        }
     }
 }
 </script>
@@ -124,5 +185,59 @@ export default {
 
 .meta p {
     margin: 4px 0;
+}
+
+.update-block {
+    margin-top: 16px;
+    min-height: 36px;
+}
+
+.update-banner {
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, #e6a23c 45%, var(--app-border, #e4e7ed));
+    background: color-mix(in srgb, #e6a23c 10%, transparent);
+}
+
+.update-banner-title {
+    font-size: 14px;
+    font-weight: 650;
+    color: var(--app-text, #303133);
+}
+
+.update-banner-sub {
+    margin-top: 2px;
+    font-size: 12px;
+    color: var(--app-text-muted, #909399);
+}
+
+.update-notes {
+    margin: 10px 0;
+    max-height: 160px;
+    overflow: auto;
+    padding: 8px 10px;
+    border-radius: 8px;
+    background: var(--app-card-bg, #fff);
+    border: 1px solid var(--app-border, #e4e7ed);
+    font-size: 12px;
+    line-height: 1.5;
+    white-space: pre-wrap;
+    word-break: break-word;
+    color: var(--app-text-secondary, #606266);
+    font-family: inherit;
+}
+
+.update-ok {
+    margin-bottom: 6px;
+    font-size: 13px;
+    color: #67c23a;
+}
+
+.update-err {
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: #f56c6c;
+    line-height: 1.45;
 }
 </style>

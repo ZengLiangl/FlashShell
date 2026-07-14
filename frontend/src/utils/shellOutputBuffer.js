@@ -48,6 +48,11 @@ export function removeShellOutput(machineName) {
   writers.delete(machineName)
 }
 
+/** 丢弃缓冲但不清空终端画面（软断开后重连时避免回放重复输出） */
+export function discardShellOutputBuffer(machineName) {
+  buffers.delete(machineName)
+}
+
 export function registerShellWriter(machineName, writer) {
   writers.set(machineName, writer)
   const buf = buffers.get(machineName)

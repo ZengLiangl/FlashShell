@@ -22,6 +22,10 @@ export function ApplyShellCd(arg1, arg2, arg3) {
   return window['go']['app']['App']['ApplyShellCd'](arg1, arg2, arg3);
 }
 
+export function CheckForUpdates() {
+  return window['go']['app']['App']['CheckForUpdates']();
+}
+
 export function ClearMachineSensitiveData(arg1) {
   return window['go']['app']['App']['ClearMachineSensitiveData'](arg1);
 }
@@ -84,6 +88,10 @@ export function ExecuteShellCommand(arg1, arg2) {
 
 export function ExecuteSubProject(arg1, arg2) {
   return window['go']['app']['App']['ExecuteSubProject'](arg1, arg2);
+}
+
+export function GetAppVersion() {
+  return window['go']['app']['App']['GetAppVersion']();
 }
 
 export function GetConfig() {
@@ -232,6 +240,10 @@ export function OpenGlobalConfigWithEvent() {
 
 export function OpenMachineConfig() {
   return window['go']['app']['App']['OpenMachineConfig']();
+}
+
+export function OpenReleaseURL(arg1) {
+  return window['go']['app']['App']['OpenReleaseURL'](arg1);
 }
 
 export function OpenSystemSettings() {

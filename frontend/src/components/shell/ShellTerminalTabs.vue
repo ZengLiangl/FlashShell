@@ -14,7 +14,7 @@
         <el-tab-pane
           v-for="session in sessions"
           :key="session.machineName"
-          :label="session.machineName"
+          :label="tabLabel(session)"
           :name="session.machineName"
           :closable="true"
         />
@@ -42,13 +42,16 @@
           :key="session.machineName"
           :ref="(el) => setTerminalRef(session.machineName, el)"
           :machine-name="session.machineName"
-          :connected="session.connected"
+          :connected="!!session.connected"
           :active="activeTab === session.machineName"
+          :view-visible="viewVisible"
           :search-query="searchQuery"
-          :class="{ 'is-active': activeTab === session.machineName }"
+          :class="{ 'is-active': activeTab === session.machineName, 'is-disconnected': !session.connected }"
           @cd-hint="(payload) => $emit('cd-hint', payload)"
-          @open-search="$emit('open-search')"
+          @open-search="(text) => $emit('open-search', text)"
+          @reconnect="(name) => $emit('reconnect', name)"
           @clear-cache="(name) => $emit('clear', name)"
+          @search-result="(payload) => $emit('search-result', payload)"
         />
       </div>
       <slot name="footer" :active-machine="activeTab" />
@@ -68,8 +71,12 @@ export default {
     sessions: { type: Array, default: () => [] },
     activeMachine: { type: String, default: '' },
     searchQuery: { type: String, default: '' },
+    viewVisible: { type: Boolean, default: true },
   },
-  emits: ['update:activeMachine', 'disconnect', 'clear', 'open-picker', 'cd-hint', 'back', 'open-search'],
+  emits: [
+    'update:activeMachine', 'close-session', 'clear', 'open-picker',
+    'cd-hint', 'back', 'open-search', 'reconnect', 'search-result',
+  ],
   setup(props, { emit, expose }) {
     const activeTab = ref(props.activeMachine)
     const terminalRefs = ref({})
@@ -86,10 +93,16 @@ export default {
 
     const setTerminalRef = (name, el) => {
       if (el) terminalRefs.value[name] = el
+      else delete terminalRefs.value[name]
+    }
+
+    const tabLabel = (session) => {
+      if (!session?.connected) return `${session.machineName} (未连接)`
+      return session.machineName
     }
 
     const onTabRemove = (name) => {
-      emit('disconnect', name)
+      emit('close-session', name)
     }
 
     const clearActive = () => {
@@ -99,14 +112,16 @@ export default {
 
     const getActiveTerminal = () => terminalRefs.value[activeTab.value]
 
-    const findNext = () => getActiveTerminal()?.findNext?.() ?? false
-    const findPrevious = () => getActiveTerminal()?.findPrevious?.() ?? false
+    const emptyResult = () => ({ found: false, resultIndex: -1, resultCount: 0 })
+    const findNext = () => getActiveTerminal()?.findNext?.() ?? emptyResult()
+    const findPrevious = () => getActiveTerminal()?.findPrevious?.() ?? emptyResult()
     const clearSearch = () => getActiveTerminal()?.clearSearch?.()
     const fitActive = () => getActiveTerminal()?.fitAndResize?.()
+    const getSelection = () => getActiveTerminal()?.getSelection?.() || ''
 
-    expose({ clearActive, findNext, findPrevious, clearSearch, fitActive })
+    expose({ clearActive, findNext, findPrevious, clearSearch, fitActive, getSelection })
 
-    return { activeTab, setTerminalRef, onTabRemove, clearActive }
+    return { activeTab, setTerminalRef, onTabRemove, clearActive, tabLabel }
   },
 }
 </script>
