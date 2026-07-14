@@ -16,7 +16,8 @@ env:
 jobs:
   frontend:
     name: Build frontend
-    runs-on: ubuntu-latest
+    # 22.04 提供 WebKitGTK 4.0；ubuntu-latest(24.04) 仅有 4.1
+    runs-on: ubuntu-22.04
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -82,24 +83,28 @@ jobs:
             arch_name: Amd64
             kind: macos
             build_name: flashdock-darwin-amd64
+            wails_tags: ''
           - os: macos-latest
             platform: darwin/arm64
             os_name: MacOS
             arch_name: Arm64
             kind: macos
             build_name: flashdock-darwin-arm64
+            wails_tags: ''
           - os: windows-latest
             platform: windows/amd64
             os_name: Windows
             arch_name: Amd64
             kind: windows
             build_name: flashdock-windows-amd64
+            wails_tags: ''
           - os: windows-latest
             platform: windows/arm64
             os_name: Windows
             arch_name: Arm64
             kind: windows
             build_name: flashdock-windows-arm64
+            wails_tags: ''
           - os: ubuntu-22.04
             platform: linux/amd64
             os_name: Linux
@@ -107,6 +112,7 @@ jobs:
             kind: linux
             build_name: flashdock-linux-amd64
             linux_webkit: '4.0'
+            wails_tags: ''
           - os: ubuntu-22.04-arm
             platform: linux/arm64
             os_name: Linux
@@ -114,6 +120,7 @@ jobs:
             kind: linux
             build_name: flashdock-linux-arm64
             linux_webkit: '4.0'
+            wails_tags: ''
 
     steps:
       - name: Checkout
@@ -167,7 +174,13 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev pkg-config
+          sudo apt-get install -y libgtk-3-dev pkg-config
+          # Ubuntu 22.04 -> WebKitGTK 4.0；若改用 24.04 则装 4.1 并加 -tags webkit2_41
+          if [ "${{ matrix.linux_webkit }}" = "4.1" ]; then
+            sudo apt-get install -y libwebkit2gtk-4.1-dev libsoup-3.0-dev
+          else
+            sudo apt-get install -y libwebkit2gtk-4.0-dev
+          fi
 
       - name: Install Wails
         run: go install -v "github.com/wailsapp/wails/v2/cmd/wails@${WAILS_VERSION}"
@@ -176,12 +189,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          EXTRA_ARGS=()
+          if [ -n "${{ matrix.wails_tags }}" ]; then
+            EXTRA_ARGS+=(-tags "${{ matrix.wails_tags }}")
+          fi
           wails build \
             -s \
             -skipbindings \
             -clean \
             -platform "${{ matrix.platform }}" \
             -o "${{ matrix.build_name }}" \
+            ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"} \
             -ldflags "-s -w -X FlashDock/app.Version=${APP_VERSION}"
 
       - name: Package macOS DMG
