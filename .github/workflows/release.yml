@@ -52,7 +52,9 @@ jobs:
         run: |
           set -euo pipefail
           npm ci --registry=https://registry.npmjs.org/
-          # 生成 bindings，确保前端构建与后端一致
+          # go:embed 需要 dist 存在；generate module 前先放占位，再正式 build 覆盖
+          mkdir -p dist
+          printf '<!doctype html><title>FlashDock</title>\n' > dist/index.html
           (cd .. && wails generate module)
           npm run build
           test -s dist/index.html
