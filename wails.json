@@ -15,7 +15,7 @@
         "productName": "FlashDock",
         "productVersion": "1.0.2",
         "copyright": "Copyright © 2026, FlashDock",
-        "comments": "FlashDock — local tasks & remote Shell in one dock"
+        "comments": "FlashDock - local tasks and remote Shell in one dock"
     },
     "nsisType": "multiple",
     "obfuscated": false,
