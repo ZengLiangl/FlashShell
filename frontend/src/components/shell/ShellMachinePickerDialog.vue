@@ -1,28 +1,28 @@
 <template>
   <el-dialog
-    v-model="visibleProxy"
-    title="连接管理器"
-    width="720px"
-    class="machine-picker-dialog"
-    append-to-body
+      v-model="visibleProxy"
+      title="连接管理器"
+      width="700px"
+      class="machine-picker-dialog"
+      append-to-body
   >
     <div class="toolbar">
-      <el-input v-model="keyword" clearable placeholder="搜索机器" size="small" style="width: 220px" />
+      <el-input v-model="keyword" clearable placeholder="搜索机器" size="small" style="width: 220px"/>
       <el-button size="small" type="primary" @click="$emit('add-machine')">添加机器</el-button>
     </div>
 
     <div v-if="filteredGroups.length === 0" class="empty">暂无机器配置</div>
     <el-collapse v-else v-model="expanded" class="group-list">
       <el-collapse-item
-        v-for="group in filteredGroups"
-        :key="group.name"
-        :title="`${group.name} (${group.machines.length})`"
-        :name="group.name"
+          v-for="group in filteredGroups"
+          :key="group.name"
+          :title="`${group.name} (${group.machines.length})`"
+          :name="group.name"
       >
         <div
-          v-for="machine in group.machines"
-          :key="machine.id || machine.name"
-          class="machine-row"
+            v-for="machine in group.machines"
+            :key="machine.id || machine.name"
+            class="machine-row"
         >
           <div class="machine-meta">
             <div class="name">
@@ -33,15 +33,17 @@
           </div>
           <div class="row-actions">
             <el-button
-              size="small"
-              type="primary"
-              :loading="connectingName === machine.name"
-              @click="$emit('connect', machine.name)"
+                size="small"
+                type="primary"
+                :loading="connectingName === machine.name"
+                @click="$emit('connect', machine.name)"
             >
               {{ isConnected(machine.name) ? '聚焦' : '连接' }}
             </el-button>
             <el-button size="small" text title="编辑配置" @click="$emit('edit-machine', machine)">
-              <el-icon><Setting /></el-icon>
+              <el-icon>
+                <Setting/>
+              </el-icon>
             </el-button>
           </div>
         </div>
@@ -51,19 +53,19 @@
 </template>
 
 <script>
-import { computed, ref, watch } from 'vue'
-import { groupMachines } from '../../utils/machineGroups'
+import {computed, ref, watch} from 'vue'
+import {groupMachines} from '../../utils/machineGroups'
 
 export default {
   name: 'ShellMachinePickerDialog',
   props: {
-    modelValue: { type: Boolean, default: false },
-    machines: { type: Array, default: () => [] },
-    sessions: { type: Array, default: () => [] },
-    connectingName: { type: String, default: '' },
+    modelValue: {type: Boolean, default: false},
+    machines: {type: Array, default: () => []},
+    sessions: {type: Array, default: () => []},
+    connectingName: {type: String, default: ''},
   },
   emits: ['update:modelValue', 'connect', 'edit-machine', 'add-machine'],
-  setup(props, { emit }) {
+  setup(props, {emit}) {
     const keyword = ref('')
     const expanded = ref([])
 
@@ -77,8 +79,8 @@ export default {
       let list = props.machines || []
       if (kw) {
         list = list.filter((m) =>
-          (m.name || '').toLowerCase().includes(kw) ||
-          (m.group || '').toLowerCase().includes(kw)
+            (m.name || '').toLowerCase().includes(kw) ||
+            (m.group || '').toLowerCase().includes(kw)
         )
       }
       return groupMachines(list)
@@ -86,12 +88,12 @@ export default {
 
     watch(filteredGroups, (groups) => {
       expanded.value = groups.map((g) => g.name)
-    }, { immediate: true })
+    }, {immediate: true})
 
     const isConnected = (name) =>
-      (props.sessions || []).some((s) => s.machineName === name && s.connected)
+        (props.sessions || []).some((s) => s.machineName === name && s.connected)
 
-    return { visibleProxy, keyword, expanded, filteredGroups, isConnected }
+    return {visibleProxy, keyword, expanded, filteredGroups, isConnected}
   },
 }
 </script>
@@ -114,6 +116,7 @@ export default {
   border: none;
   max-height: 480px;
   overflow: auto;
+  overflow-x: hidden;
 }
 
 .machine-row {
