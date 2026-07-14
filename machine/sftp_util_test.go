@@ -3,7 +3,7 @@ package machine
 import (
 	"testing"
 
-	"quick-cmd/define"
+	"FlashDock/define"
 )
 
 func TestCommandNeedsSFTP(t *testing.T) {

@@ -139,14 +139,3 @@ func normalizeOscPath(p string) string {
 	}
 	return p
 }
-
-// CwdHookScript 注入 bash/zsh 的 cwd 上报钩子（一次性）。
-// 输出 OSC 777，由 oscCwdFilter 剥离，用户终端不可见。
-// 外层用 SGR 8（隐藏）尽量减少命令回显干扰。
-func CwdHookScript() string {
-	body := `__qc_cwd(){printf '\033]777;cwd;%s\007' "$PWD";};` +
-		`if [ -n "$BASH_VERSION" ];then PROMPT_COMMAND="__qc_cwd${PROMPT_COMMAND:+;$PROMPT_COMMAND}";` +
-		`elif [ -n "$ZSH_VERSION" ];then precmd_functions+=(__qc_cwd);fi;` +
-		`__qc_cwd`
-	return "\033[8m" + body + "\033[28m\r"
-}

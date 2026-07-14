@@ -10,7 +10,7 @@ import (
 	"strings"
 	_ "syscall"
 
-	"quick-cmd/app"
+	"FlashDock/app"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -30,7 +30,7 @@ func main() {
 	flag.Parse()
 
 	// daemonize if requested (like nohup), only on non-Windows
-	if *runMode == "back" && os.Getenv("QUICKCMD_DAEMONIZED") != "1" {
+	if *runMode == "back" && os.Getenv("FLASHDOCK_DAEMONIZED") != "1" {
 		exePath, err := os.Executable()
 		if err == nil {
 			childArgs := os.Args[1:]
@@ -40,11 +40,11 @@ func main() {
 				}
 			}
 
-			stdoutFile, _ := os.OpenFile("/tmp/quick-cmd.out", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-			stderrFile, _ := os.OpenFile("/tmp/quick-cmd.err", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+			stdoutFile, _ := os.OpenFile("/tmp/FlashDock.out", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+			stderrFile, _ := os.OpenFile("/tmp/FlashDock.err", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 
 			cmd := exec.Command(exePath, childArgs...)
-			cmd.Env = append(os.Environ(), "QUICKCMD_DAEMONIZED=1")
+			cmd.Env = append(os.Environ(), "FLASHDOCK_DAEMONIZED=1")
 			cmd.Stdin = nil
 			if stdoutFile != nil {
 				cmd.Stdout = stdoutFile
@@ -65,7 +65,7 @@ func main() {
 
 	// 获取窗口名称
 	globalConfig, err := appInstance.GetGlobalConfig()
-	windowsName := "Quick Cmd" // 默认窗口名称
+	windowsName := "FlashDock" // 默认窗口名称
 	if err == nil && globalConfig != nil {
 		windowsName = globalConfig.WindowsName
 	}

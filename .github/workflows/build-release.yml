@@ -8,6 +8,8 @@ on:
 
 env:
   NODE_OPTIONS: '--max-old-space-size=4096'
+  APP_NAME: FlashDock
+  VERSION: ${{ github.ref_name }}
 
 jobs:
   build:
@@ -63,8 +65,10 @@ jobs:
           New-Item -ItemType Directory -Force -Path dist | Out-Null
           $exe = Get-ChildItem -Path build/bin -Filter *.exe -Recurse | Select-Object -First 1
           if (-not $exe) { throw "未找到 Windows 可执行文件" }
-          Copy-Item $exe.FullName "dist/${{ matrix.asset }}" -Force
-          Get-Item "dist/${{ matrix.asset }}"
+          $outName = "FlashDock-${{ env.VERSION }}-${{ matrix.asset }}"
+          Copy-Item $exe.FullName "dist/$outName" -Force
+          Get-Item "dist/$outName"
+          echo "RELEASE_ASSET=$outName" >> $env:GITHUB_ENV
 
       - name: Package macOS dmg
         if: matrix.kind == 'macos'
@@ -76,19 +80,21 @@ jobs:
             ls -laR build/bin
             exit 1
           fi
+          OUT_NAME="FlashDock-${{ env.VERSION }}-${{ matrix.asset }}"
           hdiutil create \
-            -volname "Quick Cmd" \
+            -volname "FlashDock ${{ env.VERSION }}" \
             -srcfolder "$APP_PATH" \
             -ov \
             -format UDZO \
-            "dist/${{ matrix.asset }}"
-          ls -la "dist/${{ matrix.asset }}"
+            "dist/${OUT_NAME}"
+          ls -la "dist/${OUT_NAME}"
+          echo "RELEASE_ASSET=${OUT_NAME}" >> "$GITHUB_ENV"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.asset }}
-          path: dist/${{ matrix.asset }}
+          name: ${{ env.RELEASE_ASSET }}
+          path: dist/${{ env.RELEASE_ASSET }}
           if-no-files-found: error
 
   release:
@@ -108,8 +114,8 @@ jobs:
         run: |
           mkdir -p upload
           find release-assets -type f \( \
-            -name 'Windows-*.exe' -o \
-            -name 'MacOS-*.dmg' \
+            -name 'FlashDock-*-Windows-*.exe' -o \
+            -name 'FlashDock-*-MacOS-*.dmg' \
           \) -exec cp -v {} upload/ \;
           ls -la upload
 
@@ -117,12 +123,9 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: ${{ github.ref_name }}
+          name: FlashDock ${{ github.ref_name }}
           draft: false
           generate_release_notes: true
-          files: |
-            upload/Windows-Amd64.exe
-            upload/Windows-Arm64.exe
-            upload/MacOS-Arm64.dmg
+          files: upload/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

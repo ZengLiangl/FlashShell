@@ -82,6 +82,8 @@ export function GetShellSessions():Promise<Array<define.ShellStatus>>;
 
 export function GetShellStatus():Promise<define.ShellStatus>;
 
+export function GetShortcutSettings():Promise<data.ShortcutSettings>;
+
 export function GetStatus():Promise<define.CommandStatus>;
 
 export function GetSubProjectStatus():Promise<define.SubProjectStatus>;
@@ -141,6 +143,8 @@ export function SaveGlobalAccounts(arg1:Array<data.GlobalAccount>):Promise<void>
 export function SaveGlobalAccountsFromDTO(arg1:Array<data.GlobalAccountDTO>):Promise<void>;
 
 export function SaveGlobalConfig(arg1:data.GlobalConfig):Promise<void>;
+
+export function SaveShortcutSettings(arg1:data.ShortcutSettings):Promise<void>;
 
 export function SaveSystemSettings(arg1:data.GlobalConfig):Promise<void>;
 

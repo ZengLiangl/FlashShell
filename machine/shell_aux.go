@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"quick-cmd/define"
+	"FlashDock/define"
 
 	"github.com/pkg/sftp"
 )
@@ -20,6 +20,9 @@ type ShellAuxManager struct {
 	client      *SSHClient
 	machineName string
 	host        string
+	uidNames    map[uint32]string
+	gidNames    map[uint32]string
+	idMapsReady bool
 }
 
 // NewShellAuxManager 创建辅助连接管理器
@@ -49,6 +52,9 @@ func (a *ShellAuxManager) Connect(machine *define.Machine, workVars map[string]s
 	a.client = client
 	a.machineName = machine.Name
 	a.host = sensitive.Host
+	a.uidNames = nil
+	a.gidNames = nil
+	a.idMapsReady = false
 	return nil
 }
 
@@ -61,6 +67,9 @@ func (a *ShellAuxManager) Close() error {
 	}
 	err := a.client.Close()
 	a.client = nil
+	a.uidNames = nil
+	a.gidNames = nil
+	a.idMapsReady = false
 	return err
 }
 
@@ -246,12 +255,88 @@ func (a *ShellAuxManager) ListDir(dirPath string, showHidden bool) ([]define.Sft
 			Type:    fileTypeLabel(mode),
 		}
 		if stat, ok := info.Sys().(*sftp.FileStat); ok && stat != nil {
-			entry.Owner = strconv.FormatUint(uint64(stat.UID), 10)
-			entry.Group = strconv.FormatUint(uint64(stat.GID), 10)
+			entry.Owner = a.resolveUID(stat.UID)
+			entry.Group = a.resolveGID(stat.GID)
 		}
 		entries = append(entries, entry)
 	}
 	return entries, nil
+}
+
+func (a *ShellAuxManager) ensureIDNameMaps() {
+	a.mu.Lock()
+	ready := a.idMapsReady
+	a.mu.Unlock()
+	if ready {
+		return
+	}
+
+	uidNames := parsePasswdOrGroupMap(a.fetchNameMapText(true))
+	gidNames := parsePasswdOrGroupMap(a.fetchNameMapText(false))
+
+	a.mu.Lock()
+	a.uidNames = uidNames
+	a.gidNames = gidNames
+	a.idMapsReady = true
+	a.mu.Unlock()
+}
+
+func (a *ShellAuxManager) fetchNameMapText(passwd bool) string {
+	var cmds []string
+	if passwd {
+		cmds = []string{"getent passwd 2>/dev/null", "cat /etc/passwd 2>/dev/null"}
+	} else {
+		cmds = []string{"getent group 2>/dev/null", "cat /etc/group 2>/dev/null"}
+	}
+	for _, cmd := range cmds {
+		out, err := a.Exec(cmd)
+		if err == nil && strings.TrimSpace(out) != "" {
+			return out
+		}
+	}
+	return ""
+}
+
+// parsePasswdOrGroupMap 解析 passwd/group 文本：name:x:id:...
+func parsePasswdOrGroupMap(text string) map[uint32]string {
+	result := make(map[uint32]string)
+	for _, line := range strings.Split(text, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.Split(line, ":")
+		if len(parts) < 3 {
+			continue
+		}
+		name := parts[0]
+		id64, err := strconv.ParseUint(parts[2], 10, 32)
+		if err != nil || name == "" {
+			continue
+		}
+		result[uint32(id64)] = name
+	}
+	return result
+}
+
+func (a *ShellAuxManager) resolveUID(uid uint32) string {
+	a.ensureIDNameMaps()
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if name, ok := a.uidNames[uid]; ok && name != "" {
+		return name
+	}
+	return strconv.FormatUint(uint64(uid), 10)
+}
+
+func (a *ShellAuxManager) resolveGID(gid uint32) string {
+	a.ensureIDNameMaps()
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if name, ok := a.gidNames[gid]; ok && name != "" {
+		return name
+	}
+	return strconv.FormatUint(uint64(gid), 10)
 }
 
 // RemovePath 删除远端文件或空目录；目录非空则递归删除

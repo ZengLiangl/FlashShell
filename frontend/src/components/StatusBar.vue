@@ -46,7 +46,7 @@ export default {
     props: {
         status: { type: Object, required: true },
         selectedProject: { type: Object, default: null },
-        appInfo: { type: String, default: 'Quick Cmd' }
+        appInfo: { type: String, default: 'FlashDock' }
     },
     emits: ['stop-all']
 }

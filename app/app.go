@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"quick-cmd/data"
-	"quick-cmd/define"
-	"quick-cmd/machine"
+	"FlashDock/data"
+	"FlashDock/define"
+	"FlashDock/machine"
 
 	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/menu/keys"
@@ -46,7 +46,7 @@ func NewApp(sessionID string) *App {
 	}
 
 	configManager := data.NewConfigManager("", sessionManager)
-	logManager := data.NewLogManager("~/.cmd-config/logs")
+	logManager := data.NewLogManager(data.DefaultLogPathTilde)
 
 	app := &App{
 		outputChannel:  make(chan string, 1000),
@@ -755,7 +755,7 @@ func (a *App) UpdateApplicationMenu() error {
 	if globalConfig.WindowsName != "" {
 		wailsRuntime.WindowSetTitle(a.ctx, globalConfig.WindowsName)
 	} else {
-		wailsRuntime.WindowSetTitle(a.ctx, "Quick Cmd")
+		wailsRuntime.WindowSetTitle(a.ctx, "FlashDock")
 	}
 	return nil
 }
@@ -1120,6 +1120,22 @@ func (a *App) GetSessionInfo() data.SessionState {
 // GetSystemSettings 获取系统设置
 func (a *App) GetSystemSettings() (*data.GlobalConfig, error) {
 	return a.configManager.GetGlobalConfig()
+}
+
+// GetShortcutSettings 获取快捷键配置（~/.flashdock/shortcuts.json）
+func (a *App) GetShortcutSettings() (data.ShortcutSettings, error) {
+	return data.LoadShortcutSettings()
+}
+
+// SaveShortcutSettings 保存快捷键配置到 JSON，并通知前端刷新
+func (a *App) SaveShortcutSettings(settings data.ShortcutSettings) error {
+	if err := data.SaveShortcutSettings(settings); err != nil {
+		return err
+	}
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "shortcuts:changed", settings)
+	}
+	return nil
 }
 
 // SaveSystemSettings 保存系统设置

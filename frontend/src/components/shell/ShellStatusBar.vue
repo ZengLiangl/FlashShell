@@ -17,7 +17,7 @@ export default {
   props: {
     connectedCount: { type: Number, default: 0 },
     activeMachine: { type: String, default: '' },
-    appInfo: { type: String, default: 'Quick Cmd · Shell' },
+    appInfo: { type: String, default: 'FlashDock · Shell' },
   },
 }
 </script>

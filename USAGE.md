@@ -1,18 +1,20 @@
-# Quick Cmd 使用指南
+# FlashDock（闪舵）使用指南
 
-本文档介绍 Quick Cmd 的安装、配置、界面操作与常见场景，内容与当前代码实现保持一致。
+本文档与当前代码行为对齐，覆盖安装、配置、任务模式、Shell 模式与系统设置。
 
 ## 目录
 
 - [安装与启动](#安装与启动)
 - [配置体系](#配置体系)
-- [界面与操作](#界面与操作)
+- [界面总览](#界面总览)
+- [任务模式](#任务模式)
+- [Shell 模式](#shell-模式)
+- [系统设置中心](#系统设置中心)
 - [执行模型](#执行模型)
 - [命令类型与特殊命令](#命令类型与特殊命令)
 - [远程机器与敏感信息](#远程机器与敏感信息)
 - [环境变量与路径](#环境变量与路径)
 - [键盘快捷键](#键盘快捷键)
-- [性能说明](#性能说明)
 - [故障排除](#故障排除)
 - [配置示例](#配置示例)
 
@@ -25,395 +27,229 @@
 | 依赖 | 版本 |
 |------|------|
 | Go | 1.23+ |
-| Node.js | 16+ |
+| Node.js | 16+（推荐 20） |
 | Wails CLI | v2 |
 
 ```bash
 go install github.com/wailsapp/wails/v2/cmd/wails@latest
-
-# 安装项目依赖
 cd frontend && npm install && cd ..
 go mod tidy
 ```
 
-### 开发模式
+### 开发 / 构建
 
 ```bash
-wails dev
-```
-
-支持前端热重载，适合调试配置与界面。
-
-### 构建与运行
-
-```bash
-wails build
-./build/bin/quick-cmd.app/Contents/MacOS/quick-cmd
+wails dev     # 热重载
+wails build   # 产出在 build/bin/
 ```
 
 ### 运行模式
 
 | 参数 | 说明 |
 |------|------|
-| `-reg=desk` | 前台运行（默认） |
+| `-reg=desk` | 前台（默认） |
 | `-reg=back` | 后台守护 |
 
-后台模式日志：`/tmp/quick-cmd.out`、`/tmp/quick-cmd.err`。
+后台日志：`/tmp/FlashDock.out`、`/tmp/FlashDock.err`。
 
 ---
 
 ## 配置体系
 
-Quick Cmd 将配置分为**全局配置**和**业务配置**两层。
+FlashDock 将配置分为全局与业务两层，并单独存放快捷键。
 
-### 全局配置 `global_config.yaml`
+### 全局配置 `~/.flashdock/global_config.yaml`
 
-**路径**：`~/.cmd-config/global_config.yaml`
+在顶部图标栏 **配置文件** 菜单中可「打开全局配置」。
 
-> 全局配置保存在用户主目录，**不是**项目目录下的文件。在应用菜单中可通过「设置 → 配置文件 → 打开全局配置」直接打开。
+用途包括：窗口标题、业务配置文件列表、`workPaths`、机器清单、主题与日志落盘等。
 
-**用途**：
+文件已存在时启动**不会**覆盖；仅通过 UI / 主动写盘时更新。
 
-- `windowsName`：窗口标题
-- `configFile` / `lastOpenedFile`：业务配置文件历史与当前选中项
-- `workPaths`：路径变量表，供业务配置 `${KEY}` 引用
-- `machines`：远程机器清单（敏感信息加密存储）
+### 快捷键 `~/.flashdock/shortcuts.json`
 
-**默认示例**（仅首次创建、文件不存在时生成）：
-
-```yaml
-appId: com.runner
-windowsName: "运行器"
-configFile:
-  - config.yaml
-lastOpenedFile: config.yaml
-workPaths:
-  HOME: ~
-machines: []
-```
-
-**保护策略**：
-
-- 文件已存在且有内容时，启动**不会**覆盖为默认配置
-- `lastOpenedFile` 仅在路径实际变化时才写回磁盘
+系统设置 → **快捷键** 中修改并保存。Mac 展示 `Command+…`，Windows / Linux 展示 `Ctrl+…`。
 
 ### 业务配置 `config.yaml`
 
-定义要执行的项目、子项目、命令步骤。可准备多个文件，通过菜单切换。
-
-**层级结构**：
+定义项目与可执行流水线，可多文件切换。
 
 ```
-Project（项目）
- └── SubProject（子项目，可执行单元）
-      └── Command（命令，含 type 与 steps）
-           └── steps[]（具体 shell 步骤）
+Project
+ └── SubProject（点击「执行」）
+      └── Command（batch / remote）
+           └── steps[]
 ```
 
-**最小示例**：
-
-```yaml
-projects:
-  - name: demo-api
-    description: 示例 Go 服务
-    workdir: "${WORKSPACE}/demo-api"
-    subprojects:
-      - name: 本地构建
-        description: 编译并测试
-        commands:
-          - name: 编译
-            type: batch
-            steps:
-              - go build -o bin/demo-api .
-          - name: 测试
-            type: batch
-            steps:
-              - go test ./...
-
-      - name: 部署到测试环境
-        commands:
-          - name: 上传并重启
-            type: remote
-            machine: staging-server
-            steps:
-              - upload ./bin/demo-api /opt/demo-api/bin/demo-api
-              - systemctl restart demo-api
-```
+最小示例见文末「配置示例」。
 
 ### 工作目录优先级
 
-命令执行时，`workdir` 按以下优先级生效（高 → 低）：
+1. `Command.workdir`  
+2. `SubProject.workdir`  
+3. `Project.workdir`  
 
-1. `Command.workdir`
-2. `SubProject.workdir`
-3. `Project.workdir`
-
-### 路径与变量展开
-
-解析业务配置时，处理顺序为：
-
-1. 用全局 `workPaths` 替换 `${KEY}`
-2. 展开 `~/` 为用户主目录
-3. 展开 `$VAR` 等操作系统环境变量
-
-### 多配置切换
-
-菜单 **设置 → 配置文件**：
-
-| 操作 | 行为 |
-|------|------|
-| 单选切换 | 停止当前任务、清空终端、加载新配置 |
-| 刷新配置列表 | 重新扫描并刷新菜单 |
-| 打开全局配置 | 用系统默认编辑器打开 `global_config.yaml` |
-| 打开当前配置 | 打开当前业务配置文件 |
-
-切换后前端收到 `config:changed` 事件并自动刷新。
+解析时：先替换 `${KEY}` → 展开 `~/` → 展开系统环境变量。
 
 ---
 
-## 界面与操作
+## 界面总览
 
-### 主界面布局
+### 顶部图标栏
 
-```
-┌─────────────────────┬──────────────────────────────┐
-│  项目列表（全屏）     │                              │
-│  或                  │   终端输出（ANSI + 虚拟滚动）  │
-│  子项目列表 + 执行按钮 │   进度条 / 状态               │
-├─────────────────────┴──────────────────────────────┤
-│  状态栏：运行状态 / 停止全部 / 版本信息              │
-└────────────────────────────────────────────────────┘
-```
+仅显示图标（悬停看提示）：
 
-### 基本流程
-
-1. 启动应用，自动加载上次打开的业务配置
-2. 在项目列表中点击项目，进入子项目视图
-3. 点击子项目「执行」，按顺序运行其下所有 Command
-4. 右侧终端实时显示输出；底部状态栏显示进度
-5. 点击「停止」可中断**本地** batch 任务（远程 SSH 会话暂不支持强杀）
-
-### 终端行为
-
-- 新任务开始时**自动清空**终端
-- 输出通过 Wails 事件推送（`output:line`），无定时轮询
-- 虚拟滚动：大量日志时只渲染可见区域
-- **粘底跟随**：在底部附近时自动滚到最新行；向上翻看历史时不强制跳回
-
-### 对话框
-
-| 入口 | 功能 |
+| 图标 | 功能 |
 |------|------|
-| 设置 → 机器配置（Cmd+M） | 增删改机器、测试 SSH、管理密钥 |
-| 设置 → 环境变量（Cmd+E） | 管理 `workPaths` 变量 |
-| 帮助 → 关于 | 版本与简介 |
+| 文件 | 新建窗口 |
+| 配置文件 | 切换 / 刷新业务配置，打开全局或当前配置 |
+| 系统设置 | 打开统一设置中心（左右分栏） |
+| 帮助 | 关于 FlashDock |
 
-### 应用菜单
+### 首页
 
-- **文件 → 新建窗口**：启动新的应用进程
-- **设置 → 配置文件**：切换/刷新/打开配置
-- **设置 → 机器配置 / 环境变量**
+左右两大入口：
+
+- **任务模式**：选择项目进入执行视图  
+- **Shell 模式**：点机器直连，或「进入 Shell 终端」；有会话时可随时返回首页  
+
+任务与 Shell **可并行**：执行流水线时仍可连 SSH；返回首页不会强制断开会话。
+
+---
+
+## 任务模式
+
+1. 首页点击项目卡片  
+2. 左侧选择子项目 → **执行**  
+3. 右侧终端实时输出；状态栏可停止本地任务  
+
+终端支持搜索（快捷键「查找」）、清空、粘底跟随。远程 SSH 步骤暂不支持从前端强杀。
+
+---
+
+## Shell 模式
+
+- 多会话 Tab，可同时连接多台机器  
+- 交互式 xterm 终端；右键：**复制 / 粘贴 / 查找 / 清空缓存**  
+- 底部 SFTP：目录浏览、上传感知（任务 upload）、用户:组显示名解析  
+- Tab 栏可 **返回首页**（会话保留）  
+- 左侧监控面板可折叠  
+
+`cd` 输入会乐观同步 SFTP 路径；若远端 shell 自带 OSC 7 cwd 上报也会自动对齐。
+
+---
+
+## 系统设置中心
+
+点击齿轮图标打开，左侧导航：
+
+| 分区 | 内容 |
+|------|------|
+| 机器配置 | 增删改、测连、导入 Xshell / FinalShell |
+| 环境变量 | 管理 `${KEY}` 替换表 |
+| 系统设置 | 全局 SSH 帐号、日志落盘、主题、Shell 字号 / 行高、会话 ID |
+| 快捷键 | 录制 / 重置 / 保存到 `shortcuts.json` |
+| 执行历史 | 查看与打开执行日志 |
+
+机器列表按名称首字母排序：`a–z` → `0–9` → 其它。
 
 ---
 
 ## 执行模型
 
-### 概念对照
+1. 点击「执行」→ 重读配置 → 清空任务终端  
+2. 按 SubProject 内 Command 顺序执行  
+3. Command 内 steps 逐步执行  
+4. 状态经 Wails 事件推送到前端  
 
-| 概念 | 说明 | 用户操作 |
-|------|------|----------|
-| Project | 项目分组 | 点击进入 |
-| SubProject | 一次完整执行单元 | 点击「执行」 |
-| Command | 一组步骤（batch 或 remote） | 自动顺序执行 |
-| Step | 单条 shell 命令 | 在配置中编写 |
+| type | 位置 | 场景 |
+|------|------|------|
+| `batch` | 本机 shell | 构建、测试 |
+| `remote` | SSH 到 `machine` | 发布、重启、Docker |
 
-### 执行过程
-
-1. 点击「执行」→ 重读配置 → 清空终端
-2. 按 SubProject 内 Command 顺序依次执行
-3. 每个 Command 内 steps 逐步执行
-4. 状态通过 `execution:status` 事件推送到前端
-5. 全部完成或出错后停止，`IsRunning` 变为 false
-
-### batch 与 remote 对比
-
-| 类型 | 执行位置 | 适用场景 |
-|------|----------|----------|
-| `batch` | 本机 shell（`bash -c`） | 构建、测试、本地脚本 |
-| `remote` | SSH 到指定 `machine` | 上传文件、重启服务、Docker 操作 |
-
----
-
-## 命令类型与特殊命令
-
-### batch（本地）
-
-在本地 shell 中执行，工作目录由上述优先级决定。
-
-```yaml
-- name: 打包
-  type: batch
-  steps:
-    - mvn clean package -DskipTests
-    - echo 构建完成
-```
-
-### remote（远程）
-
-通过 SSH 连接 `machine` 字段指定的机器执行步骤。
-
-```yaml
-- name: 重启服务
-  type: remote
-  machine: staging-server
-  steps:
-    - docker restart api-gateway auth-service
-```
-
-- 普通 shell 步骤：创建 SSH Session 执行
-- 仅当步骤包含 `upload` 时才建立 SFTP 连接
+仅步骤含 `upload` 时才建立 SFTP。
 
 ### 远程特殊命令
 
-在 `remote` 类型的 steps 中可使用以下内置命令：
-
 | 命令 | 格式 | 说明 |
 |------|------|------|
-| `upload` | `upload <本地路径> <远程路径>` | 上传文件或目录（目录先 zip 再传） |
-| `targz` | `targz <源目录> <目标.tar.gz>` | 本地打包（特殊场景） |
+| `upload` | `upload <本地> <远程>` | 文件或目录（目录先打包） |
+| `targz` | `targz <源> <目标.tar.gz>` | 本地打包 |
 | `chdir` | `chdir <远程目录>` | 切换远程工作目录 |
-
-**upload 示例**：
-
-```yaml
-steps:
-  - upload ~/workspace/demo-api/target/demo-api.jar /opt/demo-api/app.jar
-  - upload ~/workspace/demo-web/dist /usr/share/nginx/html/demo-web
-  - docker restart nginx
-```
-
-上传目录时会自动压缩为 zip、传到远程临时目录、解压后删除压缩包，并显示传输进度。
 
 ---
 
 ## 远程机器与敏感信息
 
-### 配置方式
+机器保存在全局配置 `machines` 中，主机 / 端口 / 用户 / 密码经 UI 加密写入，不以明文落盘。
 
-机器信息保存在**全局配置**的 `machines` 数组中，通过 UI「机器配置」管理。
-
-磁盘上可见字段：
-
-```yaml
-machines:
-  - name: staging-server
-    key_file: ~/.ssh/id_rsa
-    encrypted_data: "..."   # UI 写入后自动生成，勿手动编辑
-```
-
-主机、端口、用户名、密码通过 UI 填写，加密后写入 `encrypted_data`，**不以明文落盘**。
-
-### 认证方式
-
-- **密钥认证**：填写 `key_file` 路径（支持 `~/.ssh/id_rsa`）
-- **密码认证**：在 UI 中填写密码（加密存储）
-- 可同时配置，连接时两种都尝试
-
-### 连接测试
-
-在「机器配置」列表中点击「测试连接」，后端执行 `echo 'connection test'` 验证 SSH 可达。
+- 密钥：`key_file`（如 `~/.ssh/id_rsa`）  
+- 密码：UI 填写，加密存储  
+- 可配置全局 SSH 帐号，添加机器时一键填充  
+- 「测试连接」验证可达性  
 
 ---
 
 ## 环境变量与路径
 
-在「环境变量配置管理」中维护键值对，例如：
+在系统设置 → 环境变量中维护，例如：
 
 | 键 | 值 |
 |----|-----|
-| `HOME` | `~` |
 | `WORKSPACE` | `~/workspace` |
-| `PROJECT_ROOT` | `~/workspace/demo-api` |
+| `PROJECT_ROOT` | `${WORKSPACE}/demo-api` |
 
-业务配置中引用：
+业务配置：
 
 ```yaml
 workdir: "${PROJECT_ROOT}"
 steps:
-  - mvn package -pl demo-service -am
-  - upload ${PROJECT_ROOT}/target/demo-service.jar /opt/demo-api/app.jar
+  - upload ${PROJECT_ROOT}/target/app.jar /opt/app/app.jar
 ```
 
 ---
 
 ## 键盘快捷键
 
-| 快捷键 | 功能 |
-|--------|------|
-| Cmd + C | 复制终端选中文本；无选中则复制全部 |
-| Cmd + K | 清空终端 |
-| Cmd + M | 打开机器配置 |
-| Cmd + E | 打开环境变量配置 |
-| Cmd + R | 刷新配置列表（菜单） |
-| Escape | 关闭已打开对话框 |
+默认（修饰键按系统显示为 Command 或 Ctrl）：
 
----
-
-## 性能说明
-
-### 输出机制
-
-- 后端通过 `output:line`、`execution:status` 事件推送，**已移除前端轮询**
-- 本地输出通道满时非阻塞丢弃，避免阻塞
-- 执行新任务时自动清空终端，避免历史 DOM 堆积
-
-### 使用建议
-
-| 场景 | 建议 |
+| 功能 | 默认 |
 |------|------|
-| 大量构建日志 | 限制构建并行度，日常可去掉 `clean` |
-| 远程 docker restart | 等待期间 UI 应保持流畅（本地无构建负载） |
-| 终端历史过多 | 新任务会自动清空；也可手动 Cmd+K |
+| 新建窗口 | Mod+N |
+| 机器配置 | Mod+M |
+| 环境变量 | Mod+E |
+| 系统设置 | Mod+, |
+| 刷新配置列表 | Mod+R |
+| 查找 | Mod+F |
+| 复制 | Mod+C |
+| 清空输出 | Mod+K |
+
+均可在 **系统设置 → 快捷键** 中修改。焦点在输入框时默认不触发全局快捷键。
 
 ---
 
 ## 故障排除
 
-### 配置文件无法加载
+### 配置无法加载
 
-- 检查 YAML 缩进与编码（UTF-8）
-- 确认 `workdir` 引用的 `${KEY}` 在全局 `workPaths` 中已定义
-- 菜单「刷新配置列表」后重试
+- 检查 YAML 缩进与 UTF-8  
+- 确认 `${KEY}` 已在环境变量中定义  
+- 配置文件菜单中「刷新配置列表」  
 
-### 全局配置丢失或被改写
+### SSH 失败
 
-- 确认编辑路径为 `~/.cmd-config/global_config.yaml`
-- 应用不会在启动时覆盖已有内容的全局配置
-- 仅 UI 主动修改（机器/环境变量/切换配置）时才会写盘
+1. 机器配置中「测试连接」  
+2. 核对 host / port / 用户 / 密钥权限（`chmod 600`）  
+3. 本机 `ssh user@host` 验证  
 
-### SSH 连接失败
+### 机器列表空白
 
-1. 机器配置中点击「测试连接」
-2. 检查 host、port、user、密钥路径
-3. 确认密钥权限（`chmod 600 ~/.ssh/id_rsa`）
-4. 手动 `ssh user@host` 验证网络
+关闭系统设置后重新从首页打开；确认全局配置中确有 `machines` 数据。
 
-### 本地命令执行失败
+### upload 失败
 
-- 检查 `workdir` 是否存在
-- 复杂管道可拆分为多条 step 或写成脚本
-- 查看终端 `[STDERR]` 行
-
-### 远程 upload 失败
-
-- 确认步骤以 `upload` 开头（此时才会建立 SFTP）
-- 检查本地路径与远程目录权限
-- 大目录上传会先 zip，留意磁盘空间
-
-### 界面无响应
-
-- 菜单刷新配置或重启应用
-- 确认使用 `wails build` 构建的最新版本
+- 步骤需以 `upload` 开头  
+- 检查本地路径与远端写权限  
 
 ---
 
@@ -438,14 +274,6 @@ projects:
             steps:
               - upload ${WORKSPACE}/sample-platform/user-service/target/user-service.jar /opt/user-service/app.jar
               - docker restart user-service
-
-      - name: 重启网关
-        commands:
-          - name: 重启 api-gateway
-            type: remote
-            machine: staging-server
-            steps:
-              - docker restart api-gateway
 ```
 
 ### 纯本地脚本
@@ -454,9 +282,9 @@ projects:
 projects:
   - name: dev-tools
     subprojects:
-      - name: 启用 mock 环境
+      - name: 启用 mock
         commands:
-          - name: 切换服务状态
+          - name: 切换状态
             type: batch
             steps:
               - curl -s https://mock.example.com/api/v1/status?enabled=1
@@ -467,15 +295,13 @@ projects:
 ## 命令速查
 
 ```bash
-wails dev                              # 开发模式
-wails build                            # 构建
-cd frontend && npm install && cd ..    # 安装前端依赖
-go mod tidy                            # 整理 Go 依赖
-go test ./...                          # 运行测试
-go fmt ./...                           # 格式化
-go vet ./...                           # 静态检查
+wails dev
+wails build
+cd frontend && npm install && cd ..
+go mod tidy
+go test ./...
 ```
 
 ---
 
-如有问题，请先查看终端输出与全局配置路径是否正确，再对照本文档排查。
+品牌：**FlashDock · 闪舵** — 任务与 Shell，一港调度。

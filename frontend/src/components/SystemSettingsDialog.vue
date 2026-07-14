@@ -1,5 +1,5 @@
 <template>
-    <el-dialog v-model="visibleProxy" title="系统设置" width="720px" :before-close="handleClose">
+    <div class="general-settings-panel" :class="{ embedded }">
         <el-form label-width="120px">
             <el-divider content-position="left">全局 SSH 帐号</el-divider>
             <div class="account-toolbar">
@@ -26,7 +26,7 @@
                 <el-switch v-model="form.logSettings.enabled" />
             </el-form-item>
             <el-form-item label="落盘路径">
-                <el-input v-model="form.logSettings.path" placeholder="~/.cmd-config/logs" />
+                <el-input v-model="form.logSettings.path" placeholder="~/.flashdock/logs" />
             </el-form-item>
 
             <el-divider content-position="left">外观</el-divider>
@@ -70,6 +70,10 @@
             </el-form-item>
         </el-form>
 
+        <div class="panel-actions">
+            <el-button type="primary" :loading="saving" @click="save">保存设置</el-button>
+        </div>
+
         <el-dialog v-model="accountEditVisible" :title="editingAccountIndex >= 0 ? '编辑帐号' : '添加帐号'" width="480px" append-to-body>
             <el-form :model="accountForm" label-width="90px">
                 <el-form-item label="帐号名称">
@@ -87,12 +91,7 @@
                 <el-button type="primary" :loading="savingAccount" @click="confirmAccount">确定</el-button>
             </template>
         </el-dialog>
-
-        <template #footer>
-            <el-button @click="handleClose">取消</el-button>
-            <el-button type="primary" :loading="saving" @click="save">保存</el-button>
-        </template>
-    </el-dialog>
+    </div>
 </template>
 
 <script>
@@ -104,9 +103,11 @@ import { useTheme } from '../composables/useTheme'
 export default {
     name: 'SystemSettingsDialog',
     props: {
-        modelValue: { type: Boolean, default: false }
+        modelValue: { type: Boolean, default: false },
+        embedded: { type: Boolean, default: false },
+        active: { type: Boolean, default: false },
     },
-    emits: ['update:modelValue'],
+    emits: ['update:modelValue', 'saved'],
     setup(props, { emit }) {
         const saving = ref(false)
         const savingAccount = ref(false)
@@ -117,7 +118,7 @@ export default {
         const accountForm = reactive({ id: '', name: '', user: '', password: '' })
         const { applyThemeSettings } = useTheme()
         const form = reactive({
-            logSettings: { enabled: false, path: '~/.cmd-config/logs' },
+            logSettings: { enabled: false, path: '~/.flashdock/logs' },
             themeSettings: { mode: 'light', terminalPreset: 'classic', shellFontSize: 13, shellLineHeight: 1.2 }
         })
 
@@ -141,8 +142,11 @@ export default {
         }
 
         watch(() => props.modelValue, (open) => {
-            if (open) load()
+            if (!props.embedded && open) load()
         })
+        watch(() => props.active, (open) => {
+            if (props.embedded && open) load()
+        }, { immediate: true })
 
         const resetAccountForm = () => {
             accountForm.id = crypto.randomUUID()
@@ -221,7 +225,8 @@ export default {
                 await App.SaveSystemSettings(config)
                 applyThemeSettings(form.themeSettings)
                 ElMessage.success('系统设置已保存')
-                visibleProxy.value = false
+                emit('saved')
+                if (!props.embedded) visibleProxy.value = false
             } catch (e) {
                 ElMessage.error(`保存失败: ${e}`)
             } finally {
@@ -229,10 +234,8 @@ export default {
             }
         }
 
-        const handleClose = () => { visibleProxy.value = false }
-
         return {
-            visibleProxy,
+            embedded: computed(() => props.embedded),
             form,
             accounts,
             saving,
@@ -246,13 +249,24 @@ export default {
             removeAccount,
             confirmAccount,
             save,
-            handleClose
         }
     }
 }
 </script>
 
 <style scoped>
+.general-settings-panel.embedded {
+    padding-bottom: 8px;
+}
+
+.panel-actions {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--app-border);
+}
+
 .account-toolbar {
     margin-bottom: 8px;
 }

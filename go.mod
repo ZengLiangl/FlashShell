@@ -1,4 +1,4 @@
-module quick-cmd
+module FlashDock
 
 go 1.23.0
 

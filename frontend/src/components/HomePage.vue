@@ -13,6 +13,15 @@
           </div>
         </div>
         <div class="header-actions">
+          <el-button
+            v-if="hasTask"
+            size="small"
+            type="primary"
+            plain
+            @click="$emit('resume-task')"
+          >
+            {{ taskRunning ? '返回执行中任务' : '继续当前任务' }}
+          </el-button>
           <el-button size="small" @click="$emit('open-execution-history')">执行历史</el-button>
           <el-button size="small" @click="handleRefresh">
             <el-icon>
@@ -137,10 +146,13 @@ export default {
   props: {
     projects: { type: Array, required: true },
     connectedCount: { type: Number, default: 0 },
+    hasTask: { type: Boolean, default: false },
+    taskRunning: { type: Boolean, default: false },
   },
   emits: [
     'refresh',
     'select-project',
+    'resume-task',
     'open-shell',
     'connect-machine',
     'add-machine',

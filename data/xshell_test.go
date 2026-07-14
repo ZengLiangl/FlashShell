@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"quick-cmd/define"
+	"FlashDock/define"
 )
 
 func TestParseXshellContent(t *testing.T) {

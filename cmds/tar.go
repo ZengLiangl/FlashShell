@@ -8,8 +8,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"quick-cmd/define"
-	"quick-cmd/utils"
+	"FlashDock/define"
+	"FlashDock/utils"
 	"strings"
 )
 

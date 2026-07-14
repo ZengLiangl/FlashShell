@@ -3,7 +3,7 @@ package data
 import (
 	"fmt"
 
-	"quick-cmd/crypto"
+	"FlashDock/crypto"
 
 	"github.com/google/uuid"
 )

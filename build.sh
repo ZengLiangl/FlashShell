@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Quick Cmd 构建脚本
+# FlashDock 构建脚本
 
-echo "开始构建 Quick Cmd..."
+echo "开始构建 FlashDock..."
 
 # 检查 Wails 是否安装
 if ! command -v wails &> /dev/null; then

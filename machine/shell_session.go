@@ -5,9 +5,8 @@ import (
 	"fmt"
 	"io"
 	"sync"
-	"time"
 
-	"quick-cmd/define"
+	"FlashDock/define"
 
 	"golang.org/x/crypto/ssh"
 )
@@ -145,9 +144,6 @@ func (sm *ShellSessionManager) Connect(machine *define.Machine, workVars map[str
 
 	go sm.readPTY(stdout, handler, ctx, readDone)
 
-	// 注入 cwd 上报钩子（bash/zsh）；输出经 OSC 过滤，不污染终端显示
-	go sm.installCwdHook(ctx)
-
 	connectMsg := fmt.Sprintf("已连接到 %s (%s@%s:%d)", machine.Name, sensitive.User, sensitive.Host, sensitive.Port)
 	sm.mu.Unlock()
 
@@ -156,16 +152,6 @@ func (sm *ShellSessionManager) Connect(machine *define.Machine, workVars map[str
 	}
 	sm.notifyStatus(handler)
 	return nil
-}
-
-func (sm *ShellSessionManager) installCwdHook(ctx context.Context) {
-	// 等首屏登录输出稍稳定
-	select {
-	case <-ctx.Done():
-		return
-	case <-time.After(450 * time.Millisecond):
-	}
-	_ = sm.SendInput(CwdHookScript())
 }
 
 func (sm *ShellSessionManager) readPTY(stdout io.Reader, handler ShellOutputHandler, ctx context.Context, done chan struct{}) {

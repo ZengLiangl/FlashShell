@@ -1,21 +1,21 @@
 {
     "$schema": "https://wails.io/schemas/config.v2.json",
-    "name": "quick-cmd",
-    "outputfilename": "quick-cmd",
+    "name": "FlashDock",
+    "outputfilename": "FlashDock",
     "frontend:install": "npm install",
     "frontend:build": "npm run build",
     "frontend:dev:watcher": "npm run dev",
     "frontend:dev:serverUrl": "http://localhost:3000",
     "author": {
-        "name": "Quick Cmd Developer",
+        "name": "FlashDock",
         "email": "developer@example.com"
     },
     "info": {
-        "companyName": "Quick Cmd",
-        "productName": "Quick Cmd",
-        "productVersion": "1.0.0",
-        "copyright": "Copyright © 2024, Quick Cmd Developer",
-        "comments": "A cross-platform command management tool"
+        "companyName": "FlashDock",
+        "productName": "FlashDock",
+        "productVersion": "1.2.0",
+        "copyright": "Copyright © 2026, FlashDock",
+        "comments": "FlashDock — local tasks & remote Shell in one dock"
     },
     "nsisType": "multiple",
     "obfuscated": false,

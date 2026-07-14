@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"quick-cmd/define"
+	"FlashDock/define"
 
 	"gopkg.in/yaml.v3"
 )

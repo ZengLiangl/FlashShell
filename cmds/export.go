@@ -1,7 +1,7 @@
 package cmds
 
 import (
-	"quick-cmd/define"
+	"FlashDock/define"
 )
 
 var (

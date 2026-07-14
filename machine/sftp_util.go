@@ -3,7 +3,7 @@ package machine
 import (
 	"strings"
 
-	"quick-cmd/define"
+	"FlashDock/define"
 )
 
 // CommandNeedsSFTP reports whether a remote command includes file upload steps.

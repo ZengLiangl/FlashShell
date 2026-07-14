@@ -66,7 +66,7 @@ func (lm *LogManager) StartSession(projectName, subProjectName string) (string, 
 		return "", fmt.Errorf("创建日志文件失败: %w", err)
 	}
 
-	header := fmt.Sprintf("=== Quick Cmd 执行日志 ===\n项目: %s/%s\n开始时间: %s\n\n",
+	header := fmt.Sprintf("=== FlashDock 执行日志 ===\n项目: %s/%s\n开始时间: %s\n\n",
 		projectName, subProjectName, time.Now().Format(time.RFC3339))
 	if _, err := file.WriteString(header); err != nil {
 		_ = file.Close()

@@ -158,6 +158,10 @@ export function GetShellStatus() {
   return window['go']['app']['App']['GetShellStatus']();
 }
 
+export function GetShortcutSettings() {
+  return window['go']['app']['App']['GetShortcutSettings']();
+}
+
 export function GetStatus() {
   return window['go']['app']['App']['GetStatus']();
 }
@@ -276,6 +280,10 @@ export function SaveGlobalAccountsFromDTO(arg1) {
 
 export function SaveGlobalConfig(arg1) {
   return window['go']['app']['App']['SaveGlobalConfig'](arg1);
+}
+
+export function SaveShortcutSettings(arg1) {
+  return window['go']['app']['App']['SaveShortcutSettings'](arg1);
 }
 
 export function SaveSystemSettings(arg1) {

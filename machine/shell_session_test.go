@@ -3,7 +3,7 @@ package machine
 import (
 	"testing"
 
-	"quick-cmd/define"
+	"FlashDock/define"
 )
 
 func TestShellSessionManager_GetStatusDisconnected(t *testing.T) {

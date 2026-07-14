@@ -3,8 +3,8 @@ package machine
 import (
 	"fmt"
 
-	"quick-cmd/define"
-	"quick-cmd/utils"
+	"FlashDock/define"
+	"FlashDock/utils"
 )
 
 type stepExecutor func(command string, output chan<- string) error

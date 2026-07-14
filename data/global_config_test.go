@@ -55,7 +55,7 @@ func TestUpdateLastOpenedFile_SkipsSaveWhenUnchanged(t *testing.T) {
 	configPath := filepath.Join(tempDir, "global_config.yaml")
 
 	original := `appId: com.runner
-windowsName: 运行器
+windowsName: FlashDock
 configFile:
   - config.yaml
 lastOpenedFile: config.yaml

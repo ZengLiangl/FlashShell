@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"quick-cmd/define"
+	"FlashDock/define"
 )
 
 // ShellAuxPool 辅助连接池（监控 + SFTP）

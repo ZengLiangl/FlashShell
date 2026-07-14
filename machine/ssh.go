@@ -6,9 +6,9 @@ import (
 	"regexp"
 	"strings"
 
-	"quick-cmd/cmds"
-	"quick-cmd/define"
-	"quick-cmd/utils"
+	"FlashDock/cmds"
+	"FlashDock/define"
+	"FlashDock/utils"
 )
 
 // SSHClient SSH客户端封装

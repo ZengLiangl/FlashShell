@@ -20,6 +20,16 @@
         />
       </el-tabs>
       <div v-else class="tabs-placeholder">未连接</div>
+      <el-button
+        class="home-btn"
+        size="small"
+        text
+        title="返回首页"
+        @click="$emit('back')"
+      >
+        <el-icon :size="14"><ArrowLeft /></el-icon>
+        <span class="home-btn-text">返回首页</span>
+      </el-button>
     </div>
 
     <div v-if="sessions.length === 0" class="empty-slot">
@@ -37,6 +47,8 @@
           :search-query="searchQuery"
           :class="{ 'is-active': activeTab === session.machineName }"
           @cd-hint="(payload) => $emit('cd-hint', payload)"
+          @open-search="$emit('open-search')"
+          @clear-cache="(name) => $emit('clear', name)"
         />
       </div>
       <slot name="footer" :active-machine="activeTab" />
@@ -46,17 +58,18 @@
 
 <script>
 import { ref, watch } from 'vue'
+import { ArrowLeft, Folder } from '@element-plus/icons-vue'
 import ShellTerminal from './ShellTerminal.vue'
 
 export default {
   name: 'ShellTerminalTabs',
-  components: { ShellTerminal },
+  components: { ShellTerminal, ArrowLeft, Folder },
   props: {
     sessions: { type: Array, default: () => [] },
     activeMachine: { type: String, default: '' },
     searchQuery: { type: String, default: '' },
   },
-  emits: ['update:activeMachine', 'disconnect', 'clear', 'open-picker', 'cd-hint'],
+  emits: ['update:activeMachine', 'disconnect', 'clear', 'open-picker', 'cd-hint', 'back', 'open-search'],
   setup(props, { emit, expose }) {
     const activeTab = ref(props.activeMachine)
     const terminalRefs = ref({})
@@ -116,7 +129,7 @@ export default {
   flex-shrink: 0;
   background: var(--app-panel-bg);
   border-bottom: 1px solid var(--app-border);
-  padding: 0 4px;
+  padding: 0 4px 0 4px;
   min-height: 36px;
 }
 
@@ -125,9 +138,25 @@ export default {
   margin: 0 2px;
 }
 
+.home-btn {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--app-text-secondary);
+  padding: 4px 10px;
+}
+
+.home-btn:hover {
+  color: var(--app-accent-color);
+}
+
+.home-btn-text {
+  margin-left: 2px;
+}
+
 .session-tabs {
   flex: 1;
   min-width: 0;
+  overflow: hidden;
 }
 
 .session-tabs :deep(.el-tabs__header) {

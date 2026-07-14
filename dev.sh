@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# Quick Cmd 开发脚本
+# FlashDock 开发脚本
 
-echo "启动 Quick Cmd 开发模式..."
+echo "启动 FlashDock 开发模式..."
 
 # 检查 Wails 是否安装
 if ! command -v wails &> /dev/null; then

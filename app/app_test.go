@@ -5,9 +5,9 @@ import (
 	"testing"
 	"time"
 
-	"quick-cmd/data"
-	"quick-cmd/define"
-	"quick-cmd/machine"
+	"FlashDock/data"
+	"FlashDock/define"
+	"FlashDock/machine"
 )
 
 func TestApp_GetConfig(t *testing.T) {
@@ -459,7 +459,7 @@ func TestSubProjectWorkDirGlobalConfigReplace(t *testing.T) {
 	// 设置全局配置中的 workPaths
 	globalConfig := &data.GlobalConfig{
 		AppId:       "com.runner",
-		WindowsName: "运行器",
+		WindowsName: "FlashDock",
 		WorkPaths: map[string]string{
 			"TEST_WORK_PATH": "/global/test/work",
 		},

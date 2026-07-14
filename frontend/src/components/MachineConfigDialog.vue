@@ -1,37 +1,43 @@
 <template>
-    <el-dialog v-model="visibleProxy" title="机器配置管理" width="80%" :before-close="handleClose">
-        <div class="machine-config-container">
-            <div class="machine-list">
-                <div class="list-header">
-                    <h4>机器列表</h4>
-                    <div class="header-actions">
-                        <el-select
-                            v-model="importAccountId"
-                            clearable
-                            placeholder="导入时使用全局帐号(可选)"
-                            class="import-account-select"
-                        >
-                            <el-option
-                                v-for="account in globalAccounts"
-                                :key="account.id"
-                                :label="account.name"
-                                :value="account.id"
-                            />
-                        </el-select>
-                        <el-dropdown split-button type="primary" @click="addMachine" @command="handleAddCommand">
-                            <el-icon><Plus /></el-icon>
-                            添加机器
-                            <template #dropdown>
-                                <el-dropdown-menu>
-                                    <el-dropdown-item command="import-xshell">导入 Xshell</el-dropdown-item>
-                                    <el-dropdown-item command="import-finalshell">导入 FinalShell</el-dropdown-item>
-                                </el-dropdown-menu>
-                            </template>
-                        </el-dropdown>
-                    </div>
+    <div class="machine-config-container" :class="{ embedded }">
+        <div class="machine-list">
+            <div class="list-header">
+                <h4 v-if="!embedded">机器列表</h4>
+                <div v-else></div>
+                <div class="header-actions">
+                    <el-select
+                        v-model="importAccountId"
+                        clearable
+                        placeholder="导入时使用全局帐号(可选)"
+                        class="import-account-select"
+                    >
+                        <el-option
+                            v-for="account in globalAccounts"
+                            :key="account.id"
+                            :label="account.name"
+                            :value="account.id"
+                        />
+                    </el-select>
+                    <el-dropdown split-button type="primary" @click="addMachine" @command="handleAddCommand">
+                        <el-icon><Plus /></el-icon>
+                        添加机器
+                        <template #dropdown>
+                            <el-dropdown-menu>
+                                <el-dropdown-item command="import-xshell">导入 Xshell</el-dropdown-item>
+                                <el-dropdown-item command="import-finalshell">导入 FinalShell</el-dropdown-item>
+                            </el-dropdown-menu>
+                        </template>
+                    </el-dropdown>
                 </div>
+            </div>
 
-                <el-table :data="machines" row-key="id" style="width: 100%" v-loading="machinesLoading">
+            <div class="machine-table-wrap">
+                <el-table
+                    :data="sortedMachines"
+                    row-key="id"
+                    style="width: 100%"
+                    v-loading="machinesLoading"
+                >
                     <el-table-column prop="name" label="机器名称" width="150" />
                     <el-table-column prop="group" label="分组" width="120">
                         <template #default="scope">
@@ -52,7 +58,12 @@
             </div>
         </div>
 
-        <el-dialog v-model="machineEditVisible" :title="editingMachine ? '编辑机器' : '添加机器'" width="600px">
+        <el-dialog
+            v-model="machineEditVisible"
+            :title="editingMachine ? '编辑机器' : '添加机器'"
+            width="600px"
+            append-to-body
+        >
             <el-form :model="machineForm" :rules="machineRules" ref="machineFormRef" label-width="100px">
                 <el-form-item label="机器名称" prop="name">
                     <el-input v-model="machineForm.name" placeholder="请输入机器名称" />
@@ -114,11 +125,11 @@
                 </div>
             </template>
         </el-dialog>
-    </el-dialog>
+    </div>
 </template>
 
 <script>
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
     GetMachines,
@@ -133,32 +144,21 @@ import {
     ImportXshellPick,
     ImportFinalShellPick,
 } from '../../wailsjs/go/app/App'
+import { sortMachinesByName } from '../utils/machineGroups'
 
 export default {
     name: 'MachineConfigDialog',
     props: {
-        modelValue: { type: Boolean, required: true },
+        modelValue: { type: Boolean, default: false },
+        embedded: { type: Boolean, default: false },
+        active: { type: Boolean, default: false },
         editMachineId: { type: String, default: '' },
     },
     emits: ['update:modelValue', 'closed', 'changed'],
     setup(props, { emit }) {
         const visibleProxy = ref(props.modelValue)
-        watch(() => props.modelValue, async (v) => {
-            visibleProxy.value = v
-            if (v) {
-                await loadMachines()
-                await loadGlobalAccounts()
-                if (props.editMachineId) {
-                    const target = machines.value.find((m) => m.id === props.editMachineId)
-                    if (target) await editMachine(target)
-                }
-            } else {
-                emit('closed')
-            }
-        })
-        watch(visibleProxy, v => emit('update:modelValue', v))
-
         const machines = ref([])
+        const sortedMachines = computed(() => sortMachinesByName(machines.value))
         const globalAccounts = ref([])
         const machinesLoading = ref(false)
         const machineEditVisible = ref(false)
@@ -245,6 +245,30 @@ export default {
             }
             machineEditVisible.value = true
         }
+
+        const activate = async () => {
+            await loadMachines()
+            await loadGlobalAccounts()
+            if (props.editMachineId) {
+                const target = machines.value.find((m) => m.id === props.editMachineId)
+                if (target) await editMachine(target)
+            }
+        }
+
+        watch(() => props.modelValue, async (v) => {
+            visibleProxy.value = v
+            if (props.embedded) return
+            if (v) await activate()
+            else emit('closed')
+        })
+        watch(visibleProxy, (v) => {
+            if (!props.embedded) emit('update:modelValue', v)
+        })
+        watch(() => props.active, async (v) => {
+            if (!props.embedded) return
+            if (v) await activate()
+            else emit('closed')
+        }, { immediate: true })
 
         const resetMachineForm = () => {
             machineForm.name = ''
@@ -376,8 +400,10 @@ export default {
         }
 
         return {
+            embedded: computed(() => props.embedded),
             visibleProxy,
             machines,
+            sortedMachines,
             globalAccounts,
             machinesLoading,
             machineEditVisible,
@@ -403,11 +429,35 @@ export default {
 </script>
 
 <style scoped>
+.machine-config-container {
+    height: min(62vh, 560px);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
+
+.machine-config-container.embedded {
+    height: 100%;
+    min-height: 360px;
+}
+
+.machine-config-container.embedded .machine-table-wrap {
+    min-height: 280px;
+}
+
+.machine-list {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
 .list-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: 12px;
+    flex-shrink: 0;
 }
 
 .header-actions {
@@ -422,6 +472,15 @@ export default {
 
 .import-account-select :deep(.el-select__wrapper) {
     min-height: 32px;
+}
+
+.machine-table-wrap {
+    flex: 1;
+    min-height: 0;
+    max-height: 100%;
+    overflow: auto;
+    border: 1px solid var(--el-border-color-lighter, var(--app-border));
+    border-radius: 6px;
 }
 
 .key-file-input {

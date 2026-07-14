@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"quick-cmd/define"
+	"FlashDock/define"
 )
 
 // ShellSessionPool 管理多台机器的 PTY 会话

@@ -39,6 +39,8 @@
           @clear="onClear"
           @open-picker="pickerVisible = true"
           @cd-hint="onCdHint"
+          @back="$emit('back')"
+          @open-search="openSearch"
         >
           <template #empty>
             <ShellConnectionHistory
@@ -101,6 +103,7 @@ import ShellMachinePickerDialog from '../components/shell/ShellMachinePickerDial
 import ShellFilePanel from '../components/shell/ShellFilePanel.vue'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
+import { mergeShortcuts, matchesShortcut } from '../utils/shortcuts'
 
 export default {
   name: 'ShellWorkspace',
@@ -113,6 +116,7 @@ export default {
     ShellFilePanel,
   },
   props: {
+    active: { type: Boolean, default: true },
     leftPanelWidth: { type: Number, default: 280 },
     isResizing: { type: Boolean, default: false },
     appInfo: { type: String, default: '' },
@@ -179,24 +183,39 @@ export default {
       searchVisible.value = true
     }
 
+    const findShortcut = ref(mergeShortcuts().find)
+
     const handleKeyDown = (e) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+      if (!props.active) return
+      if (matchesShortcut(e, findShortcut.value)) {
         e.preventDefault()
         e.stopPropagation()
         openSearch()
       }
     }
 
+    const loadFindShortcut = async () => {
+      try {
+        findShortcut.value = mergeShortcuts(await App.GetShortcutSettings()).find
+      } catch {
+        findShortcut.value = mergeShortcuts().find
+      }
+    }
+
     onMounted(() => {
       document.addEventListener('keydown', handleKeyDown, true)
       loadHistory()
-      // PTY 真实 cwd（OSC）—— SFTP 跟踪的权威来源
+      loadFindShortcut()
       EventsOn('shell:cwd', onShellCwd)
+      EventsOn('shortcuts:changed', (data) => {
+        findShortcut.value = mergeShortcuts(data).find
+      })
     })
 
     onUnmounted(() => {
       document.removeEventListener('keydown', handleKeyDown, true)
       EventsOff('shell:cwd')
+      EventsOff('shortcuts:changed')
     })
 
     /** 终端真实工作目录变化 → 同步 SFTP */
@@ -335,6 +354,12 @@ export default {
       tabsRef.value?.fitActive?.()
     })
 
+    watch(() => props.active, async (visible) => {
+      if (!visible) return
+      await nextTick()
+      tabsRef.value?.fitActive?.()
+    })
+
     return {
       tabsRef,
       filePanelRef,
@@ -348,6 +373,7 @@ export default {
       clearTerminal,
       onClear,
       toggleSearch,
+      openSearch,
       closeSearch,
       findNext,
       findPrevious,

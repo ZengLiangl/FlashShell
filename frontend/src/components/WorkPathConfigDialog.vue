@@ -1,16 +1,17 @@
 <template>
-    <el-dialog v-model="visibleProxy" title="环境变量配置管理" width="80%" :before-close="handleClose">
-        <div class="workpath-config-container">
-            <div class="workpath-list">
-                <div class="list-header">
-                    <h4>环境变量列表</h4>
-                    <el-button type="primary" @click="addWorkPath">
-                        <el-icon>
-                            <Plus />
-                        </el-icon>
-                        添加环境变量
-                    </el-button>
-                </div>
+    <div class="workpath-config-container" :class="{ embedded }">
+        <div class="workpath-list">
+            <div class="list-header">
+                <h4 v-if="!embedded">环境变量列表</h4>
+                <div v-else></div>
+                <el-button type="primary" @click="addWorkPath">
+                    <el-icon>
+                        <Plus />
+                    </el-icon>
+                    添加环境变量
+                </el-button>
+            </div>
+            <div class="workpath-table-wrap">
                 <el-table :data="entries" style="width: 100%" v-loading="workPathsLoading">
                     <el-table-column prop="key" label="变量名" width="200" />
                     <el-table-column prop="value" label="变量值" overflow-tooltip />
@@ -24,7 +25,12 @@
             </div>
         </div>
 
-        <el-dialog v-model="workPathEditVisible" :title="editingWorkPath ? '编辑环境变量' : '添加环境变量'" width="500px">
+        <el-dialog
+            v-model="workPathEditVisible"
+            :title="editingWorkPath ? '编辑环境变量' : '添加环境变量'"
+            width="500px"
+            append-to-body
+        >
             <el-form :model="workPathForm" :rules="workPathRules" ref="workPathFormRef" label-width="100px">
                 <el-form-item label="变量名" prop="key">
                     <el-input v-model="workPathForm.key" placeholder="请输入变量名（如：PROJECT_HOME）" />
@@ -50,7 +56,7 @@
                 </div>
             </template>
         </el-dialog>
-    </el-dialog>
+    </div>
 </template>
 
 <script>
@@ -61,17 +67,13 @@ import * as App from '../../wailsjs/go/app/App'
 export default {
     name: 'WorkPathConfigDialog',
     props: {
-        modelValue: { type: Boolean, required: true }
+        modelValue: { type: Boolean, default: false },
+        embedded: { type: Boolean, default: false },
+        active: { type: Boolean, default: false },
     },
     emits: ['update:modelValue'],
     setup(props, { emit }) {
         const visibleProxy = ref(props.modelValue)
-        watch(() => props.modelValue, v => {
-            visibleProxy.value = v
-            if (v) loadWorkPaths()
-        })
-        watch(visibleProxy, v => emit('update:modelValue', v))
-
         const workPaths = ref({})
         const workPathsLoading = ref(false)
         const workPathEditVisible = ref(false)
@@ -87,8 +89,6 @@ export default {
 
         const entries = computed(() => Object.entries(workPaths.value).map(([key, value]) => ({ key, value })))
 
-        const handleClose = () => { visibleProxy.value = false }
-
         const loadWorkPaths = async () => {
             try {
                 workPathsLoading.value = true
@@ -101,6 +101,17 @@ export default {
                 workPathsLoading.value = false
             }
         }
+
+        watch(() => props.modelValue, (v) => {
+            visibleProxy.value = v
+            if (!props.embedded && v) loadWorkPaths()
+        })
+        watch(visibleProxy, (v) => {
+            if (!props.embedded) emit('update:modelValue', v)
+        })
+        watch(() => props.active, (v) => {
+            if (props.embedded && v) loadWorkPaths()
+        }, { immediate: true })
 
         const addWorkPath = () => {
             editingWorkPath.value = null
@@ -154,7 +165,7 @@ export default {
         }
 
         return {
-            visibleProxy,
+            embedded: computed(() => props.embedded),
             workPaths,
             workPathsLoading,
             workPathEditVisible,
@@ -164,7 +175,6 @@ export default {
             workPathForm,
             workPathRules,
             entries,
-            handleClose,
             addWorkPath,
             editWorkPath,
             saveWorkPath,
@@ -175,14 +185,48 @@ export default {
 </script>
 
 <style scoped>
-.workpath-config-container {}
+.workpath-config-container {
+    height: min(62vh, 560px);
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+}
 
-.workpath-list {}
+.workpath-config-container.embedded {
+    height: 100%;
+    min-height: 360px;
+}
+
+.workpath-list {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
 
 .list-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
     margin-bottom: 12px;
+    flex-shrink: 0;
+}
+
+.workpath-table-wrap {
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
+    border: 1px solid var(--el-border-color-lighter, var(--app-border));
+    border-radius: 6px;
+}
+
+.usage-info {
+    font-size: 12px;
+    color: var(--app-text-muted);
+    line-height: 1.6;
+}
+
+.usage-info p {
+    margin: 0;
 }
 </style>

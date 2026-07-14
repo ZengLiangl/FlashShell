@@ -11,8 +11,8 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"quick-cmd/define"
-	"quick-cmd/utils"
+	"FlashDock/define"
+	"FlashDock/utils"
 )
 
 // LocalRunner 本地命令执行器

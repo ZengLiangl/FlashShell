@@ -1,7 +1,7 @@
 {
-    "name": "quick-cmd-frontend",
+    "name": "FlashDock-frontend",
     "version": "1.0.0",
-    "description": "Quick Cmd Frontend",
+    "description": "FlashDock Frontend",
     "main": "index.js",
     "scripts": {
         "build": "vite build",

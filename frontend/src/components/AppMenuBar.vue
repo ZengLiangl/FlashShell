@@ -1,78 +1,80 @@
 <template>
   <div class="app-menu-bar">
-    <el-menu
-      :key="menuKey"
-      mode="horizontal"
-      :ellipsis="false"
-      class="menu-inner"
-      @select="onMenuSelect"
-    >
-      <el-sub-menu index="file">
-        <template #title>文件</template>
-        <el-menu-item index="file-new" @click="onNewWindow">
-          新建窗口
-          <span class="menu-shortcut">Ctrl+N</span>
-        </el-menu-item>
-      </el-sub-menu>
-
-      <el-sub-menu index="settings">
-        <template #title>设置</template>
-        <el-menu-item index="settings-machine" @click="App.OpenMachineConfig()">
-          机器配置
-          <span class="menu-shortcut">Ctrl+M</span>
-        </el-menu-item>
-        <el-menu-item index="settings-env" @click="App.OpenWorkPathConfig()">
-          环境变量
-          <span class="menu-shortcut">Ctrl+E</span>
-        </el-menu-item>
-        <!-- <el-menu-item divided index="settings-config-editor" @click="App.OpenConfigEditor()">
-          业务配置编辑
-          <span class="menu-shortcut">Ctrl+,</span>
-        </el-menu-item> -->
-        <el-menu-item divided index="settings-system" @click="App.OpenSystemSettings()">
-          系统设置
-          <span class="menu-shortcut">Ctrl+,</span>
-        </el-menu-item>
-        <el-menu-item index="settings-history" @click="App.OpenExecutionHistory()">执行历史</el-menu-item>
-      </el-sub-menu>
-
-      <el-sub-menu index="configs">
-        <template #title>配置文件</template>
-        <template v-if="configFiles.length">
-          <el-menu-item
-            v-for="file in configFiles"
-            :key="file"
-            :index="`config-${file}`"
-            @click="switchConfig(file)"
-          >
-            <span class="config-item">
-              <el-icon v-if="file === currentConfig" class="config-check"><Check /></el-icon>
-              <span>{{ basename(file) }}</span>
-            </span>
-          </el-menu-item>
+    <div class="menu-icons">
+      <el-dropdown trigger="click" @command="onFileCommand">
+        <button type="button" class="icon-btn" title="文件">
+          <el-icon :size="16"><DocumentAdd /></el-icon>
+        </button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="new-window">
+              <span>新建窗口</span>
+              <span class="menu-shortcut">{{ labelOf('newWindow') }}</span>
+            </el-dropdown-item>
+          </el-dropdown-menu>
         </template>
-        <el-menu-item v-else index="config-empty" disabled>无法加载配置文件</el-menu-item>
-        <el-menu-item divided index="config-refresh" @click="refreshConfigList">
-          刷新配置列表
-          <span class="menu-shortcut">Ctrl+R</span>
-        </el-menu-item>
-        <el-menu-item index="config-global" @click="App.OpenGlobalConfigWithEvent()">打开全局配置</el-menu-item>
-        <el-menu-item index="config-current" @click="App.OpenCurrentConfigWithEvent()">打开当前配置</el-menu-item>
-      </el-sub-menu>
+      </el-dropdown>
 
-      <el-sub-menu index="help">
-        <template #title>帮助</template>
-        <el-menu-item index="help-about" @click="App.OpenAbout()">关于</el-menu-item>
-      </el-sub-menu>
-    </el-menu>
+      <el-dropdown trigger="click" @command="onConfigCommand">
+        <button type="button" class="icon-btn" title="配置文件">
+          <el-icon :size="16"><FolderOpened /></el-icon>
+        </button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <template v-if="configFiles.length">
+              <el-dropdown-item
+                v-for="file in configFiles"
+                :key="file"
+                :command="`switch:${file}`"
+              >
+                <span class="config-item">
+                  <el-icon v-if="file === currentConfig" class="config-check"><Check /></el-icon>
+                  <span>{{ basename(file) }}</span>
+                </span>
+              </el-dropdown-item>
+            </template>
+            <el-dropdown-item v-else disabled>无法加载配置文件</el-dropdown-item>
+            <el-dropdown-item divided command="refresh">
+              <span>刷新配置列表</span>
+              <span class="menu-shortcut">{{ labelOf('refreshConfig') }}</span>
+            </el-dropdown-item>
+            <el-dropdown-item command="open-global">打开全局配置</el-dropdown-item>
+            <el-dropdown-item command="open-current">打开当前配置</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+
+      <button
+        type="button"
+        class="icon-btn"
+        title="系统设置"
+        @click="openSettings"
+      >
+        <el-icon :size="16"><Setting /></el-icon>
+      </button>
+      <button type="button" class="icon-btn" title="帮助" @click="onHelpCommand('about')">
+          <el-icon :size="16"><QuestionFilled /></el-icon>
+        </button>
+      <!-- <el-dropdown trigger="click" @command="onHelpCommand">
+        <button type="button" class="icon-btn" title="帮助">
+          <el-icon :size="16"><QuestionFilled /></el-icon>
+        </button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item command="about">关于</el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown> -->
+    </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted, nextTick } from 'vue'
-import { Check } from '@element-plus/icons-vue'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { Check, DocumentAdd, FolderOpened, Setting, QuestionFilled } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
+import { mergeShortcuts, formatShortcut } from '../utils/shortcuts'
 
 function basename(filePath) {
   if (!filePath) return ''
@@ -83,20 +85,20 @@ function basename(filePath) {
 
 export default {
   name: 'AppMenuBar',
-  components: { Check },
+  components: { Check, DocumentAdd, FolderOpened, Setting, QuestionFilled },
   setup() {
     const configFiles = ref([])
     const currentConfig = ref('')
-    const menuKey = ref(0)
+    const shortcuts = ref(mergeShortcuts())
 
-    const clearMenuHighlight = () => {
-      nextTick(() => {
-        menuKey.value += 1
-      })
-    }
+    const labelOf = (id) => formatShortcut(shortcuts.value[id])
 
-    const onMenuSelect = () => {
-      clearMenuHighlight()
+    const loadShortcuts = async () => {
+      try {
+        shortcuts.value = mergeShortcuts(await App.GetShortcutSettings())
+      } catch {
+        shortcuts.value = mergeShortcuts()
+      }
     }
 
     const loadMenuData = async () => {
@@ -114,33 +116,62 @@ export default {
       }
     }
 
-    const onNewWindow = () => App.NewWindow()
-    const refreshConfigList = () => App.RefreshConfigMenuWithEvent()
-    const switchConfig = (file) => {
-      if (file && file !== currentConfig.value) {
-        App.SwitchConfigFileWithEvent(file)
+    const openSettings = () => {
+      App.OpenSystemSettings()
+    }
+
+    const onFileCommand = (cmd) => {
+      if (cmd === 'new-window') App.NewWindow()
+    }
+
+    const onConfigCommand = (cmd) => {
+      if (cmd === 'refresh') {
+        App.RefreshConfigMenuWithEvent()
+        return
       }
+      if (cmd === 'open-global') {
+        App.OpenGlobalConfigWithEvent()
+        return
+      }
+      if (cmd === 'open-current') {
+        App.OpenCurrentConfigWithEvent()
+        return
+      }
+      if (typeof cmd === 'string' && cmd.startsWith('switch:')) {
+        const file = cmd.slice('switch:'.length)
+        if (file && file !== currentConfig.value) {
+          App.SwitchConfigFileWithEvent(file)
+        }
+      }
+    }
+
+    const onHelpCommand = (cmd) => {
+      if (cmd === 'about') App.OpenAbout()
     }
 
     onMounted(() => {
       loadMenuData()
+      loadShortcuts()
       EventsOn('menu:refresh', loadMenuData)
+      EventsOn('shortcuts:changed', (data) => {
+        shortcuts.value = mergeShortcuts(data)
+      })
     })
 
     onUnmounted(() => {
       EventsOff('menu:refresh')
+      EventsOff('shortcuts:changed')
     })
 
     return {
-      App,
       configFiles,
       currentConfig,
-      menuKey,
       basename,
-      onNewWindow,
-      refreshConfigList,
-      switchConfig,
-      onMenuSelect,
+      labelOf,
+      openSettings,
+      onFileCommand,
+      onConfigCommand,
+      onHelpCommand,
     }
   },
 }
@@ -152,52 +183,38 @@ export default {
   border-bottom: 1px solid var(--app-border);
   background: var(--app-panel-bg);
   color: var(--app-text);
-}
-
-.menu-inner {
-  border-bottom: none !important;
-  background: var(--app-panel-bg) !important;
   height: 36px;
+  display: flex;
+  align-items: center;
+  padding: 0 8px;
 }
 
-.menu-inner :deep(.el-menu-item),
-.menu-inner :deep(.el-sub-menu__title) {
-  height: 36px;
-  line-height: 36px;
-  color: var(--app-text);
+.menu-icons {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.icon-btn {
+  width: 32px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 6px;
   background: transparent;
+  color: var(--app-text-secondary, var(--app-text));
+  cursor: pointer;
+  padding: 0;
 }
 
-.menu-inner :deep(.el-sub-menu .el-menu),
-.menu-inner :deep(.el-menu--popup) {
-  background: var(--app-panel-bg);
-  border: 1px solid var(--app-border);
-}
-
-.menu-inner :deep(.el-menu--popup .el-menu-item) {
-  color: var(--app-text);
-  background: var(--app-panel-bg);
-}
-
-.menu-inner :deep(.el-menu-item:hover),
-.menu-inner :deep(.el-sub-menu__title:hover),
-.menu-inner :deep(.el-menu--popup .el-menu-item:hover) {
-  background: var(--app-accent-bg) !important;
-  color: var(--app-accent-color) !important;
-}
-
-.menu-inner :deep(.el-menu-item.is-active) {
-  color: var(--app-text);
-  background: transparent;
-}
-
-.menu-inner :deep(.el-sub-menu.is-active > .el-sub-menu__title) {
-  color: var(--app-text);
-  border-bottom-color: transparent;
+.icon-btn:hover {
+  background: var(--app-accent-bg);
+  color: var(--app-accent-color);
 }
 
 .menu-shortcut {
-  float: right;
   margin-left: 24px;
   color: var(--app-text-muted);
   font-size: 12px;

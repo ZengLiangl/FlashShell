@@ -2,7 +2,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
-import { isMachineConnected } from '../utils/machineGroups'
+import { isMachineConnected, sortMachinesByName } from '../utils/machineGroups'
 import {
   pushShellOutput,
   clearShellOutput,
@@ -32,7 +32,7 @@ export function useShell() {
 
   const loadMachines = async () => {
     try {
-      shellMachines.value = await App.GetMachines() || []
+      shellMachines.value = sortMachinesByName(await App.GetMachines() || [])
     } catch {
       shellMachines.value = []
     }
@@ -45,11 +45,7 @@ export function useShell() {
     }
   }
 
-  const connect = async (machineName, taskRunning = false) => {
-    if (taskRunning) {
-      ElMessage.warning('任务正在执行，请先停止')
-      return false
-    }
+  const connect = async (machineName) => {
     if (!machineName) return false
 
     // 先同步一次，避免本地 sessions 过期误判

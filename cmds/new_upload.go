@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"quick-cmd/define"
-	"quick-cmd/utils"
+	"FlashDock/define"
+	"FlashDock/utils"
 	"strings"
 	"time"
 )

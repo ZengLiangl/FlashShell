@@ -1,11 +1,23 @@
 <template>
-  <div class="shell-terminal" ref="containerRef">
+  <div class="shell-terminal" ref="containerRef" @contextmenu.prevent="onContextMenu">
     <div ref="terminalRef" class="terminal-host"></div>
+    <ul
+      v-if="ctx.visible"
+      class="ctx-menu"
+      :style="{ left: ctx.x + 'px', top: ctx.y + 'px' }"
+      @click.stop
+    >
+      <li @click="onCopy">复制</li>
+      <li @click="onPaste">粘贴</li>
+      <li @click="onFind">查找</li>
+      <li class="danger" @click="onClearCache">清空缓存</li>
+    </ul>
   </div>
 </template>
 
 <script>
-import { ref, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ElMessage } from 'element-plus'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import { SearchAddon } from 'xterm-addon-search'
@@ -23,19 +35,70 @@ export default {
     connected: { type: Boolean, default: false },
     searchQuery: { type: String, default: '' },
   },
-  emits: ['cd-hint'],
+  emits: ['cd-hint', 'open-search', 'clear-cache'],
   setup(props, { expose, emit }) {
     const containerRef = ref(null)
     const terminalRef = ref(null)
     const term = ref(null)
     const fitAddon = ref(null)
     const searchAddon = ref(null)
+    const ctx = reactive({ visible: false, x: 0, y: 0 })
     const { shellFontSize, shellLineHeight, terminalPreset } = useTheme()
     let resizeObserver = null
     let fitTimers = []
     let initialized = false
     let unregisterWriter = null
     let inputLineBuf = ''
+
+    const hideContextMenu = () => {
+      ctx.visible = false
+    }
+
+    const onContextMenu = (e) => {
+      ctx.x = e.clientX
+      ctx.y = e.clientY
+      ctx.visible = true
+    }
+
+    const onCopy = async () => {
+      hideContextMenu()
+      const text = term.value?.getSelection?.() || ''
+      if (!text) {
+        ElMessage.info('没有选中内容')
+        return
+      }
+      try {
+        await navigator.clipboard.writeText(text)
+        ElMessage.success('已复制')
+      } catch (err) {
+        ElMessage.error(`复制失败: ${err}`)
+      }
+    }
+
+    const onPaste = async () => {
+      hideContextMenu()
+      try {
+        const text = await navigator.clipboard.readText()
+        if (!text) return
+        await App.SendShellInput(props.machineName, text)
+        term.value?.focus?.()
+      } catch (err) {
+        ElMessage.error(`粘贴失败: ${err}`)
+      }
+    }
+
+    const onFind = () => {
+      hideContextMenu()
+      // 与 Ctrl/Cmd+F 一致：打开终端搜索条
+      nextTick(() => emit('open-search'))
+    }
+
+    const onClearCache = () => {
+      hideContextMenu()
+      term.value?.clear?.()
+      emit('clear-cache', props.machineName)
+      App.ClearShellOutput(props.machineName).catch(() => {})
+    }
 
     const trackInputForCd = (data) => {
       for (let i = 0; i < data.length; i++) {
@@ -305,17 +368,30 @@ export default {
     onMounted(() => {
       if (props.connected && props.active) initTerminal()
       EventsOn('theme:changed', onThemeChanged)
+      window.addEventListener('click', hideContextMenu)
+      window.addEventListener('blur', hideContextMenu)
     })
 
     onUnmounted(() => {
       EventsOff('theme:changed')
+      window.removeEventListener('click', hideContextMenu)
+      window.removeEventListener('blur', hideContextMenu)
       window.removeEventListener('resize', scheduleFit)
       destroyTerminal()
     })
 
     expose({ clear, fitAndResize, findNext, findPrevious, clearSearch })
 
-    return { containerRef, terminalRef }
+    return {
+      containerRef,
+      terminalRef,
+      ctx,
+      onContextMenu,
+      onCopy,
+      onPaste,
+      onFind,
+      onClearCache,
+    }
   },
 }
 </script>
@@ -330,6 +406,36 @@ export default {
   flex-direction: column;
   background: #0d1117;
   overflow: hidden;
+  position: relative;
+}
+
+.ctx-menu {
+  position: fixed;
+  z-index: 3000;
+  margin: 0;
+  padding: 4px 0;
+  min-width: 120px;
+  list-style: none;
+  background: var(--app-panel-bg, #1e1e1e);
+  border: 1px solid var(--app-border, #333);
+  border-radius: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+}
+
+.ctx-menu li {
+  padding: 6px 14px;
+  font-size: 13px;
+  color: var(--app-text, #e6e6e6);
+  cursor: pointer;
+}
+
+.ctx-menu li:hover {
+  background: var(--app-accent-bg, rgba(64, 158, 255, 0.15));
+  color: var(--app-accent-color, #409eff);
+}
+
+.ctx-menu li.danger {
+  color: #f56c6c;
 }
 
 .terminal-host {

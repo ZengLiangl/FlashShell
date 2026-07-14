@@ -5,8 +5,8 @@ import (
 	"sync"
 	"time"
 
-	"quick-cmd/define"
-	"quick-cmd/utils"
+	"FlashDock/define"
+	"FlashDock/utils"
 )
 
 // SubProjectRunner SubProject 执行器实现

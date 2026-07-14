@@ -173,6 +173,64 @@ export namespace data {
 	        this.terminalPreset = source["terminalPreset"];
 	    }
 	}
+	export class ShortcutBinding {
+	    key: string;
+	    useMod: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShortcutBinding(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.key = source["key"];
+	        this.useMod = source["useMod"];
+	    }
+	}
+	export class ShortcutSettings {
+	    newWindow: ShortcutBinding;
+	    machineConfig: ShortcutBinding;
+	    envVars: ShortcutBinding;
+	    systemSettings: ShortcutBinding;
+	    refreshConfig: ShortcutBinding;
+	    find: ShortcutBinding;
+	    copy: ShortcutBinding;
+	    clearOutput: ShortcutBinding;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShortcutSettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.newWindow = this.convertValues(source["newWindow"], ShortcutBinding);
+	        this.machineConfig = this.convertValues(source["machineConfig"], ShortcutBinding);
+	        this.envVars = this.convertValues(source["envVars"], ShortcutBinding);
+	        this.systemSettings = this.convertValues(source["systemSettings"], ShortcutBinding);
+	        this.refreshConfig = this.convertValues(source["refreshConfig"], ShortcutBinding);
+	        this.find = this.convertValues(source["find"], ShortcutBinding);
+	        this.copy = this.convertValues(source["copy"], ShortcutBinding);
+	        this.clearOutput = this.convertValues(source["clearOutput"], ShortcutBinding);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 
 }
 

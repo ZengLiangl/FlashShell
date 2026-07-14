@@ -25,12 +25,12 @@ type SessionManager struct {
 
 // NewSessionManager 创建会话管理器
 func NewSessionManager(sessionID string) (*SessionManager, error) {
-	homeDir, err := os.UserHomeDir()
+	configHome, err := ConfigHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("获取用户主目录失败: %w", err)
 	}
 
-	baseDir := filepath.Join(homeDir, ".cmd-config", "sessions")
+	baseDir := filepath.Join(configHome, "sessions")
 	if err := os.MkdirAll(baseDir, 0755); err != nil {
 		return nil, err
 	}

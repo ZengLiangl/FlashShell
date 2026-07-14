@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"quick-cmd/define"
+	"FlashDock/define"
 
 	"github.com/google/uuid"
 )

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"quick-cmd/crypto"
+	"FlashDock/crypto"
 	"strings"
 	"time"
 

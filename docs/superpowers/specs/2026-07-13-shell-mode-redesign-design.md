@@ -16,4 +16,4 @@
 - Tab bar leading folder button → machine picker dialog (connect + edit)
 
 ## Persistence
-- Connection history: `~/.cmd-config/shell_history.json`
+- Connection history: `~/.flashdock/shell_history.json`

@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"quick-cmd/define"
+	"FlashDock/define"
 )
 
 // ShellHistoryManager 连接历史
@@ -21,10 +21,9 @@ type ShellHistoryManager struct {
 
 // NewShellHistoryManager 创建历史管理器
 func NewShellHistoryManager() *ShellHistoryManager {
-	home, err := os.UserHomeDir()
 	path := "shell_history.json"
-	if err == nil {
-		path = filepath.Join(home, ".cmd-config", "shell_history.json")
+	if configHome, err := ConfigHomeDir(); err == nil {
+		path = filepath.Join(configHome, "shell_history.json")
 	}
 	m := &ShellHistoryManager{filePath: path}
 	_ = m.load()

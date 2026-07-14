@@ -3,7 +3,7 @@ package cmds
 import (
 	"errors"
 	"os"
-	"quick-cmd/define"
+	"FlashDock/define"
 	"strings"
 )
 

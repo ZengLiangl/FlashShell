@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"strings"
 
-	"quick-cmd/define"
+	"FlashDock/define"
 
 	"github.com/google/uuid"
 )

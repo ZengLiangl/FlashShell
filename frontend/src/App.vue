@@ -12,8 +12,8 @@
       </div>
     </div>
 
-    <!-- 任务详情视图 -->
-    <template v-if="selectedProject && !shellMode">
+    <!-- 任务详情视图（与 Shell 可并行，仅切换展示） -->
+    <template v-if="activeView === 'task' && selectedProject">
       <el-container class="main-container">
         <!-- 左侧面板 -->
         <el-aside :width="leftPanelWidth + 'px'" class="left-panel" :class="{ resizing: isResizing }">
@@ -49,63 +49,64 @@
         @stop-all="stopAllCommands" />
     </template>
 
-    <!-- Shell 视图 -->
-    <ShellWorkspace
-      v-else-if="shellMode"
-      :left-panel-width="Math.min(leftPanelWidth, 320)"
-      :is-resizing="isResizing"
-      :app-info="statusBarInfo"
-      :machines="shellMachines"
-      :sessions="shellSessions"
-      :connected-sessions="connectedSessions"
-      :connected-count="connectedCount"
-      v-model:active-machine="activeMachine"
-      :connecting-name="connectingName"
-      :testing-name="testingName"
-      @back="leaveShellMode"
-      @connect="(name) => connectShell(name, status.isRunning)"
-      @disconnect="disconnectShell"
-      @test="testShellConnection"
-      @add-machine="openShellMachineDialog"
-      @edit-machine="openShellMachineEdit"
-      @start-resize="startResize"
-    />
+    <!-- Shell 视图：挂载后用 v-show 保留会话，可与任务并行 -->
+    <div v-show="activeView === 'shell'" class="shell-view-host">
+      <ShellWorkspace
+        v-if="shellMounted"
+        :active="activeView === 'shell'"
+        :left-panel-width="Math.min(leftPanelWidth, 320)"
+        :is-resizing="isResizing"
+        :app-info="statusBarInfo"
+        :machines="shellMachines"
+        :sessions="shellSessions"
+        :connected-sessions="connectedSessions"
+        :connected-count="connectedCount"
+        v-model:active-machine="activeMachine"
+        :connecting-name="connectingName"
+        :testing-name="testingName"
+        @back="leaveShellMode"
+        @connect="(name) => connectShell(name)"
+        @disconnect="disconnectShell"
+        @test="testShellConnection"
+        @add-machine="openShellMachineDialog"
+        @edit-machine="openShellMachineEdit"
+        @start-resize="startResize"
+      />
+    </div>
 
     <!-- 首页：任务模式 + Shell 模式入口 -->
-    <template v-else>
+    <template v-if="activeView === 'home'">
       <div class="projectlist-fullscreen">
         <HomePage
           ref="homePageRef"
           :projects="projects"
           :connected-count="connectedCount"
+          :has-task="!!selectedProject"
+          :task-running="status.isRunning"
           @refresh="refreshConfig"
           @select-project="selectProject"
+          @resume-task="resumeTaskView"
           @open-shell="enterShellMode"
           @connect-machine="openShellAndConnect"
           @add-machine="openShellMachineDialog"
-          @open-system-settings="systemSettingsVisible = true"
-          @open-execution-history="executionHistoryVisible = true"
+          @open-system-settings="openSettingsHub('general')"
+          @open-execution-history="openSettingsHub('history')"
         />
       </div>
     </template>
 
-    <!-- 机器配置弹框 -->
-    <MachineConfigDialog
-      v-model="machineConfigVisible"
+    <SettingsHubDialog
+      v-model="settingsHubVisible"
+      :initial-section="settingsSection"
       :edit-machine-id="machineEditId"
-      @closed="machineEditId = ''"
-      @changed="onMachinesChanged"
+      @machines-changed="onMachinesChanged"
+      @machines-closed="machineEditId = ''"
     />
-
-    <!-- 环境变量配置弹框 -->
-    <WorkPathConfigDialog v-model="workPathConfigVisible" />
 
     <!-- 关于弹框 -->
     <AboutDialog v-model="aboutVisible" :intro-html="aboutIntroHtml" />
 
     <ConfigEditorDialog v-model="configEditorVisible" @saved="refreshProjectConfig" />
-    <SystemSettingsDialog v-model="systemSettingsVisible" />
-    <ExecutionHistoryDialog v-model="executionHistoryVisible" />
   </div>
 </template>
 
@@ -122,19 +123,17 @@ import HomePage from "./components/HomePage.vue";
 import ShellWorkspace from "./views/ShellWorkspace.vue";
 import { useShell } from "./composables/useShell";
 import SubProjectList from "./components/SubProjectList.vue";
-import MachineConfigDialog from "./components/MachineConfigDialog.vue";
-import WorkPathConfigDialog from "./components/WorkPathConfigDialog.vue";
 import TerminalHeader from "./components/TerminalHeader.vue";
 import AboutDialog from "./components/AboutDialog.vue";
 import ConfigEditorDialog from "./components/ConfigEditorDialog.vue";
-import SystemSettingsDialog from "./components/SystemSettingsDialog.vue";
-import ExecutionHistoryDialog from "./components/ExecutionHistoryDialog.vue";
+import SettingsHubDialog from "./components/SettingsHubDialog.vue";
 import AppMenuBar from "./components/AppMenuBar.vue";
 import { useTheme } from "./composables/useTheme";
+import { mergeShortcuts, matchesShortcut } from "./utils/shortcuts";
 
 export default {
   name: "App",
-  components: { AppMenuBar, TerminalOutput, StatusBar, ProjectList, HomePage, ShellWorkspace, SubProjectList, MachineConfigDialog, WorkPathConfigDialog, TerminalHeader, AboutDialog, ConfigEditorDialog, SystemSettingsDialog, ExecutionHistoryDialog },
+  components: { AppMenuBar, TerminalOutput, StatusBar, ProjectList, HomePage, ShellWorkspace, SubProjectList, TerminalHeader, AboutDialog, ConfigEditorDialog, SettingsHubDialog },
   setup() {
     const { isDark, themeMode, terminalPreset, loadTheme, applyThemeSettings } = useTheme();
     const projects = ref([]);
@@ -170,25 +169,21 @@ export default {
     const expandedSubProjects = ref({});
     const expandedCommands = ref({});
 
-    // 机器配置相关
-    const machineConfigVisible = ref(false);
+    // 统一系统设置 Hub
+    const settingsHubVisible = ref(false);
+    const settingsSection = ref('general');
     const machineEditId = ref('');
-    const machineEditVisible = ref(false);
     const machines = ref([]);
     const machinesLoading = ref(false);
-    const savingMachine = ref(false);
-    const editingMachine = ref(null);
-    const machineFormRef = ref(null);
 
-    // 环境变量配置相关
-    const workPathConfigVisible = ref(false);
     // 关于弹框
     const aboutVisible = ref(false);
     const aboutIntroHtml = ref('');
     const configEditorVisible = ref(false);
-    const systemSettingsVisible = ref(false);
-    const executionHistoryVisible = ref(false);
-    const shellMode = ref(false);
+    // home | task | shell —— 任务与 Shell 互不打断，仅切换当前视图
+    const activeView = ref('home');
+    const shellMounted = ref(false);
+    const shellMode = computed(() => activeView.value === 'shell');
     const homePageRef = ref(null);
     const {
       sessions: shellSessions,
@@ -210,9 +205,17 @@ export default {
     const terminalMatchIndices = ref([]);
     const terminalActiveMatchIndex = ref(-1);
     const sessionId = ref('');
+    const shortcutMap = ref(mergeShortcuts());
 
+    const loadShortcutMap = async () => {
+      try {
+        shortcutMap.value = mergeShortcuts(await App.GetShortcutSettings());
+      } catch {
+        shortcutMap.value = mergeShortcuts();
+      }
+    };
     const statusBarInfo = computed(() => {
-      const base = 'Quick Cmd v1.2.0';
+      const base = 'FlashDock v1.2.0';
       if (!sessionId.value) return base;
       return `${base} · 会话 ${sessionId.value.slice(0, 8)}`;
     });
@@ -392,15 +395,11 @@ export default {
         // alert(`调试失败: ${error.message}`);
       }
     };
-    // 选择项目
+    // 选择项目（可与 Shell 会话并行）
     const selectProject = (project) => {
-      if (connectedCount.value > 0) {
-        ElMessage.warning('请先断开 Shell 连接后再进入任务模式');
-        return;
-      }
-      shellMode.value = false;
       selectedProject.value = project;
       selectedSubProject.value = null;
+      activeView.value = 'task';
 
       // 显示该项目下的所有 SubProjects
       if (project.subprojects) {
@@ -422,42 +421,47 @@ export default {
     };
 
     const backToProjectList = () => {
-      selectedProject.value = null;
-      subProjects.value = [];
-      expandedSubProjects.value = {};
-      expandedCommands.value = {};
+      // 回到首页但不销毁任务上下文，可与 Shell 来回切换
+      activeView.value = 'home';
+    };
+
+    const resumeTaskView = () => {
+      if (!selectedProject.value) return;
+      activeView.value = 'task';
     };
 
     const enterShellMode = async () => {
-      if (status.isRunning) {
-        ElMessage.warning('任务正在执行，请先停止后再使用 Shell');
-        return;
-      }
-      selectedProject.value = null;
-      shellMode.value = true;
+      shellMounted.value = true;
+      activeView.value = 'shell';
       await loadShellMachines();
       await syncSessions();
     };
 
     const leaveShellMode = () => {
-      shellMode.value = false;
+      // 保留 Shell 会话与任务状态，仅回到首页
+      activeView.value = 'home';
     };
 
     const openShellAndConnect = async (machineName) => {
       await enterShellMode();
-      await connectShell(machineName, status.isRunning);
+      await connectShell(machineName);
+    };
+
+    const openSettingsHub = (section = 'general') => {
+      settingsSection.value = section || 'general';
+      settingsHubVisible.value = true;
     };
 
     const openShellMachineDialog = async () => {
       machineEditId.value = '';
-      machineConfigVisible.value = true;
+      openSettingsHub('machines');
       await loadMachines();
       await loadShellMachines();
     };
 
     const openShellMachineEdit = async (machine) => {
       machineEditId.value = machine?.id || '';
-      machineConfigVisible.value = true;
+      openSettingsHub('machines');
       await loadMachines();
       await loadShellMachines();
     };
@@ -738,66 +742,61 @@ export default {
       terminalActiveMatchIndex.value = (terminalActiveMatchIndex.value - 1 + terminalMatchIndices.value.length) % terminalMatchIndices.value.length;
     };
 
-    // 键盘快捷键处理
+    // 键盘快捷键处理（可在系统设置中自定义，保存至 shortcuts.json）
     const handleKeyDown = (e) => {
       // 检查是否在输入框中，如果是则不处理快捷键
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.contentEditable === 'true') {
         return;
       }
 
-      // 终端搜索 (Cmd+F 或 Ctrl+F) — 任务模式；Shell 模式由 ShellWorkspace 处理
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'f') {
+      const sc = shortcutMap.value;
+
+      // 终端搜索 — 任务模式；Shell 模式由 ShellWorkspace 处理
+      if (matchesShortcut(e, sc.find)) {
         e.preventDefault();
-        if (!shellMode.value) {
+        if (activeView.value !== 'shell') {
           terminalSearchVisible.value = true;
         }
         return;
       }
 
-      // 复制快捷键 (Cmd+C 或 Ctrl+C)
-      if ((e.metaKey || e.ctrlKey) && e.key === 'c') {
+      if (matchesShortcut(e, sc.copy)) {
         e.preventDefault();
         copySelectedText();
         return;
       }
 
-      // 清空输出快捷键 (Cmd+K 或 Ctrl+K)
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      if (matchesShortcut(e, sc.clearOutput)) {
         e.preventDefault();
         clearOutput();
         return;
       }
 
-      // 打开机器配置快捷键 (Cmd+M 或 Ctrl+M)
-      if ((e.metaKey || e.ctrlKey) && e.key === 'm') {
+      if (matchesShortcut(e, sc.machineConfig)) {
         e.preventDefault();
         openMachineConfig();
         return;
       }
 
-      // 打开环境变量配置快捷键 (Cmd+E 或 Ctrl+E)
-      if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
+      if (matchesShortcut(e, sc.envVars)) {
         e.preventDefault();
         openWorkPathConfig();
         return;
       }
 
-      // 新建窗口 (Cmd+N 或 Ctrl+N)
-      if ((e.metaKey || e.ctrlKey) && e.key === 'n') {
+      if (matchesShortcut(e, sc.newWindow)) {
         e.preventDefault();
         App.NewWindow();
         return;
       }
 
-      // 刷新配置列表 (Cmd+R 或 Ctrl+R)
-      if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
+      if (matchesShortcut(e, sc.refreshConfig)) {
         e.preventDefault();
         App.RefreshConfigMenuWithEvent();
         return;
       }
 
-      // 系统设置 (Cmd+, 或 Ctrl+,)
-      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+      if (matchesShortcut(e, sc.systemSettings)) {
         e.preventDefault();
         App.OpenSystemSettings();
         return;
@@ -805,11 +804,8 @@ export default {
 
       // Escape 键关闭对话框
       if (e.key === 'Escape') {
-        if (machineConfigVisible.value) {
-          handleMachineConfigClose();
-        }
-        if (workPathConfigVisible.value) {
-          handleWorkPathConfigClose();
+        if (settingsHubVisible.value) {
+          settingsHubVisible.value = false;
         }
         return;
       }
@@ -877,6 +873,7 @@ export default {
 
       loadConfig();
       loadTheme();
+      loadShortcutMap();
       App.GetSessionInfo().then((info) => { sessionId.value = info.sessionId || ''; }).catch(() => {});
 
       // 监听输出与执行状态事件（替代轮询）
@@ -884,6 +881,9 @@ export default {
       EventsOn("output:clear", handleOutputClear);
       EventsOn("execution:status", handleExecutionStatus);
       EventsOn("theme:changed", applyThemeSettings);
+      EventsOn("shortcuts:changed", (data) => {
+        shortcutMap.value = mergeShortcuts(data);
+      });
 
       // 添加全局键盘事件监听器
       document.addEventListener('keydown', handleKeyDown);
@@ -905,27 +905,17 @@ export default {
         }, 200);
       });
 
-      // 监听打开机器配置事件
-      EventsOn("open:machine-config", async (data) => {
-        console.log("收到 open:machine-config 事件:", data);
+      // 监听打开设置相关事件（统一进 Settings Hub）
+      EventsOn("open:machine-config", async () => {
         await openMachineConfig();
       });
-
-      // 监听打开环境变量配置事件
-      EventsOn("open:workpath-config", async (data) => {
-        console.log("收到 open:workpath-config 事件:", data);
+      EventsOn("open:workpath-config", async () => {
         await openWorkPathConfig();
       });
-
-      // 监听关于事件
-      EventsOn("open:about", async (data) => {
-        console.log("收到 open:about 事件:", data);
-        openAbout();
-      });
-
+      EventsOn("open:about", () => { openAbout(); });
       EventsOn("open:config-editor", () => { configEditorVisible.value = true; });
-      EventsOn("open:system-settings", () => { systemSettingsVisible.value = true; });
-      EventsOn("open:execution-history", () => { executionHistoryVisible.value = true; });
+      EventsOn("open:system-settings", () => { openSettingsHub('general'); });
+      EventsOn("open:execution-history", () => { openSettingsHub('history'); });
     });
 
     // 机器配置相关方法
@@ -943,12 +933,9 @@ export default {
     };
 
     const openMachineConfig = async () => {
-      machineConfigVisible.value = true;
+      machineEditId.value = '';
+      openSettingsHub('machines');
       await loadMachines();
-    };
-
-    const handleMachineConfigClose = () => {
-      machineConfigVisible.value = false;
     };
 
     const addMachine = () => {
@@ -1081,12 +1068,7 @@ export default {
     };
 
     const openWorkPathConfig = async () => {
-      workPathConfigVisible.value = true;
-      await loadWorkPaths();
-    };
-
-    const handleWorkPathConfigClose = () => {
-      workPathConfigVisible.value = false;
+      openSettingsHub('env');
     };
 
     const addWorkPath = () => {
@@ -1196,6 +1178,7 @@ export default {
           "open:system-settings",
           "open:execution-history",
           "theme:changed",
+          "shortcuts:changed",
           "output:line",
           "output:clear",
           "execution:status",
@@ -1243,40 +1226,14 @@ export default {
       isResizing,
       startResize,
       // 机器配置相关
-      machineConfigVisible,
       machineEditId,
-      machineEditVisible,
       machines,
       machinesLoading,
-      savingMachine,
-      editingMachine,
-      machineFormRef,
-      machineForm,
-      machineRules,
+      settingsHubVisible,
+      settingsSection,
+      openSettingsHub,
       openMachineConfig,
-      handleMachineConfigClose,
-      addMachine,
-      editMachine,
-      saveMachine,
-      deleteMachine,
-      testConnection,
-      selectKeyFile,
-      // 环境变量配置相关
-      workPathConfigVisible,
-      workPathEditVisible,
-      workPaths,
-      workPathsLoading,
-      savingWorkPath,
-      editingWorkPath,
-      workPathFormRef,
-      workPathForm,
-      workPathRules,
       openWorkPathConfig,
-      handleWorkPathConfigClose,
-      addWorkPath,
-      editWorkPath,
-      saveWorkPath,
-      deleteWorkPath,
       // 关于
       aboutVisible,
       aboutIntroHtml,
@@ -1288,8 +1245,6 @@ export default {
       copySelectedText,
       themeClass,
       configEditorVisible,
-      systemSettingsVisible,
-      executionHistoryVisible,
       terminalSearchVisible,
       terminalSearchQuery,
       terminalMatchSummary,
@@ -1302,8 +1257,11 @@ export default {
       refreshProjectConfig,
       sessionId,
       statusBarInfo,
-      // Shell 模式
+      // Shell / 视图切换
+      activeView,
+      shellMounted,
       shellMode,
+      resumeTaskView,
       shellSessions,
       shellMachines,
       activeMachine,
@@ -1397,6 +1355,14 @@ export default {
   position: relative;
   height: 100%;
   overflow-x: hidden;
+}
+
+.shell-view-host {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .projectlist-fullscreen {

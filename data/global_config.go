@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"quick-cmd/define"
+	"FlashDock/define"
 
 	"gopkg.in/yaml.v3"
 )
@@ -47,14 +47,11 @@ type GlobalConfigManager struct {
 // NewGlobalConfigManager 创建全局配置管理器
 func NewGlobalConfigManager(configPath string) *GlobalConfigManager {
 	if configPath == "" {
-		// 获取用户主目录
-		homeDir, err := os.UserHomeDir()
+		configHome, err := ConfigHomeDir()
 		if err != nil {
-			// 如果获取用户主目录失败，使用当前目录
 			configPath = "global_config.yaml"
 		} else {
-			// 使用用户主目录下的 .cmd-config 文件夹
-			configPath = filepath.Join(homeDir, ".cmd-config", "global_config.yaml")
+			configPath = filepath.Join(configHome, "global_config.yaml")
 		}
 	}
 	return &GlobalConfigManager{
@@ -97,12 +94,29 @@ func (gcm *GlobalConfigManager) LoadGlobalConfig() (*GlobalConfig, error) {
 	}
 
 	gcm.config = &config
-	if gcm.ensureMachineIDs() || gcm.ensureGlobalAccountIDs() {
+	dirty := gcm.ensureMachineIDs() || gcm.ensureGlobalAccountIDs()
+	if gcm.migrateLegacyLogPath() {
+		dirty = true
+	}
+	if dirty {
 		if err := gcm.SaveGlobalConfig(gcm.config); err != nil {
-			return nil, fmt.Errorf("迁移配置 ID 失败: %w", err)
+			return nil, fmt.Errorf("迁移配置失败: %w", err)
 		}
 	}
 	return &config, nil
+}
+
+// migrateLegacyLogPath 将默认日志路径从 ~/.cmd-config/logs 迁到 ~/.flashdock/logs
+func (gcm *GlobalConfigManager) migrateLegacyLogPath() bool {
+	if gcm.config == nil {
+		return false
+	}
+	oldDefault := "~/.cmd-config/logs"
+	if gcm.config.LogSettings.Path == oldDefault {
+		gcm.config.LogSettings.Path = DefaultLogPathTilde
+		return true
+	}
+	return false
 }
 
 // SaveGlobalConfig 保存全局配置文件
@@ -225,7 +239,7 @@ func (gcm *GlobalConfigManager) ReplaceWorkPaths(input string) string {
 func (gcm *GlobalConfigManager) createDefaultGlobalConfig() error {
 	defaultConfig := &GlobalConfig{
 		AppId:       "com.runner",
-		WindowsName: "运行器",
+		WindowsName: "FlashDock",
 		ConfigFiles: []string{
 			"config.yaml",
 		},
@@ -235,7 +249,7 @@ func (gcm *GlobalConfigManager) createDefaultGlobalConfig() error {
 		},
 		LogSettings: LogSettings{
 			Enabled: false,
-			Path:    "~/.cmd-config/logs",
+			Path:    DefaultLogPathTilde,
 		},
 		ThemeSettings: ThemeSettings{
 			Mode:            "light",

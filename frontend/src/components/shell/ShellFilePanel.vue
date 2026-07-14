@@ -124,7 +124,7 @@
             </template>
           </el-table-column>
           <el-table-column prop="mode" label="权限" width="110" show-overflow-tooltip />
-          <el-table-column label="用户组" width="100" show-overflow-tooltip>
+          <el-table-column label="用户:组" width="120" show-overflow-tooltip>
             <template #default="{ row }">
               {{ formatOwnerGroup(row) }}
             </template>
