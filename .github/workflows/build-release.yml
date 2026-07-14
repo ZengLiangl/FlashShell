@@ -25,22 +25,10 @@ jobs:
             platform: windows/arm64
             asset: Windows-Arm64.exe
             kind: windows
-          - os: macos-13
-            platform: darwin/amd64
-            asset: MacOS-Amd64.dmg
-            kind: macos
           - os: macos-latest
             platform: darwin/arm64
             asset: MacOS-Arm64.dmg
             kind: macos
-          - os: ubuntu-latest
-            platform: linux/amd64
-            asset: Linux-Amd64.tar.gz
-            kind: linux
-          - os: ubuntu-24.04-arm
-            platform: linux/arm64
-            asset: Linux-Arm64.tar.gz
-            kind: linux
 
     steps:
       - name: Checkout
@@ -57,13 +45,6 @@ jobs:
           node-version: '20'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
-
-      - name: Install Linux dependencies
-        if: matrix.kind == 'linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev || \
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
 
       - name: Install Wails
         run: go install github.com/wailsapp/wails/v2/cmd/wails@latest
@@ -103,20 +84,6 @@ jobs:
             "dist/${{ matrix.asset }}"
           ls -la "dist/${{ matrix.asset }}"
 
-      - name: Package Linux tar.gz
-        if: matrix.kind == 'linux'
-        run: |
-          mkdir -p dist
-          BIN_PATH=$(find build/bin -maxdepth 2 -type f -executable ! -name '*.so' | head -n 1)
-          if [ -z "$BIN_PATH" ]; then
-            echo "未找到 Linux 可执行文件"
-            ls -laR build/bin
-            exit 1
-          fi
-          BIN_NAME=$(basename "$BIN_PATH")
-          tar -C "$(dirname "$BIN_PATH")" -czf "dist/${{ matrix.asset }}" "$BIN_NAME"
-          ls -la "dist/${{ matrix.asset }}"
-
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
@@ -142,8 +109,7 @@ jobs:
           mkdir -p upload
           find release-assets -type f \( \
             -name 'Windows-*.exe' -o \
-            -name 'MacOS-*.dmg' -o \
-            -name 'Linux-*.tar.gz' \
+            -name 'MacOS-*.dmg' \
           \) -exec cp -v {} upload/ \;
           ls -la upload
 
@@ -157,9 +123,6 @@ jobs:
           files: |
             upload/Windows-Amd64.exe
             upload/Windows-Arm64.exe
-            upload/MacOS-Amd64.dmg
             upload/MacOS-Arm64.dmg
-            upload/Linux-Amd64.tar.gz
-            upload/Linux-Arm64.tar.gz
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
