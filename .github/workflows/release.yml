@@ -314,8 +314,8 @@ jobs:
           ls -lah upload
           test "$(find upload -type f | wc -l)" -ge 1
 
-      # 按 commit 标题归类生成 Release body
-      # 依赖常规提交前缀分类：feat / fix / perf / refactor / chore 等；正文会去掉这些关键字
+      # 按 commit 标题归类生成 Release body（含正文要点）
+      # 分类看标题前缀 feat/fix/perf/...；写入时去掉前缀，正文里以 -/* 开头的行作为子要点
       - name: Generate Changelog
         id: changelog
         shell: bash
@@ -350,8 +350,29 @@ jobs:
             fi
           }
 
-          COMMITS=$(git log "$RANGE" --no-merges --pretty=format:'%s' 2>/dev/null || true)
-          if [ -z "$COMMITS" ]; then
+          # 从 commit body 提取要点（- / * / • 开头），缩进写在标题下；忽略 trailer
+          format_body_points() {
+            local body="$1"
+            local out="" bline point
+            while IFS= read -r bline || [ -n "${bline:-}" ]; do
+              bline="$(printf '%s' "$bline" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+              [ -z "$bline" ] && continue
+              case "$bline" in
+                [Cc]o-[Aa]uthored-[Bb]y:*|[Ss]igned-[Oo]ff-[Bb]y:*|[Mm]ade-[Ww]ith:*|[Cc]hange-[Ii]d:*)
+                  continue
+                  ;;
+              esac
+              if printf '%s' "$bline" | grep -qE '^[-*•]+[[:space:]]+'; then
+                point="$(printf '%s' "$bline" | sed -E 's/^[-*•]+[[:space:]]+//')"
+                [ -z "$point" ] && continue
+                out="${out}\n  - ${point}"
+              fi
+            done <<< "$body"
+            printf '%b' "$out"
+          }
+
+          HASHES=$(git log "$RANGE" --no-merges --pretty=format:'%H' 2>/dev/null || true)
+          if [ -z "$HASHES" ]; then
             BODY="暂无提交记录。"
           else
             CAT_FEAT=""
@@ -361,19 +382,25 @@ jobs:
             CAT_I18N=""
             CAT_OTHER=""
 
-            while IFS= read -r line; do
-              [ -z "$line" ] && continue
-              text="$(strip_commit_prefix "$line")"
-              case "$line" in
-                ✨*|*feat*)     CAT_FEAT="${CAT_FEAT}\n- ${text}" ;;
-                🐛*|*fix*)     CAT_FIX="${CAT_FIX}\n- ${text}" ;;
-                ⚡*|⚡️*|*perf*) CAT_PERF="${CAT_PERF}\n- ${text}" ;;
-                ♻️*|*refactor*) CAT_REFACTOR="${CAT_REFACTOR}\n- ${text}" ;;
-                🌐*)           CAT_I18N="${CAT_I18N}\n- ${text}" ;;
-                🔧*|🔨*|*chore*) CAT_OTHER="${CAT_OTHER}\n- ${text}" ;;
-                *)             CAT_OTHER="${CAT_OTHER}\n- ${text}" ;;
+            while IFS= read -r hash || [ -n "${hash:-}" ]; do
+              [ -z "${hash:-}" ] && continue
+              subject="$(git log -1 --pretty=format:'%s' "$hash")"
+              body="$(git log -1 --pretty=format:'%b' "$hash")"
+              [ -z "$subject" ] && continue
+
+              text="$(strip_commit_prefix "$subject")"
+              entry="- ${text}$(format_body_points "$body")"
+
+              case "$subject" in
+                ✨*|*feat*)     CAT_FEAT="${CAT_FEAT}\n${entry}" ;;
+                🐛*|*fix*)     CAT_FIX="${CAT_FIX}\n${entry}" ;;
+                ⚡*|⚡️*|*perf*) CAT_PERF="${CAT_PERF}\n${entry}" ;;
+                ♻️*|*refactor*) CAT_REFACTOR="${CAT_REFACTOR}\n${entry}" ;;
+                🌐*)           CAT_I18N="${CAT_I18N}\n${entry}" ;;
+                🔧*|🔨*|*chore*) CAT_OTHER="${CAT_OTHER}\n${entry}" ;;
+                *)             CAT_OTHER="${CAT_OTHER}\n${entry}" ;;
               esac
-            done <<< "$COMMITS"
+            done <<< "$HASHES"
 
             BODY=""
             [ -n "$CAT_FEAT" ]     && BODY="${BODY}## ✨ 新功能\n${CAT_FEAT}\n\n"
