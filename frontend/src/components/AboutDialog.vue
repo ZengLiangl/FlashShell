@@ -143,13 +143,12 @@ export default {
         }
 
         const defaultIntro = `
-      <p><strong>FlashDock（闪舵）</strong> 是一款跨平台桌面运维工作台：用 YAML 驱动本地与远程命令流水线，同时提供多会话 SSH 终端与 SFTP，让构建发布和交互排障在同一应用内完成。</p>
+      <p><strong>FlashDock（闪舵）</strong>：跨平台桌面运维工作台，任务流水线与远程 Shell 集于一体。</p>
       <ul>
-        <li><strong>任务模式</strong>：项目 / 子项目 / 步骤一键执行，实时终端回传</li>
-        <li><strong>Shell 模式</strong>：多 Tab SSH、右键操作、SFTP 文件管理</li>
-        <li><strong>并行调度</strong>：任务与 Shell 互不打断，首页随时切换</li>
-        <li><strong>配置驱动</strong>：业务 YAML + 全局机器 / 环境变量 / 主题 / 快捷键</li>
-        <li><strong>安全连接</strong>：敏感信息加密；支持导入 Xshell / FinalShell</li>
+        <li><strong>任务模式</strong>：YAML 驱动本地 / 远程命令，一键执行并实时回传</li>
+        <li><strong>Shell 模式</strong>：多会话 SSH、SFTP，支持导入 Xshell / FinalShell</li>
+        <li><strong>并行使用</strong>：任务与 Shell 互不打断，首页随时切换</li>
+        <li><strong>配置与安全</strong>：机器 / 环境变量 / 主题可配，敏感信息加密存储</li>
       </ul>
     `
 
