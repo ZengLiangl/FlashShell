@@ -316,6 +316,7 @@ jobs:
 
       # 按 commit 标题归类生成 Release body（含正文要点）
       # 分类看标题前缀 feat/fix/perf/...；写入时去掉前缀，正文里以 -/* 开头的行作为子要点
+      # 多条 commit 正文（规范化后）相同则只保留首次出现的一条
       - name: Generate Changelog
         id: changelog
         shell: bash
@@ -371,6 +372,29 @@ jobs:
             printf '%b' "$out"
           }
 
+          # 规范化正文用于去重：去掉 trailer / 空白后的正文要点；空正文不参与去重
+          normalize_body_key() {
+            local body="$1"
+            local key="" bline point
+            while IFS= read -r bline || [ -n "${bline:-}" ]; do
+              bline="$(printf '%s' "$bline" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+              [ -z "$bline" ] && continue
+              case "$bline" in
+                [Cc]o-[Aa]uthored-[Bb]y:*|[Ss]igned-[Oo]ff-[Bb]y:*|[Mm]ade-[Ww]ith:*|[Cc]hange-[Ii]d:*)
+                  continue
+                  ;;
+              esac
+              if printf '%s' "$bline" | grep -qE '^[-*•]+[[:space:]]+'; then
+                point="$(printf '%s' "$bline" | sed -E 's/^[-*•]+[[:space:]]+//')"
+                [ -z "$point" ] && continue
+                key="${key}${point}"$'\n'
+              else
+                key="${key}${bline}"$'\n'
+              fi
+            done <<< "$body"
+            printf '%s' "$key"
+          }
+
           HASHES=$(git log "$RANGE" --no-merges --pretty=format:'%H' 2>/dev/null || true)
           if [ -z "$HASHES" ]; then
             BODY="暂无提交记录。"
@@ -381,12 +405,22 @@ jobs:
             CAT_REFACTOR=""
             CAT_I18N=""
             CAT_OTHER=""
+            declare -A SEEN_BODIES=()
 
             while IFS= read -r hash || [ -n "${hash:-}" ]; do
               [ -z "${hash:-}" ] && continue
               subject="$(git log -1 --pretty=format:'%s' "$hash")"
               body="$(git log -1 --pretty=format:'%b' "$hash")"
               [ -z "$subject" ] && continue
+
+              body_key="$(normalize_body_key "$body")"
+              if [ -n "$body_key" ]; then
+                if [[ -n "${SEEN_BODIES[$body_key]+x}" ]]; then
+                  echo "↩️ 跳过重复正文 commit: ${subject}"
+                  continue
+                fi
+                SEEN_BODIES[$body_key]=1
+              fi
 
               text="$(strip_commit_prefix "$subject")"
               entry="- ${text}$(format_body_points "$body")"

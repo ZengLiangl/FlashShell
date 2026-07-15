@@ -452,6 +452,16 @@ func buildDownloadSources(rawURL string) []updateDownloadSource {
 	if isGitHubAssetURL(rawURL) {
 		sources = append(sources,
 			updateDownloadSource{
+				Label:  "ghproxy.net",
+				URL:    withGitHubProxyPrefix("https://ghproxy.net", rawURL),
+				Direct: false,
+			},
+			updateDownloadSource{
+				Label:  "gitclone.com",
+				URL:    withGitCloneMirror(rawURL),
+				Direct: false,
+			},
+			updateDownloadSource{
 				Label:  "githubproxy.cc",
 				URL:    withGitHubProxyPrefix("https://githubproxy.cc", rawURL),
 				Direct: false,
@@ -482,6 +492,21 @@ func withGitHubProxyPrefix(proxyBase, raw string) string {
 		return raw
 	}
 	return prefix + raw
+}
+
+// withGitCloneMirror 按 gitclone.com 习惯：https://gitclone.com/github.com/...
+// 见 https://gitclone.com/
+func withGitCloneMirror(raw string) string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return raw
+	}
+	trimmed := strings.TrimPrefix(raw, "https://")
+	trimmed = strings.TrimPrefix(trimmed, "http://")
+	if !strings.HasPrefix(strings.ToLower(trimmed), "github.com/") {
+		return raw
+	}
+	return "https://gitclone.com/" + trimmed
 }
 
 // selectFastestDownloadSource 并发探测各源首字节延迟，选最快可用源。
