@@ -271,8 +271,14 @@ export default {
 
     const normalizeAbs = (p) => {
       let s = String(p || '').trim()
-      if (!s) return '/'
-      if (!s.startsWith('/')) s = `/${s}`
+      const marker = '777;cwd;'
+      const idx = s.indexOf(marker)
+      if (idx >= 0) s = s.slice(idx + marker.length)
+      s = s.replace(/\x07/g, '')
+      const esc = s.indexOf('\x1b')
+      if (esc >= 0) s = s.slice(0, esc)
+      s = s.trim()
+      if (!s || !s.startsWith('/') || s.includes('777;cwd') || s.includes(']')) return ''
       if (s.length > 1) s = s.replace(/\/+$/, '')
       return s || '/'
     }
@@ -509,8 +515,9 @@ export default {
 
     /** 供父组件在终端 cwd 变化后直接调用 */
     const applyCwdHint = async (hint) => {
-      if (!hint || !String(hint).startsWith('/')) return
       const abs = normalizeAbs(hint)
+      if (!abs) return
+      const seq = ++navSeq
       // 未展开时也记下路径，展开后使用
       if (!expanded.value) {
         if (abs !== normalizeAbs(cwd.value)) {
@@ -524,7 +531,17 @@ export default {
       if (abs === normalizeAbs(cwd.value)) {
         return
       }
-      await setCwd(abs)
+      cwd.value = abs
+      pathDraft.value = abs
+      emit('cwd-change', abs)
+      if (seq !== navSeq) return
+      await reloadList()
+      if (seq !== navSeq) return
+      try {
+        await syncTreeToPath(abs)
+      } catch (e) {
+        console.warn('同步目录树失败:', e)
+      }
     }
 
     const onTreeClick = async (data) => {
@@ -562,10 +579,6 @@ export default {
       await setCwd(cwd.value)
     }
 
-    watch(() => props.cwdHint, async (hint) => {
-      await applyCwdHint(hint)
-    })
-
     const calibrateList = async () => {
       if (!props.machineName || !expanded.value || !cwd.value) return
       try {
@@ -579,7 +592,9 @@ export default {
 
     const startPwdTimer = () => {
       stopPwdTimer()
-      pwdTimer = setInterval(calibrateList, 2000)
+      pwdTimer = setInterval(async () => {
+        await calibrateList()
+      }, 4000)
     }
     const stopPwdTimer = () => {
       if (pwdTimer) {
@@ -591,7 +606,14 @@ export default {
     const toggle = async () => {
       expanded.value = !expanded.value
       if (expanded.value) {
-        await setCwd(cwd.value || await ensureHome())
+        let start = cwd.value
+        try {
+          const remote = await App.GetShellPtyCwd(props.machineName)
+          if (remote && String(remote).startsWith('/')) start = remote
+        } catch {
+          // 使用 cwdHint / home
+        }
+        await setCwd(start || await ensureHome())
         startPwdTimer()
       } else {
         stopPwdTimer()
@@ -795,12 +817,31 @@ export default {
       }
     }
 
-    watch(() => props.machineName, async () => {
+    watch(() => props.machineName, async (name) => {
       cwd.value = ''
       pathDraft.value = ''
       entries.value = []
+      treeRoot.value = []
+      expandedKeys.value = ['/']
       closeMenu()
-      if (expanded.value) await reload()
+      if (!name || !expanded.value) return
+      try {
+        let start = ''
+        try {
+          const remote = await App.GetShellPtyCwd(name)
+          if (remote && String(remote).startsWith('/')) start = normalizeAbs(remote)
+        } catch {
+          // 使用 cwdHint / home
+        }
+        if (!start) {
+          start = (props.cwdHint && String(props.cwdHint).startsWith('/'))
+            ? normalizeAbs(props.cwdHint)
+            : await ensureHome()
+        }
+        await setCwd(start)
+      } catch (e) {
+        error.value = String(e)
+      }
     })
 
     onMounted(() => {

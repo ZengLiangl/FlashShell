@@ -375,6 +375,8 @@ export namespace define {
 	    name: string;
 	    group?: string;
 	    key_file?: string;
+	    host?: string;
+	    port?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new Machine(source);
@@ -387,6 +389,8 @@ export namespace define {
 	        this.name = source["name"];
 	        this.group = source["group"];
 	        this.key_file = source["key_file"];
+	        this.host = source["host"];
+	        this.port = source["port"];
 	    }
 	}
 	export class SubProject {

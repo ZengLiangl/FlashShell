@@ -189,6 +189,8 @@ export function useShell() {
   }
 
   const setupShellEvents = () => {
+    // 热重载或重复 mount 时先解绑，避免 shell:data 重复监听导致按键 echo 双份
+    teardownShellEvents()
     EventsOn('shell:status', handleShellStatus)
     EventsOn('shell:data', (payload) => {
       if (payload?.machineName && payload?.data) {

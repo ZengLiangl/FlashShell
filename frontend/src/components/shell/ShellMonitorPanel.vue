@@ -34,26 +34,38 @@
         <div class="value">{{ snapshot?.uptimeText || '-' }}</div>
       </div>
 
-      <div class="metric">
+      <div class="metric" :class="{ 'is-high': isHighUsage(snapshot?.cpuPercent) }">
         <div class="metric-head">
           <span>CPU</span>
-          <span>{{ formatPct(snapshot?.cpuPercent) }}</span>
+          <span class="metric-value" :class="{ 'is-danger': isHighUsage(snapshot?.cpuPercent) }">
+            {{ formatPct(snapshot?.cpuPercent) }}
+          </span>
         </div>
-        <el-progress :percentage="clampPct(snapshot?.cpuPercent)" :stroke-width="10" :show-text="false" />
+        <el-progress
+          :percentage="clampPct(snapshot?.cpuPercent)"
+          :stroke-width="10"
+          :status="progressStatus(snapshot?.cpuPercent)"
+          :show-text="false"
+        />
       </div>
 
-      <div class="metric">
+      <div class="metric" :class="{ 'is-high': isHighUsage(snapshot?.memPercent) }">
         <div class="metric-head">
           <span>内存</span>
-          <span>{{ formatPct(snapshot?.memPercent) }} · {{ snapshot?.memUsed || '-' }}/{{ snapshot?.memTotal || '-'
-            }}</span>
+          <span class="metric-value" :class="{ 'is-danger': isHighUsage(snapshot?.memPercent) }">
+            {{ formatPct(snapshot?.memPercent) }} · {{ snapshot?.memUsed || '-' }}/{{ snapshot?.memTotal || '-' }}
+          </span>
         </div>
-        <el-progress :percentage="clampPct(snapshot?.memPercent)" :stroke-width="10" status="warning"
-          :show-text="false" />
+        <el-progress
+          :percentage="clampPct(snapshot?.memPercent)"
+          :stroke-width="10"
+          :status="progressStatus(snapshot?.memPercent)"
+          :show-text="false"
+        />
       </div>
 
       <div class="top-block">
-        <div class="label">CPU 占用 TOP4</div>
+        <div class="label">CPU 占用 TOP5</div>
         <div class="top-head">
           <span class="top-pid">PID</span>
           <span class="top-mem">内存</span>
@@ -63,8 +75,8 @@
         <div v-if="!(snapshot?.topMem || []).length" class="empty-sm">暂无数据</div>
         <div v-for="(p, idx) in (snapshot?.topMem || [])" :key="p.pid + idx" class="top-row">
           <div class="top-pid">{{ p.pid }}</div>
-          <div class="top-mem">{{ formatPct1(p.mem) }}</div>
-          <div class="top-cpu">{{ formatPct1(p.cpu) }}</div>
+          <div class="top-mem" :class="{ 'is-danger': isHighUsage(p.mem) }">{{ formatPct1(p.mem) }}</div>
+          <div class="top-cpu" :class="{ 'is-danger': isHighUsage(p.cpu) }">{{ formatPct1(p.cpu) }}</div>
           <div class="top-cmd" :title="p.command">{{ p.command }}</div>
         </div>
       </div>
@@ -94,6 +106,9 @@ export default {
     const loading = ref(false)
     let timer = null
 
+    /** 占用 ≥80% 视为过高，标红提示 */
+    const HIGH_USAGE = 80
+
     const clampPct = (v) => {
       const n = Number(v) || 0
       return Math.max(0, Math.min(100, Math.round(n)))
@@ -104,6 +119,11 @@ export default {
       if (!Number.isFinite(n)) return '-'
       return `${n.toFixed(1)}%`
     }
+    const isHighUsage = (v) => {
+      const n = Number(v)
+      return Number.isFinite(n) && n >= HIGH_USAGE
+    }
+    const progressStatus = (v) => (isHighUsage(v) ? 'exception' : undefined)
 
     const refresh = async () => {
       if (!props.activeMachine) {
@@ -139,7 +159,7 @@ export default {
       stopTimer()
       if (!props.activeMachine) return
       refresh()
-      timer = setInterval(refresh, 4000)
+      timer = setInterval(refresh, 1000)
     }
     const stopTimer = () => {
       if (timer) {
@@ -152,7 +172,16 @@ export default {
     onMounted(startTimer)
     onUnmounted(stopTimer)
 
-    return { snapshot, loading, clampPct, formatPct, formatPct1, copyHost }
+    return {
+      snapshot,
+      loading,
+      clampPct,
+      formatPct,
+      formatPct1,
+      isHighUsage,
+      progressStatus,
+      copyHost,
+    }
   },
 }
 </script>
@@ -225,6 +254,18 @@ export default {
   justify-content: space-between;
   font-size: 12px;
   margin-bottom: 4px;
+}
+
+.metric.is-high .metric-head span:first-child {
+  color: var(--el-color-danger);
+  font-weight: 600;
+}
+
+.metric-value.is-danger,
+.top-mem.is-danger,
+.top-cpu.is-danger {
+  color: var(--el-color-danger);
+  font-weight: 700;
 }
 
 .top-head,

@@ -42,6 +42,28 @@ func TestOscCwdFilter_StripAndEmit(t *testing.T) {
 	}
 }
 
+func TestSanitizePtyCwd(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+		ok   bool
+	}{
+		{"/root", "/root", true},
+		{"/root/app", "/root/app", true},
+		{"]777;cwd;/root", "/root", true},
+		{"\033]777;cwd;/root\x07", "/root", true},
+		{"/]777;cwd;/root", "/root", true},
+		{"777;cwd;", "", false},
+		{"", "", false},
+	}
+	for _, c := range cases {
+		got, ok := SanitizePtyCwd(c.in)
+		if ok != c.ok || got != c.want {
+			t.Fatalf("SanitizePtyCwd(%q)=%q,%v want %q,%v", c.in, got, ok, c.want, c.ok)
+		}
+	}
+}
+
 func TestOscCwdFilter_SplitAcrossChunks(t *testing.T) {
 	var got []string
 	f := newOscCwdFilter(func(cwd string) { got = append(got, cwd) })

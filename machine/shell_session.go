@@ -66,6 +66,13 @@ func (sm *ShellSessionManager) notifyStatus(handler ShellOutputHandler) {
 	sm.emitStatus(handler)
 }
 
+// SharedSSHClient 返回 PTY 使用的 SSH 客户端（供 SFTP 复用）。
+func (sm *ShellSessionManager) SharedSSHClient() *SSHClient {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	return sm.client
+}
+
 // Connect 建立 SSH 连接并启动交互式 PTY Shell
 func (sm *ShellSessionManager) Connect(machine *define.Machine, workVars map[string]string, handler ShellOutputHandler) error {
 	sm.mu.Lock()
@@ -187,18 +194,18 @@ func (sm *ShellSessionManager) readPTY(stdout io.Reader, handler ShellOutputHand
 			}
 			sm.mu.Lock()
 			shouldClose := sm.session != nil
-			if shouldClose {
-				sm.closeResourcesLocked()
-			}
 			sm.mu.Unlock()
 			if disconnectMsg != "" && handler.OnLine != nil {
 				handler.OnLine(disconnectMsg)
 			}
 			if shouldClose {
-				sm.notifyStatus(handler)
 				if handler.OnClose != nil {
 					handler.OnClose()
 				}
+				sm.mu.Lock()
+				sm.closeResourcesLocked()
+				sm.mu.Unlock()
+				sm.notifyStatus(handler)
 			}
 			return
 		}

@@ -18,6 +18,45 @@ func NewShellAuxPool() *ShellAuxPool {
 	return &ShellAuxPool{clients: make(map[string]*ShellAuxManager)}
 }
 
+// AttachFromSession 复用 PTY SSH 连接建立辅助通道（监控 + SFTP）。
+func (p *ShellAuxPool) AttachFromSession(machineName string, ptyClient *SSHClient, host string) error {
+	p.mu.Lock()
+	if existing, ok := p.clients[machineName]; ok {
+		_ = existing.Close()
+		delete(p.clients, machineName)
+	}
+	aux := NewShellAuxManager()
+	p.clients[machineName] = aux
+	p.mu.Unlock()
+
+	if err := aux.Attach(ptyClient, machineName, host); err != nil {
+		p.mu.Lock()
+		delete(p.clients, machineName)
+		p.mu.Unlock()
+		return err
+	}
+	return nil
+}
+
+// EnsureAttached 优先复用 PTY SSH；PTY 未连时再独立建连。
+func (p *ShellAuxPool) EnsureAttached(machineName string, machine *define.Machine, workVars map[string]string, ptyClient *SSHClient, host string) error {
+	p.mu.RLock()
+	aux, ok := p.clients[machineName]
+	p.mu.RUnlock()
+	if ok && aux != nil && aux.IsConnected() {
+		return nil
+	}
+	if ptyClient != nil && ptyClient.IsConnected() {
+		return p.AttachFromSession(machineName, ptyClient, host)
+	}
+	return p.Connect(machineName, machine, workVars)
+}
+
+// ConnectIfNeeded 已连接则跳过，避免重复建连导致监控/SFTP 短暂不可用。
+func (p *ShellAuxPool) ConnectIfNeeded(machineName string, machine *define.Machine, workVars map[string]string) error {
+	return p.EnsureAttached(machineName, machine, workVars, nil, "")
+}
+
 // Connect 连接辅助通道
 func (p *ShellAuxPool) Connect(machineName string, machine *define.Machine, workVars map[string]string) error {
 	p.mu.Lock()

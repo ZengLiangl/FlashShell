@@ -29,6 +29,8 @@ export function ClearShellHistory():Promise<void>;
 
 export function ClearShellOutput(arg1:string):Promise<void>;
 
+export function ConfirmQuit():Promise<void>;
+
 export function ConnectShell(arg1:string):Promise<void>;
 
 export function CreateApplicationMenu():Promise<menu.Menu>;
@@ -90,6 +92,8 @@ export function GetShellDownloadDir():Promise<string>;
 export function GetShellHistory():Promise<Array<define.ShellHistoryRecord>>;
 
 export function GetShellMonitor(arg1:string):Promise<define.ShellMonitorSnapshot>;
+
+export function GetShellPtyCwd(arg1:string):Promise<string>;
 
 export function GetShellRemoteHome(arg1:string):Promise<string>;
 
@@ -220,6 +224,8 @@ export function StopShellCommand(arg1:string):Promise<void>;
 export function StopSubProject(arg1:string,arg2:string):Promise<void>;
 
 export function SwitchConfigFileWithEvent(arg1:string):Promise<void>;
+
+export function SyncShellCwd(arg1:string,arg2:string):Promise<string>;
 
 export function TestMachineConnection(arg1:string):Promise<void>;
 

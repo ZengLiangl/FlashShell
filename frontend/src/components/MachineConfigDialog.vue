@@ -10,7 +10,7 @@
                             v-model="machineKeyword"
                             clearable
                             size="small"
-                            placeholder="搜索名称 / 分组"
+                            placeholder="搜索名称 / IP"
                             class="list-search"
                         >
                             <template #prefix>
@@ -83,6 +83,11 @@
                     v-loading="machinesLoading"
                 >
                     <el-table-column prop="name" label="机器名称" width="150" />
+                    <el-table-column prop="host" label="IP" min-width="140" show-overflow-tooltip>
+                        <template #default="scope">
+                            {{ scope.row.host || '-' }}
+                        </template>
+                    </el-table-column>
                     <el-table-column prop="group" label="分组" width="120">
                         <template #default="scope">
                             {{ scope.row.group || DEFAULT_MACHINE_GROUP }}
@@ -265,7 +270,7 @@ import {
     ImportXshellPick,
     ImportFinalShellPick,
 } from '../../wailsjs/go/app/App'
-import { DEFAULT_MACHINE_GROUP, sortMachinesByName } from '../utils/machineGroups'
+import { DEFAULT_MACHINE_GROUP, sortMachinesByName, machineMatchesKeyword } from '../utils/machineGroups'
 
 export default {
     name: 'MachineConfigDialog',
@@ -286,14 +291,10 @@ export default {
         const machineKeyword = ref('')
         const sortedMachines = computed(() => sortMachinesByName(machines.value))
         const filteredMachines = computed(() => {
-            const kw = machineKeyword.value.trim().toLowerCase()
+            const kw = machineKeyword.value
             const list = sortedMachines.value
-            if (!kw) return list
-            return list.filter((m) =>
-                (m.name || '').toLowerCase().includes(kw) ||
-                (m.group || '').toLowerCase().includes(kw) ||
-                (m.key_file || '').toLowerCase().includes(kw)
-            )
+            if (!String(kw || '').trim()) return list
+            return list.filter((m) => machineMatchesKeyword(m, kw))
         })
         const groupOptions = computed(() => {
             const set = new Set([DEFAULT_MACHINE_GROUP])

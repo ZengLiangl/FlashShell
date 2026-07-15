@@ -111,6 +111,9 @@ func shellSingleQuote(s string) string {
 }
 
 func (a *ShellAuxManager) sftpClient() (*sftp.Client, error) {
+	if err := a.EnsureSFTP(); err != nil {
+		return nil, err
+	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	if a.client == nil || a.client.remoteMachine == nil || a.client.remoteMachine.SFTPClient == nil {

@@ -85,6 +85,19 @@ func ResolveRemotePath(base, target, home string) (string, error) {
 	return PathJoinRemote(base, target), nil
 }
 
+// ResolveShellCdTarget 解析 shell cd 目标；无参数与 cd ~ 等价，均回到 home。
+func ResolveShellCdTarget(current, target, home string) (string, error) {
+	target = strings.TrimSpace(target)
+	target = strings.Trim(target, `"'`)
+	if target == "" || target == "~" {
+		if strings.TrimSpace(home) == "" {
+			return "", fmt.Errorf("home 未知")
+		}
+		return NormalizeRemoteAbs(home), nil
+	}
+	return ResolveRemotePath(current, target, home)
+}
+
 // ChooseCdPath 目录存在则采用 resolved，否则保留 current。
 func ChooseCdPath(current, resolved string, exists bool) string {
 	current = NormalizeRemoteAbs(current)

@@ -58,11 +58,11 @@
           :view-visible="viewVisible"
           :search-query="searchQuery"
           :class="{ 'is-active': activeTab === session.machineName, 'is-disconnected': !session.connected }"
-          @cd-hint="(payload) => $emit('cd-hint', payload)"
           @open-search="(text) => $emit('open-search', text)"
           @reconnect="(name) => $emit('reconnect', name)"
           @clear-cache="(name) => $emit('clear', name)"
           @search-result="(payload) => $emit('search-result', payload)"
+          @cwd-sync="(payload) => $emit('cwd-sync', payload)"
         />
       </div>
       <slot name="footer" :active-machine="activeTab" />
@@ -87,7 +87,7 @@ export default {
   },
   emits: [
     'update:activeMachine', 'close-session', 'clear', 'open-picker',
-    'cd-hint', 'back', 'open-search', 'reconnect', 'search-result', 'open-transfer',
+    'back', 'open-search', 'reconnect', 'search-result', 'open-transfer', 'cwd-sync',
   ],
   setup(props, { emit, expose }) {
     const activeTab = ref(props.activeMachine)

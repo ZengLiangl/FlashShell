@@ -139,3 +139,30 @@ func normalizeOscPath(p string) string {
 	}
 	return p
 }
+
+// SanitizePtyCwd 从 sidecar / OSC 残留中提取合法绝对路径。
+func SanitizePtyCwd(raw string) (string, bool) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", false
+	}
+	if idx := strings.Index(raw, "777;cwd;"); idx >= 0 {
+		raw = raw[idx+len("777;cwd;"):]
+	}
+	if i := strings.IndexAny(raw, "\x07\x1b"); i >= 0 {
+		raw = raw[:i]
+	}
+	raw = strings.TrimSpace(raw)
+	raw = strings.Trim(raw, "\x07")
+	if raw == "" || !strings.HasPrefix(raw, "/") {
+		return "", false
+	}
+	if strings.Contains(raw, "777;cwd") || strings.ContainsAny(raw, "\x00\x1b\x07]") {
+		return "", false
+	}
+	out := normalizeOscPath(raw)
+	if out == "" || !strings.HasPrefix(out, "/") || strings.Contains(out, "777;cwd") {
+		return "", false
+	}
+	return out, true
+}

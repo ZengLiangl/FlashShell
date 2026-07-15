@@ -20,6 +20,13 @@ func NewShellSessionPool() *ShellSessionPool {
 	}
 }
 
+// GetSession 获取指定机器的 PTY 会话（可能为 nil）
+func (p *ShellSessionPool) GetSession(machineName string) *ShellSessionManager {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.sessions[machineName]
+}
+
 // Connect 连接指定机器（允许多会话并存；已连接则幂等成功）
 func (p *ShellSessionPool) Connect(machineName string, machine *define.Machine, workVars map[string]string, handler ShellOutputHandler) error {
 	p.mu.Lock()

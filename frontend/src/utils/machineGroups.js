@@ -5,6 +5,19 @@ export function getMachineGroup(machine) {
   return group || DEFAULT_MACHINE_GROUP
 }
 
+/** 机器列表关键词匹配：名称、IP/主机、分组、密钥路径 */
+export function machineMatchesKeyword(machine, keyword) {
+  const kw = String(keyword || '').trim().toLowerCase()
+  if (!kw) return true
+  const host = String(machine?.host || machine?.ip || '').toLowerCase()
+  return (
+    String(machine?.name || '').toLowerCase().includes(kw) ||
+    host.includes(kw) ||
+    String(machine?.group || '').toLowerCase().includes(kw) ||
+    String(machine?.key_file || '').toLowerCase().includes(kw)
+  )
+}
+
 /** 机器名称首字母排序：a-z，再 0-9，其它靠后；同前缀按完整名 localeCompare */
 export function compareMachineName(a, b) {
   const na = String(a?.name || a || '')

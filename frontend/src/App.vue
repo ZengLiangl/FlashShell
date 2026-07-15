@@ -85,7 +85,7 @@
 
 <script>
 import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
-import { ElMessage } from "element-plus";
+import { ElMessage, ElMessageBox } from "element-plus";
 import * as App from "../wailsjs/go/app/App";
 import { EventsOn, EventsOff } from "../wailsjs/runtime/runtime";
 import Convert from "ansi-to-html";
@@ -881,6 +881,29 @@ export default {
       document.body.style.userSelect = 'none';
     };
 
+    let quitConfirmOpen = false;
+
+    const handleConfirmQuit = async () => {
+      if (quitConfirmOpen) return;
+      quitConfirmOpen = true;
+      try {
+        await ElMessageBox.confirm(
+          "确定要退出 FlashDock 吗？",
+          "退出应用",
+          {
+            confirmButtonText: "退出",
+            cancelButtonText: "取消",
+            type: "warning",
+          },
+        );
+        await App.ConfirmQuit();
+      } catch {
+        // 用户取消
+      } finally {
+        quitConfirmOpen = false;
+      }
+    };
+
     onMounted(() => {
       // 如果上一次刷新触发了页面重载，则在重载完成后再弹提示
       const pendingReloadToast = sessionStorage.getItem('pendingReloadToastMessage');
@@ -934,6 +957,7 @@ export default {
       EventsOn("open:about", () => { openAbout(); });
       EventsOn("open:config-editor", () => { configEditorVisible.value = true; });
       EventsOn("open:system-settings", () => { openSettingsHub('general'); });
+      EventsOn("app:confirm-quit", handleConfirmQuit);
 
       // 启动进入首页时检查新版本并弹窗
       if (activeView.value === 'home') {
@@ -1210,6 +1234,7 @@ export default {
           "output:line",
           "output:clear",
           "execution:status",
+          "app:confirm-quit",
           "shell:data",
           "shell:line",
           "shell:clear",

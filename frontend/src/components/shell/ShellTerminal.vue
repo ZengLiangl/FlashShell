@@ -37,7 +37,7 @@ export default {
     connected: { type: Boolean, default: false },
     searchQuery: { type: String, default: '' },
   },
-  emits: ['cd-hint', 'open-search', 'clear-cache', 'reconnect', 'search-result'],
+  emits: ['open-search', 'clear-cache', 'reconnect', 'search-result', 'cwd-sync'],
   setup(props, { expose, emit }) {
     const containerRef = ref(null)
     const terminalRef = ref(null)
@@ -50,9 +50,11 @@ export default {
     let fitTimers = []
     let initialized = false
     let unregisterWriter = null
-    let inputLineBuf = ''
+    let inputListener = null
     let searchResultsListener = null
     let lastSearchResults = { resultIndex: -1, resultCount: 0 }
+    let cwdSyncTimer = null
+    let inputLine = ''
 
     const SEARCH_DECORATIONS = {
       // 普通匹配：淡琥珀色；当前定位：蓝色，和选区颜色一致便于辨认
@@ -120,81 +122,6 @@ export default {
       term.value?.clear?.()
       emit('clear-cache', props.machineName)
       App.ClearShellOutput(props.machineName).catch(() => {})
-    }
-
-    const trackInputForCd = (data) => {
-      for (let i = 0; i < data.length; i++) {
-        const ch = data[i]
-        // 跳过 CSI/OSC 等终端控制序列，避免污染输入缓冲
-        if (ch === '\u001b') {
-          i += skipEscSequence(data, i)
-          continue
-        }
-        if (ch === '\r' || ch === '\n') {
-          const line = inputLineBuf.trim()
-          inputLineBuf = ''
-          const target = parseCdTarget(line)
-          if (target != null) {
-            emit('cd-hint', { machineName: props.machineName, target })
-          }
-          continue
-        }
-        if (ch === '\u007f' || ch === '\b') {
-          inputLineBuf = inputLineBuf.slice(0, -1)
-          continue
-        }
-        // Ctrl+C / Ctrl+U 清空当前输入缓冲
-        if (ch === '\u0003' || ch === '\u0015') {
-          inputLineBuf = ''
-          continue
-        }
-        if (ch >= ' ' || ch === '\t') {
-          inputLineBuf += ch
-        }
-      }
-    }
-
-    const skipEscSequence = (data, start) => {
-      // 返回需要额外跳过的字符数（不含起始 ESC）
-      if (start + 1 >= data.length) return 0
-      const next = data[start + 1]
-      if (next === '[') {
-        // CSI: ESC [ ... finalbyte @-~ 
-        let j = start + 2
-        while (j < data.length) {
-          const c = data[j]
-          if (c >= '@' && c <= '~') return j - start
-          j++
-        }
-        return data.length - start - 1
-      }
-      if (next === ']') {
-        // OSC: ESC ] ... BEL or ST
-        let j = start + 2
-        while (j < data.length) {
-          if (data[j] === '\u0007') return j - start
-          if (data[j] === '\u001b' && data[j + 1] === '\\') return j + 1 - start
-          j++
-        }
-        return data.length - start - 1
-      }
-      // 简单 ESC + 单字符
-      return 1
-    }
-
-    /** @returns {string|null} cd 目标；非 cd 命令返回 null */
-    const parseCdTarget = (line) => {
-      const m = line.match(/^(?:builtin\s+)?cd(?:\s+--)?(?:\s+(.*))?$/)
-      if (!m) return null
-      let target = (m[1] || '~').trim()
-      if ((target.startsWith('"') && target.endsWith('"')) ||
-          (target.startsWith("'") && target.endsWith("'"))) {
-        target = target.slice(1, -1)
-      }
-      if (target.length > 1) {
-        target = target.replace(/\/+$/, '')
-      }
-      return target
     }
 
     const terminalThemeForPreset = (preset) => {
@@ -303,17 +230,7 @@ export default {
       terminal.loadAddon(search)
       terminal.open(terminalRef.value)
 
-      terminal.onData((data) => {
-        if (!props.connected) {
-          // 断开后：Enter 触发重连，其余输入忽略
-          if (data === '\r' || data === '\n') {
-            emit('reconnect', props.machineName)
-          }
-          return
-        }
-        App.SendShellInput(props.machineName, data).catch(() => {})
-        trackInputForCd(data)
-      })
+      bindInputHandler(terminal)
 
       searchResultsListener?.dispose?.()
       searchResultsListener = search.onDidChangeResults?.((e) => {
@@ -341,6 +258,7 @@ export default {
 
     const destroyTerminal = () => {
       clearFitTimers()
+      clearCwdSyncTimer()
       detachWriter()
       searchResultsListener?.dispose?.()
       searchResultsListener = null
@@ -348,6 +266,8 @@ export default {
         resizeObserver.disconnect()
         resizeObserver = null
       }
+      inputListener?.dispose?.()
+      inputListener = null
       if (term.value) {
         term.value.dispose()
         term.value = null
@@ -408,6 +328,119 @@ export default {
       lastSearchResults = { resultIndex: -1, resultCount: 0 }
     }
 
+    const stripAnsi = (s) => String(s || '')
+      .replace(/\x1b\[[0-9?]*[ -/]*[@-~]/g, '')
+      .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+
+    const readTerminalLine = (terminal, rowOffset = 0) => {
+      const buf = terminal.buffer.active
+      const row = buf.baseY + buf.cursorY + rowOffset
+      if (row < 0) return ''
+      const line = buf.getLine(row)
+      if (!line) return ''
+      let text = ''
+      for (let i = 0; i < line.length; i++) {
+        text += line.getCell(i)?.getChars() || ''
+      }
+      return stripAnsi(text)
+    }
+
+    /** 从终端行提取 cd 命令（支持历史命令、Tab 补全后的完整行） */
+    const extractCdCommand = (raw) => {
+      const plain = stripAnsi(raw).trim()
+      if (!plain) return ''
+      const tail = plain.includes('\n')
+        ? plain.split('\n').pop()?.trim() || plain
+        : plain.replace(/^.*[$#>]\s*/, '').trim() || plain
+      if (!/^cd(\s|$)/i.test(tail)) return ''
+      const m = tail.match(/^cd(?:\s+([^;|&]+))?/i)
+      if (!m) return ''
+      return m[1] !== undefined ? `cd ${m[1].trim()}` : 'cd'
+    }
+
+    const mightBeCdEnter = () => {
+      if (/^cd(\s|$)/i.test(inputLine.trim())) return true
+      if (!term.value) return false
+      return /^cd(\s|$)/i.test(extractCdCommand(readTerminalLine(term.value)))
+    }
+
+    const clearCwdSyncTimer = () => {
+      if (cwdSyncTimer) {
+        clearTimeout(cwdSyncTimer)
+        cwdSyncTimer = null
+      }
+    }
+
+    const onEnterForCwd = () => {
+      const shouldSync = mightBeCdEnter()
+      inputLine = ''
+      if (shouldSync) {
+        scheduleCwdSyncAfterEnter()
+      }
+    }
+
+    const trackInputLine = (data) => {
+      for (let i = 0; i < data.length; i++) {
+        const ch = data[i]
+        if (ch === '\r' || ch === '\n') {
+          onEnterForCwd()
+        } else if (ch === '\x7f' || ch === '\b') {
+          inputLine = inputLine.slice(0, -1)
+        } else if (ch === '\x03') {
+          inputLine = ''
+        } else if (ch === '\x1b') {
+          // 方向键 / Tab 补全序列：inputLine 不可靠
+          inputLine = ''
+        } else if (ch >= ' ' || ch === '\t') {
+          inputLine += ch
+        }
+      }
+    }
+
+    /**
+     * 回车后延迟读取终端上一行（已执行的 cd 命令，含 Tab 补全结果）。
+     * 避免 inputLine 停在 cd ap 而实际执行的是 cd app/。
+     */
+    const scheduleCwdSyncAfterEnter = () => {
+      clearCwdSyncTimer()
+      cwdSyncTimer = setTimeout(async () => {
+        if (!term.value) return
+        let cdLine = extractCdCommand(readTerminalLine(term.value, -1))
+        if (!/^cd(\s|$)/i.test(cdLine)) {
+          cdLine = extractCdCommand(readTerminalLine(term.value, 0))
+        }
+        if (!/^cd(\s|$)/i.test(cdLine)) return
+        try {
+          const cwd = await App.SyncShellCwd(props.machineName, cdLine)
+          if (cwd) {
+            emit('cwd-sync', { machineName: props.machineName, cwd })
+          }
+        } catch (e) {
+          console.warn('cwd sync failed:', e)
+        }
+      }, 200)
+    }
+
+    const scheduleCwdSync = () => {
+      scheduleCwdSyncAfterEnter()
+    }
+
+    const bindInputHandler = (terminal) => {
+      inputListener?.dispose?.()
+      inputListener = terminal.onData((data) => {
+        if (!props.active || !props.viewVisible) return
+        if (!props.connected) {
+          // 断开后：Enter 触发重连，其余输入忽略
+          if (data === '\r' || data === '\n') {
+            emit('reconnect', props.machineName)
+          }
+          return
+        }
+        trackInputLine(data)
+        App.SendShellInput(props.machineName, data).catch(() => {})
+      })
+    }
+
     const attachWriter = (terminal) => {
       unregisterWriter?.()
       unregisterWriter = registerShellWriter(props.machineName, {
@@ -438,14 +471,16 @@ export default {
         return
       }
       if (val) {
-        attachWriter(term.value)
+        if (props.active) attachWriter(term.value)
         scheduleFit()
         if (props.active) {
+          scheduleCwdSync()
           await nextTick()
           term.value.focus()
         }
       } else {
         detachWriter()
+        clearCwdSyncTimer()
       }
     })
 
@@ -455,21 +490,28 @@ export default {
         else {
           setupObservers()
           scheduleFit()
+          if (term.value && props.connected) attachWriter(term.value)
         }
         await nextTick()
         term.value?.focus()
+      } else if (term.value) {
+        detachWriter()
       }
     })
 
     watch(() => props.viewVisible, async (visible) => {
       if (!visible) {
         clearFitTimers()
+        detachWriter()
         return
       }
       if (!props.active) return
       await nextTick()
       if (!initialized) await initTerminal()
-      else scheduleFit()
+      else {
+        scheduleFit()
+        if (term.value && props.connected) attachWriter(term.value)
+      }
       await nextTick()
       term.value?.focus()
     })

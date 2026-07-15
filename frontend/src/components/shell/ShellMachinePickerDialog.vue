@@ -7,7 +7,7 @@
       append-to-body
   >
     <div class="toolbar">
-      <el-input v-model="keyword" clearable placeholder="搜索机器" size="small" style="width: 220px">
+      <el-input v-model="keyword" clearable placeholder="搜索名称 / IP" size="small" style="width: 220px">
         <template #prefix>
           <el-icon><Search /></el-icon>
         </template>
@@ -37,7 +37,7 @@
               {{ machine.name }}
               <el-tag v-if="isConnected(machine.name)" size="small" type="success" effect="plain">已连接</el-tag>
             </div>
-            <div class="sub">{{ machine.key_file || '密码/密钥认证' }}</div>
+            <div class="sub">{{ machineHost(machine) }}</div>
           </div>
           <div class="row-actions icon-actions">
             <el-tooltip :content="isConnected(machine.name) ? '聚焦' : '连接'" placement="top">
@@ -68,7 +68,7 @@
 
 <script>
 import {computed, ref, watch} from 'vue'
-import {groupMachines} from '../../utils/machineGroups'
+import {groupMachines, machineMatchesKeyword} from '../../utils/machineGroups'
 
 export default {
   name: 'ShellMachinePickerDialog',
@@ -89,13 +89,10 @@ export default {
     })
 
     const filteredGroups = computed(() => {
-      const kw = keyword.value.trim().toLowerCase()
+      const kw = keyword.value
       let list = props.machines || []
-      if (kw) {
-        list = list.filter((m) =>
-            (m.name || '').toLowerCase().includes(kw) ||
-            (m.group || '').toLowerCase().includes(kw)
-        )
+      if (String(kw || '').trim()) {
+        list = list.filter((m) => machineMatchesKeyword(m, kw))
       }
       return groupMachines(list)
     })
@@ -107,7 +104,14 @@ export default {
     const isConnected = (name) =>
         (props.sessions || []).some((s) => s.machineName === name && s.connected)
 
-    return {visibleProxy, keyword, expanded, filteredGroups, isConnected}
+    const machineHost = (machine) => {
+      const host = machine?.host || machine?.ip || ''
+      if (!host) return machine?.key_file || '密码/密钥认证'
+      const port = machine?.port ? `:${machine.port}` : ''
+      return `${host}${port}`
+    }
+
+    return {visibleProxy, keyword, expanded, filteredGroups, isConnected, machineHost}
   },
 }
 </script>

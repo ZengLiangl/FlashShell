@@ -44,11 +44,11 @@
           @reconnect="onReconnect"
           @clear="onClear"
           @open-picker="pickerVisible = true"
-          @cd-hint="onCdHint"
           @back="$emit('back')"
           @open-search="openSearch"
           @search-result="onSearchResult"
           @open-transfer="transferVisible = true"
+          @cwd-sync="onCwdSync"
         >
           <template #empty>
             <div v-if="connectingName" class="shell-connecting">
@@ -281,12 +281,34 @@ export default {
       EventsOff('shortcuts:changed')
     })
 
-    /** 终端真实工作目录变化 → 同步 SFTP */
+    /** 终端 cd 后同步 SFTP（直接驱动面板，不依赖 shell:cwd 事件） */
+    const onCwdSync = async (payload) => {
+      const machineName = payload?.machineName
+      let cwd = payload?.cwd
+      if (!machineName || !cwd) return
+      cwd = String(cwd).trim()
+      if (!cwd.startsWith('/')) return
+      if (cwd.length > 1) cwd = cwd.replace(/\/+$/, '')
+      ptyCwds[machineName] = cwd
+      cwdHints[machineName] = cwd
+      if (machineName !== props.activeMachine) return
+      await nextTick()
+      filePanelRef.value?.applyCwdHint?.(cwd)
+    }
+
+    /** 终端真实工作目录变化（OSC 777/7）→ 同步 SFTP */
     const onShellCwd = async (payload) => {
       const machineName = payload?.machineName
       let cwd = payload?.cwd
       if (!machineName || !cwd) return
-      if (!String(cwd).startsWith('/')) cwd = `/${cwd}`
+      cwd = String(cwd).trim()
+      const marker = '777;cwd;'
+      const idx = cwd.indexOf(marker)
+      if (idx >= 0) cwd = cwd.slice(idx + marker.length)
+      cwd = cwd.replace(/\x07/g, '')
+      const esc = cwd.indexOf('\x1b')
+      if (esc >= 0) cwd = cwd.slice(0, esc)
+      if (!cwd.startsWith('/') || cwd.includes('777;cwd') || cwd.includes(']')) return
       if (cwd.length > 1) cwd = cwd.replace(/\/+$/, '')
       ptyCwds[machineName] = cwd
       cwdHints[machineName] = cwd
@@ -373,33 +395,22 @@ export default {
       }
     }
 
-    const onCdHint = async ({ machineName, target }) => {
-      // 乐观更新；权威路径以 shell:cwd（每个 prompt 的 OSC）为准
-      if (!machineName || target == null) return
-      try {
-        const base = cwdHints[machineName] || await ensurePtyCwd(machineName)
-        const next = await App.ApplyShellCd(machineName, base, target)
-        if (next === base) return
-        ptyCwds[machineName] = next
-        cwdHints[machineName] = next
-        await nextTick()
-        filePanelRef.value?.applyCwdHint?.(next)
-      } catch (e) {
-        console.warn('[shell-cd] 乐观同步失败，等待 OSC:', e)
-      }
-    }
-
-    const onPanelCwdChange = (machineName, dir) => {
-      if (!machineName || !dir) return
-      const abs = String(dir).startsWith('/') ? dir : `/${dir}`
-      ptyCwds[machineName] = abs
-      cwdHints[machineName] = abs
+    const onPanelCwdChange = (_machineName, _dir) => {
+      // SFTP 面板手动浏览不应覆盖终端 cwd 缓存，避免与 shell:cwd 同步冲突
     }
 
     const onFilePanelLayout = async () => {
       await nextTick()
       tabsRef.value?.fitActive?.()
     }
+
+    watch(() => props.activeMachine, async (name) => {
+      if (!name) return
+      const hint = cwdHints[name] || ptyCwds[name]
+      if (!hint) return
+      await nextTick()
+      filePanelRef.value?.applyCwdHint?.(hint)
+    })
 
     watch(() => props.workspaceSessions, async (sessions) => {
       const alive = new Set((sessions || []).map((s) => s?.machineName).filter(Boolean))
@@ -480,9 +491,9 @@ export default {
       onSearchResult,
       clearHistory,
       removeHistory,
-      onCdHint,
       onPanelCwdChange,
       onFilePanelLayout,
+      onCwdSync,
       loadHistory,
     }
   },

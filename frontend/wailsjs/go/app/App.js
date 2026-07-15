@@ -50,6 +50,10 @@ export function ClearShellOutput(arg1) {
   return window['go']['app']['App']['ClearShellOutput'](arg1);
 }
 
+export function ConfirmQuit() {
+  return window['go']['app']['App']['ConfirmQuit']();
+}
+
 export function ConnectShell(arg1) {
   return window['go']['app']['App']['ConnectShell'](arg1);
 }
@@ -172,6 +176,10 @@ export function GetShellHistory() {
 
 export function GetShellMonitor(arg1) {
   return window['go']['app']['App']['GetShellMonitor'](arg1);
+}
+
+export function GetShellPtyCwd(arg1) {
+  return window['go']['app']['App']['GetShellPtyCwd'](arg1);
 }
 
 export function GetShellRemoteHome(arg1) {
@@ -432,6 +440,10 @@ export function StopSubProject(arg1, arg2) {
 
 export function SwitchConfigFileWithEvent(arg1) {
   return window['go']['app']['App']['SwitchConfigFileWithEvent'](arg1);
+}
+
+export function SyncShellCwd(arg1, arg2) {
+  return window['go']['app']['App']['SyncShellCwd'](arg1, arg2);
 }
 
 export function TestMachineConnection(arg1) {

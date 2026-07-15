@@ -162,6 +162,12 @@ func TestApp_MachineManagement(t *testing.T) {
 	for _, machine := range machines {
 		if machine.Name == "测试机器" {
 			found = true
+			if machine.Host != "test.example.com" {
+				t.Fatalf("GetMachines 应填充 Host，得到 %q", machine.Host)
+			}
+			if machine.Port != 22 {
+				t.Fatalf("GetMachines 应填充 Port，得到 %d", machine.Port)
+			}
 			break
 		}
 	}

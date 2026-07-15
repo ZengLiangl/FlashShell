@@ -35,7 +35,11 @@ type App struct {
 	outputChannel    chan string
 	outputIngress    chan string
 	executionMutex   sync.RWMutex
+	shellCwdMu       sync.RWMutex
+	shellCwds        map[string]string
 	logEnabled       bool
+	quitMu           sync.Mutex
+	allowQuit        bool
 }
 
 // NewApp creates a new App application struct
@@ -58,6 +62,7 @@ func NewApp(sessionID string) *App {
 		shellHistory:   data.NewShellHistoryManager(),
 		shellPool:      machine.NewShellSessionPool(),
 		shellAuxPool:   machine.NewShellAuxPool(),
+		shellCwds:      make(map[string]string),
 	}
 	app.refreshLogSettings()
 	go app.outputEventLoop()
@@ -105,14 +110,37 @@ func (a *App) DomReady(ctx context.Context) {
 	// Add your action here
 }
 
-// BeforeClose is called when the application is about to quit
+// BeforeClose 关闭窗口前触发；首次拦截并弹框确认，确认后再次关闭才真正退出。
 func (a *App) BeforeClose(ctx context.Context) (prevent bool) {
+	a.quitMu.Lock()
+	allow := a.allowQuit
+	a.quitMu.Unlock()
+	if !allow {
+		if a.ctx != nil {
+			wailsRuntime.EventsEmit(a.ctx, "app:confirm-quit")
+		}
+		return true
+	}
+	a.cleanupBeforeQuit()
+	return false
+}
+
+func (a *App) cleanupBeforeQuit() {
 	a.StopAllSubProjects()
 	for _, session := range a.shellPool.ListSessions() {
 		_ = a.shellPool.Disconnect(session.MachineName, a.shellHandlerFor(session.MachineName))
 	}
 	a.shellAuxPool.DisconnectAll()
-	return false
+}
+
+// ConfirmQuit 用户确认退出后调用，关闭应用。
+func (a *App) ConfirmQuit() {
+	a.quitMu.Lock()
+	a.allowQuit = true
+	a.quitMu.Unlock()
+	if a.ctx != nil {
+		wailsRuntime.Quit(a.ctx)
+	}
 }
 
 // Shutdown is called during application termination
@@ -179,8 +207,9 @@ func (a *App) shellHandlerFor(machineName string) machine.ShellOutputHandler {
 		},
 		OnClose: func() {
 			if machineName != "" {
-				a.shellPool.RemoveSession(machineName)
 				_ = a.shellAuxPool.Disconnect(machineName)
+				a.shellPool.RemoveSession(machineName)
+				a.clearShellCwd(machineName)
 			}
 			go a.emitShellSessions()
 		},
@@ -197,14 +226,34 @@ func (a *App) pushShellData(machineName string, data []byte) {
 }
 
 func (a *App) pushShellCwd(machineName, cwd string) {
-	cwd = NormalizeRemoteAbs(cwd)
+	if clean, ok := machine.SanitizePtyCwd(cwd); ok {
+		cwd = clean
+	} else {
+		return
+	}
 	if a.ctx == nil || machineName == "" || cwd == "" {
 		return
 	}
+	a.shellCwdMu.Lock()
+	if prev := a.shellCwds[machineName]; prev == cwd {
+		a.shellCwdMu.Unlock()
+		return
+	}
+	a.shellCwds[machineName] = cwd
+	a.shellCwdMu.Unlock()
 	wailsRuntime.EventsEmit(a.ctx, "shell:cwd", map[string]interface{}{
 		"machineName": machineName,
 		"cwd":         cwd,
 	})
+}
+
+func (a *App) clearShellCwd(machineName string) {
+	if machineName == "" {
+		return
+	}
+	a.shellCwdMu.Lock()
+	delete(a.shellCwds, machineName)
+	a.shellCwdMu.Unlock()
 }
 
 func (a *App) pushShellOutput(machineName, msg string) {
@@ -245,14 +294,10 @@ func (a *App) SaveConfig(root *define.Root) error {
 	return a.configManager.SaveConfig(root)
 }
 
-// ExecuteSubProject 执行 SubProject
+// ExecuteSubProject 执行 SubProject（可与 Shell 会话并行）
 func (a *App) ExecuteSubProject(projectName, subProjectName string) error {
 	a.executionMutex.Lock()
 	defer a.executionMutex.Unlock()
-
-	if a.shellPool.IsAnyConnected() {
-		return fmt.Errorf("Shell 模式已连接，请先断开后再执行任务")
-	}
 
 	// 在执行前刷新配置，确保读取到最新的 SubProject 定义
 	if _, err := a.configManager.LoadConfigForRefresh(); err != nil {
@@ -413,8 +458,18 @@ func (a *App) TestMachineDraftConnection(m define.Machine, sensitive define.Sens
 }
 
 // GetMachines 获取所有机器配置（从全局配置）
+// 返回副本并填充 host/port，便于前端按名称或 IP 搜索与展示。
 func (a *App) GetMachines() []define.Machine {
-	return a.configManager.GetAllMachinesFromGlobal()
+	src := a.configManager.GetAllMachinesFromGlobal()
+	out := make([]define.Machine, len(src))
+	for i := range src {
+		out[i] = src[i]
+		if s, err := src[i].GetSensitiveData(); err == nil && s != nil {
+			out[i].Host = s.Host
+			out[i].Port = s.Port
+		}
+	}
+	return out
 }
 
 // GetMachineGroups 获取机器分组列表
@@ -1323,23 +1378,16 @@ func (a *App) applyWindowTheme(mode string) {
 	}
 }
 
-// ConnectShell 连接远程 Shell（支持多会话）
+// ConnectShell 连接远程 Shell（支持多会话；可与任务执行并行）
 func (a *App) ConnectShell(machineName string) error {
-	a.executionMutex.Lock()
-	status := a.subProjectRunner.GetExecutionStatus()
-	if status.IsRunning {
-		a.executionMutex.Unlock()
-		return fmt.Errorf("任务正在执行，请先停止后再使用 Shell")
-	}
-	a.executionMutex.Unlock()
-
 	machineConfig := a.configManager.GetMachine(machineName)
 	if machineConfig == nil {
 		return fmt.Errorf("未找到机器配置: %s", machineName)
 	}
 
-	// 已连接：直接返回，避免重复建连/重连辅助通道
+	// 已连接：确保辅助通道附着 PTY SSH
 	if a.shellPool.IsConnected(machineName) {
+		a.ensureShellAux(machineName, machineConfig)
 		a.emitShellSessions()
 		return nil
 	}
@@ -1349,10 +1397,7 @@ func (a *App) ConnectShell(machineName string) error {
 		return err
 	}
 
-	// 辅助通道失败不阻断终端
-	if auxErr := a.shellAuxPool.Connect(machineName, machineConfig, a.configManager.GetWorkPathVars()); auxErr != nil {
-		fmt.Printf("辅助连接失败(%s): %v\n", machineName, auxErr)
-	}
+	a.ensureShellAux(machineName, machineConfig)
 
 	if sensitive, sErr := machineConfig.GetSensitiveData(); sErr == nil && a.shellHistory != nil {
 		_ = a.shellHistory.RecordConnect(machineConfig, sensitive.Host, sensitive.Port, sensitive.User)
@@ -1362,12 +1407,44 @@ func (a *App) ConnectShell(machineName string) error {
 	return nil
 }
 
+func (a *App) ensureShellAux(machineName string, machineConfig *define.Machine) {
+	host := ""
+	if s, err := machineConfig.GetSensitiveData(); err == nil && s != nil {
+		host = s.Host
+	}
+	var ptyClient *machine.SSHClient
+	if sm := a.shellPool.GetSession(machineName); sm != nil {
+		ptyClient = sm.SharedSSHClient()
+	}
+	if auxErr := a.shellAuxPool.EnsureAttached(machineName, machineConfig, a.configManager.GetWorkPathVars(), ptyClient, host); auxErr != nil {
+		fmt.Printf("辅助连接失败(%s): %v\n", machineName, auxErr)
+		return
+	}
+	if aux, err := a.shellAuxPool.Get(machineName); err == nil {
+		_ = machine.UninstallShellCwdHook(aux)
+	}
+	a.seedShellCwdIfEmpty(machineName)
+}
+
+func (a *App) seedShellCwdIfEmpty(machineName string) {
+	a.shellCwdMu.RLock()
+	has := a.shellCwds[machineName] != ""
+	a.shellCwdMu.RUnlock()
+	if has {
+		return
+	}
+	if home, err := a.getRemoteHome(machineName); err == nil && home != "" {
+		a.pushShellCwd(machineName, home)
+	}
+}
+
 // DisconnectShell 断开指定机器的 Shell
 func (a *App) DisconnectShell(machineName string) error {
 	a.executionMutex.Lock()
 	defer a.executionMutex.Unlock()
-	err := a.shellPool.Disconnect(machineName, a.shellHandlerFor(machineName))
 	_ = a.shellAuxPool.Disconnect(machineName)
+	err := a.shellPool.Disconnect(machineName, a.shellHandlerFor(machineName))
+	a.clearShellCwd(machineName)
 	a.emitShellSessions()
 	return err
 }
@@ -1449,13 +1526,63 @@ func (a *App) GetShellRemoteHome(machineName string) (string, error) {
 	return a.getRemoteHome(machineName)
 }
 
-// GetShellRemotePwd 获取辅助通道 pwd（兼容旧调用；新逻辑请用 home + 客户端 cd 跟踪）
+// GetShellRemotePwd 获取辅助通道 pwd（兼容旧调用；新逻辑请用 GetShellPtyCwd）
 func (a *App) GetShellRemotePwd(machineName string) (string, error) {
 	aux, err := a.shellAuxPool.Get(machineName)
 	if err != nil {
 		return "", err
 	}
 	return aux.Pwd()
+}
+
+// GetShellPtyCwd 获取 PTY 终端当前工作目录（内存缓存 / home）
+func (a *App) GetShellPtyCwd(machineName string) (string, error) {
+	a.shellCwdMu.RLock()
+	raw := a.shellCwds[machineName]
+	a.shellCwdMu.RUnlock()
+	if clean, ok := machine.SanitizePtyCwd(raw); ok {
+		return clean, nil
+	}
+	if home, err := a.getRemoteHome(machineName); err == nil && home != "" {
+		return NormalizeRemoteAbs(home), nil
+	}
+	return "", fmt.Errorf("PTY cwd 未知")
+}
+
+// SyncShellCwd 根据终端 cd 命令行同步 cwd（Enter 后调用；不修改远端 shell 配置）
+func (a *App) SyncShellCwd(machineName, cdLine string) (string, error) {
+	cdLine = strings.TrimSpace(cdLine)
+	if cdLine == "" {
+		a.shellCwdMu.RLock()
+		raw := a.shellCwds[machineName]
+		a.shellCwdMu.RUnlock()
+		if clean, ok := machine.SanitizePtyCwd(raw); ok {
+			return clean, nil
+		}
+		return "", fmt.Errorf("PTY cwd 未知")
+	}
+	if len(cdLine) < 2 || !strings.EqualFold(cdLine[:2], "cd") {
+		return "", fmt.Errorf("非 cd 命令")
+	}
+	target := strings.TrimSpace(cdLine[2:])
+	home, err := a.getRemoteHome(machineName)
+	if err != nil {
+		home = ""
+	}
+	a.shellCwdMu.RLock()
+	current := a.shellCwds[machineName]
+	a.shellCwdMu.RUnlock()
+	if strings.TrimSpace(current) == "" {
+		current = home
+	}
+	current = NormalizeRemoteAbs(current)
+	resolved, err := ResolveShellCdTarget(current, target, home)
+	if err != nil {
+		return "", err
+	}
+	resolved = NormalizeRemoteAbs(resolved)
+	a.pushShellCwd(machineName, resolved)
+	return resolved, nil
 }
 
 // ShellDirExists 远端路径是否为目录
@@ -1486,7 +1613,7 @@ func (a *App) ApplyShellCd(machineName, current, target string) (string, error) 
 		current = home
 	}
 	current = NormalizeRemoteAbs(current)
-	resolved, err := ResolveRemotePath(current, target, home)
+	resolved, err := ResolveShellCdTarget(current, target, home)
 	if err != nil {
 		return "", err
 	}

@@ -46,9 +46,9 @@ func TestPathJoinRemote(t *testing.T) {
 
 func TestResolveRemotePath(t *testing.T) {
 	cases := []struct {
-		name       string
+		name                     string
 		base, target, home, want string
-		wantErr    bool
+		wantErr                  bool
 	}{
 		{"relative from base", "/root", "app", "/home/u", "/root/app", false},
 		{"relative trailing slash", "/root", "app/", "/home/u", "/root/app", false},
@@ -65,6 +65,35 @@ func TestResolveRemotePath(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			got, err := ResolveRemotePath(c.base, c.target, c.home)
+			if c.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got %q", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected err: %v", err)
+			}
+			if got != c.want {
+				t.Fatalf("got %q want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestResolveShellCdTarget(t *testing.T) {
+	cases := []struct {
+		name                        string
+		current, target, home, want string
+		wantErr                     bool
+	}{
+		{"bare cd goes home", "/root/app", "", "/root", "/root", false},
+		{"cd tilde goes home", "/var/log", "~", "/root", "/root", false},
+		{"relative still works", "/root", "app", "/root", "/root/app", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, err := ResolveShellCdTarget(c.current, c.target, c.home)
 			if c.wantErr {
 				if err == nil {
 					t.Fatalf("expected error, got %q", got)

@@ -1,10 +1,10 @@
 package define
 
 import (
+	"FlashDock/crypto"
 	"fmt"
 	"os"
 	"path/filepath"
-	"FlashDock/crypto"
 	"strings"
 	"time"
 
@@ -52,6 +52,9 @@ type Machine struct {
 	Name          string `yaml:"name" json:"name"`
 	Group         string `yaml:"group,omitempty" json:"group,omitempty"`
 	KeyFile       string `yaml:"key_file,omitempty" json:"key_file,omitempty"`
+	// 列表展示用（不落盘；由 GetMachines 从敏感数据填充）
+	Host string `yaml:"-" json:"host,omitempty"`
+	Port int    `yaml:"-" json:"port,omitempty"`
 	// 运行时数据（不序列化）
 	sensitiveData *SensitiveData `yaml:"-"`
 }
@@ -190,18 +193,32 @@ func (rm *RemoteMachine) Connect(machine *Machine, withSFTP bool) error {
 	rm.SSHClient = client
 
 	if withSFTP {
-		sftpClient, err := sftp.NewClient(client,
-			sftp.MaxPacketUnchecked(512*1024),
-			sftp.UseConcurrentWrites(true),
-		)
-		if err != nil {
+		if err := rm.EnsureSFTP(); err != nil {
 			client.Close()
 			rm.SSHClient = nil
-			return fmt.Errorf("SFTP连接失败: %w", err)
+			return err
 		}
-		rm.SFTPClient = sftpClient
 	}
 
+	return nil
+}
+
+// EnsureSFTP 在已有 SSH 连接上初始化 SFTP（可重复调用）。
+func (rm *RemoteMachine) EnsureSFTP() error {
+	if rm.SFTPClient != nil {
+		return nil
+	}
+	if rm.SSHClient == nil {
+		return fmt.Errorf("SSH客户端未连接")
+	}
+	sftpClient, err := sftp.NewClient(rm.SSHClient,
+		sftp.MaxPacketUnchecked(512*1024),
+		sftp.UseConcurrentWrites(true),
+	)
+	if err != nil {
+		return fmt.Errorf("SFTP连接失败: %w", err)
+	}
+	rm.SFTPClient = sftpClient
 	return nil
 }
 

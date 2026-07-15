@@ -72,7 +72,7 @@
               v-model="machineKeyword"
               clearable
               size="small"
-              placeholder="搜索机器"
+              placeholder="搜索名称 / IP"
               class="machine-search"
             >
               <template #prefix>
@@ -146,7 +146,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
-import { groupMachines } from '../utils/machineGroups'
+import { groupMachines, machineMatchesKeyword } from '../utils/machineGroups'
 
 export default {
   name: 'HomePage',
@@ -179,15 +179,10 @@ export default {
     }
 
     const filteredMachines = computed(() => {
-      const kw = machineKeyword.value.trim().toLowerCase()
+      const kw = machineKeyword.value
       const list = machines.value || []
-      if (!kw) return list
-      return list.filter((m) =>
-        (m.name || '').toLowerCase().includes(kw) ||
-        (m.group || '').toLowerCase().includes(kw) ||
-        (m.key_file || '').toLowerCase().includes(kw) ||
-        (m.host || '').toLowerCase().includes(kw)
-      )
+      if (!String(kw || '').trim()) return list
+      return list.filter((m) => machineMatchesKeyword(m, kw))
     })
 
     const machineGroups = computed(() => groupMachines(filteredMachines.value))
