@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,7 +14,7 @@ import (
 	"sync"
 	"time"
 
-	"context"
+	"FlashDock/utils"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -73,7 +74,7 @@ func (w *updateDownloadProgressWriter) Write(p []byte) (int, error) {
 	w.written += int64(n)
 	if w.onProgress != nil {
 		now := time.Now()
-		if now.Sub(w.lastEmit) >= 120*time.Millisecond || w.written >= w.total {
+		if now.Sub(w.lastEmit) >= 400*time.Millisecond || (w.total > 0 && w.written >= w.total) {
 			w.lastEmit = now
 			w.onProgress(w.written, w.total)
 		}
@@ -200,52 +201,43 @@ func (a *App) DownloadUpdate() *UpdateDownloadResult {
 	}
 
 	dest := filepath.Join(dir, check.AssetName)
-	a.emitUpdateDownloadProgress("start", 0, check.AssetSize, "正在测速选取最快下载源…")
-
-	source := selectFastestDownloadSource(check.DownloadURL)
-	a.emitUpdateDownloadProgress("start", 0, check.AssetSize, fmt.Sprintf("使用「%s」下载…", source.Label))
-
-	if err := downloadFileWithProgress(source.URL, dest, check.AssetSize, source.Direct, func(downloaded, total int64) {
-		a.emitUpdateDownloadProgress("downloading", downloaded, total, "")
-	}); err != nil {
-		_ = os.Remove(dest)
-		msg := fmt.Sprintf("下载失败（%s）: %v", source.Label, err)
-		// 按测速外的其余源依次兜底
-		for _, fallback := range buildDownloadSources(check.DownloadURL) {
-			if fallback.URL == source.URL {
-				continue
-			}
-			a.emitUpdateDownloadProgress("start", 0, check.AssetSize, fmt.Sprintf("%s 失败，改用「%s」…", source.Label, fallback.Label))
-			_ = os.Remove(dest)
-			err2 := downloadFileWithProgress(fallback.URL, dest, check.AssetSize, fallback.Direct, func(downloaded, total int64) {
-				a.emitUpdateDownloadProgress("downloading", downloaded, total, "")
-			})
-			if err2 == nil {
-				lastDownloadedDir = dir
-				a.emitUpdateDownloadProgress("done", check.AssetSize, check.AssetSize, dest)
-				_ = a.OpenDownloadsDirectory()
-				return &UpdateDownloadResult{
-					Success:  true,
-					Message:  fmt.Sprintf("下载完成（%s）: %s", fallback.Label, dest),
-					FilePath: dest,
-					DirPath:  dir,
-				}
-			}
-			msg = fmt.Sprintf("%s；%s 失败: %v", msg, fallback.Label, err2)
-		}
+	// 优先直连 GitHub（与浏览器一致）；镜像仅作失败兜底，避免 TTFB 测速误选慢代理
+	sources := buildDownloadSources(check.DownloadURL)
+	if len(sources) == 0 {
+		msg := "无可用下载源"
 		a.emitUpdateDownloadProgress("error", 0, check.AssetSize, msg)
 		return &UpdateDownloadResult{Success: false, Message: msg}
 	}
 
-	lastDownloadedDir = dir
-	a.emitUpdateDownloadProgress("done", check.AssetSize, check.AssetSize, dest)
-	_ = a.OpenDownloadsDirectory()
-	return &UpdateDownloadResult{
-		Success:  true,
-		Message:  fmt.Sprintf("下载完成（%s）: %s", source.Label, dest),
-		FilePath: dest,
-		DirPath:  dir,
+	var lastErr error
+	for i, source := range sources {
+		if i == 0 {
+			a.emitUpdateDownloadProgress("start", 0, check.AssetSize, fmt.Sprintf("使用「%s」下载…", source.Label))
+		} else {
+			a.emitUpdateDownloadProgress("start", 0, check.AssetSize, fmt.Sprintf("改用「%s」…", source.Label))
+		}
+		_ = os.Remove(dest)
+		err := downloadFileWithProgress(source.URL, dest, check.AssetSize, source.Direct, func(downloaded, total int64) {
+			a.emitUpdateDownloadProgress("downloading", downloaded, total, "")
+		})
+		if err == nil {
+			lastDownloadedDir = dir
+			a.emitUpdateDownloadProgress("done", check.AssetSize, check.AssetSize, dest)
+			_ = a.OpenDownloadsDirectory()
+			return &UpdateDownloadResult{
+				Success:  true,
+				Message:  fmt.Sprintf("下载完成（%s）: %s", source.Label, dest),
+				FilePath: dest,
+				DirPath:  dir,
+			}
+		}
+		lastErr = err
+		_ = os.Remove(dest)
 	}
+
+	msg := fmt.Sprintf("下载失败: %v", lastErr)
+	a.emitUpdateDownloadProgress("error", 0, check.AssetSize, msg)
+	return &UpdateDownloadResult{Success: false, Message: msg}
 }
 
 // OpenDownloadsDirectory 打开用户下载目录（优先最近一次下载目录）
@@ -323,13 +315,19 @@ func (a *App) emitUpdateDownloadProgress(status string, downloaded, total int64,
 			percent = 100
 		}
 	}
-	wailsRuntime.EventsEmit(a.ctx, updateDownloadProgressEvent, map[string]interface{}{
+	payload := map[string]interface{}{
 		"status":     status,
 		"downloaded": downloaded,
 		"total":      total,
 		"percent":    percent,
 		"message":    message,
-	})
+	}
+	// 进度事件异步发出，避免阻塞下载读写
+	if status == "downloading" {
+		go wailsRuntime.EventsEmit(a.ctx, updateDownloadProgressEvent, payload)
+		return
+	}
+	wailsRuntime.EventsEmit(a.ctx, updateDownloadProgressEvent, payload)
 }
 
 func pickReleaseAsset(assets []githubAsset, tagOrVersion string) *githubAsset {
@@ -509,47 +507,11 @@ func withGitCloneMirror(raw string) string {
 	return "https://gitclone.com/" + trimmed
 }
 
-// selectFastestDownloadSource 并发探测各源首字节延迟，选最快可用源。
+// selectFastestDownloadSource 保留给兼容调用；现已改为优先直连 GitHub。
 func selectFastestDownloadSource(rawURL string) updateDownloadSource {
 	sources := buildDownloadSources(rawURL)
 	if len(sources) == 0 {
 		return updateDownloadSource{Label: "GitHub", URL: rawURL, Direct: true}
-	}
-	if len(sources) == 1 {
-		return sources[0]
-	}
-
-	type probeResult struct {
-		src updateDownloadSource
-		d   time.Duration
-		err error
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	ch := make(chan probeResult, len(sources))
-	for _, src := range sources {
-		go func(s updateDownloadSource) {
-			d, err := probeDownloadLatency(ctx, s)
-			ch <- probeResult{src: s, d: d, err: err}
-		}(src)
-	}
-
-	var best *updateDownloadSource
-	var bestLatency time.Duration
-	for i := 0; i < len(sources); i++ {
-		r := <-ch
-		if r.err != nil {
-			continue
-		}
-		if best == nil || r.d < bestLatency {
-			cp := r.src
-			best = &cp
-			bestLatency = r.d
-		}
-	}
-	if best != nil {
-		return *best
 	}
 	return sources[0]
 }
@@ -568,18 +530,29 @@ func probeDownloadLatency(ctx context.Context, src updateDownloadSource) (time.D
 			req.Header.Set("Authorization", "Bearer "+token)
 		}
 	}
-	client := &http.Client{Timeout: 5 * time.Second}
+	client := &http.Client{Timeout: 5 * time.Second, Transport: updateHTTPTransport}
 	resp, err := client.Do(req)
 	if err != nil {
 		return 0, err
 	}
 	defer resp.Body.Close()
-	// 丢弃极少数据，确认链路可用
 	_, _ = io.CopyN(io.Discard, resp.Body, 64)
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 		return 0, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 	return time.Since(start), nil
+}
+
+var updateHTTPTransport = &http.Transport{
+	Proxy:                 http.ProxyFromEnvironment,
+	MaxIdleConns:          16,
+	IdleConnTimeout:       90 * time.Second,
+	TLSHandshakeTimeout:   10 * time.Second,
+	ExpectContinueTimeout: 1 * time.Second,
+	ForceAttemptHTTP2:     true,
+	DisableCompression:    true, // 发布包已是压缩产物，避免多余 gzip 协商
+	WriteBufferSize:       512 * 1024,
+	ReadBufferSize:        512 * 1024,
 }
 
 func downloadFileWithProgress(url, dest string, knownSize int64, sendGitHubAuth bool, onProgress func(downloaded, total int64)) error {
@@ -596,7 +569,7 @@ func downloadFileWithProgress(url, dest string, knownSize int64, sendGitHubAuth 
 		}
 	}
 
-	client := &http.Client{Timeout: 0}
+	client := &http.Client{Timeout: 0, Transport: updateHTTPTransport}
 	resp, err := client.Do(req)
 	if err != nil {
 		return err
@@ -622,7 +595,7 @@ func downloadFileWithProgress(url, dest string, knownSize int64, sendGitHubAuth 
 		total:      total,
 		onProgress: onProgress,
 	}
-	_, copyErr := io.Copy(io.MultiWriter(out, progressWriter), resp.Body)
+	_, copyErr := utils.CopyBuffer(io.MultiWriter(out, progressWriter), resp.Body)
 	closeErr := out.Close()
 	if copyErr != nil {
 		_ = os.Remove(tmp)

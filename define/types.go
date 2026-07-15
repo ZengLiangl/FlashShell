@@ -190,7 +190,10 @@ func (rm *RemoteMachine) Connect(machine *Machine, withSFTP bool) error {
 	rm.SSHClient = client
 
 	if withSFTP {
-		sftpClient, err := sftp.NewClient(client)
+		sftpClient, err := sftp.NewClient(client,
+			sftp.MaxPacketUnchecked(512*1024),
+			sftp.UseConcurrentWrites(true),
+		)
 		if err != nil {
 			client.Close()
 			rm.SSHClient = nil

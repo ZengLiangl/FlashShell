@@ -1,18 +1,25 @@
 #!/usr/bin/env bash
-# bump-tag.sh — 同步本地版本号、打 annotated tag 并推送到 origin
+# bump-tag.sh — 打 annotated tag 并推送；版本号提交放在 tag 之后
 #
 # 用法:
 #   ./tools/bump-tag.sh              # 拉取最新 v* tag，patch +1
 #   ./tools/bump-tag.sh v1.0.3       # 直接使用指定版本
 #
-# 流程:
+# 流程（重要）:
 #   1. 解析 NEW_TAG（如 v1.0.4）
-#   2. 写回 app/version.go、wails.json（与 tag 一致，不含 v 前缀）
-#   3. 若有变更则 commit
-#   4. 在该 commit 上打 tag 并 push（含 commit + tag）
+#   2. 在「当前 HEAD」上打 tag 并先推送 tag
+#      → Release / changelog 不含 "bump version" 提交
+#   3. 再写回 app/version.go、wails.json 并 commit "chore: bump version to …"
+#   4. 推送版本 commit 到当前分支
+#
+# 说明:
+#   CI 发布用 tag + ldflags 注入版本，不依赖 tag 指向的 commit 里是否已改 version.go。
+#   bump commit 仅同步本地/后续开发读到的默认版本号。
 #
 # 环境变量:
-#   REMOTE=origin  TAG_PREFIX=FlashDock  SKIP_COMMIT=1（只改文件不提交，也不打 tag）
+#   REMOTE=origin  TAG_PREFIX=FlashDock
+#   SKIP_COMMIT=1  只打 tag（不写版本文件、不提交）
+#   SKIP_BUMP=1    打完 tag 后不写/不提交版本文件
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -22,6 +29,7 @@ REMOTE="${REMOTE:-origin}"
 TAG_PREFIX="${TAG_PREFIX:-FlashDock}"
 EXPLICIT_TAG="${1:-}"
 SKIP_COMMIT="${SKIP_COMMIT:-0}"
+SKIP_BUMP="${SKIP_BUMP:-0}"
 
 VERSION_GO="app/version.go"
 WAILS_JSON="wails.json"
@@ -139,20 +147,19 @@ APP_VERSION="${NEW_TAG#v}"
 APP_VERSION="${APP_VERSION%%[-+]*}"
 export APP_VERSION
 
-sync_version_files "$NEW_TAG"
+BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+HEAD_SHA="$(git rev-parse HEAD)"
 
 if [ "$SKIP_COMMIT" = "1" ]; then
-  echo "⏭️  SKIP_COMMIT=1，已写回版本文件，跳过 commit / tag / push"
+  echo "⏭️  SKIP_COMMIT=1：仅解析版本 ${NEW_TAG}，不打 tag / 不提交"
+  sync_version_files "$NEW_TAG"
   exit 0
 fi
 
-# 若工作区有未提交改动（版本文件），先提交版本号
-if ! git diff --quiet -- "$VERSION_GO" "$WAILS_JSON"; then
-  git add -- "$VERSION_GO" "$WAILS_JSON"
-  git commit -m "chore: bump version to ${APP_VERSION}"
-  echo "✅ 已提交版本号变更: ${APP_VERSION}"
-else
-  echo "ℹ️  版本文件已是 ${APP_VERSION}，无需额外 commit"
+# 打 tag 前若工作区脏，先警告（避免误以为版本文件会进 tag）
+if [ -n "$(git status --porcelain)" ]; then
+  echo "⚠️  工作区有未提交变更；tag 将指向当前 HEAD=${HEAD_SHA:0:8}"
+  echo "   bump version 提交会在打 tag 之后进行"
 fi
 
 if git rev-parse -q --verify "refs/tags/${NEW_TAG}" >/dev/null 2>&1; then
@@ -166,18 +173,37 @@ if git ls-remote --tags --exit-code "$REMOTE" "refs/tags/${NEW_TAG}" >/dev/null 
 fi
 
 MSG="${TAG_PREFIX} ${NEW_TAG}"
-echo "🏷️  创建 tag: ${NEW_TAG}"
+echo "🏷️  在当前 HEAD 创建 tag: ${NEW_TAG}"
+echo "   指向: ${HEAD_SHA}"
 echo "   消息: ${MSG}"
-git tag -a "${NEW_TAG}" -m "${MSG}"
+git tag -a "${NEW_TAG}" -m "${MSG}" "${HEAD_SHA}"
 
-echo "🚀 推送 commit + tag 到 ${REMOTE}..."
-# 推送当前分支（含版本 commit）与 tag
-BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-if [ "$BRANCH" != "HEAD" ]; then
-  git push "$REMOTE" "HEAD:refs/heads/${BRANCH}"
-fi
+echo "🚀 先推送 tag 到 ${REMOTE}（触发 Release，不含 bump commit）..."
 git push "$REMOTE" "refs/tags/${NEW_TAG}"
 
+if [ "$SKIP_BUMP" = "1" ]; then
+  echo "⏭️  SKIP_BUMP=1，跳过版本文件提交"
+  echo "✅ 完成: ${NEW_TAG}"
+  exit 0
+fi
+
+# —— tag 之后再 bump，保证 release body 看不到这条提交 ——
+sync_version_files "$NEW_TAG"
+
+if ! git diff --quiet -- "$VERSION_GO" "$WAILS_JSON"; then
+  git add -- "$VERSION_GO" "$WAILS_JSON"
+  git commit -m "chore: bump version to ${APP_VERSION}"
+  echo "✅ 已提交版本号变更: ${APP_VERSION}（在 tag 之后）"
+else
+  echo "ℹ️  版本文件已是 ${APP_VERSION}，无需额外 commit"
+fi
+
+if [ "$BRANCH" != "HEAD" ]; then
+  echo "🚀 推送分支 ${BRANCH}（含 bump commit）..."
+  git push "$REMOTE" "HEAD:refs/heads/${BRANCH}"
+fi
+
 echo "✅ 完成: ${NEW_TAG}"
-echo "   本地开发默认版本 = ${APP_VERSION}（app.Version / wails.json）"
+echo "   tag 指向发布代码（无 bump commit）"
+echo "   本地默认版本 = ${APP_VERSION}（app.Version / wails.json）"
 echo "   CI 发布仍会用 tag 经 ldflags 注入同一版本"

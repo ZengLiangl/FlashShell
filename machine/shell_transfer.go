@@ -48,7 +48,7 @@ func (c *countingReader) Read(p []byte) (int, error) {
 			c.windowStart = now
 			c.windowBytes = 0
 		}
-		if c.onProgress != nil && (now.Sub(c.lastReport) >= 200*time.Millisecond || err == io.EOF || (c.total > 0 && c.transferred >= c.total)) {
+		if c.onProgress != nil && (now.Sub(c.lastReport) >= 400*time.Millisecond || err == io.EOF || (c.total > 0 && c.transferred >= c.total)) {
 			c.lastReport = now
 			c.onProgress(c.transferred, c.total, c.speedBPS)
 		}
@@ -86,7 +86,7 @@ func (c *countingWriter) Write(p []byte) (int, error) {
 			c.windowStart = now
 			c.windowBytes = 0
 		}
-		if c.onProgress != nil && (now.Sub(c.lastReport) >= 200*time.Millisecond || (c.total > 0 && c.transferred >= c.total)) {
+		if c.onProgress != nil && (now.Sub(c.lastReport) >= 400*time.Millisecond || (c.total > 0 && c.transferred >= c.total)) {
 			c.lastReport = now
 			c.onProgress(c.transferred, c.total, c.speedBPS)
 		}
@@ -181,7 +181,7 @@ func (a *ShellAuxManager) DownloadFile(ctx context.Context, remotePath, localPat
 	if onProgress != nil && offset > 0 {
 		onProgress(offset, total, 0)
 	}
-	if _, err := io.Copy(dst, reader); err != nil {
+	if _, err := utils.CopyBuffer(dst, reader); err != nil {
 		return fmt.Errorf("下载失败: %w", err)
 	}
 	if onProgress != nil {
@@ -254,7 +254,7 @@ func (a *ShellAuxManager) UploadFile(ctx context.Context, localPath, remotePath 
 	if onProgress != nil && offset > 0 {
 		onProgress(offset, total, 0)
 	}
-	if _, err := io.Copy(writer, src); err != nil {
+	if _, err := utils.CopyBuffer(writer, src); err != nil {
 		return fmt.Errorf("上传失败: %w", err)
 	}
 	if onProgress != nil {
@@ -408,10 +408,30 @@ func (a *ShellAuxManager) downloadDirectoryRecursive(ctx context.Context, remote
 		total = 0
 	}
 	var transferred int64
+	var lastReport time.Time
+	var windowStart time.Time
+	var windowBytes int64
+	var speedBPS float64
 	progress := func(n int64) {
 		transferred += n
-		if onProgress != nil {
-			onProgress(transferred, total, 0)
+		windowBytes += n
+		now := time.Now()
+		if windowStart.IsZero() {
+			windowStart = now
+		}
+		elapsed := now.Sub(windowStart).Seconds()
+		if elapsed >= 0.5 {
+			speedBPS = float64(windowBytes) / elapsed
+			windowStart = now
+			windowBytes = 0
+		}
+		if onProgress == nil {
+			return
+		}
+		done := total > 0 && transferred >= total
+		if now.Sub(lastReport) >= 400*time.Millisecond || done {
+			lastReport = now
+			onProgress(transferred, total, speedBPS)
 		}
 	}
 	if err := os.MkdirAll(localDir, 0o755); err != nil {
@@ -509,7 +529,7 @@ func (a *ShellAuxManager) downloadFileWithChunk(ctx context.Context, c *sftp.Cli
 	}
 	defer dst.Close()
 
-	buf := make([]byte, 32*1024)
+	buf := make([]byte, utils.TransferBufferSize)
 	for {
 		if err := ctxErr(ctx); err != nil {
 			return err

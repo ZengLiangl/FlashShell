@@ -35,10 +35,16 @@
                     </div>
                     <div class="subproject-actions icon-actions">
                         <el-tooltip :content="isSubProjectRunning(subProject) ? '运行中' : '执行'" placement="top">
-                            <el-button size="small" type="primary" circle @click="$emit('execute-sub', subProject)"
+                            <el-button
+                                size="small"
+                                type="primary"
+                                circle
+                                class="run-btn"
                                 :loading="isSubProjectRunning(subProject)"
-                                :disabled="status.isRunning && !isSubProjectRunning(subProject)">
-                                <el-icon><VideoPlay /></el-icon>
+                                :disabled="status.isRunning && !isSubProjectRunning(subProject)"
+                                @click="$emit('execute-sub', subProject)"
+                            >
+                                <el-icon v-if="!isSubProjectRunning(subProject)"><VideoPlay /></el-icon>
                             </el-button>
                         </el-tooltip>
                         <el-tooltip v-if="isSubProjectRunning(subProject)" content="停止" placement="top">
@@ -192,6 +198,19 @@ export default {
 
 .subproject-actions {
     flex-shrink: 0;
+}
+
+.subproject-actions :deep(.run-btn.is-loading) {
+    pointer-events: none;
+}
+
+.subproject-actions :deep(.run-btn .el-icon.is-loading),
+.subproject-actions :deep(.run-btn .el-loading-spinner),
+.subproject-actions :deep(.run-btn > span) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0;
 }
 
 .subproject-container {

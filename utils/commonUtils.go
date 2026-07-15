@@ -61,7 +61,8 @@ func LocalZip(dirPath, outFullName string) error {
 		}
 		// 使用正斜杠，避免 Windows 下 zip 内带盘符路径，Linux unzip 错建成 D:\... 目录
 		header.Name = filepath.ToSlash(rel)
-		header.Method = zip.Deflate
+		// Store：上传链路本身已是瓶颈，CPU 再 Deflate 会进一步拖慢整体吞吐
+		header.Method = zip.Store
 		writer, err := zipWriter.CreateHeader(header)
 		if err != nil {
 			return fmt.Errorf("创建ZIP条目失败: %v", err)
@@ -71,7 +72,7 @@ func LocalZip(dirPath, outFullName string) error {
 			return fmt.Errorf("打开文件失败: %v", err)
 		}
 		defer file.Close()
-		_, err = io.Copy(writer, file)
+		_, err = CopyBuffer(writer, file)
 		if err != nil {
 			return fmt.Errorf("写入ZIP文件失败: %v", err)
 		}

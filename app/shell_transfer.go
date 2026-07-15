@@ -86,7 +86,8 @@ func (a *App) updateTransferProgress(id string, transferred, total int64, speedB
 	rec.UpdatedAt = time.Now().Unix()
 	cp := *rec
 	store.mu.Unlock()
-	a.emitTransfer(&cp)
+	// 异步推送进度，避免 Wails IPC 阻塞传输热路径
+	go a.emitTransfer(&cp)
 }
 
 func (a *App) finishTransfer(id string, err error) {

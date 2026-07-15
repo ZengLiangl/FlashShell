@@ -81,11 +81,10 @@ func uploadFile(rm *define.RemoteMachine, localPath, remotePath, targetFileName 
 	go progressWriter.startProgressDisplay()
 
 	// 复制文件并显示进度
-	_, err = io.Copy(progressWriter, srcFile)
+	_, err = utils.CopyBuffer(progressWriter, srcFile)
 	if err != nil {
 		return fmt.Errorf("文件传输失败: %w", err)
 	}
-	time.Sleep(1 * time.Second)
 	return nil
 }
 
