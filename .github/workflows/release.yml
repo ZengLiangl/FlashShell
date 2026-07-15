@@ -314,8 +314,8 @@ jobs:
           ls -lah upload
           test "$(find upload -type f | wc -l)" -ge 1
 
-      # 按 commit 标题归类生成 Release body（与 GoNavi 一致）
-      # 依赖常规提交前缀：feat / fix / perf / refactor / chore 等
+      # 按 commit 标题归类生成 Release body
+      # 依赖常规提交前缀分类：feat / fix / perf / refactor / chore 等；正文会去掉这些关键字
       - name: Generate Changelog
         id: changelog
         shell: bash
@@ -337,6 +337,19 @@ jobs:
 
           echo "📋 生成更新日志：$RANGE"
 
+          # 去掉 emoji / conventional commit 前缀，Release 正文只保留描述
+          strip_commit_prefix() {
+            local s="$1"
+            s="$(printf '%s' "$s" | sed -E 's/^(✨|🐛|⚡️|⚡|♻️|🌐|🔧|🔨)[[:space:]]*//')"
+            s="$(printf '%s' "$s" | sed -E 's/^(feat|fix|perf|refactor|chore|docs|doc|ci|build|test|style|revert)(\([^)]*\))?(!)?[[:space:]]*[:：][[:space:]]*//I')"
+            s="$(printf '%s' "$s" | sed -E 's/^[[:space:]]+|[[:space:]]+$//g')"
+            if [ -z "$s" ]; then
+              printf '%s' "$1"
+            else
+              printf '%s' "$s"
+            fi
+          }
+
           COMMITS=$(git log "$RANGE" --no-merges --pretty=format:'%s' 2>/dev/null || true)
           if [ -z "$COMMITS" ]; then
             BODY="暂无提交记录。"
@@ -350,14 +363,15 @@ jobs:
 
             while IFS= read -r line; do
               [ -z "$line" ] && continue
+              text="$(strip_commit_prefix "$line")"
               case "$line" in
-                ✨*|*feat*)     CAT_FEAT="${CAT_FEAT}\n- ${line}" ;;
-                🐛*|*fix*)     CAT_FIX="${CAT_FIX}\n- ${line}" ;;
-                ⚡*|*perf*)    CAT_PERF="${CAT_PERF}\n- ${line}" ;;
-                ♻️*|*refactor*) CAT_REFACTOR="${CAT_REFACTOR}\n- ${line}" ;;
-                🌐*)           CAT_I18N="${CAT_I18N}\n- ${line}" ;;
-                🔧*|🔨*|*chore*) CAT_OTHER="${CAT_OTHER}\n- ${line}" ;;
-                *)             CAT_OTHER="${CAT_OTHER}\n- ${line}" ;;
+                ✨*|*feat*)     CAT_FEAT="${CAT_FEAT}\n- ${text}" ;;
+                🐛*|*fix*)     CAT_FIX="${CAT_FIX}\n- ${text}" ;;
+                ⚡*|⚡️*|*perf*) CAT_PERF="${CAT_PERF}\n- ${text}" ;;
+                ♻️*|*refactor*) CAT_REFACTOR="${CAT_REFACTOR}\n- ${text}" ;;
+                🌐*)           CAT_I18N="${CAT_I18N}\n- ${text}" ;;
+                🔧*|🔨*|*chore*) CAT_OTHER="${CAT_OTHER}\n- ${text}" ;;
+                *)             CAT_OTHER="${CAT_OTHER}\n- ${text}" ;;
               esac
             done <<< "$COMMITS"
 

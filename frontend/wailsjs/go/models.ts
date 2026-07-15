@@ -9,6 +9,9 @@ export namespace app {
 	    releaseURL: string;
 	    publishedAt: string;
 	    checkedAt: string;
+	    assetName?: string;
+	    downloadURL?: string;
+	    assetSize?: number;
 	    error?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -25,7 +28,28 @@ export namespace app {
 	        this.releaseURL = source["releaseURL"];
 	        this.publishedAt = source["publishedAt"];
 	        this.checkedAt = source["checkedAt"];
+	        this.assetName = source["assetName"];
+	        this.downloadURL = source["downloadURL"];
+	        this.assetSize = source["assetSize"];
 	        this.error = source["error"];
+	    }
+	}
+	export class UpdateDownloadResult {
+	    success: boolean;
+	    message: string;
+	    filePath?: string;
+	    dirPath?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateDownloadResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.message = source["message"];
+	        this.filePath = source["filePath"];
+	        this.dirPath = source["dirPath"];
 	    }
 	}
 

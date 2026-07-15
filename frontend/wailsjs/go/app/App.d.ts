@@ -43,6 +43,8 @@ export function DeleteWorkPathWithEvent(arg1:string):Promise<void>;
 
 export function DisconnectShell(arg1:string):Promise<void>;
 
+export function DownloadUpdate():Promise<app.UpdateDownloadResult>;
+
 export function ExecuteCommand(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function ExecuteShellCommand(arg1:string,arg2:string):Promise<void>;
@@ -89,6 +91,8 @@ export function GetShellStatus():Promise<define.ShellStatus>;
 
 export function GetShortcutSettings():Promise<data.ShortcutSettings>;
 
+export function GetSkippedUpdateVersion():Promise<string>;
+
 export function GetStatus():Promise<define.CommandStatus>;
 
 export function GetSubProjectStatus():Promise<define.SubProjectStatus>;
@@ -116,6 +120,8 @@ export function OpenAbout():Promise<void>;
 export function OpenConfigEditor():Promise<void>;
 
 export function OpenCurrentConfigWithEvent():Promise<void>;
+
+export function OpenDownloadsDirectory():Promise<void>;
 
 export function OpenExecutionHistory():Promise<void>;
 
@@ -170,6 +176,8 @@ export function SendShellInterrupt(arg1:string):Promise<void>;
 export function SetMachineSensitiveData(arg1:string,arg2:define.SensitiveData):Promise<void>;
 
 export function ShellDirExists(arg1:string,arg2:string):Promise<boolean>;
+
+export function SkipUpdateVersion(arg1:string):Promise<void>;
 
 export function StopAllCommands():Promise<void>;
 

@@ -95,6 +95,7 @@ func main() {
 		OnBeforeClose:    appInstance.BeforeClose,
 		OnShutdown:       appInstance.Shutdown,
 		Fullscreen:       false,
+		WindowStartState: options.Maximised,
 		MinWidth:         1200,
 		MinHeight:        768,
 		Menu:             nil,

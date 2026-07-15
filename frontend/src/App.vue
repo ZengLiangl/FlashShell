@@ -71,14 +71,21 @@
       @machines-changed="onMachinesChanged" @machines-closed="machineEditId = ''" />
 
     <!-- 关于弹框 -->
-    <AboutDialog v-model="aboutVisible" :intro-html="aboutIntroHtml" />
+    <AboutDialog
+      v-model="aboutVisible"
+      :intro-html="aboutIntroHtml"
+      :prompt-mode="aboutPromptMode"
+      :initial-update-result="aboutInitialUpdate"
+      @dismissed="onAboutPromptDismissed"
+      @skipped="onAboutPromptSkipped"
+    />
 
     <ConfigEditorDialog v-model="configEditorVisible" @saved="refreshProjectConfig" />
   </div>
 </template>
 
 <script>
-import { ref, reactive, computed, onMounted, onUnmounted, nextTick } from "vue";
+import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
 import { ElMessage } from "element-plus";
 import * as App from "../wailsjs/go/app/App";
 import { EventsOn, EventsOff } from "../wailsjs/runtime/runtime";
@@ -143,9 +150,12 @@ export default {
     const machines = ref([]);
     const machinesLoading = ref(false);
 
-    // 关于弹框
+    // 关于弹框 / 更新提示
     const aboutVisible = ref(false);
     const aboutIntroHtml = ref('');
+    const aboutPromptMode = ref(false);
+    const aboutInitialUpdate = ref(null);
+    const updatePromptDismissedThisSession = ref(false);
     const configEditorVisible = ref(false);
     // home | task | shell —— 任务与 Shell 互不打断，仅切换当前视图
     const activeView = ref('home');
@@ -205,7 +215,42 @@ export default {
     });
 
     const openAbout = () => {
+      aboutPromptMode.value = false;
+      aboutInitialUpdate.value = null;
       aboutVisible.value = true;
+    };
+
+    const normalizeVer = (v) => String(v || '').trim().replace(/^v/i, '').toLowerCase();
+
+    const maybePromptUpdateOnHome = async () => {
+      if (updatePromptDismissedThisSession.value) return;
+      if (aboutVisible.value) return;
+      try {
+        const result = await App.CheckForUpdates();
+        if (!result?.hasUpdate) return;
+        const skipped = await App.GetSkippedUpdateVersion();
+        if (skipped && normalizeVer(skipped) === normalizeVer(result.latestVersion)) {
+          return;
+        }
+        aboutPromptMode.value = true;
+        aboutInitialUpdate.value = result;
+        aboutVisible.value = true;
+      } catch {
+        // 静默失败：不影响首页使用
+      }
+    };
+
+    const onAboutPromptDismissed = () => {
+      // 仅关闭：本会话内不再弹，下次启动软件再检查
+      updatePromptDismissedThisSession.value = true;
+      aboutPromptMode.value = false;
+      aboutInitialUpdate.value = null;
+    };
+
+    const onAboutPromptSkipped = () => {
+      updatePromptDismissedThisSession.value = true;
+      aboutPromptMode.value = false;
+      aboutInitialUpdate.value = null;
     };
 
     const workPathEditVisible = ref(false);
@@ -891,6 +936,17 @@ export default {
       EventsOn("open:config-editor", () => { configEditorVisible.value = true; });
       EventsOn("open:system-settings", () => { openSettingsHub('general'); });
       EventsOn("open:execution-history", () => { openSettingsHub('history'); });
+
+      // 启动进入首页时检查新版本并弹窗
+      if (activeView.value === 'home') {
+        maybePromptUpdateOnHome();
+      }
+    });
+
+    watch(activeView, (view) => {
+      if (view === 'home') {
+        maybePromptUpdateOnHome();
+      }
     });
 
     // 机器配置相关方法
@@ -1209,10 +1265,14 @@ export default {
       openSettingsHub,
       openMachineConfig,
       openWorkPathConfig,
-      // 关于
+      // 关于 / 更新提示
       aboutVisible,
       aboutIntroHtml,
+      aboutPromptMode,
+      aboutInitialUpdate,
       openAbout,
+      onAboutPromptDismissed,
+      onAboutPromptSkipped,
       // 事件处理
       handleOperationEvent,
       // 键盘快捷键

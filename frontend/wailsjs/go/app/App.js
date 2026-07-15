@@ -78,6 +78,10 @@ export function DisconnectShell(arg1) {
   return window['go']['app']['App']['DisconnectShell'](arg1);
 }
 
+export function DownloadUpdate() {
+  return window['go']['app']['App']['DownloadUpdate']();
+}
+
 export function ExecuteCommand(arg1, arg2, arg3) {
   return window['go']['app']['App']['ExecuteCommand'](arg1, arg2, arg3);
 }
@@ -170,6 +174,10 @@ export function GetShortcutSettings() {
   return window['go']['app']['App']['GetShortcutSettings']();
 }
 
+export function GetSkippedUpdateVersion() {
+  return window['go']['app']['App']['GetSkippedUpdateVersion']();
+}
+
 export function GetStatus() {
   return window['go']['app']['App']['GetStatus']();
 }
@@ -224,6 +232,10 @@ export function OpenConfigEditor() {
 
 export function OpenCurrentConfigWithEvent() {
   return window['go']['app']['App']['OpenCurrentConfigWithEvent']();
+}
+
+export function OpenDownloadsDirectory() {
+  return window['go']['app']['App']['OpenDownloadsDirectory']();
 }
 
 export function OpenExecutionHistory() {
@@ -332,6 +344,10 @@ export function SetMachineSensitiveData(arg1, arg2) {
 
 export function ShellDirExists(arg1, arg2) {
   return window['go']['app']['App']['ShellDirExists'](arg1, arg2);
+}
+
+export function SkipUpdateVersion(arg1) {
+  return window['go']['app']['App']['SkipUpdateVersion'](arg1);
 }
 
 export function StopAllCommands() {
