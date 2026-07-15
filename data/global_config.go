@@ -33,6 +33,7 @@ type GlobalConfig struct {
 	LastOpenedFile string            `yaml:"lastOpenedFile" json:"lastOpenedFile"`
 	WorkPaths      map[string]string `yaml:"workPaths" json:"workPaths"`
 	Machines       []define.Machine  `yaml:"machines,omitempty" json:"machines,omitempty"`
+	MachineGroups  []string          `yaml:"machineGroups,omitempty" json:"machineGroups,omitempty"`
 	GlobalAccounts []GlobalAccount   `yaml:"globalAccounts,omitempty" json:"globalAccounts,omitempty"`
 	LogSettings    LogSettings       `yaml:"logSettings" json:"logSettings"`
 	ThemeSettings  ThemeSettings     `yaml:"themeSettings" json:"themeSettings"`
@@ -271,6 +272,7 @@ func (gcm *GlobalConfigManager) AddMachine(machine *define.Machine) error {
 	}
 
 	machine.EnsureID()
+	gcm.EnsureMachineGroupRegistered(machine.Group)
 	for i, existing := range gcm.config.Machines {
 		if existing.ID == machine.ID {
 			gcm.config.Machines[i] = *machine

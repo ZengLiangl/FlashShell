@@ -6,6 +6,10 @@ export function AddMachine(arg1) {
   return window['go']['app']['App']['AddMachine'](arg1);
 }
 
+export function AddMachineGroup(arg1) {
+  return window['go']['app']['App']['AddMachineGroup'](arg1);
+}
+
 export function AddMachineWithEvent(arg1) {
   return window['go']['app']['App']['AddMachineWithEvent'](arg1);
 }
@@ -24,6 +28,10 @@ export function ApplyShellCd(arg1, arg2, arg3) {
 
 export function CheckForUpdates() {
   return window['go']['app']['App']['CheckForUpdates']();
+}
+
+export function ClearFinishedShellTransfers() {
+  return window['go']['app']['App']['ClearFinishedShellTransfers']();
 }
 
 export function ClearMachineSensitiveData(arg1) {
@@ -56,6 +64,10 @@ export function CreateMachine(arg1, arg2) {
 
 export function DeleteMachine(arg1) {
   return window['go']['app']['App']['DeleteMachine'](arg1);
+}
+
+export function DeleteMachineGroup(arg1) {
+  return window['go']['app']['App']['DeleteMachineGroup'](arg1);
 }
 
 export function DeleteMachineWithEvent(arg1) {
@@ -130,6 +142,10 @@ export function GetGlobalConfigForRefresh() {
   return window['go']['app']['App']['GetGlobalConfigForRefresh']();
 }
 
+export function GetMachineGroups() {
+  return window['go']['app']['App']['GetMachineGroups']();
+}
+
 export function GetMachineSensitiveData(arg1) {
   return window['go']['app']['App']['GetMachineSensitiveData'](arg1);
 }
@@ -144,6 +160,10 @@ export function GetOutput() {
 
 export function GetSessionInfo() {
   return window['go']['app']['App']['GetSessionInfo']();
+}
+
+export function GetShellDownloadDir() {
+  return window['go']['app']['App']['GetShellDownloadDir']();
 }
 
 export function GetShellHistory() {
@@ -198,24 +218,28 @@ export function GetWorkPaths() {
   return window['go']['app']['App']['GetWorkPaths']();
 }
 
-export function ImportFinalShellPick(arg1) {
-  return window['go']['app']['App']['ImportFinalShellPick'](arg1);
+export function ImportFinalShellPick(arg1, arg2) {
+  return window['go']['app']['App']['ImportFinalShellPick'](arg1, arg2);
 }
 
-export function ImportXshellFromFile(arg1, arg2) {
-  return window['go']['app']['App']['ImportXshellFromFile'](arg1, arg2);
+export function ImportXshellFromFile(arg1, arg2, arg3) {
+  return window['go']['app']['App']['ImportXshellFromFile'](arg1, arg2, arg3);
 }
 
-export function ImportXshellFromFolder(arg1, arg2) {
-  return window['go']['app']['App']['ImportXshellFromFolder'](arg1, arg2);
+export function ImportXshellFromFolder(arg1, arg2, arg3) {
+  return window['go']['app']['App']['ImportXshellFromFolder'](arg1, arg2, arg3);
 }
 
-export function ImportXshellPick(arg1) {
-  return window['go']['app']['App']['ImportXshellPick'](arg1);
+export function ImportXshellPick(arg1, arg2) {
+  return window['go']['app']['App']['ImportXshellPick'](arg1, arg2);
 }
 
 export function ListShellFiles(arg1, arg2, arg3) {
   return window['go']['app']['App']['ListShellFiles'](arg1, arg2, arg3);
+}
+
+export function ListShellTransfers() {
+  return window['go']['app']['App']['ListShellTransfers']();
 }
 
 export function NewWindow() {
@@ -258,12 +282,28 @@ export function OpenReleaseURL(arg1) {
   return window['go']['app']['App']['OpenReleaseURL'](arg1);
 }
 
+export function OpenShellDownloadDir() {
+  return window['go']['app']['App']['OpenShellDownloadDir']();
+}
+
 export function OpenSystemSettings() {
   return window['go']['app']['App']['OpenSystemSettings']();
 }
 
 export function OpenWorkPathConfig() {
   return window['go']['app']['App']['OpenWorkPathConfig']();
+}
+
+export function PauseShellTransfer(arg1) {
+  return window['go']['app']['App']['PauseShellTransfer'](arg1);
+}
+
+export function PickShellUploadFolder() {
+  return window['go']['app']['App']['PickShellUploadFolder']();
+}
+
+export function PickShellUploadPaths() {
+  return window['go']['app']['App']['PickShellUploadPaths']();
 }
 
 export function ReadExecutionLog(arg1) {
@@ -282,12 +322,24 @@ export function RemoveShellHistory(arg1, arg2) {
   return window['go']['app']['App']['RemoveShellHistory'](arg1, arg2);
 }
 
+export function RemoveShellTransfer(arg1) {
+  return window['go']['app']['App']['RemoveShellTransfer'](arg1);
+}
+
+export function RenameMachineGroup(arg1, arg2) {
+  return window['go']['app']['App']['RenameMachineGroup'](arg1, arg2);
+}
+
 export function ResizeShell(arg1, arg2, arg3) {
   return window['go']['app']['App']['ResizeShell'](arg1, arg2, arg3);
 }
 
 export function ResolveShellPath(arg1, arg2, arg3) {
   return window['go']['app']['App']['ResolveShellPath'](arg1, arg2, arg3);
+}
+
+export function ResumeShellTransfer(arg1) {
+  return window['go']['app']['App']['ResumeShellTransfer'](arg1);
 }
 
 export function SaveConfig(arg1) {
@@ -348,6 +400,14 @@ export function ShellDirExists(arg1, arg2) {
 
 export function SkipUpdateVersion(arg1) {
   return window['go']['app']['App']['SkipUpdateVersion'](arg1);
+}
+
+export function StartShellDownload(arg1, arg2) {
+  return window['go']['app']['App']['StartShellDownload'](arg1, arg2);
+}
+
+export function StartShellUpload(arg1, arg2, arg3) {
+  return window['go']['app']['App']['StartShellUpload'](arg1, arg2, arg3);
 }
 
 export function StopAllCommands() {

@@ -152,3 +152,65 @@ html.dark .app-menu-bar .menu-inner {
   color: var(--app-text);
   border-bottom-color: var(--app-border);
 }
+
+/* 成组图标操作按钮：tooltip 包裹后垂直水平对齐 */
+.icon-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  line-height: 1;
+  vertical-align: middle;
+}
+
+.icon-actions .el-tooltip__trigger,
+.icon-actions .el-dropdown,
+.icon-actions > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.icon-actions .el-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 !important;
+  vertical-align: middle;
+}
+
+.icon-actions .el-button + .el-button {
+  margin-left: 0 !important;
+}
+
+.icon-actions .el-button.is-circle {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+}
+
+.icon-actions .el-button.is-text,
+.icon-actions .el-button.is-link {
+  height: 28px;
+  min-height: 28px;
+  padding: 0 4px;
+}
+
+.icon-actions .el-button .el-icon {
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-actions.icon-actions--sm .el-button.is-circle {
+  width: 24px;
+  height: 24px;
+}
+
+.icon-actions.icon-actions--sm .el-button.is-text,
+.icon-actions.icon-actions--sm .el-button.is-link {
+  height: 24px;
+  min-height: 24px;
+}

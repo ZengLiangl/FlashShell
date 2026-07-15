@@ -5,13 +5,22 @@
         <h3>连接历史</h3>
         <p class="hint">单击记录即可连接；已连接则切换到对应终端</p>
       </div>
-      <div class="history-actions">
-        <el-button size="small" @click="$emit('back')">
-          <el-icon><ArrowLeft /></el-icon>
-          返回首页
-        </el-button>
-        <el-button size="small" @click="$emit('open-picker')">选择机器</el-button>
-        <el-button size="small" text type="danger" :disabled="!records.length" @click="onClear">清空</el-button>
+      <div class="history-actions icon-actions">
+        <el-tooltip content="返回首页" placement="top">
+          <el-button size="small" circle @click="$emit('back')">
+            <el-icon><ArrowLeft /></el-icon>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip content="选择机器" placement="top">
+          <el-button size="small" type="primary" circle @click="$emit('open-picker')">
+            <el-icon><Monitor /></el-icon>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip content="清空历史" placement="top">
+          <el-button size="small" type="danger" plain circle :disabled="!records.length" @click="onClear">
+            <el-icon><Delete /></el-icon>
+          </el-button>
+        </el-tooltip>
       </div>
     </div>
 
@@ -29,9 +38,13 @@
         </template>
       </el-table-column>
       <el-table-column prop="connectCount" label="次数" width="70" align="center" />
-      <el-table-column label="" width="70" align="center">
+      <el-table-column label="" width="56" align="center">
         <template #default="{ row }">
-          <el-button size="small" text type="danger" @click.stop="$emit('remove', row)">删除</el-button>
+          <el-tooltip content="删除" placement="top">
+            <el-button size="small" text type="danger" @click.stop="$emit('remove', row)">
+              <el-icon><Delete /></el-icon>
+            </el-button>
+          </el-tooltip>
         </template>
       </el-table-column>
     </el-table>
@@ -39,8 +52,11 @@
 </template>
 
 <script>
+import { ArrowLeft, Monitor, Delete } from '@element-plus/icons-vue'
+
 export default {
   name: 'ShellConnectionHistory',
+  components: { ArrowLeft, Monitor, Delete },
   props: {
     records: { type: Array, default: () => [] },
   },
@@ -91,8 +107,6 @@ export default {
 }
 
 .history-actions {
-  display: flex;
-  gap: 8px;
   flex-shrink: 0;
 }
 

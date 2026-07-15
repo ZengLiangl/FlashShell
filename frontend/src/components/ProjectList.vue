@@ -2,14 +2,17 @@
     <div class="panel-section project-section" :class="{ 'fullscreen': fullScreen }">
         <div class="section-header">
             <h3>项目列表</h3>
-            <div class="header-actions">
-                <el-button size="small" @click="$emit('open-system-settings')">系统设置</el-button>
-                <el-button size="small" @click="$emit('open-execution-history')">执行历史</el-button>
-                <el-button size="small" @click="$emit('refresh')">
-                    <el-icon>
-                        <Refresh />
-                    </el-icon>
-                </el-button>
+            <div class="header-actions icon-actions">
+                <el-tooltip content="系统设置" placement="top">
+                    <el-button size="small" circle @click="$emit('open-system-settings')">
+                        <el-icon><Setting /></el-icon>
+                    </el-button>
+                </el-tooltip>
+                <el-tooltip content="刷新" placement="top">
+                    <el-button size="small" circle @click="$emit('refresh')">
+                        <el-icon><Refresh /></el-icon>
+                    </el-button>
+                </el-tooltip>
             </div>
         </div>
         <div v-if="projects.length === 0" class="no-projects">
@@ -48,7 +51,7 @@ export default {
         selectedProjectName: { type: String, default: '' },
         fullScreen: { type: Boolean, default: false }
     },
-    emits: ['refresh', 'select', 'open-system-settings', 'open-execution-history']
+    emits: ['refresh', 'select', 'open-system-settings']
 }
 </script>
 
@@ -88,9 +91,7 @@ export default {
 }
 
 .header-actions {
-    display: flex;
-    gap: 8px;
-    align-items: center;
+    flex-shrink: 0;
 }
 
 .no-projects {

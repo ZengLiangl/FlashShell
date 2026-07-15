@@ -4,21 +4,30 @@
             <div class="list-header">
                 <h4 v-if="!embedded">环境变量列表</h4>
                 <div v-else></div>
-                <el-button type="primary" @click="addWorkPath">
-                    <el-icon>
-                        <Plus />
-                    </el-icon>
-                    添加环境变量
-                </el-button>
+                <el-tooltip content="添加环境变量" placement="top">
+                    <el-button type="primary" circle @click="addWorkPath">
+                        <el-icon><Plus /></el-icon>
+                    </el-button>
+                </el-tooltip>
             </div>
             <div class="workpath-table-wrap">
                 <el-table :data="entries" style="width: 100%" v-loading="workPathsLoading">
                     <el-table-column prop="key" label="变量名" width="200" />
                     <el-table-column prop="value" label="变量值" overflow-tooltip />
-                    <el-table-column label="操作" width="200">
+                    <el-table-column label="操作" width="100" align="center">
                         <template #default="scope">
-                            <el-button size="small" @click="editWorkPath(scope.row.key)">编辑</el-button>
-                            <el-button size="small" type="danger" @click="deleteWorkPath(scope.row.key)">删除</el-button>
+                            <div class="icon-actions">
+                                <el-tooltip content="编辑" placement="top">
+                                    <el-button size="small" text type="primary" @click="editWorkPath(scope.row.key)">
+                                        <el-icon><Edit /></el-icon>
+                                    </el-button>
+                                </el-tooltip>
+                                <el-tooltip content="删除" placement="top">
+                                    <el-button size="small" text type="danger" @click="deleteWorkPath(scope.row.key)">
+                                        <el-icon><Delete /></el-icon>
+                                    </el-button>
+                                </el-tooltip>
+                            </div>
                         </template>
                     </el-table-column>
                 </el-table>
@@ -62,10 +71,12 @@
 <script>
 import { ref, reactive, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Plus, Edit, Delete } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
 
 export default {
     name: 'WorkPathConfigDialog',
+    components: { Plus, Edit, Delete },
     props: {
         modelValue: { type: Boolean, default: false },
         embedded: { type: Boolean, default: false },

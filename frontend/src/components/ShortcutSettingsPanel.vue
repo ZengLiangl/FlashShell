@@ -25,13 +25,21 @@
             <template v-if="recordingId === item.id">按下组合键…</template>
             <template v-else>{{ formatShortcut(shortcuts[item.id]) || '未设置' }}</template>
           </button>
-          <el-button size="small" text @click="resetShortcut(item.id)">重置</el-button>
+          <el-tooltip content="重置" placement="top">
+            <el-button size="small" text circle @click="resetShortcut(item.id)">
+              <el-icon><RefreshLeft /></el-icon>
+            </el-button>
+          </el-tooltip>
         </div>
       </div>
     </div>
 
     <div class="panel-actions">
-      <el-button @click="resetAll">全部重置</el-button>
+      <el-tooltip content="全部重置" placement="top">
+        <el-button circle @click="resetAll">
+          <el-icon><RefreshLeft /></el-icon>
+        </el-button>
+      </el-tooltip>
       <el-button type="primary" :loading="saving" @click="save">保存快捷键</el-button>
     </div>
   </div>

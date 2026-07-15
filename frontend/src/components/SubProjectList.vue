@@ -4,12 +4,11 @@
             <h3>可执行项目</h3>
             <div class="header-actions">
                 <el-tag v-if="selectedProject" size="small">{{ selectedProject.name }}</el-tag>
-                <el-button size="small" type="primary" text @click="$emit('back')">
-                    <el-icon>
-                        <ArrowLeft />
-                    </el-icon>
-                    返回
-                </el-button>
+                <el-tooltip content="返回" placement="top">
+                    <el-button size="small" type="primary" text circle @click="$emit('back')">
+                        <el-icon><ArrowLeft /></el-icon>
+                    </el-button>
+                </el-tooltip>
             </div>
         </div>
 
@@ -34,16 +33,19 @@
                             </div>
                         </div>
                     </div>
-                    <div class="subproject-actions">
-                        <el-button size="small" type="primary" @click="$emit('execute-sub', subProject)"
-                            :loading="isSubProjectRunning(subProject)"
-                            :disabled="status.isRunning && !isSubProjectRunning(subProject)">
-                            {{ isSubProjectRunning(subProject) ? "运行中" : "执行" }}
-                        </el-button>
-                        <el-button v-if="isSubProjectRunning(subProject)" size="small" type="danger"
-                            @click="$emit('stop-sub', subProject)">
-                            停止
-                        </el-button>
+                    <div class="subproject-actions icon-actions">
+                        <el-tooltip :content="isSubProjectRunning(subProject) ? '运行中' : '执行'" placement="top">
+                            <el-button size="small" type="primary" circle @click="$emit('execute-sub', subProject)"
+                                :loading="isSubProjectRunning(subProject)"
+                                :disabled="status.isRunning && !isSubProjectRunning(subProject)">
+                                <el-icon><VideoPlay /></el-icon>
+                            </el-button>
+                        </el-tooltip>
+                        <el-tooltip v-if="isSubProjectRunning(subProject)" content="停止" placement="top">
+                            <el-button size="small" type="danger" circle @click="$emit('stop-sub', subProject)">
+                                <el-icon><VideoPause /></el-icon>
+                            </el-button>
+                        </el-tooltip>
                     </div>
                 </div>
 
@@ -189,8 +191,7 @@ export default {
 }
 
 .subproject-actions {
-    display: flex;
-    gap: 8px;
+    flex-shrink: 0;
 }
 
 .subproject-container {

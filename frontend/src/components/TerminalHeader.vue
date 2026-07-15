@@ -29,23 +29,27 @@
                     </div>
                 </div>
             </div>
-            <div class="actions-right">
-                <el-button size="small" @click="$emit('toggle-search')">
-                    <el-icon><Search /></el-icon>
-                    搜索
-                </el-button>
-                <el-button v-if="showBack" size="small" type="primary" text @click="$emit('back')">
-                    <el-icon><ArrowLeft /></el-icon>
-                    返回
-                </el-button>
-                <el-button size="small" @click="$emit('clear')">
-                    <el-icon><Delete /></el-icon>
-                    清空
-                </el-button>
-                <el-button size="small" @click="$emit('refresh')">
-                    <el-icon><Refresh /></el-icon>
-                    刷新
-                </el-button>
+            <div class="actions-right icon-actions">
+                <el-tooltip content="搜索" placement="top">
+                    <el-button size="small" @click="$emit('toggle-search')">
+                        <el-icon><Search /></el-icon>
+                    </el-button>
+                </el-tooltip>
+                <el-tooltip v-if="showBack" content="返回" placement="top">
+                    <el-button size="small" type="primary" text @click="$emit('back')">
+                        <el-icon><ArrowLeft /></el-icon>
+                    </el-button>
+                </el-tooltip>
+                <el-tooltip content="清空" placement="top">
+                    <el-button size="small" @click="$emit('clear')">
+                        <el-icon><Delete /></el-icon>
+                    </el-button>
+                </el-tooltip>
+                <el-tooltip content="刷新" placement="top">
+                    <el-button size="small" @click="$emit('refresh')">
+                        <el-icon><Refresh /></el-icon>
+                    </el-button>
+                </el-tooltip>
             </div>
         </div>
     </div>

@@ -62,8 +62,7 @@
         <HomePage ref="homePageRef" :projects="projects" :connected-count="connectedCount" :has-task="!!selectedProject"
           :task-running="status.isRunning" :connecting-name="connectingName" @refresh="refreshConfig" @select-project="selectProject"
           @resume-task="resumeTaskView" @open-shell="enterShellMode" @connect-machine="openShellAndConnect"
-          @add-machine="openShellMachineDialog" @open-system-settings="openSettingsHub('general')"
-          @open-execution-history="openSettingsHub('history')" />
+          @add-machine="openShellMachineDialog" @open-system-settings="openSettingsHub('general')" />
       </div>
     </template>
 
@@ -935,7 +934,6 @@ export default {
       EventsOn("open:about", () => { openAbout(); });
       EventsOn("open:config-editor", () => { configEditorVisible.value = true; });
       EventsOn("open:system-settings", () => { openSettingsHub('general'); });
-      EventsOn("open:execution-history", () => { openSettingsHub('history'); });
 
       // 启动进入首页时检查新版本并弹窗
       if (activeView.value === 'home') {
@@ -1207,7 +1205,6 @@ export default {
           "open:about",
           "open:config-editor",
           "open:system-settings",
-          "open:execution-history",
           "theme:changed",
           "shortcuts:changed",
           "output:line",

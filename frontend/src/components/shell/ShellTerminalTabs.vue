@@ -1,6 +1,15 @@
 <template>
   <div class="shell-terminal-tabs">
     <div class="tabs-bar">
+      <el-button
+        class="home-btn"
+        size="small"
+        text
+        title="返回首页"
+        @click="$emit('back')"
+      >
+        <el-icon :size="14"><ArrowLeft /></el-icon>
+      </el-button>
       <el-button class="folder-btn" size="small" text title="连接管理器" @click="$emit('open-picker')">
         <el-icon :size="16"><Folder /></el-icon>
       </el-button>
@@ -21,14 +30,16 @@
       </el-tabs>
       <div v-else class="tabs-placeholder">未连接</div>
       <el-button
-        class="home-btn"
+        v-if="sessions.length"
+        class="transfer-btn"
         size="small"
         text
-        title="返回首页"
-        @click="$emit('back')"
+        title="文件传输"
+        @click="$emit('open-transfer')"
       >
-        <el-icon :size="14"><ArrowLeft /></el-icon>
-        <span class="home-btn-text">返回首页</span>
+        <el-badge :value="transferActiveCount" :hidden="!transferActiveCount" :max="99">
+          <el-icon :size="15"><Upload /></el-icon>
+        </el-badge>
       </el-button>
     </div>
 
@@ -61,21 +72,22 @@
 
 <script>
 import { ref, watch } from 'vue'
-import { ArrowLeft, Folder } from '@element-plus/icons-vue'
+import { ArrowLeft, Folder, Upload } from '@element-plus/icons-vue'
 import ShellTerminal from './ShellTerminal.vue'
 
 export default {
   name: 'ShellTerminalTabs',
-  components: { ShellTerminal, ArrowLeft, Folder },
+  components: { ShellTerminal, ArrowLeft, Folder, Upload },
   props: {
     sessions: { type: Array, default: () => [] },
     activeMachine: { type: String, default: '' },
     searchQuery: { type: String, default: '' },
     viewVisible: { type: Boolean, default: true },
+    transferActiveCount: { type: Number, default: 0 },
   },
   emits: [
     'update:activeMachine', 'close-session', 'clear', 'open-picker',
-    'cd-hint', 'back', 'open-search', 'reconnect', 'search-result',
+    'cd-hint', 'back', 'open-search', 'reconnect', 'search-result', 'open-transfer',
   ],
   setup(props, { emit, expose }) {
     const activeTab = ref(props.activeMachine)
@@ -155,9 +167,31 @@ export default {
 
 .home-btn {
   flex-shrink: 0;
+  margin-left: 0;
+  color: var(--app-text-secondary);
+  padding: 4px 10px;
+}
+
+.transfer-btn {
+  flex-shrink: 0;
   margin-left: auto;
   color: var(--app-text-secondary);
   padding: 4px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.transfer-btn:hover {
+  color: var(--app-accent-color);
+}
+
+.transfer-btn-text {
+  margin-left: 2px;
+}
+
+.transfer-btn :deep(.el-badge__content) {
+  transform: translateY(-2px) translateX(4px);
 }
 
 .home-btn:hover {

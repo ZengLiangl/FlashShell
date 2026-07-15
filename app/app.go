@@ -31,6 +31,7 @@ type App struct {
 	subProjectRunner *machine.SubProjectRunner
 	shellPool        *machine.ShellSessionPool
 	shellAuxPool     *machine.ShellAuxPool
+	transfers        *shellTransferStore
 	outputChannel    chan string
 	outputIngress    chan string
 	executionMutex   sync.RWMutex
@@ -416,6 +417,26 @@ func (a *App) GetMachines() []define.Machine {
 	return a.configManager.GetAllMachinesFromGlobal()
 }
 
+// GetMachineGroups 获取机器分组列表
+func (a *App) GetMachineGroups() []string {
+	return a.configManager.GetMachineGroups()
+}
+
+// AddMachineGroup 添加机器分组
+func (a *App) AddMachineGroup(name string) error {
+	return a.configManager.AddMachineGroup(name)
+}
+
+// RenameMachineGroup 重命名机器分组
+func (a *App) RenameMachineGroup(oldName, newName string) error {
+	return a.configManager.RenameMachineGroup(oldName, newName)
+}
+
+// DeleteMachineGroup 删除机器分组
+func (a *App) DeleteMachineGroup(name string) error {
+	return a.configManager.DeleteMachineGroup(name)
+}
+
 // AddMachine 添加机器配置（到全局配置）
 func (a *App) AddMachine(machine define.Machine) error {
 	machine.EnsureID()
@@ -627,7 +648,7 @@ func (a *App) pickImportSources(title string, filters []wailsRuntime.FileFilter)
 }
 
 // ImportXshellPick 选择并导入 Xshell 配置（支持多文件或文件夹）
-func (a *App) ImportXshellPick(accountID string) (*data.MachineImportResult, error) {
+func (a *App) ImportXshellPick(accountID, group string) (*data.MachineImportResult, error) {
 	paths, err := a.pickImportSources("选择 Xshell 文件或文件夹", []wailsRuntime.FileFilter{
 		{DisplayName: "Xshell 会话 (*.xsh)", Pattern: "*.xsh"},
 	})
@@ -637,11 +658,11 @@ func (a *App) ImportXshellPick(accountID string) (*data.MachineImportResult, err
 	if len(paths) == 0 {
 		return nil, nil
 	}
-	return a.configManager.ImportXshell(paths, accountID)
+	return a.configManager.ImportXshell(paths, accountID, group)
 }
 
 // ImportFinalShellPick 选择并导入 FinalShell 配置（支持多文件或文件夹）
-func (a *App) ImportFinalShellPick(accountID string) (*data.MachineImportResult, error) {
+func (a *App) ImportFinalShellPick(accountID, group string) (*data.MachineImportResult, error) {
 	// Pattern 必须是 macOS UTType 能识别的扩展名（如 *.json）。
 	// 使用 *_connect_config.json 这类通配会在 Wails OpenFileDialog 中
 	// 因 UTType 返回 nil 而崩溃：insertObject: object cannot be nil。
@@ -654,23 +675,23 @@ func (a *App) ImportFinalShellPick(accountID string) (*data.MachineImportResult,
 	if len(paths) == 0 {
 		return nil, nil
 	}
-	return a.configManager.ImportFinalShell(paths, accountID)
+	return a.configManager.ImportFinalShell(paths, accountID, group)
 }
 
 // ImportXshellFromFile 从路径导入 Xshell
-func (a *App) ImportXshellFromFile(filePath, accountID string) (*data.MachineImportResult, error) {
+func (a *App) ImportXshellFromFile(filePath, accountID, group string) (*data.MachineImportResult, error) {
 	if filePath == "" {
 		return nil, fmt.Errorf("未选择文件")
 	}
-	return a.configManager.ImportXshell([]string{filePath}, accountID)
+	return a.configManager.ImportXshell([]string{filePath}, accountID, group)
 }
 
 // ImportXshellFromFolder 从文件夹导入 Xshell
-func (a *App) ImportXshellFromFolder(dirPath, accountID string) (*data.MachineImportResult, error) {
+func (a *App) ImportXshellFromFolder(dirPath, accountID, group string) (*data.MachineImportResult, error) {
 	if dirPath == "" {
 		return nil, fmt.Errorf("未选择文件夹")
 	}
-	return a.configManager.ImportXshell([]string{dirPath}, accountID)
+	return a.configManager.ImportXshell([]string{dirPath}, accountID, group)
 }
 
 // GetGlobalAccounts 获取全局 SSH 帐号
@@ -860,9 +881,6 @@ func (a *App) CreateApplicationMenu() *menu.Menu {
 	// })
 	configMenu.AddText("系统设置", keys.CmdOrCtrl(","), func(_ *menu.CallbackData) {
 		a.OpenSystemSettings()
-	})
-	configMenu.AddText("执行历史", nil, func(_ *menu.CallbackData) {
-		a.OpenExecutionHistory()
 	})
 
 	// 帮助菜单

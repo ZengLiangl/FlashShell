@@ -7,8 +7,16 @@
       append-to-body
   >
     <div class="toolbar">
-      <el-input v-model="keyword" clearable placeholder="搜索机器" size="small" style="width: 220px"/>
-      <el-button size="small" type="primary" @click="$emit('add-machine')">添加机器</el-button>
+      <el-input v-model="keyword" clearable placeholder="搜索机器" size="small" style="width: 220px">
+        <template #prefix>
+          <el-icon><Search /></el-icon>
+        </template>
+      </el-input>
+      <el-tooltip content="添加机器" placement="top">
+        <el-button size="small" type="primary" circle @click="$emit('add-machine')">
+          <el-icon><Plus /></el-icon>
+        </el-button>
+      </el-tooltip>
     </div>
 
     <div v-if="filteredGroups.length === 0" class="empty">暂无机器配置</div>
@@ -31,20 +39,26 @@
             </div>
             <div class="sub">{{ machine.key_file || '密码/密钥认证' }}</div>
           </div>
-          <div class="row-actions">
-            <el-button
+          <div class="row-actions icon-actions">
+            <el-tooltip :content="isConnected(machine.name) ? '聚焦' : '连接'" placement="top">
+              <el-button
                 size="small"
-                type="primary"
+                :type="isConnected(machine.name) ? 'success' : 'primary'"
+                circle
                 :loading="connectingName === machine.name"
                 @click="$emit('connect', machine.name)"
-            >
-              {{ isConnected(machine.name) ? '聚焦' : '连接' }}
-            </el-button>
-            <el-button size="small" text title="编辑配置" @click="$emit('edit-machine', machine)">
-              <el-icon>
-                <Setting/>
-              </el-icon>
-            </el-button>
+              >
+                <el-icon>
+                  <View v-if="isConnected(machine.name)" />
+                  <Connection v-else />
+                </el-icon>
+              </el-button>
+            </el-tooltip>
+            <el-tooltip content="编辑配置" placement="top">
+              <el-button size="small" circle @click="$emit('edit-machine', machine)">
+                <el-icon><Setting /></el-icon>
+              </el-button>
+            </el-tooltip>
           </div>
         </div>
       </el-collapse-item>
@@ -152,9 +166,6 @@ export default {
 }
 
 .row-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
   flex-shrink: 0;
 }
 </style>

@@ -7,6 +7,8 @@ import {data} from '../models';
 
 export function AddMachine(arg1:define.Machine):Promise<void>;
 
+export function AddMachineGroup(arg1:string):Promise<void>;
+
 export function AddMachineWithEvent(arg1:define.Machine):Promise<void>;
 
 export function AddWorkPath(arg1:string,arg2:string):Promise<void>;
@@ -16,6 +18,8 @@ export function AddWorkPathWithEvent(arg1:string,arg2:string):Promise<void>;
 export function ApplyShellCd(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function CheckForUpdates():Promise<app.UpdateCheckResult>;
+
+export function ClearFinishedShellTransfers():Promise<void>;
 
 export function ClearMachineSensitiveData(arg1:string):Promise<void>;
 
@@ -32,6 +36,8 @@ export function CreateApplicationMenu():Promise<menu.Menu>;
 export function CreateMachine(arg1:define.Machine,arg2:define.SensitiveData):Promise<string>;
 
 export function DeleteMachine(arg1:string):Promise<void>;
+
+export function DeleteMachineGroup(arg1:string):Promise<void>;
 
 export function DeleteMachineWithEvent(arg1:string):Promise<void>;
 
@@ -69,6 +75,8 @@ export function GetGlobalConfig():Promise<data.GlobalConfig>;
 
 export function GetGlobalConfigForRefresh():Promise<data.GlobalConfig>;
 
+export function GetMachineGroups():Promise<Array<string>>;
+
 export function GetMachineSensitiveData(arg1:string):Promise<define.SensitiveData>;
 
 export function GetMachines():Promise<Array<define.Machine>>;
@@ -76,6 +84,8 @@ export function GetMachines():Promise<Array<define.Machine>>;
 export function GetOutput():Promise<Array<string>>;
 
 export function GetSessionInfo():Promise<data.SessionState>;
+
+export function GetShellDownloadDir():Promise<string>;
 
 export function GetShellHistory():Promise<Array<define.ShellHistoryRecord>>;
 
@@ -103,15 +113,17 @@ export function GetThemeSettings():Promise<data.ThemeSettings>;
 
 export function GetWorkPaths():Promise<Record<string, string>>;
 
-export function ImportFinalShellPick(arg1:string):Promise<data.MachineImportResult>;
+export function ImportFinalShellPick(arg1:string,arg2:string):Promise<data.MachineImportResult>;
 
-export function ImportXshellFromFile(arg1:string,arg2:string):Promise<data.MachineImportResult>;
+export function ImportXshellFromFile(arg1:string,arg2:string,arg3:string):Promise<data.MachineImportResult>;
 
-export function ImportXshellFromFolder(arg1:string,arg2:string):Promise<data.MachineImportResult>;
+export function ImportXshellFromFolder(arg1:string,arg2:string,arg3:string):Promise<data.MachineImportResult>;
 
-export function ImportXshellPick(arg1:string):Promise<data.MachineImportResult>;
+export function ImportXshellPick(arg1:string,arg2:string):Promise<data.MachineImportResult>;
 
 export function ListShellFiles(arg1:string,arg2:string,arg3:boolean):Promise<Array<define.SftpEntry>>;
+
+export function ListShellTransfers():Promise<Array<define.SftpTransferRecord>>;
 
 export function NewWindow():Promise<void>;
 
@@ -133,9 +145,17 @@ export function OpenMachineConfig():Promise<void>;
 
 export function OpenReleaseURL(arg1:string):Promise<void>;
 
+export function OpenShellDownloadDir():Promise<void>;
+
 export function OpenSystemSettings():Promise<void>;
 
 export function OpenWorkPathConfig():Promise<void>;
+
+export function PauseShellTransfer(arg1:string):Promise<void>;
+
+export function PickShellUploadFolder():Promise<string>;
+
+export function PickShellUploadPaths():Promise<Array<string>>;
 
 export function ReadExecutionLog(arg1:string):Promise<string>;
 
@@ -145,9 +165,15 @@ export function RefreshConfigMenuWithEvent():Promise<void>;
 
 export function RemoveShellHistory(arg1:string,arg2:string):Promise<void>;
 
+export function RemoveShellTransfer(arg1:string):Promise<void>;
+
+export function RenameMachineGroup(arg1:string,arg2:string):Promise<void>;
+
 export function ResizeShell(arg1:string,arg2:number,arg3:number):Promise<void>;
 
 export function ResolveShellPath(arg1:string,arg2:string,arg3:string):Promise<string>;
+
+export function ResumeShellTransfer(arg1:string):Promise<void>;
 
 export function SaveConfig(arg1:define.Root):Promise<void>;
 
@@ -178,6 +204,10 @@ export function SetMachineSensitiveData(arg1:string,arg2:define.SensitiveData):P
 export function ShellDirExists(arg1:string,arg2:string):Promise<boolean>;
 
 export function SkipUpdateVersion(arg1:string):Promise<void>;
+
+export function StartShellDownload(arg1:string,arg2:string):Promise<string>;
+
+export function StartShellUpload(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function StopAllCommands():Promise<void>;
 

@@ -3,38 +3,75 @@
         <div class="machine-list">
             <div class="list-header">
                 <h4 v-if="!embedded">机器列表</h4>
-                <div v-else></div>
+                <div v-else class="list-header-spacer"></div>
                 <div class="header-actions">
-                    <el-input
-                        v-model="machineKeyword"
-                        clearable
-                        size="small"
-                        placeholder="搜索机器名称 / 分组"
-                        class="list-search"
-                    />
-                    <el-select
-                        v-model="importAccountId"
-                        clearable
-                        placeholder="导入时使用全局帐号(可选)"
-                        class="import-account-select"
-                    >
-                        <el-option
-                            v-for="account in globalAccounts"
-                            :key="account.id"
-                            :label="account.name"
-                            :value="account.id"
-                        />
-                    </el-select>
-                    <el-dropdown split-button type="primary" @click="addMachine" @command="handleAddCommand">
-                        <el-icon><Plus /></el-icon>
-                        添加机器
-                        <template #dropdown>
-                            <el-dropdown-menu>
-                                <el-dropdown-item command="import-xshell">导入 Xshell</el-dropdown-item>
-                                <el-dropdown-item command="import-finalshell">导入 FinalShell</el-dropdown-item>
-                            </el-dropdown-menu>
-                        </template>
-                    </el-dropdown>
+                    <div class="filter-bar">
+                        <el-input
+                            v-model="machineKeyword"
+                            clearable
+                            size="small"
+                            placeholder="搜索名称 / 分组"
+                            class="list-search"
+                        >
+                            <template #prefix>
+                                <el-icon class="filter-icon"><Search /></el-icon>
+                            </template>
+                        </el-input>
+                        <el-select
+                            v-model="importGroup"
+                            clearable
+                            filterable
+                            allow-create
+                            default-first-option
+                            size="small"
+                            placeholder="导入分组"
+                            class="import-group-select"
+                        >
+                            <el-option
+                                v-for="g in groupOptions"
+                                :key="g"
+                                :label="g"
+                                :value="g === DEFAULT_MACHINE_GROUP ? '' : g"
+                            />
+                        </el-select>
+                        <el-select
+                            v-model="importAccountId"
+                            clearable
+                            size="small"
+                            placeholder="导入帐号"
+                            class="import-account-select"
+                        >
+                            <el-option
+                                v-for="account in globalAccounts"
+                                :key="account.id"
+                                :label="account.name"
+                                :value="account.id"
+                            />
+                        </el-select>
+                    </div>
+                    <div class="toolbar-ops icon-actions">
+                        <el-tooltip content="分组管理" placement="top">
+                            <el-button size="small" circle @click="groupManageVisible = true">
+                                <el-icon><FolderOpened /></el-icon>
+                            </el-button>
+                        </el-tooltip>
+                        <el-tooltip content="添加机器" placement="top">
+                            <el-button size="small" type="primary" circle @click="addMachine">
+                                <el-icon><Plus /></el-icon>
+                            </el-button>
+                        </el-tooltip>
+                        <el-dropdown trigger="click" @command="handleAddCommand">
+                            <el-button size="small" circle title="导入机器">
+                                <el-icon><Upload /></el-icon>
+                            </el-button>
+                            <template #dropdown>
+                                <el-dropdown-menu>
+                                    <el-dropdown-item command="import-xshell">导入 Xshell</el-dropdown-item>
+                                    <el-dropdown-item command="import-finalshell">导入 FinalShell</el-dropdown-item>
+                                </el-dropdown-menu>
+                            </template>
+                        </el-dropdown>
+                    </div>
                 </div>
             </div>
 
@@ -48,17 +85,29 @@
                     <el-table-column prop="name" label="机器名称" width="150" />
                     <el-table-column prop="group" label="分组" width="120">
                         <template #default="scope">
-                            {{ scope.row.group || '默认分组' }}
+                            {{ scope.row.group || DEFAULT_MACHINE_GROUP }}
                         </template>
                     </el-table-column>
                     <el-table-column prop="key_file" label="密钥文件" overflow-tooltip />
-                    <el-table-column label="操作" width="250">
+                    <el-table-column label="操作" width="130" align="center">
                         <template #default="scope">
-                            <el-button size="small" @click="editMachine(scope.row)">编辑</el-button>
-                            <el-button size="small" @click="testConnection(scope.row)" :loading="scope.row.testing">
-                                测试连接
-                            </el-button>
-                            <el-button size="small" type="danger" @click="deleteMachine(scope.row)">删除</el-button>
+                            <div class="icon-actions">
+                                <el-tooltip content="编辑" placement="top">
+                                    <el-button size="small" text type="primary" @click="editMachine(scope.row)">
+                                        <el-icon><Edit /></el-icon>
+                                    </el-button>
+                                </el-tooltip>
+                                <el-tooltip content="测试连接" placement="top">
+                                    <el-button size="small" text type="success" :loading="scope.row.testing" @click="testConnection(scope.row)">
+                                        <el-icon><Connection /></el-icon>
+                                    </el-button>
+                                </el-tooltip>
+                                <el-tooltip content="删除" placement="top">
+                                    <el-button size="small" text type="danger" @click="deleteMachine(scope.row)">
+                                        <el-icon><Delete /></el-icon>
+                                    </el-button>
+                                </el-tooltip>
+                            </div>
                         </template>
                     </el-table-column>
                 </el-table>
@@ -77,7 +126,22 @@
                 </el-form-item>
 
                 <el-form-item label="分组" prop="group">
-                    <el-input v-model="machineForm.group" placeholder="留空则归入默认分组" />
+                    <el-select
+                        v-model="machineForm.group"
+                        clearable
+                        filterable
+                        allow-create
+                        default-first-option
+                        placeholder="选择或输入分组，留空为默认分组"
+                        style="width: 100%"
+                    >
+                        <el-option
+                            v-for="g in groupOptions"
+                            :key="g"
+                            :label="g"
+                            :value="g === DEFAULT_MACHINE_GROUP ? '' : g"
+                        />
+                    </el-select>
                 </el-form-item>
 
                 <el-form-item label="全局帐号">
@@ -100,7 +164,11 @@
                 <el-form-item label="密钥文件" prop="key_file">
                     <div class="key-file-input">
                         <el-input v-model="machineForm.key_file" placeholder="请选择密钥文件" readonly />
-                        <el-button type="primary" @click="selectKeyFile">选择文件</el-button>
+                        <el-tooltip content="选择文件" placement="top">
+                            <el-button type="primary" circle @click="selectKeyFile">
+                                <el-icon><Folder /></el-icon>
+                            </el-button>
+                        </el-tooltip>
                     </div>
                 </el-form-item>
 
@@ -126,11 +194,48 @@
             <template #footer>
                 <div class="dialog-footer">
                     <el-button @click="machineEditVisible = false">取消</el-button>
-                    <el-button :loading="testingDraft" @click="testDraftConnection">测试连接</el-button>
+                    <el-tooltip content="测试连接" placement="top">
+                        <el-button :loading="testingDraft" circle @click="testDraftConnection">
+                            <el-icon><Connection /></el-icon>
+                        </el-button>
+                    </el-tooltip>
                     <el-button type="primary" @click="saveMachine" :loading="savingMachine">
                         {{ editingMachine ? '更新' : '添加' }}
                     </el-button>
                 </div>
+            </template>
+        </el-dialog>
+
+        <el-dialog v-model="groupManageVisible" title="分组管理" width="480px" append-to-body @open="loadGroups">
+            <div class="group-add-row">
+                <el-input v-model="newGroupName" placeholder="新分组名称" clearable @keydown.enter.exact.prevent="addGroup" />
+                <el-tooltip content="添加分组" placement="top">
+                    <el-button type="primary" circle @click="addGroup">
+                        <el-icon><Plus /></el-icon>
+                    </el-button>
+                </el-tooltip>
+            </div>
+            <el-table :data="managedGroups" size="small" empty-text="暂无自定义分组">
+                <el-table-column prop="name" label="分组名称" />
+                <el-table-column label="操作" width="100" align="center">
+                    <template #default="{ row }">
+                        <div class="icon-actions">
+                            <el-tooltip content="重命名" placement="top">
+                                <el-button size="small" text type="primary" @click="renameGroup(row.name)">
+                                    <el-icon><Edit /></el-icon>
+                                </el-button>
+                            </el-tooltip>
+                            <el-tooltip content="删除" placement="top">
+                                <el-button size="small" text type="danger" @click="deleteGroup(row.name)">
+                                    <el-icon><Delete /></el-icon>
+                                </el-button>
+                            </el-tooltip>
+                        </div>
+                    </template>
+                </el-table-column>
+            </el-table>
+            <template #footer>
+                <el-button @click="groupManageVisible = false">关闭</el-button>
             </template>
         </el-dialog>
     </div>
@@ -140,7 +245,14 @@
 import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
+    Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder,
+} from '@element-plus/icons-vue'
+import {
     GetMachines,
+    GetMachineGroups,
+    AddMachineGroup,
+    RenameMachineGroup,
+    DeleteMachineGroup,
     GetGlobalAccounts,
     GetMachineSensitiveData,
     UpdateMachine,
@@ -153,10 +265,13 @@ import {
     ImportXshellPick,
     ImportFinalShellPick,
 } from '../../wailsjs/go/app/App'
-import { sortMachinesByName } from '../utils/machineGroups'
+import { DEFAULT_MACHINE_GROUP, sortMachinesByName } from '../utils/machineGroups'
 
 export default {
     name: 'MachineConfigDialog',
+    components: {
+        Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder,
+    },
     props: {
         modelValue: { type: Boolean, default: false },
         embedded: { type: Boolean, default: false },
@@ -167,6 +282,7 @@ export default {
     setup(props, { emit }) {
         const visibleProxy = ref(props.modelValue)
         const machines = ref([])
+        const machineGroups = ref([])
         const machineKeyword = ref('')
         const sortedMachines = computed(() => sortMachinesByName(machines.value))
         const filteredMachines = computed(() => {
@@ -179,15 +295,37 @@ export default {
                 (m.key_file || '').toLowerCase().includes(kw)
             )
         })
+        const groupOptions = computed(() => {
+            const set = new Set([DEFAULT_MACHINE_GROUP])
+            for (const g of machineGroups.value || []) {
+                if (g) set.add(g)
+            }
+            for (const m of machines.value || []) {
+                if (m.group) set.add(m.group)
+            }
+            return Array.from(set).sort((a, b) => {
+                if (a === DEFAULT_MACHINE_GROUP) return -1
+                if (b === DEFAULT_MACHINE_GROUP) return 1
+                return a.localeCompare(b, 'zh-CN')
+            })
+        })
+        const managedGroups = computed(() =>
+            (machineGroups.value || [])
+                .filter((g) => g && g !== DEFAULT_MACHINE_GROUP)
+                .map((name) => ({ name })),
+        )
         const globalAccounts = ref([])
         const machinesLoading = ref(false)
         const machineEditVisible = ref(false)
+        const groupManageVisible = ref(false)
+        const newGroupName = ref('')
         const savingMachine = ref(false)
         const testingDraft = ref(false)
         const editingMachine = ref(null)
         const machineFormRef = ref(null)
         const selectedAccountId = ref('')
         const importAccountId = ref('')
+        const importGroup = ref('')
 
         const machineForm = reactive({
             name: '',
@@ -210,11 +348,20 @@ export default {
             visibleProxy.value = false
         }
 
+        const loadGroups = async () => {
+            try {
+                machineGroups.value = await GetMachineGroups() || []
+            } catch {
+                machineGroups.value = []
+            }
+        }
+
         const loadMachines = async () => {
             try {
                 machinesLoading.value = true
                 const machinesData = await GetMachines()
                 machines.value = machinesData || []
+                await loadGroups()
             } catch (error) {
                 console.error('加载机器配置失败:', error)
                 ElMessage.error('加载机器配置失败: ' + error.message)
@@ -301,6 +448,12 @@ export default {
             machineForm.password = ''
         }
 
+        const normalizeGroup = (g) => {
+            const s = String(g || '').trim()
+            if (!s || s === DEFAULT_MACHINE_GROUP) return ''
+            return s
+        }
+
         const saveMachine = async () => {
             if (!machineFormRef.value) return
             try {
@@ -308,7 +461,7 @@ export default {
                 savingMachine.value = true
                 const machineData = {
                     name: machineForm.name,
-                    group: machineForm.group,
+                    group: normalizeGroup(machineForm.group),
                     key_file: machineForm.key_file
                 }
                 const sensitiveData = {
@@ -372,7 +525,7 @@ export default {
                 await TestMachineDraftConnection(
                     {
                         name: machineForm.name || 'draft-test',
-                        group: machineForm.group,
+                        group: normalizeGroup(machineForm.group),
                         key_file: machineForm.key_file,
                     },
                     {
@@ -420,7 +573,7 @@ export default {
         const importXshell = async () => {
             if (!ensureImportApi(ImportXshellPick, 'Xshell 导入')) return
             try {
-                const result = await ImportXshellPick(importAccountId.value || '')
+                const result = await ImportXshellPick(importAccountId.value || '', normalizeGroup(importGroup.value))
                 if (!result) return
                 showImportResult(result)
                 await loadMachines()
@@ -433,7 +586,7 @@ export default {
         const importFinalShell = async () => {
             if (!ensureImportApi(ImportFinalShellPick, 'FinalShell 导入')) return
             try {
-                const result = await ImportFinalShellPick(importAccountId.value || '')
+                const result = await ImportFinalShellPick(importAccountId.value || '', normalizeGroup(importGroup.value))
                 if (!result) return
                 showImportResult(result)
                 await loadMachines()
@@ -448,16 +601,78 @@ export default {
             else if (command === 'import-xshell') importXshell()
         }
 
+        const addGroup = async () => {
+            const name = newGroupName.value.trim()
+            if (!name) {
+                ElMessage.warning('请输入分组名称')
+                return
+            }
+            try {
+                await AddMachineGroup(name)
+                newGroupName.value = ''
+                ElMessage.success('分组已添加')
+                await loadGroups()
+                emit('changed')
+            } catch (e) {
+                ElMessage.error('添加分组失败: ' + e)
+            }
+        }
+
+        const renameGroup = async (oldName) => {
+            try {
+                const { value } = await ElMessageBox.prompt('请输入新的分组名称', '重命名分组', {
+                    inputValue: oldName,
+                    confirmButtonText: '确定',
+                    cancelButtonText: '取消',
+                    inputValidator: (v) => {
+                        const s = String(v || '').trim()
+                        if (!s) return '名称不能为空'
+                        if (s === DEFAULT_MACHINE_GROUP) return '不能使用默认分组名称'
+                        return true
+                    },
+                })
+                await RenameMachineGroup(oldName, String(value).trim())
+                ElMessage.success('分组已重命名')
+                await loadMachines()
+                emit('changed')
+            } catch (e) {
+                if (e === 'cancel') return
+                ElMessage.error('重命名失败: ' + e)
+            }
+        }
+
+        const deleteGroup = async (name) => {
+            try {
+                await ElMessageBox.confirm(
+                    `删除分组「${name}」后，该分组下的机器将归入「${DEFAULT_MACHINE_GROUP}」。确定删除？`,
+                    '删除分组',
+                    { type: 'warning' },
+                )
+                await DeleteMachineGroup(name)
+                ElMessage.success('分组已删除')
+                await loadMachines()
+                emit('changed')
+            } catch (e) {
+                if (e === 'cancel') return
+                ElMessage.error('删除失败: ' + e)
+            }
+        }
+
         return {
             embedded: computed(() => props.embedded),
+            DEFAULT_MACHINE_GROUP,
             visibleProxy,
             machines,
             sortedMachines,
             filteredMachines,
+            groupOptions,
+            managedGroups,
             machineKeyword,
             globalAccounts,
             machinesLoading,
             machineEditVisible,
+            groupManageVisible,
+            newGroupName,
             savingMachine,
             testingDraft,
             editingMachine,
@@ -465,6 +680,8 @@ export default {
             machineForm,
             machineRules,
             selectedAccountId,
+            importAccountId,
+            importGroup,
             handleClose,
             addMachine,
             editMachine,
@@ -475,7 +692,10 @@ export default {
             selectKeyFile,
             applyGlobalAccount,
             handleAddCommand,
-            importAccountId
+            loadGroups,
+            addGroup,
+            renameGroup,
+            deleteGroup,
         }
     }
 }
@@ -509,28 +729,69 @@ export default {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 12px;
+    gap: 12px;
+    margin-bottom: 14px;
     flex-shrink: 0;
 }
 
+.list-header-spacer {
+    flex: 0;
+}
+
 .header-actions {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    min-width: 0;
+}
+
+.filter-bar {
     display: flex;
     align-items: center;
     gap: 8px;
     flex-wrap: wrap;
-    justify-content: flex-end;
+    padding: 6px 10px;
+    border-radius: 10px;
+    background: color-mix(in srgb, var(--el-fill-color-light, #f5f7fa) 88%, transparent);
+    border: 1px solid color-mix(in srgb, var(--el-border-color-lighter, #ebeef5) 80%, transparent);
+}
+
+.filter-icon {
+    color: var(--el-text-color-secondary);
 }
 
 .list-search {
-    width: 200px;
+    width: 168px;
+}
+
+.import-group-select {
+    width: 128px;
 }
 
 .import-account-select {
-    width: 220px;
+    width: 140px;
 }
 
-.import-account-select :deep(.el-select__wrapper) {
-    min-height: 32px;
+.filter-bar :deep(.el-input__wrapper),
+.filter-bar :deep(.el-select__wrapper) {
+    box-shadow: none !important;
+    background: transparent;
+    border-radius: 6px;
+}
+
+.filter-bar :deep(.el-input__wrapper:hover),
+.filter-bar :deep(.el-select__wrapper:hover),
+.filter-bar :deep(.el-input__wrapper.is-focus),
+.filter-bar :deep(.el-select__wrapper.is-focused) {
+    background: var(--el-bg-color, #fff);
+    box-shadow: 0 0 0 1px var(--el-border-color, #dcdfe6) inset !important;
+}
+
+.toolbar-ops {
+    flex-shrink: 0;
 }
 
 .machine-table-wrap {
@@ -546,5 +807,11 @@ export default {
     display: flex;
     gap: 8px;
     width: 100%;
+}
+
+.group-add-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
 }
 </style>

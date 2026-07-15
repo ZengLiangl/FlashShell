@@ -114,6 +114,12 @@ func main() {
 				return windows.Light
 			}(),
 		},
+		DragAndDrop: &options.DragAndDrop{
+			EnableFileDrop:     true,
+			DisableWebViewDrop: false, // Windows 上与 EnableFileDrop 同为 true 会导致拖放失效
+			CSSDropProperty:    "--wails-drop-target",
+			CSSDropValue:       "drop",
+		},
 		// 绑定后端结构体到前端
 		Bind: []interface{}{
 			appInstance,

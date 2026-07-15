@@ -132,6 +132,7 @@ export namespace data {
 	    lastOpenedFile: string;
 	    workPaths: Record<string, string>;
 	    machines?: define.Machine[];
+	    machineGroups?: string[];
 	    globalAccounts?: GlobalAccount[];
 	    logSettings: LogSettings;
 	    themeSettings: ThemeSettings;
@@ -148,6 +149,7 @@ export namespace data {
 	        this.lastOpenedFile = source["lastOpenedFile"];
 	        this.workPaths = source["workPaths"];
 	        this.machines = this.convertValues(source["machines"], define.Machine);
+	        this.machineGroups = source["machineGroups"];
 	        this.globalAccounts = this.convertValues(source["globalAccounts"], GlobalAccount);
 	        this.logSettings = this.convertValues(source["logSettings"], LogSettings);
 	        this.themeSettings = this.convertValues(source["themeSettings"], ThemeSettings);
@@ -535,6 +537,48 @@ export namespace define {
 	        this.owner = source["owner"];
 	        this.group = source["group"];
 	        this.type = source["type"];
+	    }
+	}
+	export class SftpTransferRecord {
+	    id: string;
+	    machineName: string;
+	    direction: string;
+	    name: string;
+	    localPath: string;
+	    remotePath: string;
+	    isDir: boolean;
+	    status: string;
+	    total: number;
+	    transferred: number;
+	    percent: number;
+	    speedBps: number;
+	    error?: string;
+	    startedAt: number;
+	    updatedAt: number;
+	    finishedAt?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SftpTransferRecord(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.machineName = source["machineName"];
+	        this.direction = source["direction"];
+	        this.name = source["name"];
+	        this.localPath = source["localPath"];
+	        this.remotePath = source["remotePath"];
+	        this.isDir = source["isDir"];
+	        this.status = source["status"];
+	        this.total = source["total"];
+	        this.transferred = source["transferred"];
+	        this.percent = source["percent"];
+	        this.speedBps = source["speedBps"];
+	        this.error = source["error"];
+	        this.startedAt = source["startedAt"];
+	        this.updatedAt = source["updatedAt"];
+	        this.finishedAt = source["finishedAt"];
 	    }
 	}
 	export class ShellHistoryRecord {

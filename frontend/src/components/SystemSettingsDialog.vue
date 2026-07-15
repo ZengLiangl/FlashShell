@@ -3,7 +3,11 @@
         <el-form label-width="120px">
             <el-divider content-position="left">全局 SSH 帐号</el-divider>
             <div class="account-toolbar">
-                <el-button size="small" type="primary" @click="addAccount">添加帐号</el-button>
+                <el-tooltip content="添加帐号" placement="top">
+                    <el-button size="small" type="primary" circle @click="addAccount">
+                        <el-icon><Plus /></el-icon>
+                    </el-button>
+                </el-tooltip>
             </div>
             <el-table :data="accounts" size="small" style="width: 100%; margin-bottom: 16px;">
                 <el-table-column prop="name" label="帐号名称" width="160" />
@@ -13,21 +17,23 @@
                         {{ scope.row.password ? '******' : '未设置' }}
                     </template>
                 </el-table-column>
-                <el-table-column label="操作" width="140">
+                <el-table-column label="操作" width="100" align="center">
                     <template #default="scope">
-                        <el-button size="small" link @click="editAccount(scope.$index)">编辑</el-button>
-                        <el-button size="small" link type="danger" @click="removeAccount(scope.$index)">删除</el-button>
+                        <div class="icon-actions">
+                            <el-tooltip content="编辑" placement="top">
+                                <el-button size="small" text type="primary" @click="editAccount(scope.$index)">
+                                    <el-icon><Edit /></el-icon>
+                                </el-button>
+                            </el-tooltip>
+                            <el-tooltip content="删除" placement="top">
+                                <el-button size="small" text type="danger" @click="removeAccount(scope.$index)">
+                                    <el-icon><Delete /></el-icon>
+                                </el-button>
+                            </el-tooltip>
+                        </div>
                     </template>
                 </el-table-column>
             </el-table>
-
-            <el-divider content-position="left">执行日志</el-divider>
-            <el-form-item label="日志落盘">
-                <el-switch v-model="form.logSettings.enabled" />
-            </el-form-item>
-            <el-form-item label="落盘路径">
-                <el-input v-model="form.logSettings.path" placeholder="~/.flashdock/logs" />
-            </el-form-item>
 
             <el-divider content-position="left">外观</el-divider>
             <el-form-item label="界面主题">
@@ -74,16 +80,17 @@
                 <span class="version-text">{{ appVersion }}</span>
             </el-form-item>
             <el-form-item label="检查更新">
-                <div class="update-row">
-                    <el-button size="small" :loading="checkingUpdate" @click="checkUpdate">检查更新</el-button>
-                    <el-button
-                        v-if="updateResult?.hasUpdate && updateResult?.releaseURL"
-                        size="small"
-                        type="primary"
-                        @click="openRelease"
-                    >
-                        打开下载页
-                    </el-button>
+                <div class="update-row icon-actions">
+                    <el-tooltip content="检查更新" placement="top">
+                        <el-button size="small" :loading="checkingUpdate" circle @click="checkUpdate">
+                            <el-icon><Refresh /></el-icon>
+                        </el-button>
+                    </el-tooltip>
+                    <el-tooltip v-if="updateResult?.hasUpdate && updateResult?.releaseURL" content="打开下载页" placement="top">
+                        <el-button size="small" type="primary" circle @click="openRelease">
+                            <el-icon><Link /></el-icon>
+                        </el-button>
+                    </el-tooltip>
                 </div>
                 <div v-if="updateResult?.hasUpdate" class="update-tip warn">
                     发现新版本 {{ updateResult.latestVersion }}
@@ -124,11 +131,13 @@
 <script>
 import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
+import { Edit, Delete, Refresh, Link, Plus } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
 import { useTheme } from '../composables/useTheme'
 
 export default {
     name: 'SystemSettingsDialog',
+    components: { Edit, Delete, Refresh, Link, Plus },
     props: {
         modelValue: { type: Boolean, default: false },
         embedded: { type: Boolean, default: false },
@@ -148,7 +157,6 @@ export default {
         const accountForm = reactive({ id: '', name: '', user: '', password: '' })
         const { applyThemeSettings } = useTheme()
         const form = reactive({
-            logSettings: { enabled: false, path: '~/.flashdock/logs' },
             themeSettings: { mode: 'light', terminalPreset: 'classic', shellFontSize: 13, shellLineHeight: 1.2 }
         })
 
@@ -159,7 +167,6 @@ export default {
 
         const load = async () => {
             const config = await App.GetSystemSettings()
-            form.logSettings = { ...config.logSettings }
             form.themeSettings = {
                 mode: config.themeSettings?.mode || 'light',
                 terminalPreset: config.themeSettings?.terminalPreset || 'classic',
@@ -272,7 +279,6 @@ export default {
             saving.value = true
             try {
                 const config = await App.GetSystemSettings()
-                config.logSettings = { ...form.logSettings }
                 config.themeSettings = { ...form.themeSettings }
                 await App.SaveSystemSettings(config)
                 applyThemeSettings(form.themeSettings)
@@ -334,10 +340,7 @@ export default {
 }
 
 .update-row {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
+    /* alignment via .icon-actions */
 }
 
 .update-tip {

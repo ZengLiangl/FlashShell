@@ -38,6 +38,7 @@
           :active-machine="activeMachine"
           :search-query="searchQuery"
           :view-visible="active"
+          :transfer-active-count="transferActiveCount"
           @update:active-machine="(name) => $emit('update:activeMachine', name)"
           @close-session="(name) => $emit('close-session', name)"
           @reconnect="onReconnect"
@@ -47,6 +48,7 @@
           @back="$emit('back')"
           @open-search="openSearch"
           @search-result="onSearchResult"
+          @open-transfer="transferVisible = true"
         >
           <template #empty>
             <div v-if="connectingName" class="shell-connecting">
@@ -91,6 +93,11 @@
       :app-info="appInfo"
     />
 
+    <ShellTransferPanel
+      v-model="transferVisible"
+      @active-change="(n) => { transferActiveCount = n }"
+    />
+
     <ShellMachinePickerDialog
       v-model="pickerVisible"
       :machines="machines"
@@ -112,6 +119,7 @@ import ShellStatusBar from '../components/shell/ShellStatusBar.vue'
 import ShellConnectionHistory from '../components/shell/ShellConnectionHistory.vue'
 import ShellMachinePickerDialog from '../components/shell/ShellMachinePickerDialog.vue'
 import ShellFilePanel from '../components/shell/ShellFilePanel.vue'
+import ShellTransferPanel from '../components/shell/ShellTransferPanel.vue'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import { mergeShortcuts, matchesShortcut } from '../utils/shortcuts'
@@ -125,6 +133,7 @@ export default {
     ShellConnectionHistory,
     ShellMachinePickerDialog,
     ShellFilePanel,
+    ShellTransferPanel,
   },
   props: {
     active: { type: Boolean, default: true },
@@ -152,6 +161,8 @@ export default {
     const searchQuery = ref('')
     const searchMatchSummary = ref('')
     const pickerVisible = ref(false)
+    const transferVisible = ref(false)
+    const transferActiveCount = ref(0)
     const historyRecords = ref([])
     const cwdHints = reactive({})
     const ptyCwds = reactive({})
@@ -448,6 +459,8 @@ export default {
       searchQuery,
       searchMatchSummary,
       pickerVisible,
+      transferVisible,
+      transferActiveCount,
       historyRecords,
       cwdHints,
       activeConnected,

@@ -30,9 +30,11 @@
 
         <div class="status-actions">
             <transition name="button-slide">
-                <el-button v-if="status.isRunning" size="small" type="danger" @click="$emit('stop-all')">
-                    停止执行
-                </el-button>
+                <el-tooltip content="停止执行" placement="top">
+                    <el-button v-if="status.isRunning" size="small" type="danger" circle @click="$emit('stop-all')">
+                        <el-icon><VideoPause /></el-icon>
+                    </el-button>
+                </el-tooltip>
             </transition>
 
             <span class="app-info">{{ appInfo }}</span>

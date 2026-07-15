@@ -45,7 +45,7 @@ func ParseFinalShellFile(path string) (*finalShellConfig, error) {
 }
 
 // ImportFinalShellFiles 批量导入 FinalShell 配置
-func (gcm *GlobalConfigManager) ImportFinalShellFiles(paths []string, accountID string) (*MachineImportResult, error) {
+func (gcm *GlobalConfigManager) ImportFinalShellFiles(paths []string, accountID, group string) (*MachineImportResult, error) {
 	if gcm.config == nil {
 		if _, err := gcm.LoadGlobalConfig(); err != nil {
 			return nil, err
@@ -57,6 +57,7 @@ func (gcm *GlobalConfigManager) ImportFinalShellFiles(paths []string, accountID 
 		return nil, err
 	}
 
+	group = strings.TrimSpace(group)
 	result := &MachineImportResult{}
 	accountUser, accountPassword := "", defaultFinalShellPassword
 	if accountID != "" {
@@ -85,11 +86,15 @@ func (gcm *GlobalConfigManager) ImportFinalShellFiles(paths []string, accountID 
 		machine := gcm.findMachineByName(session.Name)
 		if machine == nil {
 			machine = &define.Machine{
-				ID:   uuid.NewString(),
-				Name: session.Name,
+				ID:    uuid.NewString(),
+				Name:  session.Name,
+				Group: group,
 			}
 		} else {
 			machine.EnsureID()
+			if group != "" {
+				machine.Group = group
+			}
 		}
 
 		sensitive := &define.SensitiveData{
@@ -104,6 +109,7 @@ func (gcm *GlobalConfigManager) ImportFinalShellFiles(paths []string, accountID 
 			continue
 		}
 
+		gcm.EnsureMachineGroupRegistered(machine.Group)
 		if err := gcm.upsertMachine(machine); err != nil {
 			result.Errors = append(result.Errors, fmt.Sprintf("%s: %v", session.Name, err))
 			result.Skipped++

@@ -1,7 +1,9 @@
 package utils
 
 import (
+	"archive/tar"
 	"archive/zip"
+	"compress/gzip"
 	"fmt"
 	"io"
 	"os"
@@ -78,6 +80,137 @@ func LocalZip(dirPath, outFullName string) error {
 	})
 	if err != nil {
 		return fmt.Errorf("遍历目录并压缩文件时出错: %v", err)
+	}
+	return nil
+}
+
+// LocalUnzip 将 zip 解压到目标目录（防路径穿越）
+func LocalUnzip(zipPath, destDir string) error {
+	r, err := zip.OpenReader(zipPath)
+	if err != nil {
+		return fmt.Errorf("打开ZIP失败: %w", err)
+	}
+	defer r.Close()
+
+	destAbs, err := filepath.Abs(destDir)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(destAbs, 0o755); err != nil {
+		return err
+	}
+
+	for _, f := range r.File {
+		name := filepath.Clean(filepath.FromSlash(f.Name))
+		if name == "." || name == "" {
+			continue
+		}
+		target := filepath.Join(destAbs, name)
+		rel, err := filepath.Rel(destAbs, target)
+		if err != nil || strings.HasPrefix(rel, "..") {
+			return fmt.Errorf("非法ZIP路径: %s", f.Name)
+		}
+		if f.FileInfo().IsDir() {
+			if err := os.MkdirAll(target, 0o755); err != nil {
+				return err
+			}
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		rc, err := f.Open()
+		if err != nil {
+			return err
+		}
+		out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, f.Mode())
+		if err != nil {
+			rc.Close()
+			return err
+		}
+		_, copyErr := io.Copy(out, rc)
+		closeErr := out.Close()
+		rc.Close()
+		if copyErr != nil {
+			return copyErr
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+	}
+	return nil
+}
+
+// LocalExtractTarGz 用纯 Go 解压 tar.gz（避免 Windows 系统 tar 把 C: 当成远程主机）
+func LocalExtractTarGz(archivePath, destDir string) error {
+	f, err := os.Open(archivePath)
+	if err != nil {
+		return fmt.Errorf("打开压缩包失败: %w", err)
+	}
+	defer f.Close()
+
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return fmt.Errorf("打开 gzip 失败: %w", err)
+	}
+	defer gz.Close()
+
+	tr := tar.NewReader(gz)
+	destAbs, err := filepath.Abs(destDir)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(destAbs, 0o755); err != nil {
+		return err
+	}
+
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return fmt.Errorf("读取 tar 失败: %w", err)
+		}
+		name := filepath.Clean(filepath.FromSlash(hdr.Name))
+		if name == "." || name == "" {
+			continue
+		}
+		target := filepath.Join(destAbs, name)
+		rel, err := filepath.Rel(destAbs, target)
+		if err != nil || strings.HasPrefix(rel, "..") {
+			return fmt.Errorf("非法 tar 路径: %s", hdr.Name)
+		}
+
+		switch hdr.Typeflag {
+		case tar.TypeDir:
+			if err := os.MkdirAll(target, 0o755); err != nil {
+				return err
+			}
+		case tar.TypeReg, tar.TypeRegA:
+			if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+				return err
+			}
+			mode := os.FileMode(hdr.Mode)
+			if mode == 0 {
+				mode = 0o644
+			}
+			out, err := os.OpenFile(target, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, mode)
+			if err != nil {
+				return err
+			}
+			_, copyErr := io.Copy(out, tr)
+			closeErr := out.Close()
+			if copyErr != nil {
+				return copyErr
+			}
+			if closeErr != nil {
+				return closeErr
+			}
+		default:
+			// 跳过符号链接等，避免跨平台问题
+			continue
+		}
 	}
 	return nil
 }

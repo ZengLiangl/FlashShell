@@ -102,16 +102,14 @@ exit /b 1
 :have_tag
 git rev-parse -q --verify "refs/tags/!NEW_TAG!" >nul 2>&1
 if not errorlevel 1 (
-  echo [ERROR] local tag already exists: !NEW_TAG!
-  popd >nul
-  exit /b 1
+  echo [INFO] delete local tag !NEW_TAG!
+  git tag -d "!NEW_TAG!" >nul 2>&1
 )
 
 git ls-remote --tags --exit-code %REMOTE% "refs/tags/!NEW_TAG!" >nul 2>&1
 if not errorlevel 1 (
-  echo [ERROR] remote tag already exists: !NEW_TAG!
-  popd >nul
-  exit /b 1
+  echo [INFO] delete remote tag !NEW_TAG!
+  git push %REMOTE% ":refs/tags/!NEW_TAG!" >nul 2>&1
 )
 
 set "MSG=%TAG_PREFIX% !NEW_TAG!"

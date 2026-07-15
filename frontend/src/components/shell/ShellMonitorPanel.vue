@@ -21,7 +21,11 @@
         <div class="label">IP</div>
         <div class="value-row">
           <span class="mono">{{ snapshot?.host || '-' }}</span>
-          <el-button size="small" text :disabled="!snapshot?.host" @click="copyHost">复制</el-button>
+          <el-tooltip content="复制" placement="top">
+            <el-button size="small" text type="primary" :disabled="!snapshot?.host" @click="copyHost">
+              <el-icon><CopyDocument /></el-icon>
+            </el-button>
+          </el-tooltip>
         </div>
       </div>
 

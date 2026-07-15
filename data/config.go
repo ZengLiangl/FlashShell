@@ -159,6 +159,34 @@ func (cm *ConfigManager) AddMachineToGlobal(machine *define.Machine) error {
 	return cm.globalConfigManager.AddMachine(machine)
 }
 
+func (cm *ConfigManager) GetMachineGroups() []string {
+	if cm.globalConfigManager == nil {
+		return []string{}
+	}
+	return cm.globalConfigManager.GetMachineGroups()
+}
+
+func (cm *ConfigManager) AddMachineGroup(name string) error {
+	if cm.globalConfigManager == nil {
+		return fmt.Errorf("全局配置管理器未初始化")
+	}
+	return cm.globalConfigManager.AddMachineGroup(name)
+}
+
+func (cm *ConfigManager) RenameMachineGroup(oldName, newName string) error {
+	if cm.globalConfigManager == nil {
+		return fmt.Errorf("全局配置管理器未初始化")
+	}
+	return cm.globalConfigManager.RenameMachineGroup(oldName, newName)
+}
+
+func (cm *ConfigManager) DeleteMachineGroup(name string) error {
+	if cm.globalConfigManager == nil {
+		return fmt.Errorf("全局配置管理器未初始化")
+	}
+	return cm.globalConfigManager.DeleteMachineGroup(name)
+}
+
 // GetAllMachinesFromGlobal 从全局配置获取所有机器配置
 func (cm *ConfigManager) GetAllMachinesFromGlobal() []define.Machine {
 	if cm.globalConfigManager == nil {
@@ -189,18 +217,18 @@ func (cm *ConfigManager) SaveGlobalAccounts(accounts []GlobalAccount) error {
 	return cm.globalConfigManager.SaveGlobalAccounts(accounts)
 }
 
-func (cm *ConfigManager) ImportXshell(paths []string, accountID string) (*MachineImportResult, error) {
+func (cm *ConfigManager) ImportXshell(paths []string, accountID, group string) (*MachineImportResult, error) {
 	if cm.globalConfigManager == nil {
 		return nil, fmt.Errorf("全局配置管理器未初始化")
 	}
-	return cm.globalConfigManager.ImportXshellFiles(paths, accountID)
+	return cm.globalConfigManager.ImportXshellFiles(paths, accountID, group)
 }
 
-func (cm *ConfigManager) ImportFinalShell(paths []string, accountID string) (*MachineImportResult, error) {
+func (cm *ConfigManager) ImportFinalShell(paths []string, accountID, group string) (*MachineImportResult, error) {
 	if cm.globalConfigManager == nil {
 		return nil, fmt.Errorf("全局配置管理器未初始化")
 	}
-	return cm.globalConfigManager.ImportFinalShellFiles(paths, accountID)
+	return cm.globalConfigManager.ImportFinalShellFiles(paths, accountID, group)
 }
 
 // processPathVariables 处理路径变量替换

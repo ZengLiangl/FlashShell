@@ -33,11 +33,19 @@
     </div>
     <div class="file-toolbar">
       <div class="toolbar-left">
-        <el-button size="small" :type="expanded ? 'primary' : 'default'" @click="toggle">
+        <el-button size="small" :type="expanded ? 'primary' : 'default'" title="文件" @click="toggle">
           <el-icon><FolderOpened /></el-icon>
-          文件
         </el-button>
         <template v-if="expanded">
+          <el-input
+            v-model="pathDraft"
+            class="cwd-input"
+            size="small"
+            :title="cwd"
+            placeholder="/"
+            @keydown.enter.exact.prevent="submitPathDraft"
+            @blur="syncPathDraftFromCwd"
+          />
           <el-button
             size="small"
             text
@@ -48,36 +56,52 @@
           >
             <el-icon :size="16"><ArrowUp /></el-icon>
           </el-button>
-          <el-input
-            v-model="pathDraft"
-            class="cwd-input"
-            size="small"
-            :title="cwd"
-            placeholder="/"
-            @keydown.enter.exact.prevent="submitPathDraft"
-            @blur="syncPathDraftFromCwd"
-          />
           <el-checkbox v-model="showHidden" size="small" @change="reload">显示隐藏文件</el-checkbox>
-          <el-button size="small" text :loading="loading" @click="reload">刷新目录</el-button>
+          <el-tooltip content="刷新目录" placement="top">
+            <el-button size="small" text :loading="loading" @click="reload">
+              <el-icon><RefreshRight /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-dropdown size="small" trigger="click" @command="onUploadCommand">
+            <el-button size="small" text title="上传">
+              <el-icon><Upload /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="files">上传文件</el-dropdown-item>
+                <el-dropdown-item command="folder">上传文件夹</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </template>
       </div>
-      <div class="toolbar-right">
-        <el-button size="small" @click="emit('toggle-search')">
-          <el-icon><Search /></el-icon>
-          搜索
-        </el-button>
-        <el-button size="small" @click="emit('clear')">
-          <el-icon><Delete /></el-icon>
-          清空
-        </el-button>
-        <el-button size="small" @click="emit('refresh')">
-          <el-icon><Refresh /></el-icon>
-          刷新
-        </el-button>
+      <div class="toolbar-right icon-actions">
+        <el-tooltip content="搜索" placement="top">
+          <el-button size="small" @click="emit('toggle-search')">
+            <el-icon><Search /></el-icon>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip content="清空" placement="top">
+          <el-button size="small" @click="emit('clear')">
+            <el-icon><Delete /></el-icon>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip content="刷新" placement="top">
+          <el-button size="small" @click="emit('refresh')">
+            <el-icon><Refresh /></el-icon>
+          </el-button>
+        </el-tooltip>
       </div>
     </div>
 
-    <div v-if="expanded" class="file-body" :style="{ height: bodyHeight + 'px' }">
+    <div
+      v-if="expanded"
+      class="file-body shell-drop-zone"
+      :style="{ height: bodyHeight + 'px' }"
+      @dragenter.prevent="onDragOver"
+      @dragover.prevent="onDragOver"
+      @drop.prevent="onHtmlDrop"
+    >
       <div class="tree-pane" :style="{ width: treeWidth + 'px' }">
         <el-tree
           :key="treeRenderKey"
@@ -98,7 +122,16 @@
         title="拖动调整宽度"
         @mousedown="startResize"
       ></div>
-      <div class="list-pane" @click="closeMenu">
+      <div
+        class="list-pane"
+        :class="{ 'drag-over': dragOver }"
+        @click="closeMenu"
+        @dragenter.prevent="onDragOver"
+        @dragover.prevent="onDragOver"
+        @dragleave="onDragLeave"
+        @drop.prevent="onHtmlDrop"
+      >
+        <div v-if="dragOver" class="drop-overlay">释放以上传文件/文件夹</div>
         <div v-if="error" class="error">{{ error }}</div>
         <el-table
           v-else
@@ -106,7 +139,7 @@
           size="small"
           height="100%"
           v-loading="loading"
-          empty-text="空目录"
+          empty-text="空目录（可拖拽文件/文件夹到此处上传）"
           @row-dblclick="onOpen"
           @row-contextmenu="onContextMenu"
         >
@@ -148,6 +181,7 @@
       :style="{ left: ctx.x + 'px', top: ctx.y + 'px' }"
       @click.stop
     >
+      <li @click="downloadEntry">下载</li>
       <li @click="copyPath">复制路径</li>
       <li class="danger" @click="deleteEntry">删除</li>
     </ul>
@@ -155,9 +189,10 @@
 </template>
 
 <script>
-import { computed, nextTick, onUnmounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as App from '../../../wailsjs/go/app/App'
+import { OnFileDrop, OnFileDropOff } from '../../../wailsjs/runtime/runtime'
 
 export default {
   name: 'ShellFilePanel',
@@ -178,6 +213,7 @@ export default {
     'search-prev',
     'close-search',
     'update:searchQuery',
+    'transfer-started',
   ],
   setup(props, { emit, expose }) {
     const HEIGHT_KEY = 'shell.sftpBodyHeight'
@@ -201,9 +237,11 @@ export default {
     const ctx = reactive({ visible: false, x: 0, y: 0, row: null })
     const localSearchQuery = ref(props.searchQuery)
     const searchInputRef = ref(null)
+    const dragOver = ref(false)
     let pwdTimer = null
     let resizing = false
     let navSeq = 0
+    let dropBound = false
 
     watch(() => props.searchQuery, (v) => { localSearchQuery.value = v })
     watch(localSearchQuery, (v) => emit('update:searchQuery', v))
@@ -626,6 +664,106 @@ export default {
       }
     }
 
+    const downloadEntry = async () => {
+      const row = ctx.row
+      closeMenu()
+      if (!row?.path || !props.machineName) return
+      try {
+        await App.StartShellDownload(props.machineName, row.path)
+        ElMessage.success(`已开始下载：${row.name}`)
+        emit('transfer-started', { direction: 'download', name: row.name })
+      } catch (e) {
+        ElMessage.error('下载失败: ' + e)
+      }
+    }
+
+    const startUploads = async (paths) => {
+      if (!props.machineName || !expanded.value || !cwd.value) {
+        ElMessage.warning('请先打开文件面板并进入目标目录')
+        return
+      }
+      const list = (paths || []).filter(Boolean)
+      if (!list.length) return
+      let started = 0
+      for (const localPath of list) {
+        try {
+          await App.StartShellUpload(props.machineName, localPath, cwd.value)
+          started++
+        } catch (e) {
+          ElMessage.error(`上传失败 (${localPath}): ${e}`)
+        }
+      }
+      if (started > 0) {
+        ElMessage.success(`已开始上传 ${started} 项`)
+        emit('transfer-started', { direction: 'upload', count: started })
+        setTimeout(() => reload(), 1200)
+      }
+    }
+
+    const onDragOver = (e) => {
+      if (!expanded.value || !props.machineName) return
+      dragOver.value = true
+      if (e?.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+    }
+    const onDragLeave = (e) => {
+      // 避免子元素触发 leave 误关
+      const related = e?.relatedTarget
+      if (related && e?.currentTarget?.contains?.(related)) return
+      dragOver.value = false
+    }
+    const onHtmlDrop = () => {
+      dragOver.value = false
+    }
+
+    const isOverDropZone = (x, y) => {
+      const el = document.elementFromPoint(x, y)
+      return !!el?.closest?.('.shell-drop-zone')
+    }
+
+    const bindFileDrop = () => {
+      if (dropBound) return
+      try {
+        // useDropTarget=false：Windows 上仅依赖 CSS 目标时常收不到回调；改为坐标判断落点
+        OnFileDrop((x, y, paths) => {
+          dragOver.value = false
+          if (!expanded.value || !props.machineName) return
+          if (!isOverDropZone(x, y)) return
+          startUploads(paths)
+        }, false)
+        dropBound = true
+      } catch (e) {
+        console.warn('OnFileDrop 绑定失败:', e)
+      }
+    }
+
+    const unbindFileDrop = () => {
+      if (!dropBound) return
+      try {
+        OnFileDropOff()
+      } catch { /* ignore */ }
+      dropBound = false
+    }
+
+    const onUploadCommand = async (command) => {
+      if (!props.machineName || !expanded.value || !cwd.value) {
+        ElMessage.warning('请先打开文件面板并进入目标目录')
+        return
+      }
+      try {
+        if (command === 'folder') {
+          const dir = await App.PickShellUploadFolder()
+          if (!dir) return
+          await startUploads([dir])
+        } else {
+          const files = await App.PickShellUploadPaths()
+          if (!files?.length) return
+          await startUploads(files)
+        }
+      } catch (e) {
+        ElMessage.error('选择文件失败: ' + e)
+      }
+    }
+
     const deleteEntry = async () => {
       const row = ctx.row
       if (!row || !props.machineName) return
@@ -665,9 +803,14 @@ export default {
       if (expanded.value) await reload()
     })
 
+    onMounted(() => {
+      bindFileDrop()
+    })
+
     onUnmounted(() => {
       stopPwdTimer()
       closeMenu()
+      unbindFileDrop()
     })
 
     expose({
@@ -698,6 +841,7 @@ export default {
       expandedKeys,
       canGoUp,
       ctx,
+      dragOver,
       localSearchQuery,
       searchInputRef,
       searchVisible: computed(() => props.searchVisible),
@@ -720,7 +864,12 @@ export default {
       onContextMenu,
       closeMenu,
       copyPath,
+      downloadEntry,
       deleteEntry,
+      onDragOver,
+      onDragLeave,
+      onHtmlDrop,
+      onUploadCommand,
     }
   },
 }
@@ -863,6 +1012,7 @@ export default {
   flex-shrink: 0;
   border-top: 1px solid var(--app-border);
   overflow: hidden;
+  --wails-drop-target: drop;
 }
 
 .tree-pane {
@@ -891,6 +1041,26 @@ export default {
   min-width: 0;
   overflow: hidden;
   padding: 0;
+  position: relative;
+}
+
+.list-pane.drag-over {
+  outline: 2px dashed var(--app-accent-color, #409eff);
+  outline-offset: -4px;
+}
+
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--app-accent-color, #409eff) 12%, transparent);
+  color: var(--app-accent-color, #409eff);
+  font-size: 14px;
+  font-weight: 600;
+  pointer-events: none;
 }
 
 .name-cell {

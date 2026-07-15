@@ -74,23 +74,30 @@
               size="small"
               placeholder="搜索机器"
               class="machine-search"
-            />
-            <el-button size="small" text type="primary" @click="$emit('add-machine')">
-              <el-icon>
-                <Plus />
-              </el-icon>
-              添加机器
-            </el-button>
-            <el-button size="small" type="success" plain @click="$emit('open-shell')">
-              进入终端
-            </el-button>
+            >
+              <template #prefix>
+                <el-icon><Search /></el-icon>
+              </template>
+            </el-input>
+            <div class="zone-action-btns icon-actions icon-actions--sm">
+              <el-tooltip content="添加机器" placement="top">
+                <el-button size="small" type="primary" plain circle @click="$emit('add-machine')">
+                  <el-icon><Plus /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip content="进入终端" placement="top">
+                <el-button size="small" type="success" plain circle @click="$emit('open-shell')">
+                  <el-icon><Monitor /></el-icon>
+                </el-button>
+              </el-tooltip>
+            </div>
           </div>
         </div>
 
         <div class="zone-body">
           <div v-if="machines.length === 0" class="empty-hint">
             <p>暂无机器</p>
-            <span>点击右上角「添加机器」开始</span>
+            <span>点击右上角 + 添加机器</span>
           </div>
           <div v-else-if="machineGroups.length === 0" class="empty-hint">
             <p>无匹配机器</p>
@@ -158,7 +165,6 @@ export default {
     'connect-machine',
     'add-machine',
     'open-system-settings',
-    'open-execution-history',
   ],
   setup(props, { emit }) {
     const machines = ref([])
@@ -365,10 +371,14 @@ export default {
 .zone-actions {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   flex-shrink: 0;
   flex-wrap: wrap;
   justify-content: flex-end;
+}
+
+.zone-action-btns {
+  flex-shrink: 0;
 }
 
 .machine-search {

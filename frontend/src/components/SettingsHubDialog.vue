@@ -50,11 +50,6 @@
             v-if="visibleProxy && section === 'shortcuts'"
             :active="true"
           />
-          <ExecutionHistoryDialog
-            v-if="visibleProxy && section === 'history'"
-            embedded
-            :active="true"
-          />
         </div>
       </main>
     </div>
@@ -63,19 +58,17 @@
 
 <script>
 import { computed, ref, watch } from 'vue'
-import { Monitor, Key, Setting, Clock, Operation } from '@element-plus/icons-vue'
+import { Monitor, Key, Setting, Operation } from '@element-plus/icons-vue'
 import MachineConfigDialog from './MachineConfigDialog.vue'
 import WorkPathConfigDialog from './WorkPathConfigDialog.vue'
 import SystemSettingsDialog from './SystemSettingsDialog.vue'
 import ShortcutSettingsPanel from './ShortcutSettingsPanel.vue'
-import ExecutionHistoryDialog from './ExecutionHistoryDialog.vue'
 
 const NAV_ITEMS = [
   { id: 'machines', label: '机器配置', icon: Monitor },
   { id: 'env', label: '环境变量', icon: Key },
   { id: 'general', label: '系统设置', icon: Setting },
   { id: 'shortcuts', label: '快捷键', icon: Operation },
-  { id: 'history', label: '执行历史', icon: Clock },
 ]
 
 export default {
@@ -85,12 +78,10 @@ export default {
     WorkPathConfigDialog,
     SystemSettingsDialog,
     ShortcutSettingsPanel,
-    ExecutionHistoryDialog,
     Monitor,
     Key,
     Setting,
     Operation,
-    Clock,
   },
   props: {
     modelValue: { type: Boolean, default: false },
