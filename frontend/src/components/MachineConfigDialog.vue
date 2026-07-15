@@ -5,6 +5,13 @@
                 <h4 v-if="!embedded">机器列表</h4>
                 <div v-else></div>
                 <div class="header-actions">
+                    <el-input
+                        v-model="machineKeyword"
+                        clearable
+                        size="small"
+                        placeholder="搜索机器名称 / 分组"
+                        class="list-search"
+                    />
                     <el-select
                         v-model="importAccountId"
                         clearable
@@ -33,7 +40,7 @@
 
             <div class="machine-table-wrap">
                 <el-table
-                    :data="sortedMachines"
+                    :data="filteredMachines"
                     row-key="id"
                     style="width: 100%"
                     v-loading="machinesLoading"
@@ -119,6 +126,7 @@
             <template #footer>
                 <div class="dialog-footer">
                     <el-button @click="machineEditVisible = false">取消</el-button>
+                    <el-button :loading="testingDraft" @click="testDraftConnection">测试连接</el-button>
                     <el-button type="primary" @click="saveMachine" :loading="savingMachine">
                         {{ editingMachine ? '更新' : '添加' }}
                     </el-button>
@@ -140,6 +148,7 @@ import {
     CreateMachine,
     DeleteMachine,
     TestMachineConnection,
+    TestMachineDraftConnection,
     SelectKeyFile,
     ImportXshellPick,
     ImportFinalShellPick,
@@ -158,11 +167,23 @@ export default {
     setup(props, { emit }) {
         const visibleProxy = ref(props.modelValue)
         const machines = ref([])
+        const machineKeyword = ref('')
         const sortedMachines = computed(() => sortMachinesByName(machines.value))
+        const filteredMachines = computed(() => {
+            const kw = machineKeyword.value.trim().toLowerCase()
+            const list = sortedMachines.value
+            if (!kw) return list
+            return list.filter((m) =>
+                (m.name || '').toLowerCase().includes(kw) ||
+                (m.group || '').toLowerCase().includes(kw) ||
+                (m.key_file || '').toLowerCase().includes(kw)
+            )
+        })
         const globalAccounts = ref([])
         const machinesLoading = ref(false)
         const machineEditVisible = ref(false)
         const savingMachine = ref(false)
+        const testingDraft = ref(false)
         const editingMachine = ref(null)
         const machineFormRef = ref(null)
         const selectedAccountId = ref('')
@@ -343,6 +364,34 @@ export default {
             }
         }
 
+        const testDraftConnection = async () => {
+            if (!machineFormRef.value) return
+            try {
+                await machineFormRef.value.validate()
+                testingDraft.value = true
+                await TestMachineDraftConnection(
+                    {
+                        name: machineForm.name || 'draft-test',
+                        group: machineForm.group,
+                        key_file: machineForm.key_file,
+                    },
+                    {
+                        host: machineForm.host,
+                        port: machineForm.port,
+                        user: machineForm.user,
+                        password: machineForm.password,
+                    }
+                )
+                ElMessage.success('连接测试成功')
+            } catch (error) {
+                if (error === false || error?.fields) return
+                console.error('连接测试失败:', error)
+                ElMessage.error('连接测试失败: ' + (error.message || error))
+            } finally {
+                testingDraft.value = false
+            }
+        }
+
         const selectKeyFile = async () => {
             try {
                 const filePath = await SelectKeyFile()
@@ -404,10 +453,13 @@ export default {
             visibleProxy,
             machines,
             sortedMachines,
+            filteredMachines,
+            machineKeyword,
             globalAccounts,
             machinesLoading,
             machineEditVisible,
             savingMachine,
+            testingDraft,
             editingMachine,
             machineFormRef,
             machineForm,
@@ -419,6 +471,7 @@ export default {
             saveMachine,
             deleteMachine,
             testConnection,
+            testDraftConnection,
             selectKeyFile,
             applyGlobalAccount,
             handleAddCommand,
@@ -464,6 +517,12 @@ export default {
     display: flex;
     align-items: center;
     gap: 8px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+}
+
+.list-search {
+    width: 200px;
 }
 
 .import-account-select {

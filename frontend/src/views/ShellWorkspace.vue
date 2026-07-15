@@ -49,7 +49,12 @@
           @search-result="onSearchResult"
         >
           <template #empty>
+            <div v-if="connectingName" class="shell-connecting">
+              <el-icon class="is-loading" :size="28"><Loading /></el-icon>
+              <p>正在连接 {{ connectingName }}…</p>
+            </div>
             <ShellConnectionHistory
+              v-else
               :records="historyRecords"
               @connect="onHistoryConnect"
               @open-picker="pickerVisible = true"
@@ -479,6 +484,21 @@ export default {
   flex-direction: column;
   overflow: hidden;
   background: var(--app-bg);
+}
+
+.shell-connecting {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  min-height: 240px;
+  color: var(--app-text-secondary);
+  font-size: 14px;
+}
+
+.shell-connecting p {
+  margin: 0;
 }
 
 .shell-body {

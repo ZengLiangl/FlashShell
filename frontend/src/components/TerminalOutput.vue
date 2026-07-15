@@ -331,7 +331,7 @@ export default {
 }
 
 :deep(.search-active-line) {
-    outline: 1px solid var(--terminal-search-highlight, #ffd666);
+    outline: 1px solid var(--terminal-search-active, #1f6feb);
 }
 
 .empty-output {

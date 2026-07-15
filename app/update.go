@@ -34,17 +34,12 @@ type githubRelease struct {
 	PublishedAt string `json:"published_at"`
 }
 
-// CheckForUpdates 查询 GitHub Releases 最新正式版并与本地版本对比
+// CheckForUpdates 查询 GitHub Releases 最新正式版并与本地版本对比。
+// 公开仓库无需 Token；若配置了 Token 则可选附带，以提高 API 速率限制。
 func (a *App) CheckForUpdates() *UpdateCheckResult {
 	result := &UpdateCheckResult{
 		CurrentVersion: formatVersionDisplay(Version),
 		CheckedAt:      time.Now().Format(time.RFC3339),
-	}
-
-	token := resolveGitHubToken()
-	if token == "" {
-		result.Error = "未配置 GitHub Token。请设置环境变量 FLASHDOCK_GITHUB_TOKEN，或在项目 secrets/github_pat 写入 PAT（私有仓库必需）"
-		return result
 	}
 
 	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", githubOwner, githubRepo)
@@ -54,9 +49,11 @@ func (a *App) CheckForUpdates() *UpdateCheckResult {
 		return result
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 	req.Header.Set("User-Agent", "FlashDock-UpdateCheck")
+	if token := resolveGitHubToken(); token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
 
 	client := &http.Client{Timeout: 15 * time.Second}
 	resp, err := client.Do(req)
@@ -98,7 +95,7 @@ func (a *App) CheckForUpdates() *UpdateCheckResult {
 	return result
 }
 
-// OpenReleaseURL 在系统浏览器打开 Release 页面（需已登录 GitHub 才能访问私有仓）
+// OpenReleaseURL 在系统浏览器打开 Release 页面
 func (a *App) OpenReleaseURL(url string) {
 	url = strings.TrimSpace(url)
 	if url == "" || a.ctx == nil {

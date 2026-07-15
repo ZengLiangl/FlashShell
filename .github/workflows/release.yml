@@ -314,6 +314,72 @@ jobs:
           ls -lah upload
           test "$(find upload -type f | wc -l)" -ge 1
 
+      # 按 commit 标题归类生成 Release body（与 GoNavi 一致）
+      # 依赖常规提交前缀：feat / fix / perf / refactor / chore 等
+      - name: Generate Changelog
+        id: changelog
+        shell: bash
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          PREV_TAG=$(git tag --sort=-creatordate | grep -E '^v' | sed -n '2p' || true)
+          if [ -z "$PREV_TAG" ]; then
+            # 无历史 tag：仅收录当前 tag 尖端提交，避免把整仓历史写进 Release
+            if git rev-parse "${TAG}^" >/dev/null 2>&1; then
+              RANGE="${TAG}^..${TAG}"
+            else
+              RANGE="$TAG"
+            fi
+            echo "⚠️ 未找到上一个 tag，使用范围：$RANGE"
+          else
+            RANGE="${PREV_TAG}..${TAG}"
+          fi
+
+          echo "📋 生成更新日志：$RANGE"
+
+          COMMITS=$(git log "$RANGE" --no-merges --pretty=format:'%s' 2>/dev/null || true)
+          if [ -z "$COMMITS" ]; then
+            BODY="暂无提交记录。"
+          else
+            CAT_FEAT=""
+            CAT_FIX=""
+            CAT_PERF=""
+            CAT_REFACTOR=""
+            CAT_I18N=""
+            CAT_OTHER=""
+
+            while IFS= read -r line; do
+              [ -z "$line" ] && continue
+              case "$line" in
+                ✨*|*feat*)     CAT_FEAT="${CAT_FEAT}\n- ${line}" ;;
+                🐛*|*fix*)     CAT_FIX="${CAT_FIX}\n- ${line}" ;;
+                ⚡*|*perf*)    CAT_PERF="${CAT_PERF}\n- ${line}" ;;
+                ♻️*|*refactor*) CAT_REFACTOR="${CAT_REFACTOR}\n- ${line}" ;;
+                🌐*)           CAT_I18N="${CAT_I18N}\n- ${line}" ;;
+                🔧*|🔨*|*chore*) CAT_OTHER="${CAT_OTHER}\n- ${line}" ;;
+                *)             CAT_OTHER="${CAT_OTHER}\n- ${line}" ;;
+              esac
+            done <<< "$COMMITS"
+
+            BODY=""
+            [ -n "$CAT_FEAT" ]     && BODY="${BODY}## ✨ 新功能\n${CAT_FEAT}\n\n"
+            [ -n "$CAT_FIX" ]      && BODY="${BODY}## 🐛 问题修复\n${CAT_FIX}\n\n"
+            [ -n "$CAT_PERF" ]     && BODY="${BODY}## ⚡ 性能优化\n${CAT_PERF}\n\n"
+            [ -n "$CAT_REFACTOR" ] && BODY="${BODY}## ♻️ 重构\n${CAT_REFACTOR}\n\n"
+            [ -n "$CAT_I18N" ]     && BODY="${BODY}## 🌐 国际化\n${CAT_I18N}\n\n"
+            [ -n "$CAT_OTHER" ]    && BODY="${BODY}## 🔧 其他变更\n${CAT_OTHER}\n\n"
+
+            if [ -n "$PREV_TAG" ]; then
+              REPO_URL="${{ github.server_url }}/${{ github.repository }}"
+              BODY="${BODY}---\n**完整变更**: [${PREV_TAG}...${TAG}](${REPO_URL}/compare/${PREV_TAG}...${TAG})\n"
+            fi
+          fi
+
+          printf '%b' "$BODY" > /tmp/changelog.md
+          echo "changelog_file=/tmp/changelog.md" >> "$GITHUB_OUTPUT"
+          echo "---- changelog preview ----"
+          cat /tmp/changelog.md
+
       - name: Create Release and upload assets
         uses: softprops/action-gh-release@v2
         with:
@@ -321,7 +387,7 @@ jobs:
           name: FlashDock ${{ github.ref_name }}
           draft: false
           make_latest: true
-          generate_release_notes: true
+          body_path: ${{ steps.changelog.outputs.changelog_file }}
           files: upload/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

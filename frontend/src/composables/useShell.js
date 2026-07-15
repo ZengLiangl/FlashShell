@@ -105,14 +105,6 @@ export function useShell() {
   const connect = async (machineName) => {
     if (!machineName) return false
 
-    // 先同步一次，避免本地 sessions 过期误判
-    await syncSessions()
-    if (isMachineConnected(machineName, sessions.value)) {
-      upsertOpenTab(machineName, sessions.value.find((s) => s.machineName === machineName))
-      activeMachine.value = machineName
-      return true
-    }
-
     // 防止连点/并发重复 ConnectShell
     if (connectingName.value === machineName) {
       return false
@@ -124,6 +116,14 @@ export function useShell() {
 
     connectingName.value = machineName
     try {
+      // 先同步一次，避免本地 sessions 过期误判
+      await syncSessions()
+      if (isMachineConnected(machineName, sessions.value)) {
+        upsertOpenTab(machineName, sessions.value.find((s) => s.machineName === machineName))
+        activeMachine.value = machineName
+        return true
+      }
+
       await App.ConnectShell(machineName)
       activeMachine.value = machineName
       await syncSessions()

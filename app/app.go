@@ -386,6 +386,31 @@ func (a *App) TestMachineConnection(machineID string) error {
 	return sshClient.TestConnection()
 }
 
+// TestMachineDraftConnection 用表单中的连接信息测试，无需先保存到配置
+func (a *App) TestMachineDraftConnection(m define.Machine, sensitive define.SensitiveData) error {
+	host := strings.TrimSpace(sensitive.Host)
+	user := strings.TrimSpace(sensitive.User)
+	if host == "" {
+		return fmt.Errorf("请填写主机地址")
+	}
+	if user == "" {
+		return fmt.Errorf("请填写用户名")
+	}
+	if sensitive.Port <= 0 {
+		sensitive.Port = 22
+	}
+	sensitive.Host = host
+	sensitive.User = user
+	if strings.TrimSpace(m.Name) == "" {
+		m.Name = "draft-test"
+	}
+	if err := m.SetSensitiveData(&sensitive); err != nil {
+		return fmt.Errorf("准备连接信息失败: %w", err)
+	}
+	sshClient := machine.NewSSHClient(&m, a.configManager.GetWorkPathVars())
+	return sshClient.TestConnection()
+}
+
 // GetMachines 获取所有机器配置（从全局配置）
 func (a *App) GetMachines() []define.Machine {
 	return a.configManager.GetAllMachinesFromGlobal()

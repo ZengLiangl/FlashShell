@@ -55,13 +55,13 @@ export default {
     let lastSearchResults = { resultIndex: -1, resultCount: 0 }
 
     const SEARCH_DECORATIONS = {
-      // 柔和对比：普通匹配偏暗黄，当前匹配偏暖褐，避免过亮抢眼
-      matchBackground: '#5c5346',
-      matchBorder: '#8a7f6e',
-      matchOverviewRuler: '#8a7f6e',
-      activeMatchBackground: '#7a5c3a',
-      activeMatchBorder: '#a67c52',
-      activeMatchColorOverviewRuler: '#a67c52',
+      // 普通匹配：淡琥珀色；当前定位：蓝色，和选区颜色一致便于辨认
+      matchBackground: '#3d3728',
+      matchBorder: '#a9945a',
+      matchOverviewRuler: '#a9945a',
+      activeMatchBackground: '#1f6feb',
+      activeMatchBorder: '#79c0ff',
+      activeMatchColorOverviewRuler: '#79c0ff',
     }
 
     const hideContextMenu = () => {
@@ -199,9 +199,28 @@ export default {
 
     const terminalThemeForPreset = (preset) => {
       const themes = {
-        classic: { background: '#0d1117', foreground: '#c9d1d9', cursor: '#58a6ff' },
-        monokai: { background: '#272822', foreground: '#f8f8f2', cursor: '#f8f8f0' },
-        solarized: { background: '#002b36', foreground: '#839496', cursor: '#93a1a1' },
+        classic: {
+          background: '#0d1117',
+          foreground: '#c9d1d9',
+          cursor: '#58a6ff',
+          // 当前搜索命中会用 select()，避免默认选区把文字衬成偏红
+          selectionBackground: '#1f6feb',
+          selectionForeground: '#ffffff',
+        },
+        monokai: {
+          background: '#272822',
+          foreground: '#f8f8f2',
+          cursor: '#f8f8f0',
+          selectionBackground: '#1f6feb',
+          selectionForeground: '#ffffff',
+        },
+        solarized: {
+          background: '#002b36',
+          foreground: '#839496',
+          cursor: '#93a1a1',
+          selectionBackground: '#268bd2',
+          selectionForeground: '#fdf6e3',
+        },
       }
       return themes[preset] || themes.classic
     }

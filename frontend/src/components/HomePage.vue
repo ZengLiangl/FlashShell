@@ -3,9 +3,9 @@
     <header class="home-hero">
       <div class="hero-copy">
         <h2 class="hero-title">FlashDock</h2>
-        <p class="hero-subtitle">
+        <!-- <p class="hero-subtitle">
           {{ hasProjects ? '选择一种方式开始：跑任务，或连机器进 Shell' : '连接机器，进入 Shell 开始工作' }}
-        </p>
+        </p> -->
       </div>
       <div class="hero-actions">
         <!-- <el-button
@@ -28,7 +28,7 @@
             <span class="zone-dot task-dot" aria-hidden="true"></span>
             <div>
               <h3 id="zone-task-title">任务模式</h3>
-              <p>选择项目，按预设流程执行命令</p>
+              <!-- <p>选择项目，按预设流程执行命令</p> -->
             </div>
           </div>
         </div>
@@ -64,10 +64,17 @@
                   {{ connectedCount }} 会话进行中
                 </el-tag>
               </h3>
-              <p>点机器直接连接；或先进终端再选机器</p>
+              <!-- <p>点机器直接连接；或先进终端再选机器</p> -->
             </div>
           </div>
           <div class="zone-actions">
+            <el-input
+              v-model="machineKeyword"
+              clearable
+              size="small"
+              placeholder="搜索机器"
+              class="machine-search"
+            />
             <el-button size="small" text type="primary" @click="$emit('add-machine')">
               <el-icon>
                 <Plus />
@@ -81,26 +88,41 @@
         </div>
 
         <div class="zone-body">
-          <div v-if="machineGroups.length === 0" class="empty-hint">
+          <div v-if="machines.length === 0" class="empty-hint">
             <p>暂无机器</p>
             <span>点击右上角「添加机器」开始</span>
+          </div>
+          <div v-else-if="machineGroups.length === 0" class="empty-hint">
+            <p>无匹配机器</p>
+            <span>试试其他关键词</span>
           </div>
           <template v-else>
             <div v-for="group in machineGroups" :key="group.name" class="machine-group">
               <div class="group-title">{{ group.name }}</div>
               <div class="item-grid machines">
-                <button v-for="machine in group.machines" :key="machine.name" type="button"
-                  class="item-card machine-card" @click="$emit('connect-machine', machine.name)">
+                <button
+                  v-for="machine in group.machines"
+                  :key="machine.id || machine.name"
+                  type="button"
+                  class="item-card machine-card"
+                  :class="{ connecting: connectingName === machine.name }"
+                  :disabled="!!connectingName"
+                  @click="onConnectMachine(machine.name)"
+                >
                   <div class="item-icon machine-icon">
-                    <el-icon :size="18">
-                      <Monitor />
+                    <el-icon :size="18" :class="{ 'is-loading': connectingName === machine.name }">
+                      <Loading v-if="connectingName === machine.name" />
+                      <Monitor v-else />
                     </el-icon>
                   </div>
                   <div class="item-meta">
                     <span class="item-name">{{ machine.name }}</span>
-                    <span class="item-desc">{{ machineHost(machine) }}</span>
+                    <span class="item-desc">
+                      {{ connectingName === machine.name ? '连接中…' : machineHost(machine) }}
+                    </span>
                   </div>
-                  <el-icon class="item-chevron">
+                  <span v-if="connectingName === machine.name" class="item-badge connecting-badge">连接中</span>
+                  <el-icon v-else class="item-chevron">
                     <ArrowRight />
                   </el-icon>
                 </button>
@@ -126,6 +148,7 @@ export default {
     connectedCount: { type: Number, default: 0 },
     hasTask: { type: Boolean, default: false },
     taskRunning: { type: Boolean, default: false },
+    connectingName: { type: String, default: '' },
   },
   emits: [
     'refresh',
@@ -139,6 +162,7 @@ export default {
   ],
   setup(props, { emit }) {
     const machines = ref([])
+    const machineKeyword = ref('')
 
     const loadMachines = async () => {
       try {
@@ -148,7 +172,19 @@ export default {
       }
     }
 
-    const machineGroups = computed(() => groupMachines(machines.value))
+    const filteredMachines = computed(() => {
+      const kw = machineKeyword.value.trim().toLowerCase()
+      const list = machines.value || []
+      if (!kw) return list
+      return list.filter((m) =>
+        (m.name || '').toLowerCase().includes(kw) ||
+        (m.group || '').toLowerCase().includes(kw) ||
+        (m.key_file || '').toLowerCase().includes(kw) ||
+        (m.host || '').toLowerCase().includes(kw)
+      )
+    })
+
+    const machineGroups = computed(() => groupMachines(filteredMachines.value))
     const hasProjects = computed(() => (props.projects || []).length > 0)
 
     const machineHost = (machine) => {
@@ -156,6 +192,11 @@ export default {
       const port = machine.port ? `:${machine.port}` : ''
       if (host) return `${host}${port}`
       return machine.key_file || '点击连接'
+    }
+
+    const onConnectMachine = (name) => {
+      if (props.connectingName) return
+      emit('connect-machine', name)
     }
 
     const handleRefresh = async () => {
@@ -168,9 +209,11 @@ export default {
     return {
       Refresh,
       machines,
+      machineKeyword,
       machineGroups,
       hasProjects,
       machineHost,
+      onConnectMachine,
       loadMachines,
       handleRefresh,
     }
@@ -182,8 +225,10 @@ export default {
 .home-page {
   flex: 1;
   min-height: 0;
-  overflow-y: auto;
-  padding: 28px 32px 40px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 28px 32px 24px;
   background:
     radial-gradient(ellipse 80% 50% at 0% 0%, color-mix(in srgb, var(--app-accent-color) 8%, transparent), transparent 55%),
     radial-gradient(ellipse 70% 45% at 100% 0%, color-mix(in srgb, #67c23a 7%, transparent), transparent 50%),
@@ -196,6 +241,7 @@ export default {
   justify-content: space-between;
   gap: 16px;
   margin-bottom: 24px;
+  flex-shrink: 0;
 }
 
 .hero-title {
@@ -222,20 +268,16 @@ export default {
 }
 
 .home-zones {
+  flex: 1;
+  min-height: 0;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 20px;
   align-items: stretch;
-  min-height: min(560px, calc(100vh - 180px));
 }
 
 .home-zones.shell-only {
   grid-template-columns: 1fr;
-}
-
-.home-zones.shell-only .zone-shell {
-  /* 无任务配置时 Shell 占满可用区域 */
-  min-height: min(640px, calc(100vh - 170px));
 }
 
 .home-zones.shell-only .item-grid.machines {
@@ -269,6 +311,7 @@ export default {
   gap: 12px;
   padding: 16px 18px 12px;
   border-bottom: 1px solid var(--app-border);
+  flex-shrink: 0;
 }
 
 .zone-label {
@@ -324,13 +367,38 @@ export default {
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.machine-search {
+  width: 148px;
 }
 
 .zone-body {
   flex: 1;
   min-height: 0;
+  overflow-x: hidden;
   overflow-y: auto;
   padding: 14px 16px 18px;
+  scrollbar-gutter: stable;
+}
+
+.zone-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.zone-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.zone-body::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--app-text-muted) 35%, transparent);
+  border-radius: 4px;
+}
+
+.zone-body::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--app-text-muted) 55%, transparent);
 }
 
 .empty-hint {
@@ -406,6 +474,23 @@ export default {
   border-color: #67c23a;
 }
 
+.machine-card:disabled {
+  cursor: wait;
+  opacity: 0.72;
+  transform: none;
+}
+
+.machine-card.connecting {
+  border-color: #67c23a;
+  background: color-mix(in srgb, #67c23a 10%, var(--app-card-bg));
+  opacity: 1;
+}
+
+.connecting-badge {
+  color: #67c23a;
+  background: rgba(103, 194, 58, 0.16);
+}
+
 .item-icon {
   width: 36px;
   height: 36px;
@@ -472,7 +557,7 @@ export default {
 
 @media (max-width: 960px) {
   .home-page {
-    padding: 20px 16px 28px;
+    padding: 20px 16px 20px;
   }
 
   .home-hero {
@@ -481,7 +566,12 @@ export default {
 
   .home-zones {
     grid-template-columns: 1fr;
-    min-height: 0;
+    grid-auto-rows: minmax(220px, 1fr);
+    overflow-y: auto;
+  }
+
+  .zone {
+    max-height: min(420px, 48vh);
   }
 }
 </style>

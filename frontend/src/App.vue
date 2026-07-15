@@ -60,7 +60,7 @@
     <template v-if="activeView === 'home'">
       <div class="projectlist-fullscreen">
         <HomePage ref="homePageRef" :projects="projects" :connected-count="connectedCount" :has-task="!!selectedProject"
-          :task-running="status.isRunning" @refresh="refreshConfig" @select-project="selectProject"
+          :task-running="status.isRunning" :connecting-name="connectingName" @refresh="refreshConfig" @select-project="selectProject"
           @resume-task="resumeTaskView" @open-shell="enterShellMode" @connect-machine="openShellAndConnect"
           @add-machine="openShellMachineDialog" @open-system-settings="openSettingsHub('general')"
           @open-execution-history="openSettingsHub('history')" />
@@ -415,9 +415,10 @@ export default {
     };
 
     const openShellAndConnect = async (machineName) => {
-      const ok = await connectShell(machineName);
-      if (!ok) return;
+      // 先发起连接（立即标记 connectingName），再切到 Shell 展示「连接中」
+      const connectPromise = connectShell(machineName);
       await enterShellMode();
+      await connectPromise;
     };
 
     const openSettingsHub = (section = 'general') => {
