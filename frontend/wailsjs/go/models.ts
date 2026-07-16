@@ -107,6 +107,24 @@ export namespace data {
 	        this.password = source["password"];
 	    }
 	}
+	export class ProxySettings {
+	    mode: string;
+	    type: string;
+	    host: string;
+	    port: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProxySettings(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.mode = source["mode"];
+	        this.type = source["type"];
+	        this.host = source["host"];
+	        this.port = source["port"];
+	    }
+	}
 	export class ThemeSettings {
 	    mode: string;
 	    uiAccent: string;
@@ -156,6 +174,7 @@ export namespace data {
 	    globalAccounts?: GlobalAccount[];
 	    logSettings: LogSettings;
 	    themeSettings: ThemeSettings;
+	    proxySettings: ProxySettings;
 	    shellMonitorIntervalMs: number;
 	
 	    static createFrom(source: any = {}) {
@@ -174,6 +193,7 @@ export namespace data {
 	        this.globalAccounts = this.convertValues(source["globalAccounts"], GlobalAccount);
 	        this.logSettings = this.convertValues(source["logSettings"], LogSettings);
 	        this.themeSettings = this.convertValues(source["themeSettings"], ThemeSettings);
+	        this.proxySettings = this.convertValues(source["proxySettings"], ProxySettings);
 	        this.shellMonitorIntervalMs = source["shellMonitorIntervalMs"];
 	    }
 	
@@ -236,6 +256,7 @@ export namespace data {
 	        this.errors = source["errors"];
 	    }
 	}
+	
 	export class SessionState {
 	    sessionId: string;
 	    lastOpenedFile: string;

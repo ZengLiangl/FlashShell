@@ -19,13 +19,21 @@ type LogSettings struct {
 
 // ThemeSettings 主题设置
 type ThemeSettings struct {
-	Mode            string  `yaml:"mode" json:"mode"`                         // light, dark, system
-	UiAccent        string  `yaml:"uiAccent" json:"uiAccent"`                 // blue, teal, green, amber, slate
-	TerminalPreset  string  `yaml:"terminalPreset" json:"terminalPreset"`     // classic, monokai, ...
-	UiFontFamily    string  `yaml:"uiFontFamily" json:"uiFontFamily"`         // 界面字体 id
-	ShellFontFamily string  `yaml:"shellFontFamily" json:"shellFontFamily"`   // 终端字体 id
-	ShellFontSize   int     `yaml:"shellFontSize" json:"shellFontSize"`       // Shell 终端字号，默认 13
-	ShellLineHeight float64 `yaml:"shellLineHeight" json:"shellLineHeight"`   // Shell 终端行高倍数，默认 1.2
+	Mode            string  `yaml:"mode" json:"mode"`                       // light, dark, system
+	UiAccent        string  `yaml:"uiAccent" json:"uiAccent"`               // blue, teal, green, amber, slate
+	TerminalPreset  string  `yaml:"terminalPreset" json:"terminalPreset"`   // classic, monokai, ...
+	UiFontFamily    string  `yaml:"uiFontFamily" json:"uiFontFamily"`       // 界面字体 id
+	ShellFontFamily string  `yaml:"shellFontFamily" json:"shellFontFamily"` // 终端字体 id
+	ShellFontSize   int     `yaml:"shellFontSize" json:"shellFontSize"`     // Shell 终端字号，默认 13
+	ShellLineHeight float64 `yaml:"shellLineHeight" json:"shellLineHeight"` // Shell 终端行高倍数，默认 1.2
+}
+
+// ProxySettings HTTP/SOCKS 代理
+type ProxySettings struct {
+	Mode string `yaml:"mode" json:"mode"` // none | manual
+	Type string `yaml:"type" json:"type"` // http | socks
+	Host string `yaml:"host" json:"host"`
+	Port int    `yaml:"port" json:"port"`
 }
 
 // GlobalConfig 全局配置结构
@@ -40,6 +48,7 @@ type GlobalConfig struct {
 	GlobalAccounts []GlobalAccount   `yaml:"globalAccounts,omitempty" json:"globalAccounts,omitempty"`
 	LogSettings    LogSettings       `yaml:"logSettings" json:"logSettings"`
 	ThemeSettings  ThemeSettings     `yaml:"themeSettings" json:"themeSettings"`
+	ProxySettings  ProxySettings     `yaml:"proxySettings" json:"proxySettings"`
 	// ShellMonitorIntervalMs Shell 监控面板刷新间隔（毫秒），默认 1000
 	ShellMonitorIntervalMs int `yaml:"shellMonitorIntervalMs" json:"shellMonitorIntervalMs"`
 	// ShellMonitorIntervalSec 旧字段（秒），仅用于迁移
@@ -290,6 +299,12 @@ func (gcm *GlobalConfigManager) createDefaultGlobalConfig() error {
 			ShellFontFamily: "consolas",
 			ShellFontSize:   13,
 			ShellLineHeight: 1.2,
+		},
+		ProxySettings: ProxySettings{
+			Mode: "none",
+			Type: "http",
+			Host: "",
+			Port: 7890,
 		},
 		ShellMonitorIntervalMs: 1000,
 	}

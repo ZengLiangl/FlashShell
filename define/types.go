@@ -2,6 +2,7 @@ package define
 
 import (
 	"FlashDock/crypto"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -186,10 +187,20 @@ func (rm *RemoteMachine) Connect(machine *Machine, withSFTP bool) error {
 	}
 
 	addr := fmt.Sprintf("%s:%d", sensitiveData.Host, sensitiveData.Port)
-	client, err := ssh.Dial("tcp", addr, config)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	conn, err := DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return fmt.Errorf("SSH连接失败: %w", err)
 	}
+	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
+	c, chans, reqs, err := ssh.NewClientConn(conn, addr, config)
+	if err != nil {
+		_ = conn.Close()
+		return fmt.Errorf("SSH连接失败: %w", err)
+	}
+	_ = conn.SetDeadline(time.Time{})
+	client := ssh.NewClient(c, chans, reqs)
 
 	rm.SSHClient = client
 

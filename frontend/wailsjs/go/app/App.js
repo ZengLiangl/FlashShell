@@ -466,6 +466,10 @@ export function TestMachineDraftConnection(arg1, arg2) {
   return window['go']['app']['App']['TestMachineDraftConnection'](arg1, arg2);
 }
 
+export function TestProxyConnection(arg1, arg2) {
+  return window['go']['app']['App']['TestProxyConnection'](arg1, arg2);
+}
+
 export function UpdateApplicationMenu() {
   return window['go']['app']['App']['UpdateApplicationMenu']();
 }

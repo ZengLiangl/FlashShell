@@ -237,6 +237,8 @@ export function TestMachineConnection(arg1:string):Promise<void>;
 
 export function TestMachineDraftConnection(arg1:define.Machine,arg2:define.SensitiveData):Promise<void>;
 
+export function TestProxyConnection(arg1:data.ProxySettings,arg2:string):Promise<string>;
+
 export function UpdateApplicationMenu():Promise<void>;
 
 export function UpdateMachine(arg1:string,arg2:define.Machine):Promise<void>;

@@ -14,6 +14,7 @@ import (
 	"sync"
 	"time"
 
+	"FlashDock/netproxy"
 	"FlashDock/utils"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -109,7 +110,7 @@ func (a *App) CheckForUpdates() *UpdateCheckResult {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
 
-	client := &http.Client{Timeout: 20 * time.Second}
+	client := netproxy.HTTPClient(20 * time.Second)
 	resp, err := client.Do(req)
 	if err != nil {
 		result.Error = "网络请求失败: " + err.Error()
@@ -530,7 +531,7 @@ func probeDownloadLatency(ctx context.Context, src updateDownloadSource) (time.D
 			req.Header.Set("Authorization", "Bearer "+token)
 		}
 	}
-	client := &http.Client{Timeout: 5 * time.Second, Transport: updateHTTPTransport}
+	client := &http.Client{Timeout: 5 * time.Second, Transport: netproxy.HTTPTransport()}
 	resp, err := client.Do(req)
 	if err != nil {
 		return 0, err
@@ -541,18 +542,6 @@ func probeDownloadLatency(ctx context.Context, src updateDownloadSource) (time.D
 		return 0, fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 	return time.Since(start), nil
-}
-
-var updateHTTPTransport = &http.Transport{
-	Proxy:                 http.ProxyFromEnvironment,
-	MaxIdleConns:          16,
-	IdleConnTimeout:       90 * time.Second,
-	TLSHandshakeTimeout:   10 * time.Second,
-	ExpectContinueTimeout: 1 * time.Second,
-	ForceAttemptHTTP2:     true,
-	DisableCompression:    true, // 发布包已是压缩产物，避免多余 gzip 协商
-	WriteBufferSize:       512 * 1024,
-	ReadBufferSize:        512 * 1024,
 }
 
 func downloadFileWithProgress(url, dest string, knownSize int64, sendGitHubAuth bool, onProgress func(downloaded, total int64)) error {
@@ -569,7 +558,7 @@ func downloadFileWithProgress(url, dest string, knownSize int64, sendGitHubAuth 
 		}
 	}
 
-	client := &http.Client{Timeout: 0, Transport: updateHTTPTransport}
+	client := &http.Client{Timeout: 0, Transport: netproxy.HTTPTransport()}
 	resp, err := client.Do(req)
 	if err != nil {
 		return err

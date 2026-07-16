@@ -107,18 +107,38 @@ body,
   display: inline-flex !important;
   align-items: center;
   justify-content: center;
+  position: relative;
 }
 
 .el-button.is-loading .el-icon:not(.is-loading) {
   display: none !important;
 }
 
+.el-button.is-circle.is-loading {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
 .el-button.is-circle.is-loading .el-icon.is-loading,
 .el-button.is-circle .el-icon.is-loading {
   margin: 0 !important;
-  display: inline-flex;
+  position: static !important;
+  display: inline-flex !important;
   align-items: center;
   justify-content: center;
+  left: auto !important;
+  right: auto !important;
+  top: auto !important;
+  transform: none !important;
+}
+
+.el-button.is-circle.is-loading > span {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  margin: 0 !important;
+  padding: 0 !important;
 }
 
 .el-button.is-circle > span {
@@ -282,7 +302,17 @@ html.dark .app-menu-bar .menu-inner {
 .dialog-footer .el-button.is-circle.is-loading {
   width: 28px;
   height: 28px;
+  min-width: 28px;
   padding: 0;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+.icon-actions .el-button.is-circle.is-loading .el-icon.is-loading,
+.dialog-footer .el-button.is-circle.is-loading .el-icon.is-loading {
+  margin: 0 !important;
+  position: static !important;
 }
 
 /* ========== 全局下拉：圆角 + 悬停高亮 ========== */

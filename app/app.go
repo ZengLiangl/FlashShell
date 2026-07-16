@@ -67,6 +67,7 @@ func NewApp(sessionID string) *App {
 		shellCwds:      make(map[string]string),
 	}
 	app.refreshLogSettings()
+	app.applyProxyFromConfig()
 	go app.outputEventLoop()
 	return app
 }
@@ -1268,6 +1269,7 @@ func (a *App) GetSystemSettings() (*data.GlobalConfig, error) {
 	}
 	if cfg != nil {
 		cfg.ShellMonitorIntervalMs = normalizeShellMonitorIntervalMs(cfg.ShellMonitorIntervalMs)
+		normalizeProxySettings(&cfg.ProxySettings)
 	}
 	return cfg, nil
 }
@@ -1291,12 +1293,14 @@ func (a *App) SaveShortcutSettings(settings data.ShortcutSettings) error {
 // SaveSystemSettings 保存系统设置
 func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	a.normalizeThemeSettings(&config.ThemeSettings)
+	normalizeProxySettings(&config.ProxySettings)
 	config.ShellMonitorIntervalMs = normalizeShellMonitorIntervalMs(config.ShellMonitorIntervalMs)
 	config.ShellMonitorIntervalSec = 0
 	if err := a.configManager.SaveGlobalConfig(config); err != nil {
 		return err
 	}
 	a.refreshLogSettings()
+	a.applyProxySettings(config.ProxySettings)
 	if a.sessionManager != nil && config.ThemeSettings.Mode != "" {
 		_ = a.sessionManager.SetTheme(config.ThemeSettings.Mode, config.ThemeSettings.TerminalPreset)
 	}
@@ -1305,6 +1309,7 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 		wailsRuntime.EventsEmit(a.ctx, "theme:changed", config.ThemeSettings)
 		wailsRuntime.EventsEmit(a.ctx, "system-settings:changed", map[string]any{
 			"shellMonitorIntervalMs": config.ShellMonitorIntervalMs,
+			"proxySettings":          config.ProxySettings,
 		})
 	}
 	return nil
