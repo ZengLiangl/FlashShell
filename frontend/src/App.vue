@@ -65,6 +65,7 @@
       <div class="projectlist-fullscreen">
         <HomePage ref="homePageRef" :projects="projects" :connected-count="connectedCount" :has-task="!!selectedProject"
           :task-running="status.isRunning" :connecting-name="connectingName" :sessions="shellSessions"
+          :workspace-sessions="workspaceSessions"
           @refresh="refreshConfig" @select-project="selectProject" @resume-task="resumeTaskView"
           @open-shell="enterShellMode" @connect-machine="openShellAndConnect" @add-machine="openShellMachineDialog"
           @open-system-settings="openSettingsHub('general')" />

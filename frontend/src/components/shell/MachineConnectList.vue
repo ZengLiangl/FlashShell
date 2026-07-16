@@ -31,7 +31,7 @@
           class="ml-item"
           :class="{
             connected: isConnected(machine.name),
-            connecting: connectingName === machine.name,
+            connecting: machineConnecting(machine.name),
           }"
           role="option"
           tabindex="0"
@@ -45,7 +45,7 @@
             <div class="ml-line">
               <span class="ml-name">{{ machine.name }}</span>
               <span v-if="sessionCount(machine.name) > 0" class="ml-badge">{{ sessionCount(machine.name) }} 会话</span>
-              <span v-else-if="connectingName === machine.name" class="ml-badge connecting">连接中</span>
+              <span v-else-if="machineConnecting(machine.name)" class="ml-badge connecting">连接中</span>
             </div>
             <div class="ml-addr">{{ formatMachineAddr(machine) }}</div>
           </div>
@@ -65,7 +65,7 @@
         class="ml-item"
         :class="{
           connected: isConnected(machine.name),
-          connecting: connectingName === machine.name,
+          connecting: machineConnecting(machine.name),
         }"
         role="option"
         tabindex="0"
@@ -79,7 +79,7 @@
           <div class="ml-line">
             <span class="ml-name">{{ machine.name }}</span>
             <span v-if="sessionCount(machine.name) > 0" class="ml-badge">{{ sessionCount(machine.name) }} 会话</span>
-            <span v-else-if="connectingName === machine.name" class="ml-badge connecting">连接中</span>
+            <span v-else-if="machineConnecting(machine.name)" class="ml-badge connecting">连接中</span>
           </div>
           <div class="ml-addr">{{ formatMachineAddr(machine) }}</div>
         </div>
@@ -100,6 +100,7 @@ import {
   splitMachineTree,
   formatMachineAddr,
   isMachineConnected,
+  isMachineConnecting,
   countMachineSessions,
 } from '../../utils/machineGroups'
 
@@ -109,6 +110,7 @@ export default {
   props: {
     machines: { type: Array, default: () => [] },
     sessions: { type: Array, default: () => [] },
+    workspaceSessions: { type: Array, default: () => [] },
     connectingName: { type: String, default: '' },
     showEdit: { type: Boolean, default: false },
     emptyText: { type: String, default: '暂无机器' },
@@ -150,9 +152,11 @@ export default {
 
     const isConnected = (name) => isMachineConnected(name, props.sessions)
     const sessionCount = (name) => countMachineSessions(name, props.sessions)
+    const machineConnecting = (name) =>
+      isMachineConnecting(name, props.workspaceSessions.length ? props.workspaceSessions : props.sessions)
 
     const onConnect = (machine) => {
-      if (props.connectingName) return
+      if (machineConnecting(machine.name)) return
       emit('connect', machine.name)
     }
 
@@ -164,6 +168,7 @@ export default {
       toggleGroup,
       isConnected,
       sessionCount,
+      machineConnecting,
       formatMachineAddr,
       onConnect,
     }

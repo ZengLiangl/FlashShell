@@ -7,6 +7,9 @@ import (
 	"FlashDock/define"
 )
 
+// ShellConnectCallback 异步连接完成回调（err 为 nil 表示成功）
+type ShellConnectCallback func(sessionID string, err error)
+
 // ShellSessionPool 管理远程 PTY 会话（同一机器可开多个：web1 / web1-2）
 type ShellSessionPool struct {
 	mu       sync.RWMutex
@@ -50,46 +53,72 @@ func (p *ShellSessionPool) nextSessionID(configName string) string {
 	}
 }
 
-// Connect 新建远程会话，返回会话 ID
-func (p *ShellSessionPool) Connect(machine *define.Machine, workVars map[string]string, handlerFor func(sessionID string) ShellOutputHandler) (string, error) {
+func pendingStatus(machine *define.Machine, sessionID string) (host, user string) {
+	if machine == nil {
+		return "", ""
+	}
+	if sensitive, err := machine.GetSensitiveData(); err == nil && sensitive != nil {
+		return sensitive.Host, sensitive.User
+	}
+	return "", ""
+}
+
+func (p *ShellSessionPool) runConnect(sessionID string, sm *ShellSessionManager, machine *define.Machine, workVars map[string]string, handler ShellOutputHandler, onComplete ShellConnectCallback) {
+	err := sm.Connect(sessionID, machine, workVars, handler)
+	if err != nil {
+		sm.MarkFailed()
+		if handler.OnLine != nil {
+			handler.OnLine(fmt.Sprintf("连接失败: %v", err))
+		}
+		// 失败会话移出池，避免占着「连接中」坑位；前端 tab 仍保留以便重试
+		p.RemoveSession(sessionID)
+	}
+	if handler.OnStatus != nil {
+		handler.OnStatus(sm.GetStatus())
+	}
+	if onComplete != nil {
+		onComplete(sessionID, err)
+	}
+}
+
+// Connect 新建远程会话并异步拨号，立即返回会话 ID
+func (p *ShellSessionPool) Connect(machine *define.Machine, workVars map[string]string, handlerFor func(sessionID string) ShellOutputHandler, onComplete ShellConnectCallback) (string, error) {
 	if machine == nil || machine.Name == "" {
 		return "", fmt.Errorf("机器配置无效")
 	}
+	host, user := pendingStatus(machine, "")
 	p.mu.Lock()
 	sessionID := p.nextSessionID(machine.Name)
 	sm := NewShellSessionManager()
+	sm.InitPending(sessionID, machine.Name, host, user)
 	p.sessions[sessionID] = sm
 	p.mu.Unlock()
 
-	if err := sm.Connect(sessionID, machine, workVars, handlerFor(sessionID)); err != nil {
-		p.mu.Lock()
-		delete(p.sessions, sessionID)
-		p.mu.Unlock()
-		return "", err
-	}
+	handler := handlerFor(sessionID)
+	go p.runConnect(sessionID, sm, machine, workVars, handler, onComplete)
 	return sessionID, nil
 }
 
-// ConnectID 按指定会话 ID 连接（软断开后重连）
-func (p *ShellSessionPool) ConnectID(sessionID string, machine *define.Machine, workVars map[string]string, handler ShellOutputHandler) error {
+// ConnectID 按指定会话 ID 异步连接（软断开后重连）
+func (p *ShellSessionPool) ConnectID(sessionID string, machine *define.Machine, workVars map[string]string, handler ShellOutputHandler, onComplete ShellConnectCallback) error {
 	if sessionID == "" || machine == nil {
 		return fmt.Errorf("会话或机器配置无效")
 	}
+	host, user := pendingStatus(machine, sessionID)
 	p.mu.Lock()
 	if existing, ok := p.sessions[sessionID]; ok && existing.IsConnected() {
 		p.mu.Unlock()
 		return nil
 	}
-	sm := NewShellSessionManager()
-	p.sessions[sessionID] = sm
+	sm, ok := p.sessions[sessionID]
+	if !ok {
+		sm = NewShellSessionManager()
+		p.sessions[sessionID] = sm
+	}
+	sm.InitPending(sessionID, machine.Name, host, user)
 	p.mu.Unlock()
 
-	if err := sm.Connect(sessionID, machine, workVars, handler); err != nil {
-		p.mu.Lock()
-		delete(p.sessions, sessionID)
-		p.mu.Unlock()
-		return err
-	}
+	go p.runConnect(sessionID, sm, machine, workVars, handler, onComplete)
 	return nil
 }
 
@@ -196,13 +225,22 @@ func (p *ShellSessionPool) FirstSessionOfConfig(configName string) string {
 	return ""
 }
 
-// ListSessions 列出所有活动会话状态
+// ListSessions 列出所有活动或连接中的会话状态
 func (p *ShellSessionPool) ListSessions() []define.ShellStatus {
 	p.mu.RLock()
-	defer p.mu.RUnlock()
-	result := make([]define.ShellStatus, 0, len(p.sessions))
+	sms := make([]*ShellSessionManager, 0, len(p.sessions))
 	for _, sm := range p.sessions {
-		if st := sm.GetStatus(); st.Connected {
+		sms = append(sms, sm)
+	}
+	p.mu.RUnlock()
+
+	result := make([]define.ShellStatus, 0, len(sms))
+	for _, sm := range sms {
+		st := sm.GetStatus()
+		if st == nil {
+			continue
+		}
+		if st.Connected || st.Connecting {
 			result = append(result, *st)
 		}
 	}

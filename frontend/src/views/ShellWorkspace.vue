@@ -137,6 +137,7 @@
       v-model="pickerVisible"
       :machines="machines"
       :sessions="sessions"
+      :workspace-sessions="workspaceSessions"
       :connecting-name="connectingName"
       @connect="onPickerConnect"
       @edit-machine="(m) => $emit('edit-machine', m)"

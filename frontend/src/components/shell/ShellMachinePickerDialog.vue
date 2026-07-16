@@ -32,6 +32,7 @@
       <MachineConnectList
         :machines="filteredMachines"
         :sessions="sessions"
+        :workspace-sessions="workspaceSessions"
         :connecting-name="connectingName"
         :filter-keyword="keyword"
         show-edit
@@ -56,6 +57,7 @@ export default {
     modelValue: { type: Boolean, default: false },
     machines: { type: Array, default: () => [] },
     sessions: { type: Array, default: () => [] },
+    workspaceSessions: { type: Array, default: () => [] },
     connectingName: { type: String, default: '' },
   },
   emits: ['update:modelValue', 'connect', 'edit-machine', 'add-machine', 'add-local'],

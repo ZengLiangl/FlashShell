@@ -98,6 +98,16 @@ export function isMachineConnected(machineName, sessions) {
   )
 }
 
+/** 某机器配置是否正在连接（含占位 tab） */
+export function isMachineConnecting(configName, workspaceSessions = []) {
+  if (!configName) return false
+  return (workspaceSessions || []).some(
+    (s) =>
+      s.connecting &&
+      (s.configName === configName || s.machineName === configName),
+  )
+}
+
 /** 某机器配置当前活动会话数 */
 export function countMachineSessions(configName, sessions) {
   return (sessions || []).filter(

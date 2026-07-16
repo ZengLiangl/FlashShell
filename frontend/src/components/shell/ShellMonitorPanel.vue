@@ -184,9 +184,35 @@ export default {
       memPercent: 0,
       memUsed: '0',
       memTotal: '0',
+      swapPercent: 0,
+      swapUsed: '0',
+      swapTotal: '0',
       topMem: [],
+      netIface: '',
+      netIfaces: [],
+      netRxRate: 0,
+      netTxRate: 0,
+      netRxText: '0B/s',
+      netTxText: '0B/s',
       error: '',
     })
+
+    /** 连接中 / 未连接：不拉监控，全部归零 */
+    const isIdle = () => !props.activeConnected || props.connecting
+
+    const resetToZero = (host = '') => {
+      stopTimer()
+      netHistory.value = []
+      selectedNetIface.value = ''
+      netIfaces.value = []
+      sysinfo.value = null
+      sysinfoError.value = ''
+      if (!props.activeMachine) {
+        snapshot.value = null
+        return
+      }
+      snapshot.value = zeroSnapshot(props.activeMachine, host || snapshot.value?.host || '')
+    }
 
     const displayError = computed(() => {
       const err = snapshot.value?.error
@@ -255,7 +281,7 @@ export default {
     })
 
     const loadSystemInfo = async () => {
-      if (!props.activeMachine || !props.activeConnected) {
+      if (!props.activeMachine || isIdle()) {
         sysinfo.value = null
         sysinfoError.value = ''
         return
@@ -297,13 +323,19 @@ export default {
         snapshot.value = null
         return
       }
-      if (!props.activeConnected) {
-        snapshot.value = zeroSnapshot(props.activeMachine, snapshot.value?.host || '')
+      if (isIdle()) {
+        resetToZero(snapshot.value?.host || '')
         return
       }
       loading.value = true
+      const machineAtStart = props.activeMachine
       try {
         const snap = await App.GetShellMonitor(props.activeMachine, selectedNetIface.value || '')
+        // 轮询返回时若已断开/改切机器，丢弃结果
+        if (isIdle() || props.activeMachine !== machineAtStart) {
+          resetToZero(snap?.host || '')
+          return
+        }
         // 辅助通道缺失：保留标题布局，数值归零
         if (isAuxMissingError(snap?.error)) {
           snapshot.value = {
@@ -320,8 +352,8 @@ export default {
             topMem: snap?.topMem || [],
             netIface: snap?.netIface || '',
             netIfaces: snap?.netIfaces || [],
-            netRxText: snap?.netRxText || '',
-            netTxText: snap?.netTxText || '',
+            netRxText: snap?.netRxText || '0B/s',
+            netTxText: snap?.netTxText || '0B/s',
             error: snap?.error || '',
           }
           syncNetIfaces(snap)
@@ -330,6 +362,10 @@ export default {
           }
         }
       } catch (e) {
+        if (isIdle() || props.activeMachine !== machineAtStart) {
+          resetToZero()
+          return
+        }
         if (isAuxMissingError(e)) {
           snapshot.value = zeroSnapshot(props.activeMachine, snapshot.value?.host || '')
         } else {
@@ -354,19 +390,6 @@ export default {
       }
     }
 
-    const startTimer = () => {
-      stopTimer()
-      if (!props.activeMachine) {
-        snapshot.value = null
-        return
-      }
-      if (!props.activeConnected) {
-        snapshot.value = zeroSnapshot(props.activeMachine, snapshot.value?.host || '')
-        return
-      }
-      refresh()
-      timer = setInterval(refresh, intervalMs.value)
-    }
     const stopTimer = () => {
       if (timer) {
         clearInterval(timer)
@@ -374,31 +397,49 @@ export default {
       }
     }
 
+    const startTimer = () => {
+      stopTimer()
+      if (!props.activeMachine) {
+        snapshot.value = null
+        return
+      }
+      if (isIdle()) {
+        resetToZero()
+        return
+      }
+      refresh()
+      timer = setInterval(refresh, intervalMs.value)
+    }
+
     const onSettingsChanged = (payload) => {
       const next = clampIntervalMs(payload?.shellMonitorIntervalMs)
       if (next === intervalMs.value) return
       intervalMs.value = next
-      if (props.activeMachine && props.activeConnected) {
+      if (props.activeMachine && !isIdle()) {
         startTimer()
       }
     }
 
     watch(
-      () => [props.activeMachine, props.activeConnected],
+      () => [props.activeMachine, props.activeConnected, props.connecting],
       () => {
+        if (isIdle()) {
+          resetToZero()
+          return
+        }
         netHistory.value = []
         selectedNetIface.value = ''
         netIfaces.value = []
         sysinfo.value = null
         sysinfoError.value = ''
-        if (props.activeConnected) loadSystemInfo()
+        loadSystemInfo()
         startTimer()
       },
       { immediate: true },
     )
 
     watch(sysinfoOpen, (open) => {
-      if (open && props.activeConnected && !sysinfo.value && !sysinfoLoading.value) {
+      if (open && !isIdle() && !sysinfo.value && !sysinfoLoading.value) {
         loadSystemInfo()
       }
     })

@@ -28,6 +28,8 @@ type ShellSessionManager struct {
 	configName  string // 机器配置名
 	host        string
 	user        string
+	connecting  bool
+	cancelled   bool // Disconnect 后拒绝把拨号结果写回
 	session     *ssh.Session
 	stdin       io.WriteCloser
 	cancelRead  context.CancelFunc
@@ -46,14 +48,33 @@ func (sm *ShellSessionManager) GetStatus() *define.ShellStatus {
 	return sm.statusLocked()
 }
 
+func (sm *ShellSessionManager) InitPending(sessionID, configName, host, user string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.sessionID = sessionID
+	sm.configName = configName
+	sm.host = host
+	sm.user = user
+	sm.connecting = true
+	sm.cancelled = false
+}
+
+func (sm *ShellSessionManager) MarkFailed() {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.connecting = false
+}
+
 func (sm *ShellSessionManager) statusLocked() *define.ShellStatus {
 	connected := sm.client != nil && sm.client.IsConnected() && sm.session != nil
+	connecting := sm.connecting && !connected
 	configName := sm.configName
 	if configName == "" {
 		configName = sm.sessionID
 	}
 	return &define.ShellStatus{
 		Connected:   connected,
+		Connecting:  connecting,
 		MachineName: sm.sessionID,
 		ConfigName:  configName,
 		TabLabel:    ShellTabLabel(sm.sessionID, configName, ShellKindRemote),
@@ -82,31 +103,30 @@ func (sm *ShellSessionManager) SharedSSHClient() *SSHClient {
 }
 
 // Connect 建立 SSH 连接并启动交互式 PTY Shell。sessionID 为池内唯一键。
+// 网络拨号不持有 sm.mu，避免 ListSessions/GetStatus 被长时间阻塞。
 func (sm *ShellSessionManager) Connect(sessionID string, machine *define.Machine, workVars map[string]string, handler ShellOutputHandler) error {
 	sm.mu.Lock()
-
 	if sm.client != nil && sm.client.IsConnected() {
 		sm.mu.Unlock()
 		return nil // 幂等
 	}
+	sm.connecting = true
+	sm.mu.Unlock()
 
 	client := NewSSHClient(machine, workVars)
 	if err := client.Connect(machine, false); err != nil {
-		sm.mu.Unlock()
 		return err
 	}
 
 	sensitive, err := machine.GetSensitiveData()
 	if err != nil {
-		client.Close()
-		sm.mu.Unlock()
+		_ = client.Close()
 		return err
 	}
 
 	session, err := client.remoteMachine.NewSession()
 	if err != nil {
-		client.Close()
-		sm.mu.Unlock()
+		_ = client.Close()
 		return fmt.Errorf("创建 SSH 会话失败: %w", err)
 	}
 
@@ -116,32 +136,28 @@ func (sm *ShellSessionManager) Connect(sessionID string, machine *define.Machine
 		ssh.TTY_OP_OSPEED: 14400,
 	}
 	if err := session.RequestPty("xterm-256color", 120, 40, modes); err != nil {
-		session.Close()
-		client.Close()
-		sm.mu.Unlock()
+		_ = session.Close()
+		_ = client.Close()
 		return fmt.Errorf("请求 PTY 失败: %w", err)
 	}
 
 	stdin, err := session.StdinPipe()
 	if err != nil {
-		session.Close()
-		client.Close()
-		sm.mu.Unlock()
+		_ = session.Close()
+		_ = client.Close()
 		return fmt.Errorf("获取 stdin 失败: %w", err)
 	}
 
 	stdout, err := session.StdoutPipe()
 	if err != nil {
-		session.Close()
-		client.Close()
-		sm.mu.Unlock()
+		_ = session.Close()
+		_ = client.Close()
 		return fmt.Errorf("获取 stdout 失败: %w", err)
 	}
 
 	if err := session.Shell(); err != nil {
-		session.Close()
-		client.Close()
-		sm.mu.Unlock()
+		_ = session.Close()
+		_ = client.Close()
 		return fmt.Errorf("启动 Shell 失败: %w", err)
 	}
 
@@ -150,6 +166,22 @@ func (sm *ShellSessionManager) Connect(sessionID string, machine *define.Machine
 
 	if sessionID == "" {
 		sessionID = machine.Name
+	}
+
+	sm.mu.Lock()
+	if sm.cancelled {
+		sm.mu.Unlock()
+		cancel()
+		_ = session.Close()
+		_ = client.Close()
+		return fmt.Errorf("会话已关闭")
+	}
+	if sm.client != nil && sm.client.IsConnected() {
+		sm.mu.Unlock()
+		cancel()
+		_ = session.Close()
+		_ = client.Close()
+		return nil
 	}
 	sm.client = client
 	sm.sessionID = sessionID
@@ -160,11 +192,10 @@ func (sm *ShellSessionManager) Connect(sessionID string, machine *define.Machine
 	sm.stdin = stdin
 	sm.cancelRead = cancel
 	sm.readDone = readDone
-
-	go sm.readPTY(stdout, handler, ctx, readDone)
-
+	sm.connecting = false
 	sm.mu.Unlock()
 
+	go sm.readPTY(stdout, handler, ctx, readDone)
 	sm.notifyStatus(handler)
 	return nil
 }
@@ -223,6 +254,8 @@ func (sm *ShellSessionManager) readPTY(stdout io.Reader, handler ShellOutputHand
 // Disconnect 断开 Shell 连接
 func (sm *ShellSessionManager) Disconnect(handler ShellOutputHandler) error {
 	sm.mu.Lock()
+	sm.cancelled = true
+	sm.connecting = false
 	label := ShellTabLabel(sm.sessionID, sm.configName, ShellKindRemote)
 	if sm.cancelRead != nil {
 		sm.cancelRead()

@@ -39,12 +39,11 @@ func NewShellAuxManager() *ShellAuxManager {
 // Connect 建立辅助 SSH；SFTP 尽力初始化，失败不阻断监控/Exec。
 func (a *ShellAuxManager) Connect(machine *define.Machine, workVars map[string]string) error {
 	a.mu.Lock()
-	defer a.mu.Unlock()
-
 	if a.client != nil && a.client.IsConnected() {
 		_ = a.client.Close()
 		a.client = nil
 	}
+	a.mu.Unlock()
 
 	client := NewSSHClient(machine, workVars)
 	if err := client.Connect(machine, false); err != nil {
@@ -55,6 +54,16 @@ func (a *ShellAuxManager) Connect(machine *define.Machine, workVars map[string]s
 		_ = client.Close()
 		return err
 	}
+	// SFTP 初始化可能较慢，不持有 a.mu
+	if rm := client.remoteMachine; rm != nil {
+		_ = rm.EnsureSFTP()
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.client != nil {
+		_ = a.releaseLocked()
+	}
 	a.client = client
 	a.ownsClient = true
 	a.machineName = machine.Name
@@ -62,22 +71,24 @@ func (a *ShellAuxManager) Connect(machine *define.Machine, workVars map[string]s
 	a.uidNames = nil
 	a.gidNames = nil
 	a.idMapsReady = false
-	if rm := client.remoteMachine; rm != nil {
-		_ = rm.EnsureSFTP()
-	}
 	return nil
 }
 
 // Attach 复用 PTY 已有 SSH 连接初始化 SFTP/Exec（避免第二路 TCP 触发 MaxSessions / packet too long）。
 func (a *ShellAuxManager) Attach(client *SSHClient, machineName, host string) error {
-	a.mu.Lock()
-	defer a.mu.Unlock()
-
-	if a.client != nil {
-		_ = a.releaseLocked()
-	}
 	if client == nil || !client.IsConnected() {
 		return fmt.Errorf("共享 SSH 未连接")
+	}
+	if rm := client.remoteMachine; rm != nil {
+		if err := rm.EnsureSFTP(); err != nil {
+			return err
+		}
+	}
+
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.client != nil {
+		_ = a.releaseLocked()
 	}
 	a.client = client
 	a.ownsClient = false
@@ -86,12 +97,6 @@ func (a *ShellAuxManager) Attach(client *SSHClient, machineName, host string) er
 	a.uidNames = nil
 	a.gidNames = nil
 	a.idMapsReady = false
-	if rm := client.remoteMachine; rm != nil {
-		if err := rm.EnsureSFTP(); err != nil {
-			a.client = nil
-			return err
-		}
-	}
 	return nil
 }
 

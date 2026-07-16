@@ -1504,6 +1504,19 @@ func (a *App) applyWindowTheme(mode string) {
 	}
 }
 
+func (a *App) onRemoteShellConnected(sessionID string, machineConfig *define.Machine, configName string) {
+	if sessionID == "" || machineConfig == nil {
+		return
+	}
+	a.ensureShellAux(sessionID, machineConfig)
+	if err := a.ensureMachineTunnels(machineConfig); err != nil {
+		fmt.Printf("SSH 隧道启动失败(%s): %v\n", configName, err)
+	}
+	if sensitive, sErr := machineConfig.GetSensitiveData(); sErr == nil && a.shellHistory != nil {
+		_ = a.shellHistory.RecordConnect(machineConfig, sensitive.Host, sensitive.Port, sensitive.User)
+	}
+}
+
 // ConnectShell 连接远程 Shell，返回新会话 ID（同机可多开：web1 / web1-2）
 func (a *App) ConnectShell(configName string) (string, error) {
 	if machine.IsLocalShellID(configName) {
@@ -1516,21 +1529,18 @@ func (a *App) ConnectShell(configName string) (string, error) {
 		return "", fmt.Errorf("未找到机器配置: %s", configName)
 	}
 
-	sessionID, err := a.shellPool.Connect(machineConfig, a.configManager.GetWorkPathVars(), a.shellHandlerFor)
+	workVars := a.configManager.GetWorkPathVars()
+	sessionID, err := a.shellPool.Connect(machineConfig, workVars, a.shellHandlerFor, func(id string, connectErr error) {
+		if connectErr == nil {
+			a.onRemoteShellConnected(id, machineConfig, configName)
+		}
+		a.emitShellSessions()
+	})
 	if err != nil {
 		return "", err
 	}
-
-	a.ensureShellAux(sessionID, machineConfig)
-	if err := a.ensureMachineTunnels(machineConfig); err != nil {
-		fmt.Printf("SSH 隧道启动失败(%s): %v\n", configName, err)
-	}
-
-	if sensitive, sErr := machineConfig.GetSensitiveData(); sErr == nil && a.shellHistory != nil {
-		_ = a.shellHistory.RecordConnect(machineConfig, sensitive.Host, sensitive.Port, sensitive.User)
-	}
-
-	a.emitShellSessions()
+	// 立即推送「连接中」状态；拨号在后台进行，不阻塞本调用
+	go a.emitShellSessions()
 	return sessionID, nil
 }
 
@@ -1553,14 +1563,16 @@ func (a *App) ReconnectShell(sessionID string) (string, error) {
 		a.emitShellSessions()
 		return sessionID, nil
 	}
-	if err := a.shellPool.ConnectID(sessionID, machineConfig, a.configManager.GetWorkPathVars(), a.shellHandlerFor(sessionID)); err != nil {
+	workVars := a.configManager.GetWorkPathVars()
+	if err := a.shellPool.ConnectID(sessionID, machineConfig, workVars, a.shellHandlerFor(sessionID), func(_ string, connectErr error) {
+		if connectErr == nil {
+			a.onRemoteShellConnected(sessionID, machineConfig, configName)
+		}
+		a.emitShellSessions()
+	}); err != nil {
 		return "", err
 	}
-	a.ensureShellAux(sessionID, machineConfig)
-	if err := a.ensureMachineTunnels(machineConfig); err != nil {
-		fmt.Printf("SSH 隧道启动失败(%s): %v\n", configName, err)
-	}
-	a.emitShellSessions()
+	go a.emitShellSessions()
 	return sessionID, nil
 }
 

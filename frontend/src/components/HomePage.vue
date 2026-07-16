@@ -130,6 +130,7 @@
             <MachineConnectList
               :machines="filteredMachines"
               :sessions="sessions"
+              :workspace-sessions="workspaceSessions"
               :connecting-name="connectingName"
               :filter-keyword="machineKeyword"
               empty-text="无匹配机器"
@@ -147,7 +148,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Refresh, Check, FolderOpened } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
-import { machineMatchesKeyword } from '../utils/machineGroups'
+import { machineMatchesKeyword, isMachineConnecting } from '../utils/machineGroups'
 import { mergeShortcuts, formatShortcut } from '../utils/shortcuts'
 import MachineConnectList from './shell/MachineConnectList.vue'
 
@@ -168,6 +169,7 @@ export default {
     taskRunning: { type: Boolean, default: false },
     connectingName: { type: String, default: '' },
     sessions: { type: Array, default: () => [] },
+    workspaceSessions: { type: Array, default: () => [] },
   },
   emits: [
     'refresh',
@@ -248,7 +250,8 @@ export default {
     const hasProjects = computed(() => (props.projects || []).length > 0)
 
     const onConnectMachine = (name) => {
-      if (props.connectingName) return
+      const tabs = props.workspaceSessions.length ? props.workspaceSessions : props.sessions
+      if (isMachineConnecting(name, tabs)) return
       emit('connect-machine', name)
     }
 

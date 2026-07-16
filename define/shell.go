@@ -3,6 +3,7 @@ package define
 // ShellStatus Shell 会话状态
 type ShellStatus struct {
 	Connected      bool   `json:"connected"`
+	Connecting     bool   `json:"connecting"`
 	MachineName    string `json:"machineName"` // 会话唯一 ID（远程可为 name / name#2）
 	ConfigName     string `json:"configName"`  // 机器配置名（远程）；本地为空或同 MachineName
 	TabLabel       string `json:"tabLabel"`    // Tab 显示名

@@ -857,6 +857,7 @@ export namespace define {
 	
 	export class ShellStatus {
 	    connected: boolean;
+	    connecting: boolean;
 	    machineName: string;
 	    configName: string;
 	    tabLabel: string;
@@ -873,6 +874,7 @@ export namespace define {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.connected = source["connected"];
+	        this.connecting = source["connecting"];
 	        this.machineName = source["machineName"];
 	        this.configName = source["configName"];
 	        this.tabLabel = source["tabLabel"];

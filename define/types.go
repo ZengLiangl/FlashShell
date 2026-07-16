@@ -209,17 +209,17 @@ func (rm *RemoteMachine) Connect(machine *Machine, withSFTP bool) error {
 		User:            sensitiveData.User,
 		Auth:            auth,
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // 生产环境应该验证主机密钥
-		Timeout:         30 * time.Second,
+		Timeout:         10 * time.Second,
 	}
 
 	addr := fmt.Sprintf("%s:%d", sensitiveData.Host, sensitiveData.Port)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	conn, err := DialContext(ctx, "tcp", addr)
 	if err != nil {
 		return fmt.Errorf("SSH连接失败: %w", err)
 	}
-	_ = conn.SetDeadline(time.Now().Add(30 * time.Second))
+	_ = conn.SetDeadline(time.Now().Add(10 * time.Second))
 	c, chans, reqs, err := ssh.NewClientConn(conn, addr, config)
 	if err != nil {
 		_ = conn.Close()

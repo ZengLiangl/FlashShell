@@ -27,7 +27,8 @@
               <span class="session-tab-status" :class="tabStatusClass(session)" aria-hidden="true" />
               <span class="session-tab-label">{{ tabDisplayLabel(session) }}</span>
             </div>
-            <button type="button" class="session-tab-close" title="关闭" @click.stop="onTabRemove(session.machineName)">
+            <button type="button" class="session-tab-close" title="关闭" @mousedown.stop
+              @click.stop="onTabRemove(session.machineName)">
               ×
             </button>
           </div>
@@ -327,7 +328,10 @@ export default {
 
     const onDocClick = () => hidePaneMenu()
     onMounted(() => document.addEventListener('click', onDocClick))
-    onUnmounted(() => document.removeEventListener('click', onDocClick))
+    onUnmounted(() => {
+      document.removeEventListener('click', onDocClick)
+      document.body.classList.remove('tab-drag-active', 'tab-reorder-active')
+    })
 
     const setTerminalRef = (name, el) => {
       if (el) terminalRefs.value[name] = el
@@ -443,7 +447,6 @@ export default {
 
     const onTabMouseDown = (e, sessionId) => {
       if (e.button !== 0 || e.target.closest('.session-tab-close')) return
-      e.preventDefault()
 
       const startX = e.clientX
       const startY = e.clientY
@@ -475,6 +478,7 @@ export default {
           else if (dy >= DRAG_SPLIT_PX && dy > Math.abs(dx)) mode = 'split'
           if (mode) {
             tabDragMoved.value = true
+            ev.preventDefault()
             document.body.classList.add('tab-drag-active')
           }
         }
@@ -823,7 +827,6 @@ export default {
   color: var(--app-accent-color);
   background: var(--app-card-bg);
   border-color: color-mix(in srgb, var(--app-accent-color) 35%, var(--app-border));
-  height: 35px;
 }
 
 .session-tab.in-split {
@@ -881,6 +884,7 @@ export default {
   overflow: hidden;
   flex-shrink: 0;
   align-self: center;
+  pointer-events: none;
   transition: opacity 0.15s ease, width 0.15s ease, margin 0.15s ease, color 0.15s ease;
 }
 
@@ -889,6 +893,7 @@ export default {
   width: 14px;
   margin-left: 5px;
   opacity: 1;
+  pointer-events: auto;
 }
 
 .session-tab-close:hover {
