@@ -57,11 +57,62 @@ html.dark .terminal-preset-solarized {
   --terminal-fg: #839496;
 }
 
+html.dark .terminal-preset-dracula {
+  --terminal-bg: #282a36;
+  --terminal-fg: #f8f8f2;
+}
+
+html.dark .terminal-preset-nord {
+  --terminal-bg: #2e3440;
+  --terminal-fg: #d8dee9;
+}
+
+html.dark .terminal-preset-one-dark {
+  --terminal-bg: #282c34;
+  --terminal-fg: #abb2bf;
+}
+
+html.dark .terminal-preset-tokyo-night {
+  --terminal-bg: #1a1b26;
+  --terminal-fg: #a9b1d6;
+}
+
+.terminal-preset-github-light {
+  --terminal-bg: #ffffff;
+  --terminal-fg: #24292f;
+}
+
 html,
 body,
 #app {
   background: var(--app-bg);
   color: var(--app-text);
+  font-family: var(--app-font-family, system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif);
+}
+
+/* 圆形按钮 loading 居中，避免与 slot 图标叠位 */
+.el-button.is-circle {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+.el-button.is-loading .el-icon:not(.is-loading) {
+  display: none !important;
+}
+
+.el-button.is-circle.is-loading .el-icon.is-loading,
+.el-button.is-circle .el-icon.is-loading {
+  margin: 0 !important;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.el-button.is-circle > span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .app-container {
@@ -158,7 +209,7 @@ html.dark .app-menu-bar .menu-inner {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 2px;
+  gap: 8px;
   line-height: 1;
   vertical-align: middle;
 }
@@ -213,4 +264,11 @@ html.dark .app-menu-bar .menu-inner {
 .icon-actions.icon-actions--sm .el-button.is-link {
   height: 24px;
   min-height: 24px;
+}
+
+.icon-actions .el-button.is-circle.is-loading,
+.dialog-footer .el-button.is-circle.is-loading {
+  width: 28px;
+  height: 28px;
+  padding: 0;
 }

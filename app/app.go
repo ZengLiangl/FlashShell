@@ -1312,7 +1312,11 @@ func (a *App) OpenExecutionHistory() {
 // GetThemeSettings 获取当前主题设置（会话优先，其次全局）
 func (a *App) GetThemeSettings() data.ThemeSettings {
 	globalConfig, err := a.configManager.GetGlobalConfig()
-	settings := data.ThemeSettings{Mode: "light", TerminalPreset: "classic", ShellFontSize: 13, ShellLineHeight: 1.2}
+	settings := data.ThemeSettings{
+		Mode: "light", TerminalPreset: "classic", UiAccent: "blue",
+		UiFontFamily: "system", ShellFontFamily: "consolas",
+		ShellFontSize: 13, ShellLineHeight: 1.2,
+	}
 	if err == nil && globalConfig != nil {
 		settings = globalConfig.ThemeSettings
 	}
@@ -1333,8 +1337,17 @@ func (a *App) normalizeThemeSettings(settings *data.ThemeSettings) {
 	if settings.Mode == "" {
 		settings.Mode = "light"
 	}
+	if settings.UiAccent == "" {
+		settings.UiAccent = "blue"
+	}
 	if settings.TerminalPreset == "" {
 		settings.TerminalPreset = "classic"
+	}
+	if settings.UiFontFamily == "" {
+		settings.UiFontFamily = "system"
+	}
+	if settings.ShellFontFamily == "" {
+		settings.ShellFontFamily = "consolas"
 	}
 	if settings.ShellFontSize <= 0 {
 		settings.ShellFontSize = 13
@@ -1488,10 +1501,10 @@ func (a *App) GetShellMonitor(machineName string) *define.ShellMonitorSnapshot {
 				host = s.Host
 			}
 		}
+		// 辅助通道未建立（如已断开）：返回空快照，不向 UI 暴露错误文案
 		return &define.ShellMonitorSnapshot{
 			MachineName: machineName,
 			Host:        host,
-			Error:       err.Error(),
 			UpdatedAt:   time.Now().Unix(),
 			TopMem:      []define.ShellProcessStat{},
 		}

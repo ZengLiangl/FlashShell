@@ -26,6 +26,7 @@ import * as App from '../../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../../wailsjs/runtime/runtime'
 import { registerShellWriter } from '../../utils/shellOutputBuffer'
 import { useTheme } from '../../composables/useTheme'
+import { terminalThemeForPreset, getTerminalFont } from '../../utils/themePresets'
 
 export default {
   name: 'ShellTerminal',
@@ -45,7 +46,7 @@ export default {
     const fitAddon = ref(null)
     const searchAddon = ref(null)
     const ctx = reactive({ visible: false, x: 0, y: 0, selection: '' })
-    const { shellFontSize, shellLineHeight, terminalPreset } = useTheme()
+    const { shellFontSize, shellLineHeight, terminalPreset, shellFontFamily } = useTheme()
     let resizeObserver = null
     let fitTimers = []
     let initialized = false
@@ -124,34 +125,6 @@ export default {
       App.ClearShellOutput(props.machineName).catch(() => {})
     }
 
-    const terminalThemeForPreset = (preset) => {
-      const themes = {
-        classic: {
-          background: '#0d1117',
-          foreground: '#c9d1d9',
-          cursor: '#58a6ff',
-          // 当前搜索命中会用 select()，避免默认选区把文字衬成偏红
-          selectionBackground: '#1f6feb',
-          selectionForeground: '#ffffff',
-        },
-        monokai: {
-          background: '#272822',
-          foreground: '#f8f8f2',
-          cursor: '#f8f8f0',
-          selectionBackground: '#1f6feb',
-          selectionForeground: '#ffffff',
-        },
-        solarized: {
-          background: '#002b36',
-          foreground: '#839496',
-          cursor: '#93a1a1',
-          selectionBackground: '#268bd2',
-          selectionForeground: '#fdf6e3',
-        },
-      }
-      return themes[preset] || themes.classic
-    }
-
     const decodeBase64 = (b64) => {
       const binary = atob(b64)
       const bytes = new Uint8Array(binary.length)
@@ -207,6 +180,7 @@ export default {
       if (!term.value) return
       term.value.options.fontSize = shellFontSize.value || 13
       term.value.options.lineHeight = shellLineHeight.value || 1.2
+      term.value.options.fontFamily = getTerminalFont(shellFontFamily.value).value
       term.value.options.theme = terminalThemeForPreset(terminalPreset.value)
       scheduleFit()
     }
@@ -218,7 +192,7 @@ export default {
         cursorBlink: true,
         fontSize: shellFontSize.value || 13,
         lineHeight: shellLineHeight.value || 1.2,
-        fontFamily: 'Consolas, "Courier New", monospace',
+        fontFamily: getTerminalFont(shellFontFamily.value).value,
         theme: terminalThemeForPreset(terminalPreset.value),
         // SearchAddon 高亮依赖 experimental decoration API
         allowProposedApi: true,
@@ -523,7 +497,7 @@ export default {
       // 查找与匹配计数由工作区触发（findNext/findPrevious），避免重复前进
     })
 
-    watch([shellFontSize, shellLineHeight, terminalPreset], () => {
+    watch([shellFontSize, shellLineHeight, terminalPreset, shellFontFamily], () => {
       applyTerminalAppearance()
     })
 
@@ -531,6 +505,7 @@ export default {
       if (settings?.shellFontSize > 0) shellFontSize.value = settings.shellFontSize
       if (settings?.shellLineHeight > 0) shellLineHeight.value = settings.shellLineHeight
       if (settings?.terminalPreset) terminalPreset.value = settings.terminalPreset
+      if (settings?.shellFontFamily) shellFontFamily.value = settings.shellFontFamily
       applyTerminalAppearance()
     }
 

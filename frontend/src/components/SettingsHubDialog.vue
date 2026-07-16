@@ -196,8 +196,15 @@ export default {
 .hub-main-body {
   flex: 1;
   min-height: 0;
-  overflow: auto;
-  padding: 4px 18px 16px;
+  overflow: hidden;
+  padding: 4px 18px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.hub-main-body > * {
+  flex: 1;
+  min-height: 0;
 }
 </style>
 

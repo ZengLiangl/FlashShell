@@ -1,8 +1,8 @@
 <template>
   <div class="shell-file-panel" :class="{ collapsed: !expanded }">
     <div
-      v-if="expanded"
       class="height-handle"
+      :class="{ 'is-collapsed-edge': !expanded }"
       title="拖动调整高度"
       @mousedown="startHeightResize"
     />
@@ -217,6 +217,10 @@ export default {
   ],
   setup(props, { emit, expose }) {
     const HEIGHT_KEY = 'shell.sftpBodyHeight'
+    const isAuxMissingError = (msg) => /辅助连接(未建立|不存在)/.test(String(msg || ''))
+    const setPanelError = (e) => {
+      error.value = isAuxMissingError(e) ? '' : String(e || '')
+    }
     const DEFAULT_BODY_HEIGHT = 220
     const MIN_BODY_HEIGHT = 120
     const MAX_BODY_RATIO = 0.65
@@ -419,7 +423,7 @@ export default {
       try {
         entries.value = await listDir(cwd.value)
       } catch (e) {
-        error.value = String(e)
+        setPanelError(e)
         entries.value = []
       } finally {
         loading.value = false
@@ -509,7 +513,7 @@ export default {
         }
         await setCwd(next)
       } catch (e) {
-        if (seq === navSeq) error.value = String(e)
+        if (seq === navSeq) setPanelError(e)
       }
     }
 
@@ -585,8 +589,8 @@ export default {
         entries.value = await listDir(cwd.value)
         error.value = ''
       } catch (e) {
-        // 当前目录突然不存在时保留展示，仅提示
-        error.value = String(e)
+        // 当前目录突然不存在时保留展示；辅助连接断开则不提示
+        setPanelError(e)
       }
     }
 
@@ -603,18 +607,22 @@ export default {
       }
     }
 
+    const bootstrapExpand = async () => {
+      let start = cwd.value
+      try {
+        const remote = await App.GetShellPtyCwd(props.machineName)
+        if (remote && String(remote).startsWith('/')) start = remote
+      } catch {
+        // 使用 cwdHint / home
+      }
+      await setCwd(start || await ensureHome())
+      startPwdTimer()
+    }
+
     const toggle = async () => {
       expanded.value = !expanded.value
       if (expanded.value) {
-        let start = cwd.value
-        try {
-          const remote = await App.GetShellPtyCwd(props.machineName)
-          if (remote && String(remote).startsWith('/')) start = remote
-        } catch {
-          // 使用 cwdHint / home
-        }
-        await setCwd(start || await ensureHome())
-        startPwdTimer()
+        await bootstrapExpand()
       } else {
         stopPwdTimer()
         closeMenu()
@@ -626,16 +634,49 @@ export default {
     const startHeightResize = (e) => {
       e.preventDefault()
       const startY = e.clientY
+      const opening = !expanded.value
       const startH = bodyHeight.value
+      const OPEN_THRESHOLD = 6
+      const COLLAPSE_THRESHOLD = 48
+      let didOpen = false
+
       const onMove = (ev) => {
         const delta = startY - ev.clientY
         const maxH = Math.floor(window.innerHeight * MAX_BODY_RATIO)
+        if (opening) {
+          if (!didOpen) {
+            if (delta < OPEN_THRESHOLD) return
+            didOpen = true
+            expanded.value = true
+            bodyHeight.value = delta
+            void bootstrapExpand().then(() => notifyLayout())
+          } else {
+            bodyHeight.value = Math.min(maxH, Math.max(0, delta))
+          }
+          notifyLayout()
+          return
+        }
         bodyHeight.value = Math.min(maxH, Math.max(MIN_BODY_HEIGHT, startH + delta))
         notifyLayout()
       }
+
       const onUp = () => {
         window.removeEventListener('mousemove', onMove)
         window.removeEventListener('mouseup', onUp)
+        if (opening) {
+          if (!didOpen) return
+          if (bodyHeight.value < COLLAPSE_THRESHOLD) {
+            expanded.value = false
+            bodyHeight.value = startH >= MIN_BODY_HEIGHT ? startH : MIN_BODY_HEIGHT
+            stopPwdTimer()
+            closeMenu()
+          } else {
+            bodyHeight.value = Math.max(MIN_BODY_HEIGHT, bodyHeight.value)
+            localStorage.setItem(HEIGHT_KEY, String(bodyHeight.value))
+          }
+          notifyLayout()
+          return
+        }
         localStorage.setItem(HEIGHT_KEY, String(bodyHeight.value))
         notifyLayout()
       }
@@ -840,7 +881,7 @@ export default {
         }
         await setCwd(start)
       } catch (e) {
-        error.value = String(e)
+        setPanelError(e)
       }
     })
 
@@ -927,6 +968,10 @@ export default {
   max-height: none;
 }
 
+.shell-file-panel.collapsed {
+  overflow: visible;
+}
+
 .height-handle {
   height: 5px;
   cursor: row-resize;
@@ -935,8 +980,17 @@ export default {
   border-bottom: 1px solid transparent;
 }
 
+.height-handle.is-collapsed-edge {
+  position: absolute;
+  top: -3px;
+  left: 0;
+  right: 0;
+  height: 8px;
+  z-index: 5;
+}
+
 .height-handle:hover {
-  background: rgba(64, 158, 255, 0.25);
+  background: rgba(64, 158, 255, 0.08);
 }
 
 .file-toolbar {

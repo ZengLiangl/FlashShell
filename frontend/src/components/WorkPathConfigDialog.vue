@@ -57,11 +57,17 @@
                 </el-form-item>
             </el-form>
             <template #footer>
-                <div class="dialog-footer">
-                    <el-button @click="workPathEditVisible = false">取消</el-button>
-                    <el-button type="primary" @click="saveWorkPath" :loading="savingWorkPath">
-                        {{ editingWorkPath ? '更新' : '添加' }}
-                    </el-button>
+                <div class="dialog-footer icon-actions">
+                    <el-tooltip content="取消" placement="top">
+                        <el-button circle @click="workPathEditVisible = false">
+                            <el-icon><Close /></el-icon>
+                        </el-button>
+                    </el-tooltip>
+                    <el-tooltip :content="editingWorkPath ? '更新' : '添加'" placement="top">
+                        <el-button type="primary" circle :loading="savingWorkPath" @click="saveWorkPath">
+                            <el-icon v-if="!savingWorkPath"><Check /></el-icon>
+                        </el-button>
+                    </el-tooltip>
                 </div>
             </template>
         </el-dialog>
@@ -71,12 +77,12 @@
 <script>
 import { ref, reactive, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Plus, Edit, Delete } from '@element-plus/icons-vue'
+import { Plus, Edit, Delete, Close, Check } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
 
 export default {
     name: 'WorkPathConfigDialog',
-    components: { Plus, Edit, Delete },
+    components: { Plus, Edit, Delete, Close, Check },
     props: {
         modelValue: { type: Boolean, default: false },
         embedded: { type: Boolean, default: false },

@@ -200,7 +200,6 @@ func (a *ShellAuxManager) FetchMonitor() *define.ShellMonitorSnapshot {
 		TopMem:      []define.ShellProcessStat{},
 	}
 	if !a.IsConnected() {
-		snap.Error = "辅助连接未建立"
 		return snap
 	}
 

@@ -95,7 +95,10 @@ export namespace data {
 	}
 	export class ThemeSettings {
 	    mode: string;
+	    uiAccent: string;
 	    terminalPreset: string;
+	    uiFontFamily: string;
+	    shellFontFamily: string;
 	    shellFontSize: number;
 	    shellLineHeight: number;
 	
@@ -106,7 +109,10 @@ export namespace data {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.mode = source["mode"];
+	        this.uiAccent = source["uiAccent"];
 	        this.terminalPreset = source["terminalPreset"];
+	        this.uiFontFamily = source["uiFontFamily"];
+	        this.shellFontFamily = source["shellFontFamily"];
 	        this.shellFontSize = source["shellFontSize"];
 	        this.shellLineHeight = source["shellLineHeight"];
 	    }

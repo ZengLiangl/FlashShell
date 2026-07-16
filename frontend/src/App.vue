@@ -1668,6 +1668,10 @@ export default {
   gap: 12px;
 }
 
+.dialog-footer.icon-actions {
+  gap: 10px;
+}
+
 /* 机器配置表格样式 */
 .machine-config-container .el-table {
   border-radius: 8px;

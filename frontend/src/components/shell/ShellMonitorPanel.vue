@@ -9,7 +9,6 @@
           <SwitchButton v-if="activeConnected" />
           <Connection v-else />
         </el-icon>
-        <!-- <span>{{ activeConnected ? '断开' : '连接' }}</span> -->
       </el-button>
     </div>
 
@@ -31,7 +30,7 @@
 
       <div class="field">
         <div class="label">运行时长</div>
-        <div class="value">{{ snapshot?.uptimeText || '-' }}</div>
+        <div class="value">{{ snapshot?.uptimeText || '0' }}</div>
       </div>
 
       <div class="metric" :class="{ 'is-high': isHighUsage(snapshot?.cpuPercent) }">
@@ -53,7 +52,7 @@
         <div class="metric-head">
           <span>内存</span>
           <span class="metric-value" :class="{ 'is-danger': isHighUsage(snapshot?.memPercent) }">
-            {{ formatPct(snapshot?.memPercent) }} · {{ snapshot?.memUsed || '-' }}/{{ snapshot?.memTotal || '-' }}
+            {{ formatPct(snapshot?.memPercent) }} · {{ snapshot?.memUsed || '0' }}/{{ snapshot?.memTotal || '0' }}
           </span>
         </div>
         <el-progress
@@ -81,16 +80,18 @@
         </div>
       </div>
 
-      <div v-if="snapshot?.error" class="error">{{ snapshot.error }}</div>
+      <div v-if="displayError" class="error">{{ displayError }}</div>
     </template>
   </div>
 </template>
 
 <script>
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Connection, SwitchButton } from '@element-plus/icons-vue'
 import * as App from '../../../wailsjs/go/app/App'
+
+const isAuxMissingError = (msg) => /辅助连接(未建立|不存在)/.test(String(msg || ''))
 
 export default {
   name: 'ShellMonitorPanel',
@@ -109,6 +110,24 @@ export default {
     /** 占用 ≥80% 视为过高，标红提示 */
     const HIGH_USAGE = 80
 
+    const zeroSnapshot = (name, host = '') => ({
+      machineName: name || '',
+      host: host || '',
+      uptimeText: '0',
+      cpuPercent: 0,
+      memPercent: 0,
+      memUsed: '0',
+      memTotal: '0',
+      topMem: [],
+      error: '',
+    })
+
+    const displayError = computed(() => {
+      const err = snapshot.value?.error
+      if (!err || isAuxMissingError(err)) return ''
+      return err
+    })
+
     const clampPct = (v) => {
       const n = Number(v) || 0
       return Math.max(0, Math.min(100, Math.round(n)))
@@ -116,7 +135,7 @@ export default {
     const formatPct = (v) => `${clampPct(v)}%`
     const formatPct1 = (v) => {
       const n = Number(v)
-      if (!Number.isFinite(n)) return '-'
+      if (!Number.isFinite(n)) return '0.0%'
       return `${n.toFixed(1)}%`
     }
     const isHighUsage = (v) => {
@@ -130,14 +149,38 @@ export default {
         snapshot.value = null
         return
       }
+      if (!props.activeConnected) {
+        snapshot.value = zeroSnapshot(props.activeMachine, snapshot.value?.host || '')
+        return
+      }
       loading.value = true
       try {
-        snapshot.value = await App.GetShellMonitor(props.activeMachine)
+        const snap = await App.GetShellMonitor(props.activeMachine)
+        // 辅助通道缺失：保留标题布局，数值归零
+        if (isAuxMissingError(snap?.error)) {
+          snapshot.value = {
+            ...zeroSnapshot(props.activeMachine, snap?.host || ''),
+            host: snap?.host || '',
+          }
+        } else {
+          snapshot.value = {
+            ...zeroSnapshot(props.activeMachine),
+            ...snap,
+            uptimeText: snap?.uptimeText || '0',
+            memUsed: snap?.memUsed || '0',
+            memTotal: snap?.memTotal || '0',
+            topMem: snap?.topMem || [],
+            error: snap?.error || '',
+          }
+        }
       } catch (e) {
-        snapshot.value = {
-          machineName: props.activeMachine,
-          error: String(e),
-          topMem: [],
+        if (isAuxMissingError(e)) {
+          snapshot.value = zeroSnapshot(props.activeMachine, snapshot.value?.host || '')
+        } else {
+          snapshot.value = {
+            ...zeroSnapshot(props.activeMachine, snapshot.value?.host || ''),
+            error: String(e),
+          }
         }
       } finally {
         loading.value = false
@@ -157,7 +200,14 @@ export default {
 
     const startTimer = () => {
       stopTimer()
-      if (!props.activeMachine) return
+      if (!props.activeMachine) {
+        snapshot.value = null
+        return
+      }
+      if (!props.activeConnected) {
+        snapshot.value = zeroSnapshot(props.activeMachine, snapshot.value?.host || '')
+        return
+      }
       refresh()
       timer = setInterval(refresh, 1000)
     }
@@ -168,13 +218,18 @@ export default {
       }
     }
 
-    watch(() => props.activeMachine, startTimer, { immediate: true })
+    watch(
+      () => [props.activeMachine, props.activeConnected],
+      () => startTimer(),
+      { immediate: true },
+    )
     onMounted(startTimer)
     onUnmounted(stopTimer)
 
     return {
       snapshot,
       loading,
+      displayError,
       clampPct,
       formatPct,
       formatPct1,

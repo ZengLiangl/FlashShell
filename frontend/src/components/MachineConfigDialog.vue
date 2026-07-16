@@ -112,7 +112,7 @@
                                 </el-tooltip>
                                 <el-tooltip content="测试连接" placement="top">
                                     <el-button size="small" text type="success" :loading="scope.row.testing" @click="testConnection(scope.row)">
-                                        <el-icon><Connection /></el-icon>
+                                        <el-icon v-if="!scope.row.testing"><Connection /></el-icon>
                                     </el-button>
                                 </el-tooltip>
                                 <el-tooltip content="删除" placement="top">
@@ -254,16 +254,22 @@
             </el-form>
 
             <template #footer>
-                <div class="dialog-footer">
-                    <el-button @click="machineEditVisible = false">取消</el-button>
-                    <el-tooltip content="测试连接" placement="top">
-                        <el-button :loading="testingDraft" circle @click="testDraftConnection">
-                            <el-icon><Connection /></el-icon>
+                <div class="dialog-footer icon-actions">
+                    <el-tooltip content="取消" placement="top">
+                        <el-button circle @click="machineEditVisible = false">
+                            <el-icon><Close /></el-icon>
                         </el-button>
                     </el-tooltip>
-                    <el-button type="primary" @click="saveMachine" :loading="savingMachine">
-                        {{ editingMachine ? '更新' : '添加' }}
-                    </el-button>
+                    <el-tooltip content="测试连接" placement="top">
+                        <el-button :loading="testingDraft" circle @click="testDraftConnection">
+                            <el-icon v-if="!testingDraft"><Connection /></el-icon>
+                        </el-button>
+                    </el-tooltip>
+                    <el-tooltip :content="editingMachine ? '更新' : '添加'" placement="top">
+                        <el-button type="primary" circle :loading="savingMachine" @click="saveMachine">
+                            <el-icon v-if="!savingMachine"><Check /></el-icon>
+                        </el-button>
+                    </el-tooltip>
                 </div>
             </template>
         </el-dialog>
@@ -297,7 +303,13 @@
                 </el-table-column>
             </el-table>
             <template #footer>
-                <el-button @click="groupManageVisible = false">关闭</el-button>
+                <div class="dialog-footer icon-actions">
+                    <el-tooltip content="关闭" placement="top">
+                        <el-button circle @click="groupManageVisible = false">
+                            <el-icon><Close /></el-icon>
+                        </el-button>
+                    </el-tooltip>
+                </div>
             </template>
         </el-dialog>
     </div>
@@ -307,7 +319,7 @@
 import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-    Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid,
+    Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid, Close, Check,
 } from '@element-plus/icons-vue'
 import {
     GetMachines,
@@ -338,7 +350,7 @@ import {
 export default {
     name: 'MachineConfigDialog',
     components: {
-        Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid,
+        Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid, Close, Check,
     },
     props: {
         modelValue: { type: Boolean, default: false },

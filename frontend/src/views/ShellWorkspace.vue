@@ -7,7 +7,6 @@
         class="left-panel shell-left-panel"
         :class="{ collapsed: leftCollapsed, resizing: isResizing }"
       >
-        <div v-if="!leftCollapsed" class="resize-handle" @mousedown="$emit('start-resize', $event)"></div>
         <ShellMonitorPanel
           v-show="!leftCollapsed"
           :active-machine="activeMachine"
@@ -15,22 +14,46 @@
           :connecting="connectingName === activeMachine"
           @toggle-connection="onToggleConnection"
         />
+        <!-- 右边框：拖拽改宽 + 悬停显示收起 -->
+        <div
+          v-if="!leftCollapsed"
+          class="panel-edge-wrap"
+          @mouseenter="edgeHover = true"
+          @mouseleave="edgeHover = false"
+        >
+          <div class="resize-handle" @mousedown="$emit('start-resize', $event)"></div>
+          <button
+            v-show="edgeHover"
+            type="button"
+            class="panel-edge-btn"
+            title="收起监控面板"
+            @mousedown.stop
+            @click.stop="toggleLeftPanel"
+          >
+            <el-icon><DArrowLeft /></el-icon>
+          </button>
+        </div>
       </el-aside>
 
-      <el-main class="terminal-container shell-terminal-container">
+      <!-- 收起后：贴左边悬停出现展开按钮 -->
+      <div
+        v-if="openSessionCount > 0 && leftCollapsed"
+        class="left-edge-hotzone"
+        @mouseenter="edgeHover = true"
+        @mouseleave="edgeHover = false"
+      >
         <button
-          v-if="openSessionCount > 0"
-          class="panel-expand-btn"
+          v-show="edgeHover"
           type="button"
-          :title="leftCollapsed ? '展开监控' : '收起监控'"
+          class="panel-edge-btn panel-edge-btn--expand"
+          title="展开监控面板"
           @click="toggleLeftPanel"
         >
-          <el-icon>
-            <DArrowRight v-if="leftCollapsed" />
-            <DArrowLeft v-else />
-          </el-icon>
+          <el-icon><DArrowRight /></el-icon>
         </button>
+      </div>
 
+      <el-main class="terminal-container shell-terminal-container">
         <ShellTerminalTabs
           ref="tabsRef"
           class="shell-tabs-area"
@@ -113,6 +136,7 @@
 <script>
 import { ref, reactive, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { DArrowLeft, DArrowRight } from '@element-plus/icons-vue'
 import ShellMonitorPanel from '../components/shell/ShellMonitorPanel.vue'
 import ShellTerminalTabs from '../components/shell/ShellTerminalTabs.vue'
 import ShellStatusBar from '../components/shell/ShellStatusBar.vue'
@@ -127,6 +151,8 @@ import { mergeShortcuts, matchesShortcut } from '../utils/shortcuts'
 export default {
   name: 'ShellWorkspace',
   components: {
+    DArrowLeft,
+    DArrowRight,
     ShellMonitorPanel,
     ShellTerminalTabs,
     ShellStatusBar,
@@ -157,6 +183,7 @@ export default {
     const tabsRef = ref(null)
     const filePanelRef = ref(null)
     const leftCollapsed = ref(false)
+    const edgeHover = ref(false)
     const searchVisible = ref(false)
     const searchQuery = ref('')
     const searchMatchSummary = ref('')
@@ -345,6 +372,7 @@ export default {
 
     const toggleLeftPanel = async () => {
       leftCollapsed.value = !leftCollapsed.value
+      edgeHover.value = false
       await nextTick()
       tabsRef.value?.fitActive?.()
     }
@@ -466,6 +494,7 @@ export default {
       tabsRef,
       filePanelRef,
       leftCollapsed,
+      edgeHover,
       searchVisible,
       searchQuery,
       searchMatchSummary,
@@ -502,6 +531,7 @@ export default {
 
 <style scoped>
 .shell-workspace {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
@@ -532,34 +562,107 @@ export default {
   overflow: hidden;
 }
 
+.left-edge-hotzone {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 28px; /* 避开底部状态栏 */
+  width: 10px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  pointer-events: auto;
+}
+
+.left-edge-hotzone:hover {
+  width: 28px;
+}
+
+.panel-edge-wrap {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 10px;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+}
+
+.panel-edge-wrap .resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: auto;
+  width: 5px; /* 与 SFTP .height-handle 同宽感 */
+  height: auto;
+  background: transparent;
+  cursor: col-resize;
+  z-index: 1;
+}
+
+/* 拖动手柄轻微高亮 */
+.shell-left-panel.resizing .panel-edge-wrap .resize-handle,
+.panel-edge-wrap:hover .resize-handle,
+.panel-edge-wrap .resize-handle:hover,
+.panel-edge-wrap .resize-handle:active {
+  background: rgba(64, 158, 255, 0.08);
+}
+
+.panel-edge-btn {
+  position: relative;
+  z-index: 2;
+  width: 18px;
+  height: 52px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px 0 0 8px;
+  background: var(--app-panel-bg);
+  color: var(--app-text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-shadow: -2px 0 8px color-mix(in srgb, #000 12%, transparent);
+}
+
+.panel-edge-btn--expand {
+  border-radius: 0 8px 8px 0;
+  border-left: none;
+  box-shadow: 2px 0 8px color-mix(in srgb, #000 12%, transparent);
+}
+
+.panel-edge-btn:hover {
+  color: var(--app-accent-color);
+  background: var(--app-card-bg);
+  border-color: var(--app-accent-color);
+}
+
 .shell-left-panel {
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   transition: width 0.2s ease;
   flex-shrink: 0;
   border-right: 1px solid var(--app-border);
   background-color: var(--app-panel-bg);
 }
 
-.shell-left-panel .resize-handle {
-  position: absolute;
-  top: 0;
-  right: -3px;
-  width: 6px;
-  height: 100%;
-  background: transparent;
-  cursor: col-resize;
-  z-index: 10;
+.shell-left-panel.resizing {
+  transition: none;
 }
 
-.shell-left-panel .resize-handle:hover,
-.shell-left-panel.resizing .resize-handle {
-  background: rgba(64, 158, 255, 0.35);
+.shell-left-panel :deep(.shell-monitor) {
+  overflow: auto;
+  height: 100%;
 }
 
 .shell-left-panel.collapsed {
   border-right: none;
   min-width: 0 !important;
+  overflow: hidden;
 }
 
 .shell-terminal-container {
@@ -569,31 +672,6 @@ export default {
   min-height: 0;
   padding: 0 !important;
   overflow: hidden;
-}
-
-.panel-expand-btn {
-  position: absolute;
-  left: 0;
-  top: 50%;
-  transform: translateY(-50%);
-  z-index: 10;
-  width: 18px;
-  height: 56px;
-  border: 1px solid var(--app-border);
-  border-left: none;
-  border-radius: 0 8px 8px 0;
-  background: var(--app-panel-bg);
-  color: var(--app-text-secondary);
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-}
-
-.panel-expand-btn:hover {
-  color: var(--app-accent-color);
-  background: var(--app-card-bg);
 }
 
 .shell-tabs-area {

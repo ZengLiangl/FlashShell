@@ -1,5 +1,6 @@
 <template>
   <div class="shortcut-panel">
+    <div class="panel-scroll">
     <div class="shortcut-section">
       <p class="shortcut-hint">
         修饰键按当前系统显示为 <strong>{{ modLabel }}</strong>。点击右侧按键区域后按下新组合即可修改
@@ -33,19 +34,25 @@
         </div>
       </div>
     </div>
+    </div>
 
-    <div class="panel-actions">
+    <div class="panel-actions icon-actions">
       <el-tooltip content="全部重置" placement="top">
         <el-button circle @click="resetAll">
           <el-icon><RefreshLeft /></el-icon>
         </el-button>
       </el-tooltip>
-      <el-button type="primary" :loading="saving" @click="save">保存快捷键</el-button>
+      <el-tooltip content="保存快捷键" placement="top">
+        <el-button type="primary" circle :loading="saving" @click="save">
+          <el-icon v-if="!saving"><Check /></el-icon>
+        </el-button>
+      </el-tooltip>
     </div>
   </div>
 </template>
 
 <script>
+import { RefreshLeft, Check } from '@element-plus/icons-vue'
 import { ref, reactive, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as App from '../../wailsjs/go/app/App'
@@ -60,6 +67,7 @@ import { modKeyLabel } from '../utils/platform'
 
 export default {
   name: 'ShortcutSettingsPanel',
+  components: { RefreshLeft, Check },
   props: {
     active: { type: Boolean, default: false },
   },
@@ -159,8 +167,16 @@ export default {
 .shortcut-panel {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  min-height: 360px;
+  gap: 0;
+  min-height: 0;
+  height: 100%;
+}
+
+.panel-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 0 0 12px;
 }
 
 .shortcut-section {
@@ -247,11 +263,18 @@ export default {
 }
 
 .panel-actions {
+  flex-shrink: 0;
   display: flex;
   justify-content: flex-end;
-  gap: 8px;
-  margin-top: auto;
-  padding-top: 12px;
+  align-items: center;
+  gap: 10px;
+  margin: 0 -18px 0;
+  padding: 12px 18px;
   border-top: 1px solid var(--app-border);
+  background: var(--app-panel-bg);
+}
+
+.panel-actions.icon-actions {
+  display: flex;
 }
 </style>
