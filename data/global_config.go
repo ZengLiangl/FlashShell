@@ -40,6 +40,10 @@ type GlobalConfig struct {
 	GlobalAccounts []GlobalAccount   `yaml:"globalAccounts,omitempty" json:"globalAccounts,omitempty"`
 	LogSettings    LogSettings       `yaml:"logSettings" json:"logSettings"`
 	ThemeSettings  ThemeSettings     `yaml:"themeSettings" json:"themeSettings"`
+	// ShellMonitorIntervalMs Shell 监控面板刷新间隔（毫秒），默认 1000
+	ShellMonitorIntervalMs int `yaml:"shellMonitorIntervalMs" json:"shellMonitorIntervalMs"`
+	// ShellMonitorIntervalSec 旧字段（秒），仅用于迁移
+	ShellMonitorIntervalSec int `yaml:"shellMonitorIntervalSec,omitempty" json:"-"`
 }
 
 // GlobalConfigManager 全局配置管理器
@@ -102,12 +106,35 @@ func (gcm *GlobalConfigManager) LoadGlobalConfig() (*GlobalConfig, error) {
 	if gcm.migrateLegacyLogPath() {
 		dirty = true
 	}
+	if gcm.migrateShellMonitorInterval() {
+		dirty = true
+	}
 	if dirty {
 		if err := gcm.SaveGlobalConfig(gcm.config); err != nil {
 			return nil, fmt.Errorf("迁移配置失败: %w", err)
 		}
 	}
 	return &config, nil
+}
+
+// migrateShellMonitorInterval 将旧的秒级间隔迁到毫秒
+func (gcm *GlobalConfigManager) migrateShellMonitorInterval() bool {
+	if gcm.config == nil {
+		return false
+	}
+	if gcm.config.ShellMonitorIntervalMs > 0 {
+		if gcm.config.ShellMonitorIntervalSec != 0 {
+			gcm.config.ShellMonitorIntervalSec = 0
+			return true
+		}
+		return false
+	}
+	if gcm.config.ShellMonitorIntervalSec > 0 {
+		gcm.config.ShellMonitorIntervalMs = gcm.config.ShellMonitorIntervalSec * 1000
+		gcm.config.ShellMonitorIntervalSec = 0
+		return true
+	}
+	return false
 }
 
 // migrateLegacyLogPath 将默认日志路径从 ~/.cmd-config/logs 迁到 ~/.flashdock/logs
@@ -264,6 +291,7 @@ func (gcm *GlobalConfigManager) createDefaultGlobalConfig() error {
 			ShellFontSize:   13,
 			ShellLineHeight: 1.2,
 		},
+		ShellMonitorIntervalMs: 1000,
 	}
 
 	return gcm.SaveGlobalConfig(defaultConfig)

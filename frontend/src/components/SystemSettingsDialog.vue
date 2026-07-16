@@ -14,7 +14,35 @@
         </div>
 
         <div class="panel-scroll">
-            <!-- 帐号 -->
+            <!-- 系统设置 -->
+            <section v-show="settingsTab === 'system'" class="settings-section">
+                <div class="section-head">
+                    <div>
+                        <h4>Shell</h4>
+                        <p>终端工作区相关行为</p>
+                    </div>
+                </div>
+                <div class="system-setting-row">
+                    <div class="system-setting-text">
+                        <span class="system-setting-label">监控同步间隔</span>
+                        <span class="system-setting-hint">侧边监控面板刷新频率，范围 200–60000 毫秒</span>
+                    </div>
+                    <div class="system-setting-control">
+                        <el-input-number
+                            v-model="form.shellMonitorIntervalMs"
+                            class="ms-num"
+                            size="small"
+                            :min="200"
+                            :max="60000"
+                            :step="100"
+                            controls-position="right"
+                        />
+                        <span class="system-setting-unit">毫秒</span>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 账号 -->
             <section v-show="settingsTab === 'accounts'" class="settings-section">
                 <div class="section-head">
                     <div>
@@ -54,8 +82,8 @@
                 </el-table>
             </section>
 
-            <!-- 外观 -->
-            <section v-show="settingsTab === 'appearance'" class="settings-section appearance-section">
+            <!-- 主题 -->
+            <section v-show="settingsTab === 'theme'" class="settings-section appearance-section">
                 <div class="appear-layout">
                     <div class="appear-controls">
                         <div class="appear-block">
@@ -77,7 +105,13 @@
                                     @click="form.themeSettings.uiAccent = accent.id"
                                 ></button>
                             </div>
-                            <el-select v-model="form.themeSettings.uiFontFamily" size="small" placeholder="界面字体" style="width: 100%">
+                            <el-select
+                                v-model="form.themeSettings.uiFontFamily"
+                                size="small"
+                                placeholder="界面字体"
+                                filterable
+                                style="width: 100%"
+                            >
                                 <el-option
                                     v-for="font in uiFonts"
                                     :key="font.id"
@@ -87,34 +121,16 @@
                             </el-select>
                         </div>
 
-                        <div class="appear-block">
+                        <div class="appear-block appear-block--terminal">
                             <div class="block-label">终端</div>
-                            <div class="preset-grid terminal-grid">
-                                <button
-                                    v-for="preset in terminalPresets"
-                                    :key="preset.id"
-                                    type="button"
-                                    class="term-card"
-                                    :class="{ active: form.themeSettings.terminalPreset === preset.id }"
-                                    :title="preset.label"
-                                    @click="form.themeSettings.terminalPreset = preset.id"
-                                >
-                                    <span
-                                        class="term-card-preview"
-                                        :style="{ background: preset.theme.background, color: preset.theme.foreground }"
-                                    >
-                                        <span class="term-card-dots">
-                                            <i :style="{ background: preset.theme.red }"></i>
-                                            <i :style="{ background: preset.theme.green }"></i>
-                                            <i :style="{ background: preset.theme.blue || preset.theme.cursor }"></i>
-                                        </span>
-                                        <code>~/</code>
-                                    </span>
-                                    <span class="term-card-name">{{ preset.label }}</span>
-                                </button>
-                            </div>
                             <div class="term-font-row">
-                                <el-select v-model="form.themeSettings.shellFontFamily" size="small" placeholder="终端字体" class="term-font-select">
+                                <el-select
+                                    v-model="form.themeSettings.shellFontFamily"
+                                    size="small"
+                                    placeholder="终端字体"
+                                    filterable
+                                    class="term-font-select"
+                                >
                                     <el-option
                                         v-for="font in terminalFonts"
                                         :key="font.id"
@@ -147,6 +163,30 @@
                                 <span>字号</span>
                                 <span>行高</span>
                             </div>
+                            <div class="preset-grid terminal-grid">
+                                <button
+                                    v-for="preset in terminalPresets"
+                                    :key="preset.id"
+                                    type="button"
+                                    class="term-card"
+                                    :class="{ active: form.themeSettings.terminalPreset === preset.id }"
+                                    :title="preset.label"
+                                    @click="form.themeSettings.terminalPreset = preset.id"
+                                >
+                                    <span
+                                        class="term-card-preview"
+                                        :style="{ background: preset.theme.background, color: preset.theme.foreground }"
+                                    >
+                                        <span class="term-card-dots">
+                                            <i :style="{ background: preset.theme.red }"></i>
+                                            <i :style="{ background: preset.theme.green }"></i>
+                                            <i :style="{ background: preset.theme.blue || preset.theme.cursor }"></i>
+                                        </span>
+                                        <span class="term-card-name">{{ preset.label }}</span>
+                                        <code>~/</code>
+                                    </span>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -174,41 +214,76 @@
             </section>
 
             <!-- 关于 -->
-            <section v-show="settingsTab === 'about'" class="settings-section">
-                <div class="about-card">
-                    <div class="about-row">
-                        <span class="about-label">当前版本</span>
-                        <span class="version-text">{{ appVersion || '—' }}</span>
+            <section v-show="settingsTab === 'about'" class="settings-section about-section">
+                <div class="about-meta">
+                    <div class="about-meta-row">
+                        <span class="about-meta-label">当前版本</span>
+                        <span class="about-meta-value">{{ appVersion || '—' }}</span>
                     </div>
-                    <div class="about-row about-row--update">
-                        <span class="about-label">检查更新</span>
-                        <div class="about-update">
-                            <div class="icon-actions">
-                                <el-tooltip content="检查更新" placement="top">
-                                    <el-button size="small" :loading="checkingUpdate" circle @click="checkUpdate">
-                                        <el-icon v-if="!checkingUpdate"><Refresh /></el-icon>
-                                    </el-button>
-                                </el-tooltip>
-                                <el-tooltip v-if="updateResult?.hasUpdate && updateResult?.releaseURL" content="打开下载页" placement="top">
-                                    <el-button size="small" type="primary" circle @click="openRelease">
-                                        <el-icon><Link /></el-icon>
-                                    </el-button>
-                                </el-tooltip>
-                            </div>
-                            <div v-if="updateResult?.hasUpdate" class="update-tip warn">
-                                发现新版本 {{ updateResult.latestVersion }}
-                            </div>
-                            <div v-else-if="updateResult && !updateResult.error" class="update-tip ok">
-                                已是最新版本
-                            </div>
-                            <div v-else-if="updateResult?.error" class="update-tip err">
-                                {{ updateResult.error }}
-                            </div>
+                    <div class="about-meta-row">
+                        <span class="about-meta-label">最新 Release</span>
+                        <span class="about-meta-value">
+                            {{ updateResult?.latestVersion || (checkingUpdate ? '检查中…' : '—') }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="about-update-block" v-loading="checkingUpdate">
+                    <div class="about-update-actions">
+                        <el-button size="small" :loading="checkingUpdate" @click="checkUpdate">
+                            检查更新
+                        </el-button>
+                        <el-button
+                            v-if="updateResult?.releaseURL"
+                            size="small"
+                            @click="openRelease"
+                        >
+                            查看 Release
+                        </el-button>
+                        <el-button
+                            v-if="updateResult?.hasUpdate"
+                            type="primary"
+                            size="small"
+                            :loading="downloading"
+                            :disabled="!canDownload"
+                            @click="downloadUpdate"
+                        >
+                            {{ downloading ? `下载中 ${downloadPercent}%` : '下载安装包' }}
+                        </el-button>
+                    </div>
+
+                    <div v-if="updateResult?.hasUpdate" class="update-banner">
+                        <div class="update-banner-title">发现新版本 {{ updateResult.latestVersion }}</div>
+                        <div class="update-banner-sub">当前 {{ updateResult.currentVersion || appVersion }}</div>
+                        <div v-if="updateResult.assetName" class="asset-line">
+                            适配安装包：{{ updateResult.assetName }}
+                        </div>
+                        <el-progress
+                            v-if="downloading || downloadPercent > 0"
+                            :percentage="downloadPercent"
+                            :stroke-width="10"
+                            style="margin-top: 10px"
+                        />
+                        <div v-if="downloadMessage" class="download-msg" :class="{ err: downloadFailed }">
+                            {{ downloadMessage }}
                         </div>
                     </div>
-                    <div class="about-row">
-                        <span class="about-label">会话 ID</span>
-                        <el-input :model-value="sessionId" readonly size="small" />
+                    <div v-else-if="updateResult && !updateResult.error" class="update-ok">
+                        已是最新版本
+                    </div>
+                    <div v-else-if="updateResult?.error" class="update-err">
+                        {{ updateResult.error }}
+                    </div>
+
+                    <div v-if="updateResult?.releaseNotes" class="release-section">
+                        <div class="release-section-title">
+                            <span>{{ updateResult.hasUpdate ? '更新说明' : '最新 Release' }}</span>
+                        </div>
+                        <div
+                            class="update-notes"
+                            v-html="renderReleaseNotes(updateResult.releaseNotes)"
+                            @click="onNotesClick"
+                        ></div>
                     </div>
                 </div>
             </section>
@@ -253,10 +328,12 @@
 </template>
 
 <script>
-import { ref, reactive, watch, computed } from 'vue'
+import { ref, reactive, watch, computed, onMounted, onUnmounted } from 'vue'
+import { marked } from 'marked'
 import { ElMessage } from 'element-plus'
-import { Edit, Delete, Refresh, Link, Plus, Close, Check } from '@element-plus/icons-vue'
+import { Edit, Delete, Plus, Close, Check } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
+import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import { useTheme } from '../composables/useTheme'
 import {
     UI_ACCENTS,
@@ -267,11 +344,18 @@ import {
     getUiFont,
     getTerminalFont,
     getTerminalPreset,
+    mergeUiFontOptions,
+    mergeTerminalFontOptions,
 } from '../utils/themePresets'
+
+marked.setOptions({
+    breaks: true,
+    gfm: true,
+})
 
 export default {
     name: 'SystemSettingsDialog',
-    components: { Edit, Delete, Refresh, Link, Plus, Close, Check },
+    components: { Edit, Delete, Plus, Close, Check },
     props: {
         modelValue: { type: Boolean, default: false },
         embedded: { type: Boolean, default: false },
@@ -285,15 +369,20 @@ export default {
         const appVersion = ref('')
         const checkingUpdate = ref(false)
         const updateResult = ref(null)
+        const downloading = ref(false)
+        const downloadPercent = ref(0)
+        const downloadMessage = ref('')
+        const downloadFailed = ref(false)
         const accounts = ref([])
         const accountEditVisible = ref(false)
         const editingAccountIndex = ref(-1)
         const accountForm = reactive({ id: '', name: '', user: '', password: '' })
         const { applyThemeSettings } = useTheme()
-        const settingsTab = ref('appearance')
+        const settingsTab = ref('system')
         const settingsTabs = [
-            { id: 'accounts', label: '帐号' },
-            { id: 'appearance', label: '外观' },
+            { id: 'system', label: '系统设置' },
+            { id: 'accounts', label: '账号' },
+            { id: 'theme', label: '主题' },
             { id: 'about', label: '关于' },
         ]
         const form = reactive({
@@ -305,13 +394,33 @@ export default {
                 shellFontFamily: 'consolas',
                 shellFontSize: 13,
                 shellLineHeight: 1.2,
-            }
+            },
+            shellMonitorIntervalMs: 1000,
         })
 
         const uiAccents = UI_ACCENTS
         const terminalPresets = TERMINAL_PRESETS
-        const uiFonts = UI_FONTS
-        const terminalFonts = TERMINAL_FONTS
+        const uiFonts = ref([...UI_FONTS])
+        const terminalFonts = ref([...TERMINAL_FONTS])
+        const systemFontsLoaded = ref(false)
+
+        const canDownload = computed(() =>
+            !!(updateResult.value?.hasUpdate && updateResult.value?.downloadURL && !downloading.value)
+        )
+
+        const renderReleaseNotes = (md) => {
+            const text = String(md || '').trim()
+            if (!text) return ''
+            try {
+                return marked.parse(text)
+            } catch {
+                return text
+                    .replace(/&/g, '&amp;')
+                    .replace(/</g, '&lt;')
+                    .replace(/>/g, '&gt;')
+                    .replace(/\n/g, '<br>')
+            }
+        }
 
         const previewIsDark = computed(() => {
             const mode = form.themeSettings.mode
@@ -373,6 +482,10 @@ theme preview · ${theme.foreground}`
                 shellFontSize: config.themeSettings?.shellFontSize > 0 ? config.themeSettings.shellFontSize : 13,
                 shellLineHeight: config.themeSettings?.shellLineHeight > 0 ? config.themeSettings.shellLineHeight : 1.2,
             }
+            const interval = Number(config.shellMonitorIntervalMs)
+            form.shellMonitorIntervalMs = Number.isFinite(interval) && interval >= 200
+                ? Math.min(60000, Math.round(interval))
+                : 1000
             accounts.value = await App.GetGlobalAccounts() || []
             const session = await App.GetSessionInfo()
             sessionId.value = session.sessionId || ''
@@ -382,10 +495,26 @@ theme preview · ${theme.foreground}`
                 appVersion.value = ''
             }
             updateResult.value = null
+            await loadSystemFonts()
+        }
+
+        const loadSystemFonts = async () => {
+            if (systemFontsLoaded.value) return
+            try {
+                const fonts = await App.ListSystemFonts()
+                uiFonts.value = mergeUiFontOptions(fonts || [])
+                terminalFonts.value = mergeTerminalFontOptions(fonts || [])
+                systemFontsLoaded.value = true
+            } catch {
+                // 保留内置字体列表
+            }
         }
 
         const checkUpdate = async () => {
             checkingUpdate.value = true
+            downloadPercent.value = 0
+            downloadMessage.value = ''
+            downloadFailed.value = false
             try {
                 updateResult.value = await App.CheckForUpdates()
             } catch (e) {
@@ -400,12 +529,78 @@ theme preview · ${theme.foreground}`
             if (url) App.OpenReleaseURL(url)
         }
 
+        const onNotesClick = (e) => {
+            const a = e.target?.closest?.('a')
+            if (!a) return
+            const href = a.getAttribute('href') || ''
+            if (!/^https?:\/\//i.test(href)) return
+            e.preventDefault()
+            App.OpenReleaseURL(href)
+        }
+
+        const onDownloadProgress = (payload) => {
+            if (!payload) return
+            downloadPercent.value = Number(payload.percent) || 0
+            if (payload.status === 'start' || payload.status === 'downloading') {
+                downloading.value = true
+                downloadFailed.value = false
+                downloadMessage.value = payload.status === 'start' ? '开始下载…' : '正在下载…'
+            } else if (payload.status === 'done') {
+                downloading.value = false
+                downloadPercent.value = 100
+                downloadFailed.value = false
+                downloadMessage.value = '下载完成，已打开下载目录'
+            } else if (payload.status === 'error') {
+                downloading.value = false
+                downloadFailed.value = true
+                downloadMessage.value = payload.message || '下载失败'
+            }
+        }
+
+        const downloadUpdate = async () => {
+            if (!canDownload.value) return
+            downloading.value = true
+            downloadFailed.value = false
+            downloadMessage.value = '准备下载…'
+            downloadPercent.value = 0
+            try {
+                const result = await App.DownloadUpdate()
+                if (result?.success) {
+                    ElMessage.success(result.message || '下载完成')
+                    downloadMessage.value = result.message || '下载完成，已打开下载目录'
+                    downloadPercent.value = 100
+                } else {
+                    downloadFailed.value = true
+                    downloadMessage.value = result?.message || '下载失败'
+                    ElMessage.error(downloadMessage.value)
+                }
+            } catch (e) {
+                downloadFailed.value = true
+                downloadMessage.value = String(e)
+                ElMessage.error(downloadMessage.value)
+            } finally {
+                downloading.value = false
+            }
+        }
+
         watch(() => props.modelValue, (open) => {
             if (!props.embedded && open) load()
         })
         watch(() => props.active, (open) => {
             if (props.embedded && open) load()
         }, { immediate: true })
+        watch(settingsTab, (tab) => {
+            if (tab === 'about' && !updateResult.value && !checkingUpdate.value) {
+                checkUpdate()
+            }
+        })
+
+        onMounted(() => {
+            EventsOn('update:download-progress', onDownloadProgress)
+        })
+        onUnmounted(() => {
+            EventsOff('update:download-progress')
+        })
 
         const resetAccountForm = () => {
             accountForm.id = crypto.randomUUID()
@@ -480,6 +675,7 @@ theme preview · ${theme.foreground}`
             try {
                 const config = await App.GetSystemSettings()
                 config.themeSettings = { ...form.themeSettings }
+                config.shellMonitorIntervalMs = form.shellMonitorIntervalMs
                 await App.SaveSystemSettings(config)
                 applyThemeSettings(form.themeSettings)
                 ElMessage.success('系统设置已保存')
@@ -514,8 +710,16 @@ theme preview · ${theme.foreground}`
             appVersion,
             checkingUpdate,
             updateResult,
+            canDownload,
+            downloading,
+            downloadPercent,
+            downloadMessage,
+            downloadFailed,
             checkUpdate,
             openRelease,
+            renderReleaseNotes,
+            onNotesClick,
+            downloadUpdate,
             accountEditVisible,
             editingAccountIndex,
             accountForm,
@@ -535,6 +739,7 @@ theme preview · ${theme.foreground}`
     flex-direction: column;
     min-height: 0;
     height: 100%;
+    overflow: hidden;
 }
 
 .general-settings-panel.embedded {
@@ -574,8 +779,10 @@ theme preview · ${theme.foreground}`
 .panel-scroll {
     flex: 1;
     min-height: 0;
-    overflow: auto;
+    overflow: hidden;
     padding: 0;
+    display: flex;
+    flex-direction: column;
 }
 
 .panel-actions {
@@ -597,7 +804,9 @@ theme preview · ${theme.foreground}`
 }
 
 .settings-section {
-    min-height: 100%;
+    flex: 1;
+    min-height: 0;
+    overflow: auto;
 }
 
 .section-head {
@@ -620,11 +829,22 @@ theme preview · ${theme.foreground}`
     color: var(--app-text-muted);
 }
 
+.appearance-section {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    height: 100%;
+    min-height: 0;
+}
+
 .appear-layout {
+    flex: 1;
+    min-height: 0;
     display: grid;
     grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
     gap: 16px;
-    align-items: start;
+    align-items: stretch;
+    overflow: hidden;
 }
 
 .appear-block {
@@ -637,13 +857,21 @@ theme preview · ${theme.foreground}`
     background: var(--app-bg);
     min-width: 0;
     overflow: hidden;
+    flex-shrink: 0;
+}
+
+.appear-block--terminal {
+    flex: 1;
+    min-height: 0;
+    flex-shrink: 1;
 }
 
 .appear-controls {
     display: flex;
     flex-direction: column;
-    gap: 16px;
+    gap: 12px;
     min-width: 0;
+    min-height: 0;
     overflow: hidden;
 }
 
@@ -651,6 +879,7 @@ theme preview · ${theme.foreground}`
     font-size: 12px;
     font-weight: 650;
     color: var(--app-text-secondary);
+    flex-shrink: 0;
 }
 
 .accent-grid {
@@ -675,15 +904,21 @@ theme preview · ${theme.foreground}`
 }
 
 .terminal-grid {
+    flex: 1;
+    min-height: 120px;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
-    gap: 8px;
+    grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+    gap: 10px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 2px 4px 4px 0;
+    align-content: start;
 }
 
 .term-card {
     display: flex;
     flex-direction: column;
-    gap: 6px;
+    gap: 0;
     padding: 0;
     border: 1px solid var(--app-border);
     border-radius: 8px;
@@ -692,6 +927,7 @@ theme preview · ${theme.foreground}`
     overflow: hidden;
     color: var(--app-text);
     text-align: left;
+    min-height: 88px;
 }
 
 .term-card.active {
@@ -703,35 +939,38 @@ theme preview · ${theme.foreground}`
     display: flex;
     flex-direction: column;
     gap: 6px;
-    padding: 8px;
-    min-height: 52px;
-    font-size: 11px;
+    padding: 10px;
+    min-height: 78px;
+    font-size: 12px;
 }
 
 .term-card-dots {
     display: flex;
-    gap: 3px;
+    gap: 4px;
+    flex-shrink: 0;
 }
 
 .term-card-dots i {
-    width: 6px;
-    height: 6px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     display: inline-block;
 }
 
-.term-card-preview code {
-    font-family: Consolas, monospace;
-    opacity: 0.85;
-}
-
 .term-card-name {
-    padding: 0 8px 8px;
-    font-size: 11px;
-    color: var(--app-text-secondary);
+    font-size: 12px;
+    font-weight: 650;
+    line-height: 1.3;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: inherit;
+}
+
+.term-card-preview code {
+    font-family: Consolas, monospace;
+    opacity: 0.75;
+    font-size: 11px;
 }
 
 .term-font-row {
@@ -741,6 +980,7 @@ theme preview · ${theme.foreground}`
     align-items: center;
     width: 100%;
     min-width: 0;
+    flex-shrink: 0;
 }
 
 .term-font-select {
@@ -769,6 +1009,79 @@ theme preview · ${theme.foreground}`
     margin-top: -4px;
     font-size: 11px;
     color: var(--app-text-muted);
+    flex-shrink: 0;
+}
+
+.shell-setting-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.shell-setting-label {
+    font-size: 13px;
+    color: var(--app-text);
+    flex-shrink: 0;
+}
+
+.shell-setting-unit {
+    font-size: 12px;
+    color: var(--app-text-muted);
+}
+
+.shell-setting-hint {
+    margin: 6px 0 0;
+    font-size: 12px;
+    color: var(--app-text-muted);
+}
+
+.system-setting-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--app-border);
+}
+
+.system-setting-text {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.system-setting-label {
+    font-size: 13px;
+    color: var(--app-text);
+    font-weight: 500;
+}
+
+.system-setting-hint {
+    font-size: 12px;
+    color: var(--app-text-muted);
+    line-height: 1.4;
+}
+
+.system-setting-control {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.system-setting-unit {
+    font-size: 12px;
+    color: var(--app-text-muted);
+}
+
+.ms-num {
+    width: 120px !important;
+}
+
+.ms-num :deep(.el-input-number),
+.ms-num.el-input-number {
+    width: 120px;
 }
 
 .appear-preview {
@@ -776,15 +1089,18 @@ theme preview · ${theme.foreground}`
     flex-direction: column;
     gap: 8px;
     min-width: 0;
-    position: sticky;
-    top: 0;
+    min-height: 0;
+    overflow: hidden;
 }
 
 .theme-preview {
+    flex: 1;
+    min-height: 0;
     width: 100%;
     display: flex;
     flex-direction: column;
     gap: 10px;
+    overflow: hidden;
 }
 
 .preview-ui,
@@ -792,7 +1108,8 @@ theme preview · ${theme.foreground}`
     border: 1px solid var(--app-border);
     border-radius: 10px;
     overflow: hidden;
-    min-height: 120px;
+    min-height: 0;
+    flex: 1;
 }
 
 .preview-ui {
@@ -873,68 +1190,164 @@ theme preview · ${theme.foreground}`
     line-height: inherit;
 }
 
-.about-card {
+.about-section {
     display: flex;
     flex-direction: column;
     gap: 14px;
-    padding: 14px;
-    border: 1px solid var(--app-border);
-    border-radius: 10px;
-    background: var(--app-bg);
 }
 
-.about-row {
+.about-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.about-meta-row {
     display: grid;
-    grid-template-columns: 88px minmax(0, 1fr);
+    grid-template-columns: 96px minmax(0, 1fr);
     gap: 12px;
     align-items: center;
 }
 
-.about-row--update {
-    align-items: start;
-}
-
-.about-label {
+.about-meta-label {
     font-size: 13px;
     color: var(--app-text-secondary);
-    line-height: 28px;
 }
 
-.about-update {
-    display: flex;
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: flex-start;
-    gap: 10px;
-    min-width: 0;
-}
-
-.about-update .icon-actions {
-    flex-shrink: 0;
-    justify-content: flex-start;
-}
-
-.version-text {
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+.about-meta-value {
     font-size: 13px;
+    color: var(--app-text);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-.update-tip {
+.about-update-block {
+    min-height: 36px;
+}
+
+.about-update-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.update-banner {
+    padding: 12px 14px;
+    margin-bottom: 8px;
+    border-radius: 10px;
+    border: 1px solid color-mix(in srgb, #e6a23c 45%, var(--app-border));
+    background: color-mix(in srgb, #e6a23c 10%, transparent);
+}
+
+.update-banner-title {
+    font-size: 14px;
+    font-weight: 650;
+    color: var(--app-text);
+}
+
+.update-banner-sub {
+    margin-top: 2px;
     font-size: 12px;
-    line-height: 1.45;
+    color: var(--app-text-muted);
 }
 
-.update-tip.warn {
-    color: #e6a23c;
+.asset-line {
+    margin: 8px 0 4px;
+    font-size: 12px;
+    color: var(--app-text-muted);
 }
 
-.update-tip.ok {
+.download-msg {
+    margin-top: 8px;
+    font-size: 12px;
+    color: #67c23a;
+    line-height: 1.4;
+    word-break: break-all;
+}
+
+.download-msg.err {
+    color: #f56c6c;
+}
+
+.release-section {
+    margin: 10px 0 0;
+}
+
+.release-section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--app-text);
+}
+
+.update-notes {
+    margin: 0;
+    max-height: 220px;
+    overflow: auto;
+    padding: 10px 12px;
+    border-radius: 8px;
+    background: var(--app-card-bg);
+    border: 1px solid var(--app-border);
+    font-size: 12px;
+    line-height: 1.55;
+    word-break: break-word;
+    color: var(--app-text-secondary);
+}
+
+.update-notes :deep(h1),
+.update-notes :deep(h2),
+.update-notes :deep(h3) {
+    margin: 0.65em 0 0.35em;
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--app-text);
+    line-height: 1.35;
+}
+
+.update-notes :deep(h1:first-child),
+.update-notes :deep(h2:first-child),
+.update-notes :deep(h3:first-child) {
+    margin-top: 0;
+}
+
+.update-notes :deep(p),
+.update-notes :deep(ul),
+.update-notes :deep(ol) {
+    margin: 0.35em 0;
+}
+
+.update-notes :deep(ul),
+.update-notes :deep(ol) {
+    padding-left: 1.35em;
+}
+
+.update-notes :deep(a) {
+    color: var(--app-accent-color);
+    text-decoration: none;
+}
+
+.update-notes :deep(code) {
+    padding: 0 4px;
+    border-radius: 3px;
+    background: color-mix(in srgb, var(--app-text-muted) 14%, transparent);
+    font-size: 0.95em;
+}
+
+.update-ok {
+    margin-bottom: 6px;
+    font-size: 13px;
     color: #67c23a;
 }
 
-.update-tip.err {
+.update-err {
+    margin-bottom: 6px;
+    font-size: 12px;
     color: #f56c6c;
+    line-height: 1.45;
 }
 
 @media (max-width: 860px) {

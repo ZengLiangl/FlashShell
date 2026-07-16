@@ -250,6 +250,10 @@ export function ListShellTransfers() {
   return window['go']['app']['App']['ListShellTransfers']();
 }
 
+export function ListSystemFonts() {
+  return window['go']['app']['App']['ListSystemFonts']();
+}
+
 export function NewWindow() {
   return window['go']['app']['App']['NewWindow']();
 }

@@ -129,6 +129,8 @@ export function ListShellFiles(arg1:string,arg2:string,arg3:boolean):Promise<Arr
 
 export function ListShellTransfers():Promise<Array<define.SftpTransferRecord>>;
 
+export function ListSystemFonts():Promise<Array<app.SystemFontInfo>>;
+
 export function NewWindow():Promise<void>;
 
 export function OpenAbout():Promise<void>;

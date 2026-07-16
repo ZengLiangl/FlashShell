@@ -1,5 +1,19 @@
 export namespace app {
 	
+	export class SystemFontInfo {
+	    family: string;
+	    mono: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new SystemFontInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.family = source["family"];
+	        this.mono = source["mono"];
+	    }
+	}
 	export class UpdateCheckResult {
 	    currentVersion: string;
 	    latestVersion: string;
@@ -142,6 +156,7 @@ export namespace data {
 	    globalAccounts?: GlobalAccount[];
 	    logSettings: LogSettings;
 	    themeSettings: ThemeSettings;
+	    shellMonitorIntervalMs: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new GlobalConfig(source);
@@ -159,6 +174,7 @@ export namespace data {
 	        this.globalAccounts = this.convertValues(source["globalAccounts"], GlobalAccount);
 	        this.logSettings = this.convertValues(source["logSettings"], LogSettings);
 	        this.themeSettings = this.convertValues(source["themeSettings"], ThemeSettings);
+	        this.shellMonitorIntervalMs = source["shellMonitorIntervalMs"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

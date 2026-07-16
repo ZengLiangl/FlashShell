@@ -89,9 +89,17 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Connection, SwitchButton } from '@element-plus/icons-vue'
+import { EventsOn, EventsOff } from '../../../wailsjs/runtime/runtime'
 import * as App from '../../../wailsjs/go/app/App'
 
 const isAuxMissingError = (msg) => /辅助连接(未建立|不存在)/.test(String(msg || ''))
+const DEFAULT_INTERVAL_MS = 1000
+
+const clampIntervalMs = (ms) => {
+  const n = Number(ms)
+  if (!Number.isFinite(n) || n < 200) return DEFAULT_INTERVAL_MS
+  return Math.min(60000, Math.round(n))
+}
 
 export default {
   name: 'ShellMonitorPanel',
@@ -105,10 +113,20 @@ export default {
   setup(props) {
     const snapshot = ref(null)
     const loading = ref(false)
+    const intervalMs = ref(DEFAULT_INTERVAL_MS)
     let timer = null
 
     /** 占用 ≥80% 视为过高，标红提示 */
     const HIGH_USAGE = 80
+
+    const loadInterval = async () => {
+      try {
+        const config = await App.GetSystemSettings()
+        intervalMs.value = clampIntervalMs(config?.shellMonitorIntervalMs)
+      } catch {
+        intervalMs.value = DEFAULT_INTERVAL_MS
+      }
+    }
 
     const zeroSnapshot = (name, host = '') => ({
       machineName: name || '',
@@ -209,7 +227,7 @@ export default {
         return
       }
       refresh()
-      timer = setInterval(refresh, 1000)
+      timer = setInterval(refresh, intervalMs.value)
     }
     const stopTimer = () => {
       if (timer) {
@@ -218,13 +236,29 @@ export default {
       }
     }
 
+    const onSettingsChanged = (payload) => {
+      const next = clampIntervalMs(payload?.shellMonitorIntervalMs)
+      if (next === intervalMs.value) return
+      intervalMs.value = next
+      if (props.activeMachine && props.activeConnected) {
+        startTimer()
+      }
+    }
+
     watch(
       () => [props.activeMachine, props.activeConnected],
       () => startTimer(),
       { immediate: true },
     )
-    onMounted(startTimer)
-    onUnmounted(stopTimer)
+    onMounted(async () => {
+      await loadInterval()
+      EventsOn('system-settings:changed', onSettingsChanged)
+      startTimer()
+    })
+    onUnmounted(() => {
+      stopTimer()
+      EventsOff('system-settings:changed')
+    })
 
     return {
       snapshot,

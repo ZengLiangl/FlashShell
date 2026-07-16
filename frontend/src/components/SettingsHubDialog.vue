@@ -209,8 +209,22 @@ export default {
 </style>
 
 <style>
+.settings-hub-dialog.el-dialog {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 90vh;
+}
+
+.settings-hub-dialog .el-dialog__header {
+  flex-shrink: 0;
+}
+
 .settings-hub-dialog .el-dialog__body {
   padding-top: 8px;
   padding-bottom: 12px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
 }
 </style>

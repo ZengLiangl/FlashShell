@@ -1222,7 +1222,14 @@ func (a *App) GetSessionInfo() data.SessionState {
 
 // GetSystemSettings 获取系统设置
 func (a *App) GetSystemSettings() (*data.GlobalConfig, error) {
-	return a.configManager.GetGlobalConfig()
+	cfg, err := a.configManager.GetGlobalConfig()
+	if err != nil {
+		return nil, err
+	}
+	if cfg != nil {
+		cfg.ShellMonitorIntervalMs = normalizeShellMonitorIntervalMs(cfg.ShellMonitorIntervalMs)
+	}
+	return cfg, nil
 }
 
 // GetShortcutSettings 获取快捷键配置（~/.flashdock/shortcuts.json）
@@ -1244,6 +1251,8 @@ func (a *App) SaveShortcutSettings(settings data.ShortcutSettings) error {
 // SaveSystemSettings 保存系统设置
 func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	a.normalizeThemeSettings(&config.ThemeSettings)
+	config.ShellMonitorIntervalMs = normalizeShellMonitorIntervalMs(config.ShellMonitorIntervalMs)
+	config.ShellMonitorIntervalSec = 0
 	if err := a.configManager.SaveGlobalConfig(config); err != nil {
 		return err
 	}
@@ -1254,8 +1263,21 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	a.applyWindowTheme(config.ThemeSettings.Mode)
 	if a.ctx != nil {
 		wailsRuntime.EventsEmit(a.ctx, "theme:changed", config.ThemeSettings)
+		wailsRuntime.EventsEmit(a.ctx, "system-settings:changed", map[string]any{
+			"shellMonitorIntervalMs": config.ShellMonitorIntervalMs,
+		})
 	}
 	return nil
+}
+
+func normalizeShellMonitorIntervalMs(ms int) int {
+	if ms < 200 {
+		return 1000
+	}
+	if ms > 60000 {
+		return 60000
+	}
+	return ms
 }
 
 // GetExecutionLogs 获取执行历史列表
