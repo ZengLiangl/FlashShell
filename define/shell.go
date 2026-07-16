@@ -8,6 +8,7 @@ type ShellStatus struct {
 	User           string `json:"user"`
 	IsRunning      bool   `json:"isRunning"`
 	CurrentCommand string `json:"currentCommand"`
+	Kind           string `json:"kind"` // remote | local
 }
 
 // ShellHistoryRecord 连接历史

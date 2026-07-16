@@ -399,6 +399,7 @@ export namespace define {
 	    key_file?: string;
 	    host?: string;
 	    port?: number;
+	    user?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new Machine(source);
@@ -413,6 +414,7 @@ export namespace define {
 	        this.key_file = source["key_file"];
 	        this.host = source["host"];
 	        this.port = source["port"];
+	        this.user = source["user"];
 	    }
 	}
 	export class SubProject {
@@ -709,6 +711,7 @@ export namespace define {
 	    user: string;
 	    isRunning: boolean;
 	    currentCommand: string;
+	    kind: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ShellStatus(source);
@@ -722,6 +725,7 @@ export namespace define {
 	        this.user = source["user"];
 	        this.isRunning = source["isRunning"];
 	        this.currentCommand = source["currentCommand"];
+	        this.kind = source["kind"];
 	    }
 	}
 	

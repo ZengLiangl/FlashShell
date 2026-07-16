@@ -55,6 +55,7 @@ type Machine struct {
 	// 列表展示用（不落盘；由 GetMachines 从敏感数据填充）
 	Host string `yaml:"-" json:"host,omitempty"`
 	Port int    `yaml:"-" json:"port,omitempty"`
+	User string `yaml:"-" json:"user,omitempty"`
 	// 运行时数据（不序列化）
 	sensitiveData *SensitiveData `yaml:"-"`
 }

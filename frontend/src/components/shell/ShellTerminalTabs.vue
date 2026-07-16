@@ -28,9 +28,25 @@
           :closable="true"
         />
       </el-tabs>
-      <div v-else class="tabs-placeholder">未连接</div>
+      <div class="add-session-wrap">
+        <el-button class="add-session-btn" size="small" text title="新建本机" @click="$emit('add-local')">
+          <el-icon :size="15"><Plus /></el-icon>
+        </el-button>
+        <el-dropdown trigger="click" @command="onAddCommand">
+          <el-button class="add-session-more" size="small" text title="更多连接方式">
+            <el-icon :size="12"><ArrowDown /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="local">本机</el-dropdown-item>
+              <el-dropdown-item command="remote">远程连接…</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </div>
+      <div class="tabs-bar-spacer" aria-hidden="true"></div>
       <el-button
-        v-if="sessions.length"
+        v-if="sessions.length && !isLocalSession(activeTab)"
         class="transfer-btn"
         size="small"
         text
@@ -72,12 +88,23 @@
 
 <script>
 import { ref, watch } from 'vue'
-import { ArrowLeft, Folder, Upload } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowDown, Folder, Upload, Plus } from '@element-plus/icons-vue'
 import ShellTerminal from './ShellTerminal.vue'
+
+const isLocalSession = (name) => {
+  const n = String(name || '')
+  return n === 'local' || n.startsWith('local-')
+}
+
+const localTabLabel = (name) => {
+  if (name === 'local') return '本机'
+  const n = String(name || '').replace(/^local-/, '')
+  return n ? `本机 ${n}` : '本机'
+}
 
 export default {
   name: 'ShellTerminalTabs',
-  components: { ShellTerminal, ArrowLeft, Folder, Upload },
+  components: { ShellTerminal, ArrowLeft, ArrowDown, Folder, Upload, Plus },
   props: {
     sessions: { type: Array, default: () => [] },
     activeMachine: { type: String, default: '' },
@@ -86,7 +113,7 @@ export default {
     transferActiveCount: { type: Number, default: 0 },
   },
   emits: [
-    'update:activeMachine', 'close-session', 'clear', 'open-picker',
+    'update:activeMachine', 'close-session', 'clear', 'open-picker', 'add-local',
     'back', 'open-search', 'reconnect', 'search-result', 'open-transfer', 'cwd-sync',
   ],
   setup(props, { emit, expose }) {
@@ -109,12 +136,19 @@ export default {
     }
 
     const tabLabel = (session) => {
-      if (!session?.connected) return `${session.machineName} (未连接)`
-      return session.machineName
+      const local = session?.kind === 'local' || isLocalSession(session?.machineName)
+      const base = local ? localTabLabel(session.machineName) : session.machineName
+      if (!session?.connected) return `${base} (未连接)`
+      return base
     }
 
     const onTabRemove = (name) => {
       emit('close-session', name)
+    }
+
+    const onAddCommand = (cmd) => {
+      if (cmd === 'remote') emit('open-picker')
+      else emit('add-local')
     }
 
     const clearActive = () => {
@@ -133,7 +167,7 @@ export default {
 
     expose({ clearActive, findNext, findPrevious, clearSearch, fitActive, getSelection })
 
-    return { activeTab, setTerminalRef, onTabRemove, clearActive, tabLabel }
+    return { activeTab, setTerminalRef, onTabRemove, clearActive, tabLabel, onAddCommand, isLocalSession }
   },
 }
 </script>
@@ -165,6 +199,29 @@ export default {
   margin: 0 2px;
 }
 
+.add-session-wrap {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  margin-left: 2px;
+}
+
+.add-session-btn {
+  color: var(--app-text-secondary);
+  padding: 4px 6px;
+}
+
+.add-session-more {
+  color: var(--app-text-secondary);
+  padding: 4px 4px;
+  margin-left: -2px;
+}
+
+.add-session-btn:hover,
+.add-session-more:hover {
+  color: var(--app-accent-color);
+}
+
 .home-btn {
   flex-shrink: 0;
   margin-left: 0;
@@ -174,7 +231,7 @@ export default {
 
 .transfer-btn {
   flex-shrink: 0;
-  margin-left: auto;
+  margin-left: 0;
   color: var(--app-text-secondary);
   padding: 4px 10px;
   display: inline-flex;
@@ -202,10 +259,61 @@ export default {
   margin-left: 2px;
 }
 
-.session-tabs {
+.tabs-bar-spacer {
   flex: 1;
+  min-width: 8px;
+}
+
+.session-tabs {
+  flex: 0 1 auto;
+  max-width: calc(100% - 160px);
   min-width: 0;
+  width: max-content;
   overflow: hidden;
+}
+
+.session-tabs :deep(.el-tabs__header) {
+  margin-bottom: 0;
+  width: max-content;
+  max-width: 100%;
+  border-bottom: none;
+}
+
+.session-tabs :deep(.el-tabs__nav-wrap) {
+  margin-bottom: 0;
+  width: max-content;
+  max-width: 100%;
+}
+
+.session-tabs :deep(.el-tabs__nav-scroll) {
+  width: max-content;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.session-tabs :deep(.el-tabs__nav-wrap::after) {
+  display: none;
+}
+
+.session-tabs :deep(.el-tabs__nav) {
+  border: none;
+  float: none;
+  white-space: nowrap;
+}
+
+.session-tabs :deep(.el-tabs__item) {
+  height: 32px;
+  line-height: 32px;
+  padding: 0 12px !important;
+  font-size: 12px;
+  border: none !important;
+  color: var(--app-text-secondary);
+}
+
+.session-tabs :deep(.el-tabs__item.is-active) {
+  color: var(--app-accent-color);
+  background: var(--app-card-bg);
+  border-radius: 6px 6px 0 0;
 }
 
 .session-tabs :deep(.el-tabs__header) {
@@ -214,13 +322,6 @@ export default {
 
 .session-tabs :deep(.el-tabs__nav-wrap::after) {
   display: none;
-}
-
-.tabs-placeholder {
-  flex: 1;
-  font-size: 12px;
-  color: var(--app-text-muted);
-  padding-left: 8px;
 }
 
 .empty-slot {

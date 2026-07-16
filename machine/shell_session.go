@@ -53,6 +53,7 @@ func (sm *ShellSessionManager) statusLocked() *define.ShellStatus {
 		Host:        sm.host,
 		User:        sm.user,
 		IsRunning:   false,
+		Kind:        ShellKindRemote,
 	}
 }
 

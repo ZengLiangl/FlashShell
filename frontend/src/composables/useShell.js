@@ -28,8 +28,10 @@ export function useShell() {
 
   const upsertOpenTab = (machineName, liveStatus) => {
     const existing = openTabs.value.find((t) => t.machineName === machineName)
+    const kind = liveStatus?.kind || (String(machineName).startsWith('local') ? 'local' : 'remote')
     if (existing) {
       existing.connected = true
+      existing.kind = kind
       if (liveStatus) {
         existing.host = liveStatus.host || existing.host
         existing.user = liveStatus.user || existing.user
@@ -44,6 +46,7 @@ export function useShell() {
       user: liveStatus?.user || '',
       isRunning: liveStatus?.isRunning || false,
       currentCommand: liveStatus?.currentCommand || '',
+      kind,
     })
   }
 
@@ -146,6 +149,36 @@ export function useShell() {
     }
   }
 
+  const connectLocal = async (sessionID = '') => {
+    if (connectingName.value) {
+      ElMessage.warning(`正在连接 ${connectingName.value}，请稍候`)
+      return false
+    }
+    connectingName.value = sessionID || '本机'
+    try {
+      const id = await App.ConnectLocalShell(sessionID || '')
+      if (!id) throw new Error('未返回会话 ID')
+      activeMachine.value = id
+      await syncSessions()
+      upsertOpenTab(id, sessions.value.find((s) => s.machineName === id) || { machineName: id, kind: 'local' })
+      ElMessage.success(sessionID ? '已重新连接本机' : '已打开本机')
+      return true
+    } catch (error) {
+      ElMessage.error('打开本机失败: ' + error)
+      return false
+    } finally {
+      connectingName.value = ''
+    }
+  }
+
+  const connectOrReconnect = async (machineName) => {
+    if (!machineName) return false
+    if (machineName === 'local' || String(machineName).startsWith('local-')) {
+      return connectLocal(machineName)
+    }
+    return connect(machineName)
+  }
+
   /** 软断开：关闭 SSH，保留 tab 与终端历史 */
   const disconnect = async (machineName) => {
     if (!machineName) return
@@ -235,6 +268,8 @@ export function useShell() {
     syncSessions,
     loadMachines,
     connect,
+    connectLocal,
+    connectOrReconnect,
     disconnect,
     closeSession,
     testMachine,

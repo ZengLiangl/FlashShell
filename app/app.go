@@ -30,6 +30,7 @@ type App struct {
 	shellHistory     *data.ShellHistoryManager
 	subProjectRunner *machine.SubProjectRunner
 	shellPool        *machine.ShellSessionPool
+	localShellPool   *machine.LocalShellPool
 	shellAuxPool     *machine.ShellAuxPool
 	transfers        *shellTransferStore
 	outputChannel    chan string
@@ -61,6 +62,7 @@ func NewApp(sessionID string) *App {
 		logManager:     logManager,
 		shellHistory:   data.NewShellHistoryManager(),
 		shellPool:      machine.NewShellSessionPool(),
+		localShellPool: machine.NewLocalShellPool(),
 		shellAuxPool:   machine.NewShellAuxPool(),
 		shellCwds:      make(map[string]string),
 	}
@@ -129,6 +131,9 @@ func (a *App) cleanupBeforeQuit() {
 	a.StopAllSubProjects()
 	for _, session := range a.shellPool.ListSessions() {
 		_ = a.shellPool.Disconnect(session.MachineName, a.shellHandlerFor(session.MachineName))
+	}
+	if a.localShellPool != nil {
+		a.localShellPool.DisconnectAll(a.shellHandlerFor)
 	}
 	a.shellAuxPool.DisconnectAll()
 }
@@ -207,8 +212,14 @@ func (a *App) shellHandlerFor(machineName string) machine.ShellOutputHandler {
 		},
 		OnClose: func() {
 			if machineName != "" {
-				_ = a.shellAuxPool.Disconnect(machineName)
-				a.shellPool.RemoveSession(machineName)
+				if machine.IsLocalShellID(machineName) {
+					if a.localShellPool != nil {
+						a.localShellPool.RemoveSession(machineName)
+					}
+				} else {
+					_ = a.shellAuxPool.Disconnect(machineName)
+					a.shellPool.RemoveSession(machineName)
+				}
 				a.clearShellCwd(machineName)
 			}
 			go a.emitShellSessions()
@@ -275,8 +286,23 @@ func (a *App) emitShellClear(machineName string) {
 
 func (a *App) emitShellSessions() {
 	if a.ctx != nil {
-		wailsRuntime.EventsEmit(a.ctx, "shell:status", a.shellPool.ListSessions())
+		wailsRuntime.EventsEmit(a.ctx, "shell:status", a.listAllShellSessions())
 	}
+}
+
+func (a *App) listAllShellSessions() []define.ShellStatus {
+	remote := a.shellPool.ListSessions()
+	var local []define.ShellStatus
+	if a.localShellPool != nil {
+		local = a.localShellPool.ListSessions()
+	}
+	if len(local) == 0 {
+		return remote
+	}
+	out := make([]define.ShellStatus, 0, len(remote)+len(local))
+	out = append(out, remote...)
+	out = append(out, local...)
+	return out
 }
 
 // GetConfig 获取配置
@@ -458,7 +484,7 @@ func (a *App) TestMachineDraftConnection(m define.Machine, sensitive define.Sens
 }
 
 // GetMachines 获取所有机器配置（从全局配置）
-// 返回副本并填充 host/port，便于前端按名称或 IP 搜索与展示。
+// 返回副本并填充 host/port/user，便于前端按名称或 IP 搜索与展示。
 func (a *App) GetMachines() []define.Machine {
 	src := a.configManager.GetAllMachinesFromGlobal()
 	out := make([]define.Machine, len(src))
@@ -467,6 +493,7 @@ func (a *App) GetMachines() []define.Machine {
 		if s, err := src[i].GetSensitiveData(); err == nil && s != nil {
 			out[i].Host = s.Host
 			out[i].Port = s.Port
+			out[i].User = s.User
 		}
 	}
 	return out
@@ -1420,6 +1447,9 @@ func (a *App) applyWindowTheme(mode string) {
 
 // ConnectShell 连接远程 Shell（支持多会话；可与任务执行并行）
 func (a *App) ConnectShell(machineName string) error {
+	if machine.IsLocalShellID(machineName) {
+		return fmt.Errorf("请使用 ConnectLocalShell 创建本地终端")
+	}
 	machineConfig := a.configManager.GetMachine(machineName)
 	if machineConfig == nil {
 		return fmt.Errorf("未找到机器配置: %s", machineName)
@@ -1445,6 +1475,30 @@ func (a *App) ConnectShell(machineName string) error {
 
 	a.emitShellSessions()
 	return nil
+}
+
+// ConnectLocalShell 创建或重连本地终端。sessionID 为空则新建并返回新 ID；非空则按该 ID 重连。
+func (a *App) ConnectLocalShell(sessionID string) (string, error) {
+	if a.localShellPool == nil {
+		return "", fmt.Errorf("本地终端不可用")
+	}
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID != "" {
+		if !machine.IsLocalShellID(sessionID) {
+			return "", fmt.Errorf("非法本地会话 ID")
+		}
+		if err := a.localShellPool.ConnectID(sessionID, a.shellHandlerFor); err != nil {
+			return "", err
+		}
+		a.emitShellSessions()
+		return sessionID, nil
+	}
+	id, err := a.localShellPool.Connect(a.shellHandlerFor)
+	if err != nil {
+		return "", err
+	}
+	a.emitShellSessions()
+	return id, nil
 }
 
 func (a *App) ensureShellAux(machineName string, machineConfig *define.Machine) {
@@ -1482,8 +1536,15 @@ func (a *App) seedShellCwdIfEmpty(machineName string) {
 func (a *App) DisconnectShell(machineName string) error {
 	a.executionMutex.Lock()
 	defer a.executionMutex.Unlock()
-	_ = a.shellAuxPool.Disconnect(machineName)
-	err := a.shellPool.Disconnect(machineName, a.shellHandlerFor(machineName))
+	var err error
+	if machine.IsLocalShellID(machineName) {
+		if a.localShellPool != nil {
+			err = a.localShellPool.Disconnect(machineName, a.shellHandlerFor(machineName))
+		}
+	} else {
+		_ = a.shellAuxPool.Disconnect(machineName)
+		err = a.shellPool.Disconnect(machineName, a.shellHandlerFor(machineName))
+	}
 	a.clearShellCwd(machineName)
 	a.emitShellSessions()
 	return err
@@ -1707,6 +1768,12 @@ func (a *App) getRemoteHome(machineName string) (string, error) {
 func (a *App) SendShellInput(machineName, input string) error {
 	a.executionMutex.RLock()
 	defer a.executionMutex.RUnlock()
+	if machine.IsLocalShellID(machineName) {
+		if a.localShellPool == nil {
+			return fmt.Errorf("本地终端不可用")
+		}
+		return a.localShellPool.SendInput(machineName, input)
+	}
 	return a.shellPool.SendInput(machineName, input)
 }
 
@@ -1714,6 +1781,12 @@ func (a *App) SendShellInput(machineName, input string) error {
 func (a *App) SendShellInterrupt(machineName string) error {
 	a.executionMutex.RLock()
 	defer a.executionMutex.RUnlock()
+	if machine.IsLocalShellID(machineName) {
+		if a.localShellPool == nil {
+			return fmt.Errorf("本地终端不可用")
+		}
+		return a.localShellPool.SendInterrupt(machineName)
+	}
 	return a.shellPool.SendInterrupt(machineName)
 }
 
@@ -1721,6 +1794,12 @@ func (a *App) SendShellInterrupt(machineName string) error {
 func (a *App) ResizeShell(machineName string, cols, rows int) error {
 	a.executionMutex.RLock()
 	defer a.executionMutex.RUnlock()
+	if machine.IsLocalShellID(machineName) {
+		if a.localShellPool == nil {
+			return fmt.Errorf("本地终端不可用")
+		}
+		return a.localShellPool.Resize(machineName, cols, rows)
+	}
 	return a.shellPool.Resize(machineName, cols, rows)
 }
 
@@ -1743,12 +1822,12 @@ func (a *App) StopShellCommand(machineName string) error {
 
 // GetShellSessions 获取所有 Shell 会话状态
 func (a *App) GetShellSessions() []define.ShellStatus {
-	return a.shellPool.ListSessions()
+	return a.listAllShellSessions()
 }
 
 // GetShellStatus 兼容旧接口，返回首个会话或空状态
 func (a *App) GetShellStatus() *define.ShellStatus {
-	sessions := a.shellPool.ListSessions()
+	sessions := a.listAllShellSessions()
 	if len(sessions) == 0 {
 		return &define.ShellStatus{}
 	}

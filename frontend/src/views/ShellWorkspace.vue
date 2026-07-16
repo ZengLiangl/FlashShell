@@ -2,7 +2,7 @@
   <div class="shell-workspace">
     <el-container class="shell-body main-container">
       <el-aside
-        v-if="openSessionCount > 0"
+        v-if="showMonitorPanel"
         :width="leftCollapsed ? '0px' : leftPanelWidth + 'px'"
         class="left-panel shell-left-panel"
         :class="{ collapsed: leftCollapsed, resizing: isResizing }"
@@ -37,7 +37,7 @@
 
       <!-- 收起后：贴左边悬停出现展开按钮 -->
       <div
-        v-if="openSessionCount > 0 && leftCollapsed"
+        v-if="showMonitorPanel && leftCollapsed"
         class="left-edge-hotzone"
         @mouseenter="edgeHover = true"
         @mouseleave="edgeHover = false"
@@ -67,6 +67,7 @@
           @reconnect="onReconnect"
           @clear="onClear"
           @open-picker="pickerVisible = true"
+          @add-local="onAddLocal"
           @back="$emit('back')"
           @open-search="openSearch"
           @search-result="onSearchResult"
@@ -81,6 +82,7 @@
             <ShellConnectionHistory
               v-else
               :records="historyRecords"
+              :sessions="sessions"
               @connect="onHistoryConnect"
               @open-picker="pickerVisible = true"
               @clear="clearHistory"
@@ -90,6 +92,7 @@
           </template>
           <template #footer="{ activeMachine: am }">
             <ShellFilePanel
+              v-if="am && !isLocalSessionName(am)"
               ref="filePanelRef"
               :machine-name="am"
               :cwd-hint="cwdHints[am] || ''"
@@ -177,7 +180,7 @@ export default {
   },
   emits: [
     'back', 'connect', 'disconnect', 'close-session', 'test', 'add-machine', 'edit-machine',
-    'start-resize', 'update:activeMachine', 'history-changed',
+    'add-local', 'start-resize', 'update:activeMachine', 'history-changed',
   ],
   setup(props, { emit }) {
     const tabsRef = ref(null)
@@ -194,10 +197,25 @@ export default {
     const cwdHints = reactive({})
     const ptyCwds = reactive({})
 
+    const isLocalSessionName = (name) => {
+      const n = String(name || '')
+      return n === 'local' || n.startsWith('local-')
+    }
+
+    const showMonitorPanel = computed(() => {
+      if (!props.openSessionCount) return false
+      return !isLocalSessionName(props.activeMachine)
+    })
+
     const activeConnected = computed(() => {
       const name = props.activeMachine
       if (!name) return false
       return (props.workspaceSessions || []).some((s) => s.machineName === name && s.connected)
+    })
+
+    watch(showMonitorPanel, async () => {
+      await nextTick()
+      tabsRef.value?.fitActive?.()
     })
 
     const formatSearchSummary = (result) => {
@@ -394,6 +412,10 @@ export default {
       emit('connect', name || props.activeMachine)
     }
 
+    const onAddLocal = () => {
+      emit('add-local')
+    }
+
     const onToggleConnection = () => {
       const name = props.activeMachine
       if (!name) return
@@ -504,6 +526,8 @@ export default {
       historyRecords,
       cwdHints,
       activeConnected,
+      showMonitorPanel,
+      isLocalSessionName,
       clearTerminal,
       onClear,
       toggleSearch,
@@ -516,6 +540,7 @@ export default {
       onHistoryConnect,
       onPickerConnect,
       onReconnect,
+      onAddLocal,
       onToggleConnection,
       onSearchResult,
       clearHistory,

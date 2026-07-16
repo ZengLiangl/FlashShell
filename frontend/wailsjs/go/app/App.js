@@ -54,6 +54,10 @@ export function ConfirmQuit() {
   return window['go']['app']['App']['ConfirmQuit']();
 }
 
+export function ConnectLocalShell(arg1) {
+  return window['go']['app']['App']['ConnectLocalShell'](arg1);
+}
+
 export function ConnectShell(arg1) {
   return window['go']['app']['App']['ConnectShell'](arg1);
 }

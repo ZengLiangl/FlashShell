@@ -5,16 +5,28 @@ export function getMachineGroup(machine) {
   return group || DEFAULT_MACHINE_GROUP
 }
 
-/** 机器列表关键词匹配：名称、IP/主机、分组、密钥路径 */
+/** 展示用地址：user@host（默认端口 22 时省略 :port） */
+export function formatMachineAddr(machine) {
+  const user = String(machine?.user || '').trim()
+  const host = String(machine?.host || machine?.ip || '').trim()
+  const port = Number(machine?.port) || 22
+  if (!host) return machine?.key_file || '-'
+  const auth = user ? `${user}@${host}` : host
+  return port === 22 ? auth : `${auth}:${port}`
+}
+
+/** 机器列表关键词匹配：名称、用户、IP/主机、分组、密钥路径 */
 export function machineMatchesKeyword(machine, keyword) {
   const kw = String(keyword || '').trim().toLowerCase()
   if (!kw) return true
   const host = String(machine?.host || machine?.ip || '').toLowerCase()
   return (
     String(machine?.name || '').toLowerCase().includes(kw) ||
+    String(machine?.user || '').toLowerCase().includes(kw) ||
     host.includes(kw) ||
     String(machine?.group || '').toLowerCase().includes(kw) ||
-    String(machine?.key_file || '').toLowerCase().includes(kw)
+    String(machine?.key_file || '').toLowerCase().includes(kw) ||
+    formatMachineAddr(machine).toLowerCase().includes(kw)
   )
 }
 

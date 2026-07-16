@@ -31,6 +31,8 @@ export function ClearShellOutput(arg1:string):Promise<void>;
 
 export function ConfirmQuit():Promise<void>;
 
+export function ConnectLocalShell(arg1:string):Promise<string>;
+
 export function ConnectShell(arg1:string):Promise<void>;
 
 export function CreateApplicationMenu():Promise<menu.Menu>;

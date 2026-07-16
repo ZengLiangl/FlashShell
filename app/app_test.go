@@ -168,6 +168,9 @@ func TestApp_MachineManagement(t *testing.T) {
 			if machine.Port != 22 {
 				t.Fatalf("GetMachines 应填充 Port，得到 %d", machine.Port)
 			}
+			if machine.User != "testuser" {
+				t.Fatalf("GetMachines 应填充 User，得到 %q", machine.User)
+			}
 			break
 		}
 	}

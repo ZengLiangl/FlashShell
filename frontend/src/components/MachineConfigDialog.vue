@@ -83,47 +83,42 @@
                 </div>
             </div>
 
-            <div v-if="listViewMode === 'table'" class="machine-table-wrap">
-                <el-table
-                    :data="filteredMachines"
-                    row-key="id"
-                    style="width: 100%"
-                    v-loading="machinesLoading"
-                >
-                    <el-table-column prop="name" label="机器名称" width="150" />
-                    <el-table-column prop="host" label="IP" min-width="140" show-overflow-tooltip>
-                        <template #default="scope">
-                            {{ scope.row.host || '-' }}
-                        </template>
-                    </el-table-column>
-                    <el-table-column prop="group" label="分组" width="120">
-                        <template #default="scope">
-                            {{ scope.row.group || DEFAULT_MACHINE_GROUP }}
-                        </template>
-                    </el-table-column>
-                    <el-table-column prop="key_file" label="密钥文件" overflow-tooltip />
-                    <el-table-column label="操作" width="130" align="center">
-                        <template #default="scope">
-                            <div class="icon-actions">
-                                <el-tooltip content="编辑" placement="top">
-                                    <el-button size="small" text type="primary" @click="editMachine(scope.row)">
-                                        <el-icon><Edit /></el-icon>
-                                    </el-button>
-                                </el-tooltip>
-                                <el-tooltip content="测试连接" placement="top">
-                                    <el-button size="small" text type="success" :loading="scope.row.testing" @click="testConnection(scope.row)">
-                                        <el-icon v-if="!scope.row.testing"><Connection /></el-icon>
-                                    </el-button>
-                                </el-tooltip>
-                                <el-tooltip content="删除" placement="top">
-                                    <el-button size="small" text type="danger" @click="deleteMachine(scope.row)">
-                                        <el-icon><Delete /></el-icon>
-                                    </el-button>
-                                </el-tooltip>
+            <div v-if="listViewMode === 'table'" class="machine-table-wrap" v-loading="machinesLoading">
+                <div v-if="!filteredMachines.length" class="cfg-empty">暂无机器</div>
+                <ul v-else class="cfg-list">
+                    <li
+                        v-for="machine in filteredMachines"
+                        :key="machine.id || machine.name"
+                        class="cfg-item"
+                        @click="editMachine(machine)"
+                    >
+                        <div class="cfg-dot" aria-hidden="true" />
+                        <div class="cfg-body">
+                            <div class="cfg-line">
+                                <span class="cfg-name">{{ machine.name }}</span>
+                                <span class="cfg-group">{{ machine.group || DEFAULT_MACHINE_GROUP }}</span>
                             </div>
-                        </template>
-                    </el-table-column>
-                </el-table>
+                            <div class="cfg-addr">{{ formatMachineAddr(machine) }}</div>
+                        </div>
+                        <div class="cfg-actions icon-actions" @click.stop>
+                            <el-tooltip content="编辑" placement="top">
+                                <el-button size="small" text type="primary" @click="editMachine(machine)">
+                                    <el-icon><Edit /></el-icon>
+                                </el-button>
+                            </el-tooltip>
+                            <el-tooltip content="测试连接" placement="top">
+                                <el-button size="small" text type="success" :loading="machine.testing" @click="testConnection(machine)">
+                                    <el-icon v-if="!machine.testing"><Connection /></el-icon>
+                                </el-button>
+                            </el-tooltip>
+                            <el-tooltip content="删除" placement="top">
+                                <el-button size="small" text type="danger" @click="deleteMachine(machine)">
+                                    <el-icon><Delete /></el-icon>
+                                </el-button>
+                            </el-tooltip>
+                        </div>
+                    </li>
+                </ul>
             </div>
 
             <div v-else class="machine-board-wrap" v-loading="machinesLoading">
@@ -151,10 +146,12 @@
                                 draggable="true"
                                 @dragstart="onBoardDragStart(machine, $event)"
                                 @dragend="onBoardDragEnd"
+                                @dblclick="editMachine(machine)"
                             >
+                                <div class="cfg-dot" aria-hidden="true" />
                                 <div class="board-card-main">
                                     <span class="board-card-name">{{ machine.name }}</span>
-                                    <span class="board-card-host">{{ machine.host || '-' }}</span>
+                                    <span class="board-card-host">{{ formatMachineAddr(machine) }}</span>
                                 </div>
                                 <div class="board-card-actions icon-actions" @mousedown.stop @click.stop>
                                     <el-tooltip content="编辑" placement="top">
@@ -345,6 +342,7 @@ import {
     sortMachinesByName,
     machineMatchesKeyword,
     getMachineGroup,
+    formatMachineAddr,
 } from '../utils/machineGroups'
 
 export default {
@@ -819,6 +817,7 @@ export default {
         return {
             embedded: computed(() => props.embedded),
             DEFAULT_MACHINE_GROUP,
+            formatMachineAddr,
             visibleProxy,
             machines,
             sortedMachines,
@@ -967,8 +966,103 @@ export default {
     min-height: 0;
     max-height: 100%;
     overflow: auto;
-    border: 1px solid var(--el-border-color-lighter, var(--app-border));
-    border-radius: 6px;
+}
+
+.cfg-empty {
+    text-align: center;
+    color: var(--app-text-muted);
+    font-size: 13px;
+    padding: 40px 12px;
+}
+
+.cfg-list {
+    list-style: none;
+    margin: 0;
+    padding: 6px;
+    border: 1px solid var(--app-border);
+    border-radius: 12px;
+    background: var(--app-card-bg, var(--app-panel-bg));
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.cfg-item {
+    display: grid;
+    grid-template-columns: 8px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 8px 10px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.12s ease;
+}
+
+.cfg-item:hover {
+    background: var(--app-accent-bg);
+}
+
+.cfg-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--app-border);
+    justify-self: center;
+    flex-shrink: 0;
+}
+
+.cfg-item:hover .cfg-dot,
+.board-card:hover .cfg-dot {
+    background: var(--app-accent-color);
+}
+
+.cfg-body {
+    min-width: 0;
+}
+
+.cfg-line {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.cfg-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--app-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cfg-group {
+    flex-shrink: 0;
+    font-size: 10px;
+    line-height: 1;
+    padding: 3px 6px;
+    border-radius: 4px;
+    color: var(--app-text-muted);
+    background: color-mix(in srgb, var(--app-text-muted) 12%, transparent);
+}
+
+.cfg-addr {
+    margin-top: 3px;
+    font-size: 12px;
+    color: var(--app-text-muted);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.cfg-actions {
+    flex-shrink: 0;
+    opacity: 0;
+}
+
+.cfg-item:hover .cfg-actions {
+    opacity: 1;
 }
 
 .view-mode-toggle {
@@ -1066,15 +1160,22 @@ export default {
 }
 
 .board-card {
-    display: flex;
+    display: grid;
+    grid-template-columns: 8px minmax(0, 1fr) auto;
     align-items: center;
-    gap: 4px;
-    padding: 8px 8px 8px 10px;
-    border-radius: 6px;
-    border: 1px solid var(--el-border-color-lighter, #ebeef5);
-    background: var(--el-bg-color, #fff);
+    gap: 8px;
+    padding: 10px 8px 10px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--app-border, #ebeef5);
+    background: var(--app-card-bg, #fff);
     cursor: grab;
     user-select: none;
+    transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.board-card:hover {
+    background: var(--app-accent-bg);
+    border-color: color-mix(in srgb, var(--app-accent-color) 35%, var(--app-border));
 }
 
 .board-card:active {
@@ -1103,8 +1204,9 @@ export default {
 }
 
 .board-card-host {
-    font-size: 11px;
-    color: var(--el-text-color-secondary, #909399);
+    font-size: 12px;
+    color: var(--app-text-muted, #909399);
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

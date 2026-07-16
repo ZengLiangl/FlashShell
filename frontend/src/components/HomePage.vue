@@ -3,44 +3,34 @@
     <header class="home-hero">
       <div class="hero-copy">
         <h2 class="hero-title">FlashDock</h2>
-        <!-- <p class="hero-subtitle">
-          {{ hasProjects ? '选择一种方式开始：跑任务，或连机器进 Shell' : '连接机器，进入 Shell 开始工作' }}
-        </p> -->
       </div>
       <div class="hero-actions">
-        <!-- <el-button
-          v-if="hasTask"
-          type="primary"
-          @click="$emit('resume-task')"
-        >
-          {{ taskRunning ? '返回执行中任务' : '继续当前任务' }}
-        </el-button> -->
-        <!-- <el-button @click="$emit('open-execution-history')">执行历史</el-button> -->
         <el-button :icon="Refresh" circle title="刷新" @click="handleRefresh" />
       </div>
     </header>
 
     <div class="home-zones" :class="{ 'shell-only': !hasProjects }">
-      <!-- 任务区：有项目时才展示 -->
       <section v-if="hasProjects" class="zone zone-task" aria-labelledby="zone-task-title">
         <div class="zone-head">
           <div class="zone-label">
             <span class="zone-dot task-dot" aria-hidden="true"></span>
             <div>
               <h3 id="zone-task-title">任务模式</h3>
-              <!-- <p>选择项目，按预设流程执行命令</p> -->
             </div>
           </div>
         </div>
 
         <div class="zone-body">
           <div class="item-grid">
-            <button v-for="project in projects" :key="project.name" type="button" class="item-card"
-              @click="$emit('select-project', project)">
+            <button
+              v-for="project in projects"
+              :key="project.name"
+              type="button"
+              class="item-card"
+              @click="$emit('select-project', project)"
+            >
               <div class="item-icon task-icon">
-                <el-icon :size="18">
-                  <Folder />
-                </el-icon>
+                <el-icon :size="18"><Folder /></el-icon>
               </div>
               <div class="item-meta">
                 <span class="item-name">{{ project.name }}</span>
@@ -52,7 +42,6 @@
         </div>
       </section>
 
-      <!-- Shell 区 -->
       <section class="zone zone-shell" aria-labelledby="zone-shell-title">
         <div class="zone-head">
           <div class="zone-label">
@@ -64,7 +53,6 @@
                   {{ connectedCount }} 会话进行中
                 </el-tag>
               </h3>
-              <!-- <p>点机器直接连接；或先进终端再选机器</p> -->
             </div>
           </div>
           <div class="zone-actions">
@@ -99,87 +87,15 @@
             <p>暂无机器</p>
             <span>点击右上角 + 添加机器</span>
           </div>
-          <div v-else-if="!hasMachineTree" class="empty-hint">
-            <p>无匹配机器</p>
-            <span>试试其他关键词</span>
-          </div>
-          <div v-else class="machine-tree">
-            <div
-              v-for="group in customGroups"
-              :key="group.name"
-              class="tree-group"
-            >
-              <button
-                type="button"
-                class="tree-group-head"
-                :aria-expanded="isGroupExpanded(group.name)"
-                @click="toggleGroup(group.name)"
-              >
-                <el-icon class="tree-caret" :class="{ open: isGroupExpanded(group.name) }">
-                  <ArrowRight />
-                </el-icon>
-                <span class="tree-group-name">{{ group.name }}</span>
-                <span class="tree-group-count">{{ group.machines.length }}</span>
-              </button>
-              <div v-show="isGroupExpanded(group.name)" class="tree-group-body item-grid machines">
-                <button
-                  v-for="machine in group.machines"
-                  :key="machine.id || machine.name"
-                  type="button"
-                  class="item-card machine-card"
-                  :class="{ connecting: connectingName === machine.name }"
-                  :disabled="!!connectingName"
-                  @click="onConnectMachine(machine.name)"
-                >
-                  <div class="item-icon machine-icon">
-                    <el-icon :size="18" :class="{ 'is-loading': connectingName === machine.name }">
-                      <Loading v-if="connectingName === machine.name" />
-                      <Monitor v-else />
-                    </el-icon>
-                  </div>
-                  <div class="item-meta">
-                    <span class="item-name">{{ machine.name }}</span>
-                    <span class="item-desc">
-                      {{ connectingName === machine.name ? '连接中…' : machineHost(machine) }}
-                    </span>
-                  </div>
-                  <span v-if="connectingName === machine.name" class="item-badge connecting-badge">连接中</span>
-                  <el-icon v-else class="item-chevron">
-                    <ArrowRight />
-                  </el-icon>
-                </button>
-              </div>
-            </div>
-
-            <div v-if="defaultMachines.length" class="tree-default item-grid machines">
-              <button
-                v-for="machine in defaultMachines"
-                :key="machine.id || machine.name"
-                type="button"
-                class="item-card machine-card"
-                :class="{ connecting: connectingName === machine.name }"
-                :disabled="!!connectingName"
-                @click="onConnectMachine(machine.name)"
-              >
-                <div class="item-icon machine-icon">
-                  <el-icon :size="18" :class="{ 'is-loading': connectingName === machine.name }">
-                    <Loading v-if="connectingName === machine.name" />
-                    <Monitor v-else />
-                  </el-icon>
-                </div>
-                <div class="item-meta">
-                  <span class="item-name">{{ machine.name }}</span>
-                  <span class="item-desc">
-                    {{ connectingName === machine.name ? '连接中…' : machineHost(machine) }}
-                  </span>
-                </div>
-                <span v-if="connectingName === machine.name" class="item-badge connecting-badge">连接中</span>
-                <el-icon v-else class="item-chevron">
-                  <ArrowRight />
-                </el-icon>
-              </button>
-            </div>
-          </div>
+          <MachineConnectList
+            v-else
+            :machines="filteredMachines"
+            :sessions="sessions"
+            :connecting-name="connectingName"
+            :filter-keyword="machineKeyword"
+            empty-text="无匹配机器"
+            @connect="onConnectMachine"
+          />
         </div>
       </section>
     </div>
@@ -187,19 +103,22 @@
 </template>
 
 <script>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
-import { splitMachineTree, machineMatchesKeyword } from '../utils/machineGroups'
+import { machineMatchesKeyword } from '../utils/machineGroups'
+import MachineConnectList from './shell/MachineConnectList.vue'
 
 export default {
   name: 'HomePage',
+  components: { MachineConnectList },
   props: {
     projects: { type: Array, required: true },
     connectedCount: { type: Number, default: 0 },
     hasTask: { type: Boolean, default: false },
     taskRunning: { type: Boolean, default: false },
     connectingName: { type: String, default: '' },
+    sessions: { type: Array, default: () => [] },
   },
   emits: [
     'refresh',
@@ -213,7 +132,6 @@ export default {
   setup(props, { emit }) {
     const machines = ref([])
     const machineKeyword = ref('')
-    const expandedGroups = ref([])
 
     const loadMachines = async () => {
       try {
@@ -230,39 +148,7 @@ export default {
       return list.filter((m) => machineMatchesKeyword(m, kw))
     })
 
-    const machineTree = computed(() => splitMachineTree(filteredMachines.value))
-    const customGroups = computed(() => machineTree.value.customGroups)
-    const defaultMachines = computed(() => machineTree.value.defaultMachines)
-    const hasMachineTree = computed(
-      () => customGroups.value.length > 0 || defaultMachines.value.length > 0,
-    )
     const hasProjects = computed(() => (props.projects || []).length > 0)
-
-    const isGroupExpanded = (name) => expandedGroups.value.includes(name)
-
-    const toggleGroup = (name) => {
-      if (isGroupExpanded(name)) {
-        expandedGroups.value = expandedGroups.value.filter((g) => g !== name)
-      } else {
-        expandedGroups.value = [...expandedGroups.value, name]
-      }
-    }
-
-    // 搜索时自动展开命中分组；清空搜索后恢复收起
-    watch(machineKeyword, (kw) => {
-      if (String(kw || '').trim()) {
-        expandedGroups.value = customGroups.value.map((g) => g.name)
-      } else {
-        expandedGroups.value = []
-      }
-    })
-
-    const machineHost = (machine) => {
-      const host = machine.host || machine.ip || ''
-      const port = machine.port ? `:${machine.port}` : ''
-      if (host) return `${host}${port}`
-      return machine.key_file || '点击连接'
-    }
 
     const onConnectMachine = (name) => {
       if (props.connectingName) return
@@ -280,13 +166,8 @@ export default {
       Refresh,
       machines,
       machineKeyword,
-      customGroups,
-      defaultMachines,
-      hasMachineTree,
+      filteredMachines,
       hasProjects,
-      isGroupExpanded,
-      toggleGroup,
-      machineHost,
       onConnectMachine,
       loadMachines,
       handleRefresh,
@@ -327,13 +208,6 @@ export default {
   line-height: 1.2;
 }
 
-.hero-subtitle {
-  margin: 0;
-  font-size: 14px;
-  color: var(--app-text-muted);
-  line-height: 1.45;
-}
-
 .hero-actions {
   display: flex;
   align-items: center;
@@ -352,12 +226,6 @@ export default {
 
 .home-zones.shell-only {
   grid-template-columns: 1fr;
-}
-
-.home-zones.shell-only .item-grid.machines {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-  gap: 10px;
 }
 
 .zone {
@@ -423,13 +291,6 @@ export default {
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-}
-
-.zone-label p {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--app-text-muted);
-  line-height: 1.4;
 }
 
 .session-tag {
@@ -507,83 +368,6 @@ export default {
   gap: 8px;
 }
 
-.item-grid.machines {
-  gap: 8px;
-}
-
-.machine-tree {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.tree-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.tree-group-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  width: 100%;
-  padding: 6px 4px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  text-align: left;
-}
-
-.tree-group-head:hover {
-  background: color-mix(in srgb, var(--app-text-muted) 8%, transparent);
-}
-
-.tree-caret {
-  font-size: 12px;
-  color: var(--app-text-muted);
-  transition: transform 0.15s ease;
-  flex-shrink: 0;
-}
-
-.tree-caret.open {
-  transform: rotate(90deg);
-}
-
-.tree-group-name {
-  flex: 1;
-  min-width: 0;
-  font-size: 13px;
-  font-weight: 650;
-  color: var(--app-text-secondary, var(--app-text));
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tree-group-count {
-  flex-shrink: 0;
-  min-width: 20px;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 9px;
-  font-size: 11px;
-  line-height: 18px;
-  text-align: center;
-  color: var(--app-text-muted);
-  background: color-mix(in srgb, var(--app-text-muted) 12%, transparent);
-}
-
-.tree-group-body {
-  padding-left: 18px;
-}
-
-.tree-default {
-  margin-top: 2px;
-}
-
 .item-card {
   display: grid;
   grid-template-columns: 36px minmax(0, 1fr) auto;
@@ -606,27 +390,6 @@ export default {
   transform: translateY(-1px);
 }
 
-.machine-card:hover {
-  border-color: #67c23a;
-}
-
-.machine-card:disabled {
-  cursor: wait;
-  opacity: 0.72;
-  transform: none;
-}
-
-.machine-card.connecting {
-  border-color: #67c23a;
-  background: color-mix(in srgb, #67c23a 10%, var(--app-card-bg));
-  opacity: 1;
-}
-
-.connecting-badge {
-  color: #67c23a;
-  background: rgba(103, 194, 58, 0.16);
-}
-
 .item-icon {
   width: 36px;
   height: 36px;
@@ -640,11 +403,6 @@ export default {
 .task-icon {
   background: var(--app-accent-bg);
   color: var(--app-accent-color);
-}
-
-.machine-icon {
-  background: rgba(103, 194, 58, 0.14);
-  color: #67c23a;
 }
 
 .item-meta {
@@ -678,17 +436,6 @@ export default {
   border-radius: 999px;
   background: color-mix(in srgb, var(--app-text-muted) 12%, transparent);
   white-space: nowrap;
-}
-
-.item-chevron {
-  color: var(--app-text-muted);
-  font-size: 14px;
-  opacity: 0.7;
-}
-
-.machine-card:hover .item-chevron {
-  color: #67c23a;
-  opacity: 1;
 }
 
 @media (max-width: 960px) {

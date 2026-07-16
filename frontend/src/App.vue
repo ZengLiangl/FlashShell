@@ -51,8 +51,9 @@
         :machines="shellMachines" :sessions="shellSessions" :workspace-sessions="workspaceSessions"
         :connected-count="connectedCount" :open-session-count="openSessionCount" v-model:active-machine="activeMachine"
         :connecting-name="connectingName" :testing-name="testingName" @back="leaveShellMode"
-        @connect="(name) => connectShell(name)" @disconnect="disconnectShell" @close-session="closeShellSession"
-        @test="testShellConnection" @add-machine="openShellMachineDialog" @edit-machine="openShellMachineEdit"
+        @connect="(name) => connectOrReconnectShell(name)" @disconnect="disconnectShell" @close-session="closeShellSession"
+        @add-local="() => connectLocalShell()" @test="testShellConnection"
+        @add-machine="openShellMachineDialog" @edit-machine="openShellMachineEdit"
         @start-resize="startResize" />
     </div>
 
@@ -60,7 +61,8 @@
     <template v-if="activeView === 'home'">
       <div class="projectlist-fullscreen">
         <HomePage ref="homePageRef" :projects="projects" :connected-count="connectedCount" :has-task="!!selectedProject"
-          :task-running="status.isRunning" :connecting-name="connectingName" @refresh="refreshConfig" @select-project="selectProject"
+          :task-running="status.isRunning" :connecting-name="connectingName" :sessions="shellSessions"
+          @refresh="refreshConfig" @select-project="selectProject"
           @resume-task="resumeTaskView" @open-shell="enterShellMode" @connect-machine="openShellAndConnect"
           @add-machine="openShellMachineDialog" @open-system-settings="openSettingsHub('general')" />
       </div>
@@ -175,6 +177,8 @@ export default {
       syncSessions,
       loadMachines: loadShellMachines,
       connect: connectShell,
+      connectLocal: connectLocalShell,
+      connectOrReconnect: connectOrReconnectShell,
       disconnect: disconnectShell,
       closeSession: closeShellSession,
       testMachine: testShellConnection,
@@ -1335,6 +1339,8 @@ export default {
       leaveShellMode,
       openShellAndConnect,
       connectShell,
+      connectLocalShell,
+      connectOrReconnectShell,
       disconnectShell,
       closeShellSession,
       openShellMachineDialog,
