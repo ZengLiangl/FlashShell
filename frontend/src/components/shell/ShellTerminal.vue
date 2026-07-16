@@ -1,5 +1,10 @@
 <template>
-  <div class="shell-terminal" ref="containerRef" @contextmenu.prevent="onContextMenu">
+  <div
+    class="shell-terminal"
+    ref="containerRef"
+    @contextmenu.prevent="onContextMenu"
+    @mousedown="onPaneFocus"
+  >
     <div ref="terminalRef" class="terminal-host"></div>
     <ul
       v-if="ctx.visible"
@@ -11,6 +16,11 @@
       <li @click="onPaste">粘贴</li>
       <li @click="onFind">查找</li>
       <li class="danger" @click="onClearCache">清空缓存</li>
+      <template v-if="inSplit">
+        <li class="sep" role="separator"></li>
+        <li @click="onRemoveFromSplit">移出分屏</li>
+        <li @click="onExitSplit">取消全部分屏</li>
+      </template>
     </ul>
   </div>
 </template>
@@ -46,8 +56,15 @@ export default {
     viewVisible: { type: Boolean, default: true },
     connected: { type: Boolean, default: false },
     searchQuery: { type: String, default: '' },
+    broadcastEnabled: { type: Boolean, default: false },
+    broadcastTargets: { type: Array, default: () => [] },
+    /** 当前是否处于分屏窗格中 */
+    inSplit: { type: Boolean, default: false },
   },
-  emits: ['open-search', 'clear-cache', 'reconnect', 'search-result', 'cwd-sync'],
+  emits: [
+    'open-search', 'clear-cache', 'reconnect', 'search-result', 'cwd-sync',
+    'remove-from-split', 'exit-split', 'focus-session',
+  ],
   setup(props, { expose, emit }) {
     const containerRef = ref(null)
     const terminalRef = ref(null)
@@ -135,6 +152,20 @@ export default {
       term.value?.clear?.()
       emit('clear-cache', props.machineName)
       App.ClearShellOutput(props.machineName).catch(() => {})
+    }
+
+    const onRemoveFromSplit = () => {
+      hideContextMenu()
+      emit('remove-from-split', props.machineName)
+    }
+
+    const onExitSplit = () => {
+      hideContextMenu()
+      emit('exit-split')
+    }
+
+    const onPaneFocus = () => {
+      emit('focus-session', props.machineName)
     }
 
     const decodeBase64 = (b64) => {
@@ -454,6 +485,7 @@ export default {
           }
           return
         }
+        if (props.broadcastEnabled) return
         trackInputLine(data)
         App.SendShellInput(props.machineName, data).catch(() => {})
       })
@@ -582,6 +614,9 @@ export default {
       onPaste,
       onFind,
       onClearCache,
+      onRemoveFromSplit,
+      onExitSplit,
+      onPaneFocus,
     }
   },
 }
@@ -627,6 +662,20 @@ export default {
 
 .ctx-menu li.danger {
   color: #f56c6c;
+}
+
+.ctx-menu li.sep {
+  height: 1px;
+  margin: 4px 8px;
+  padding: 0;
+  background: var(--app-border, #333);
+  pointer-events: none;
+  cursor: default;
+}
+
+.ctx-menu li.sep:hover {
+  background: var(--app-border, #333);
+  color: inherit;
 }
 
 .terminal-host {

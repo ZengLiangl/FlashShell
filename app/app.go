@@ -32,6 +32,7 @@ type App struct {
 	shellPool        *machine.ShellSessionPool
 	localShellPool   *machine.LocalShellPool
 	shellAuxPool     *machine.ShellAuxPool
+	tunnelMgr        *machine.TunnelManager
 	transfers        *shellTransferStore
 	outputChannel    chan string
 	outputIngress    chan string
@@ -47,7 +48,7 @@ type App struct {
 func NewApp(sessionID string) *App {
 	sessionManager, err := data.NewSessionManager(sessionID)
 	if err != nil {
-		println("创建会话管理器失败:", err.Error())
+		println("?????????:", err.Error())
 		sessionManager, _ = data.NewSessionManager(data.NewSessionID())
 	}
 
@@ -64,6 +65,7 @@ func NewApp(sessionID string) *App {
 		shellPool:      machine.NewShellSessionPool(),
 		localShellPool: machine.NewLocalShellPool(),
 		shellAuxPool:   machine.NewShellAuxPool(),
+		tunnelMgr:       machine.NewTunnelManager(),
 		shellCwds:      make(map[string]string),
 	}
 	app.refreshLogSettings()
@@ -89,21 +91,21 @@ func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 	a.setupSubProjectRunner()
 
-	// 尝试加载配置文件，如果不存在则创建默认配置
+	// ?????????????????????
 	if _, err := a.configManager.LoadConfig(); err != nil {
 		if os.IsNotExist(err) {
-			println("配置文件不存在，创建默认配置")
+			println("??????????????")
 			data.CreateDefaultConfig("config.yaml")
 			if _, loadErr := a.configManager.LoadConfig(); loadErr != nil {
-				println("加载默认配置文件失败:", loadErr.Error())
+				println("??????????:", loadErr.Error())
 			} else {
-				println("默认配置文件加载成功")
+				println("??????????")
 			}
 		} else {
-			println("加载配置文件失败:", err.Error())
+			println("????????:", err.Error())
 		}
 	} else {
-		println("配置文件加载成功")
+		println("????????")
 	}
 	a.applyWindowTheme(a.GetThemeSettings().Mode)
 }
@@ -113,7 +115,7 @@ func (a *App) DomReady(ctx context.Context) {
 	// Add your action here
 }
 
-// BeforeClose 关闭窗口前触发；首次拦截并弹框确认，确认后再次关闭才真正退出。
+// BeforeClose ???????????????????????????????
 func (a *App) BeforeClose(ctx context.Context) (prevent bool) {
 	a.quitMu.Lock()
 	allow := a.allowQuit
@@ -128,6 +130,15 @@ func (a *App) BeforeClose(ctx context.Context) (prevent bool) {
 	return false
 }
 
+func (a *App) machineConfigExists(name string) bool {
+	name = strings.TrimSpace(name)
+	return name != "" && a.configManager.GetMachine(name) != nil
+}
+
+func (a *App) remoteConfigName(sessionID string) string {
+	return machine.RemoteConfigNameWithResolver(sessionID, a.machineConfigExists)
+}
+
 func (a *App) cleanupBeforeQuit() {
 	a.StopAllSubProjects()
 	for _, session := range a.shellPool.ListSessions() {
@@ -137,9 +148,12 @@ func (a *App) cleanupBeforeQuit() {
 		a.localShellPool.DisconnectAll(a.shellHandlerFor)
 	}
 	a.shellAuxPool.DisconnectAll()
+	if a.tunnelMgr != nil {
+		a.tunnelMgr.StopAll()
+	}
 }
 
-// ConfirmQuit 用户确认退出后调用，关闭应用。
+// ConfirmQuit ???????????????
 func (a *App) ConfirmQuit() {
 	a.quitMu.Lock()
 	a.allowQuit = true
@@ -218,8 +232,12 @@ func (a *App) shellHandlerFor(machineName string) machine.ShellOutputHandler {
 						a.localShellPool.RemoveSession(machineName)
 					}
 				} else {
-					_ = a.shellAuxPool.Disconnect(machineName)
+					configName := a.remoteConfigName(machineName)
 					a.shellPool.RemoveSession(machineName)
+					if !a.shellPool.HasConnectedConfig(configName) {
+						_ = a.shellAuxPool.Disconnect(configName)
+						a.stopMachineTunnels(configName)
+					}
 				}
 				a.clearShellCwd(machineName)
 			}
@@ -306,46 +324,46 @@ func (a *App) listAllShellSessions() []define.ShellStatus {
 	return out
 }
 
-// GetConfig 获取配置
+// GetConfig ????
 func (a *App) GetConfig() (*define.Root, error) {
 	return a.configManager.LoadConfig()
 }
 
-// GetConfigForRefresh 获取配置（用于刷新，不更新全局配置）
+// GetConfigForRefresh ??????????????????
 func (a *App) GetConfigForRefresh() (*define.Root, error) {
 	return a.configManager.LoadConfigForRefresh()
 }
 
-// SaveConfig 保存配置
+// SaveConfig ????
 func (a *App) SaveConfig(root *define.Root) error {
 	return a.configManager.SaveConfig(root)
 }
 
-// ExecuteSubProject 执行 SubProject（可与 Shell 会话并行）
+// ExecuteSubProject ?? SubProject??? Shell ?????
 func (a *App) ExecuteSubProject(projectName, subProjectName string) error {
 	a.executionMutex.Lock()
 	defer a.executionMutex.Unlock()
 
-	// 在执行前刷新配置，确保读取到最新的 SubProject 定义
+	// ????????????????? SubProject ??
 	if _, err := a.configManager.LoadConfigForRefresh(); err != nil {
 		return err
 	}
 
-	// 新任务开始前清空终端
+	// ??????????
 	a.ClearOutput()
 
-	// 异步执行 SubProject
+	// ???? SubProject
 	go func() {
 		success := true
-		summary := "执行完成"
+		summary := "????"
 		if a.logEnabled {
 			if _, err := a.logManager.StartSession(projectName, subProjectName); err != nil {
-				a.pushOutput(fmt.Sprintf("日志落盘启动失败: %s", err.Error()))
+				a.pushOutput(fmt.Sprintf("????????: %s", err.Error()))
 			}
 		}
 
 		if err := a.subProjectRunner.ExecuteSubProject(projectName, subProjectName, a.outputWriter()); err != nil {
-			a.pushOutput(fmt.Sprintf("执行失败: %s", err.Error()))
+			a.pushOutput(fmt.Sprintf("????: %s", err.Error()))
 			success = false
 			summary = err.Error()
 		}
@@ -358,26 +376,26 @@ func (a *App) ExecuteSubProject(projectName, subProjectName string) error {
 	return nil
 }
 
-// ExecuteCommand 执行命令 (保持向后兼容，但现在不推荐使用)
+// ExecuteCommand ???? (???????????????)
 func (a *App) ExecuteCommand(projectName, subProjectName, commandName string) error {
-	// 为了向后兼容，我们仍然保留这个方法，但它现在会执行整个 SubProject
+	// ??????????????????????????? SubProject
 	return a.ExecuteSubProject(projectName, subProjectName)
 }
 
-// StopSubProject 停止 SubProject
+// StopSubProject ?? SubProject
 func (a *App) StopSubProject(projectName, subProjectName string) error {
 	return a.subProjectRunner.StopSubProject(projectName, subProjectName)
 }
 
-// StopCommand 停止命令 (保持向后兼容)
+// StopCommand ???? (??????)
 func (a *App) StopCommand(projectName, subProjectName, commandName string) error {
-	// 为了向后兼容，停止整个 SubProject
+	// ??????????? SubProject
 	return a.StopSubProject(projectName, subProjectName)
 }
 
-// StopAllSubProjects 停止所有 SubProjects
+// StopAllSubProjects ???? SubProjects
 func (a *App) StopAllSubProjects() error {
-	// 获取当前执行状态
+	// ????????
 	status := a.subProjectRunner.GetExecutionStatus()
 	if status.IsRunning {
 		return a.StopSubProject(status.ProjectName, status.SubProjectName)
@@ -385,16 +403,16 @@ func (a *App) StopAllSubProjects() error {
 	return nil
 }
 
-// StopAllCommands 停止所有命令 (保持向后兼容)
+// StopAllCommands ?????? (??????)
 func (a *App) StopAllCommands() {
 	a.StopAllSubProjects()
 }
 
-// GetOutput 获取输出
+// GetOutput ????
 func (a *App) GetOutput() []string {
 	var output []string
 
-	// 非阻塞读取所有可用输出
+	// ???????????
 	for {
 		select {
 		case msg := <-a.outputChannel:
@@ -405,7 +423,7 @@ func (a *App) GetOutput() []string {
 	}
 }
 
-// ClearOutput 清空输出
+// ClearOutput ????
 func (a *App) ClearOutput() {
 	for {
 		select {
@@ -426,16 +444,16 @@ drainedChannel:
 	a.emitOutputClear()
 }
 
-// GetSubProjectStatus 获取 SubProject 状态
+// GetSubProjectStatus ?? SubProject ??
 func (a *App) GetSubProjectStatus() *define.SubProjectStatus {
 	return a.subProjectRunner.GetExecutionStatus()
 }
 
-// GetStatus 获取状态 (保持向后兼容)
+// GetStatus ???? (??????)
 func (a *App) GetStatus() *define.CommandStatus {
 	subStatus := a.subProjectRunner.GetExecutionStatus()
 
-	// 转换为旧的 CommandStatus 格式
+	// ????? CommandStatus ??
 	command := ""
 	if subStatus.IsRunning {
 		command = fmt.Sprintf("%s/%s/%s", subStatus.ProjectName, subStatus.SubProjectName, subStatus.CurrentCommand)
@@ -448,26 +466,26 @@ func (a *App) GetStatus() *define.CommandStatus {
 	}
 }
 
-// TestMachineConnection 测试机器连接
+// TestMachineConnection ??????
 func (a *App) TestMachineConnection(machineID string) error {
 	machineConfig := a.configManager.GetMachineFromGlobal(machineID)
 	if machineConfig == nil {
-		return fmt.Errorf("未找到机器配置: %s", machineID)
+		return fmt.Errorf("???????: %s", machineID)
 	}
 
 	sshClient := machine.NewSSHClient(machineConfig, a.configManager.GetWorkPathVars())
 	return sshClient.TestConnection()
 }
 
-// TestMachineDraftConnection 用表单中的连接信息测试，无需先保存到配置
+// TestMachineDraftConnection ????????????????????
 func (a *App) TestMachineDraftConnection(m define.Machine, sensitive define.SensitiveData) error {
 	host := strings.TrimSpace(sensitive.Host)
 	user := strings.TrimSpace(sensitive.User)
 	if host == "" {
-		return fmt.Errorf("请填写主机地址")
+		return fmt.Errorf("???????")
 	}
 	if user == "" {
-		return fmt.Errorf("请填写用户名")
+		return fmt.Errorf("??????")
 	}
 	if sensitive.Port <= 0 {
 		sensitive.Port = 22
@@ -478,14 +496,14 @@ func (a *App) TestMachineDraftConnection(m define.Machine, sensitive define.Sens
 		m.Name = "draft-test"
 	}
 	if err := m.SetSensitiveData(&sensitive); err != nil {
-		return fmt.Errorf("准备连接信息失败: %w", err)
+		return fmt.Errorf("????????: %w", err)
 	}
 	sshClient := machine.NewSSHClient(&m, a.configManager.GetWorkPathVars())
 	return sshClient.TestConnection()
 }
 
-// GetMachines 获取所有机器配置（从全局配置）
-// 返回副本并填充 host/port/user，便于前端按名称或 IP 搜索与展示。
+// GetMachines ???????????????
+// ??????? host/port/user????????? IP ??????
 func (a *App) GetMachines() []define.Machine {
 	src := a.configManager.GetAllMachinesFromGlobal()
 	out := make([]define.Machine, len(src))
@@ -500,86 +518,89 @@ func (a *App) GetMachines() []define.Machine {
 	return out
 }
 
-// GetMachineGroups 获取机器分组列表
+// GetMachineGroups ????????
 func (a *App) GetMachineGroups() []string {
 	return a.configManager.GetMachineGroups()
 }
 
-// AddMachineGroup 添加机器分组
+// AddMachineGroup ??????
 func (a *App) AddMachineGroup(name string) error {
 	return a.configManager.AddMachineGroup(name)
 }
 
-// RenameMachineGroup 重命名机器分组
+// RenameMachineGroup ???????
 func (a *App) RenameMachineGroup(oldName, newName string) error {
 	return a.configManager.RenameMachineGroup(oldName, newName)
 }
 
-// DeleteMachineGroup 删除机器分组
+// DeleteMachineGroup ??????
 func (a *App) DeleteMachineGroup(name string) error {
 	return a.configManager.DeleteMachineGroup(name)
 }
 
-// UpdateMachineGroup 仅更新机器所属分组（保留凭证等其它字段）
+// UpdateMachineGroup ????????????????????
 func (a *App) UpdateMachineGroup(machineID, group string) error {
 	return a.configManager.UpdateMachineGroup(machineID, group)
 }
 
-// AddMachine 添加机器配置（到全局配置）
+// AddMachine ?????????????
 func (a *App) AddMachine(machine define.Machine) error {
 	machine.EnsureID()
 	return a.configManager.AddMachineToGlobal(&machine)
 }
 
-// AddMachineWithEvent 添加机器配置（带事件通知）
+// AddMachineWithEvent ?????????????
 func (a *App) AddMachineWithEvent(machine define.Machine) error {
 	err := a.configManager.AddMachineToGlobal(&machine)
 	if err != nil {
-		a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("添加机器配置失败: %s", err.Error()), define.MsgTypeError, false, nil)
+		a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("????????: %s", err.Error()), define.MsgTypeError, false, nil)
 		return err
 	}
 
-	a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("成功添加机器配置: %s", machine.Name), define.MsgTypeSuccess, false, map[string]interface{}{
+	a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("????????: %s", machine.Name), define.MsgTypeSuccess, false, map[string]interface{}{
 		"machineName": machine.Name,
 	})
 	return nil
 }
 
-// UpdateMachine 更新机器配置（在全局配置中，按 ID）
+// UpdateMachine ??????????????? ID?
 func (a *App) UpdateMachine(machineID string, machine define.Machine) error {
 	existing := a.configManager.GetMachineFromGlobal(machineID)
 	if existing == nil {
-		return fmt.Errorf("未找到机器配置: %s", machineID)
+		return fmt.Errorf("???????: %s", machineID)
 	}
 	machine.ID = machineID
+	if machine.EncryptedData == "" {
+		machine.EncryptedData = existing.EncryptedData
+	}
 	return a.configManager.AddMachineToGlobal(&machine)
 }
 
-// UpdateMachineWithEvent 更新机器配置（带事件通知）
+// UpdateMachineWithEvent ?????????????
 func (a *App) UpdateMachineWithEvent(machineID string, machine define.Machine) error {
 	if err := a.UpdateMachine(machineID, machine); err != nil {
-		a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("更新机器配置失败: %s", err.Error()), define.MsgTypeError, false, nil)
+		a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("????????: %s", err.Error()), define.MsgTypeError, false, nil)
 		return err
 	}
 
-	a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("成功更新机器配置: %s", machine.Name), define.MsgTypeSuccess, false, map[string]interface{}{
+	a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("????????: %s", machine.Name), define.MsgTypeSuccess, false, map[string]interface{}{
 		"machineId":   machine.ID,
 		"machineName": machine.Name,
 	})
 	return nil
 }
 
-// DeleteMachine 删除机器配置（从全局配置，按 ID）
+// DeleteMachine ?????????????? ID?
 func (a *App) DeleteMachine(machineID string) error {
 	return a.configManager.RemoveMachineFromGlobal(machineID)
 }
 
-// DeleteMachineWithEvent 删除机器配置（带事件通知）
+// DeleteMachineWithEvent ?????????????
 func (a *App) DeleteMachineWithEvent(machineID string) error {
 	machine := a.configManager.GetMachineFromGlobal(machineID)
 	err := a.configManager.RemoveMachineFromGlobal(machineID)
 	if err != nil {
-		a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("删除机器配置失败: %s", err.Error()), define.MsgTypeError, false, nil)
+		a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("????????: %s", err.Error()), define.MsgTypeError, false, nil)
 		return err
 	}
 
@@ -587,18 +608,18 @@ func (a *App) DeleteMachineWithEvent(machineID string) error {
 	if machine != nil {
 		name = machine.Name
 	}
-	a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("成功删除机器配置: %s", name), define.MsgTypeSuccess, false, map[string]interface{}{
+	a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("????????: %s", name), define.MsgTypeSuccess, false, map[string]interface{}{
 		"machineId": machineID,
 	})
 	return nil
 }
 
-// GetGlobalConfig 获取全局配置
+// GetGlobalConfig ??????
 func (a *App) GetGlobalConfig() (*data.GlobalConfig, error) {
 	return a.configManager.GetGlobalConfig()
 }
 
-// GetGlobalConfigForRefresh 获取全局配置（用于刷新，从文件重新读取）
+// GetGlobalConfigForRefresh ????????????????????
 func (a *App) GetGlobalConfigForRefresh() (*data.GlobalConfig, error) {
 	globalConfig, err := a.configManager.GetGlobalConfigForRefresh()
 	if err != nil {
@@ -608,103 +629,103 @@ func (a *App) GetGlobalConfigForRefresh() (*data.GlobalConfig, error) {
 	return globalConfig, nil
 }
 
-// SaveGlobalConfig 保存全局配置
+// SaveGlobalConfig ??????
 func (a *App) SaveGlobalConfig(config *data.GlobalConfig) error {
 	return a.configManager.SaveGlobalConfig(config)
 }
 
-// GetConfigFiles 获取所有配置文件列表
+// GetConfigFiles ??????????
 func (a *App) GetConfigFiles() ([]string, error) {
 	return a.configManager.GetConfigFiles()
 }
 
-// SwitchConfigFileWithEvent 切换配置文件（带事件通知）
+// SwitchConfigFileWithEvent ?????????????
 func (a *App) SwitchConfigFileWithEvent(configPath string) error {
-	// 停止所有正在运行的 SubProjects
+	// ????????? SubProjects
 	if err := a.StopAllSubProjects(); err != nil {
-		// 记录错误但不阻止切换
-		fmt.Printf("停止运行中的项目时出错: %v\n", err)
-		a.emitOperationEvent(define.OpTypeSwitchConfig, fmt.Sprintf("停止运行中的项目时出错: %v", err), define.MsgTypeWarning, false, nil)
+		// ??????????
+		fmt.Printf("???????????: %v\n", err)
+		a.emitOperationEvent(define.OpTypeSwitchConfig, fmt.Sprintf("???????????: %v", err), define.MsgTypeWarning, false, nil)
 	}
 
-	// 清空输出
+	// ????
 	a.ClearOutput()
 
-	// 切换配置文件
+	// ??????
 	if err := a.configManager.SwitchConfigFile(configPath); err != nil {
 		a.emitOperationEvent(define.OpTypeSwitchConfig, fmt.Sprintf("%v", err.Error()), define.MsgTypeError, true, nil)
-		return fmt.Errorf("切换配置文件失败: %w", err)
+		return fmt.Errorf("????????: %w", err)
 	}
 
-	// 重新创建 SubProjectRunner
+	// ???? SubProjectRunner
 	a.setupSubProjectRunner()
 
-	// 发送事件到前端通知配置文件已切换（保持向后兼容）
+	// ????????????????????????
 	if a.ctx != nil {
-		fmt.Printf("发送 config:changed 事件，配置文件: %s\n", configPath)
+		fmt.Printf("?? config:changed ???????: %s\n", configPath)
 		wailsRuntime.EventsEmit(a.ctx, "config:changed", map[string]interface{}{
 			"configPath": configPath,
 			"timestamp":  time.Now().Unix(),
 		})
-		fmt.Println("事件发送完成")
+		fmt.Println("??????")
 	}
 
 	return nil
 }
 
-// SetMachineSensitiveData 设置机器敏感数据
+// SetMachineSensitiveData ????????
 func (a *App) SetMachineSensitiveData(machineID string, sensitiveData define.SensitiveData) error {
 	machine := a.configManager.GetMachineFromGlobal(machineID)
 	if machine == nil {
-		return fmt.Errorf("未找到机器: %s", machineID)
+		return fmt.Errorf("?????: %s", machineID)
 	}
 
-	// 设置敏感数据并加密
+	// ?????????
 	if err := machine.SetSensitiveData(&sensitiveData); err != nil {
-		return fmt.Errorf("设置敏感数据失败: %w", err)
+		return fmt.Errorf("????????: %w", err)
 	}
-	// 将更新后的机器配置重新保存到全局配置文件中
+	// ?????????????????????
 	return a.configManager.AddMachineToGlobal(machine)
 }
 
-// GetMachineSensitiveData 获取机器敏感数据
+// GetMachineSensitiveData ????????
 func (a *App) GetMachineSensitiveData(machineID string) (*define.SensitiveData, error) {
 	machine := a.configManager.GetMachineFromGlobal(machineID)
 	if machine == nil {
-		return nil, fmt.Errorf("未找到机器: %s", machineID)
+		return nil, fmt.Errorf("?????: %s", machineID)
 	}
 
 	return machine.GetSensitiveData()
 }
 
-// ClearMachineSensitiveData 清除机器敏感数据缓存
+// ClearMachineSensitiveData ??????????
 func (a *App) ClearMachineSensitiveData(machineID string) error {
 	machine := a.configManager.GetMachineFromGlobal(machineID)
 	if machine == nil {
-		return fmt.Errorf("未找到机器: %s", machineID)
+		return fmt.Errorf("?????: %s", machineID)
 	}
 
 	machine.ClearSensitiveData()
 	return nil
 }
 
-// SelectKeyFile 选择密钥文件
+// SelectKeyFile ??????
 func (a *App) SelectKeyFile() (string, error) {
 	filePath, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
-		Title:           "选择SSH密钥文件",
+		Title:           "??SSH????",
 		ShowHiddenFiles: true,
 	})
 	if err != nil {
-		return "", fmt.Errorf("选择文件失败: %w", err)
+		return "", fmt.Errorf("??????: %w", err)
 	}
 
 	return filePath, nil
 }
 
-// SelectXshellFile 选择单个 Xshell 会话文件
+// SelectXshellFile ???? Xshell ????
 func (a *App) SelectXshellFile() (string, error) {
-	paths, err := a.pickImportSources("选择 Xshell 文件或文件夹", []wailsRuntime.FileFilter{
-		{DisplayName: "Xshell 会话 (*.xsh)", Pattern: "*.xsh"},
+	paths, err := a.pickImportSources("?? Xshell ??????", []wailsRuntime.FileFilter{
+		{DisplayName: "Xshell ?? (*.xsh)", Pattern: "*.xsh"},
 	})
 	if err != nil || len(paths) == 0 {
 		return "", err
@@ -712,13 +733,13 @@ func (a *App) SelectXshellFile() (string, error) {
 	return paths[0], nil
 }
 
-// SelectXshellFolder 选择 Xshell 会话文件夹
+// SelectXshellFolder ?? Xshell ?????
 func (a *App) SelectXshellFolder() (string, error) {
 	dirPath, err := wailsRuntime.OpenDirectoryDialog(a.ctx, wailsRuntime.OpenDialogOptions{
-		Title: "选择 Xshell 会话文件夹",
+		Title: "?? Xshell ?????",
 	})
 	if err != nil {
-		return "", fmt.Errorf("选择文件夹失败: %w", err)
+		return "", fmt.Errorf("???????: %w", err)
 	}
 	return dirPath, nil
 }
@@ -729,16 +750,16 @@ func (a *App) pickImportSources(title string, filters []wailsRuntime.FileFilter)
 		Filters: filters,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("选择文件失败: %w", err)
+		return nil, fmt.Errorf("??????: %w", err)
 	}
-	// 取消时 Wails 返回空切片；不要再弹文件夹选择框
+	// ??? Wails ????????????????
 	return files, nil
 }
 
-// ImportXshellPick 选择并导入 Xshell 配置（支持多文件或文件夹）
+// ImportXshellPick ????? Xshell ?????????????
 func (a *App) ImportXshellPick(accountID, group string) (*data.MachineImportResult, error) {
-	paths, err := a.pickImportSources("选择 Xshell 文件或文件夹", []wailsRuntime.FileFilter{
-		{DisplayName: "Xshell 会话 (*.xsh)", Pattern: "*.xsh"},
+	paths, err := a.pickImportSources("?? Xshell ??????", []wailsRuntime.FileFilter{
+		{DisplayName: "Xshell ?? (*.xsh)", Pattern: "*.xsh"},
 	})
 	if err != nil {
 		return nil, err
@@ -749,12 +770,12 @@ func (a *App) ImportXshellPick(accountID, group string) (*data.MachineImportResu
 	return a.configManager.ImportXshell(paths, accountID, group)
 }
 
-// ImportFinalShellPick 选择并导入 FinalShell 配置（支持多文件或文件夹）
+// ImportFinalShellPick ????? FinalShell ?????????????
 func (a *App) ImportFinalShellPick(accountID, group string) (*data.MachineImportResult, error) {
-	// Pattern 必须是 macOS UTType 能识别的扩展名（如 *.json）。
-	// 使用 *_connect_config.json 这类通配会在 Wails OpenFileDialog 中
-	// 因 UTType 返回 nil 而崩溃：insertObject: object cannot be nil。
-	paths, err := a.pickImportSources("选择 FinalShell 文件或文件夹", []wailsRuntime.FileFilter{
+	// Pattern ??? macOS UTType ????????? *.json??
+	// ?? *_connect_config.json ?????? Wails OpenFileDialog ?
+	// ? UTType ?? nil ????insertObject: object cannot be nil?
+	paths, err := a.pickImportSources("?? FinalShell ??????", []wailsRuntime.FileFilter{
 		{DisplayName: "FinalShell (*_connect_config.json)", Pattern: "*.json"},
 	})
 	if err != nil {
@@ -766,33 +787,33 @@ func (a *App) ImportFinalShellPick(accountID, group string) (*data.MachineImport
 	return a.configManager.ImportFinalShell(paths, accountID, group)
 }
 
-// ImportXshellFromFile 从路径导入 Xshell
+// ImportXshellFromFile ????? Xshell
 func (a *App) ImportXshellFromFile(filePath, accountID, group string) (*data.MachineImportResult, error) {
 	if filePath == "" {
-		return nil, fmt.Errorf("未选择文件")
+		return nil, fmt.Errorf("?????")
 	}
 	return a.configManager.ImportXshell([]string{filePath}, accountID, group)
 }
 
-// ImportXshellFromFolder 从文件夹导入 Xshell
+// ImportXshellFromFolder ?????? Xshell
 func (a *App) ImportXshellFromFolder(dirPath, accountID, group string) (*data.MachineImportResult, error) {
 	if dirPath == "" {
-		return nil, fmt.Errorf("未选择文件夹")
+		return nil, fmt.Errorf("??????")
 	}
 	return a.configManager.ImportXshell([]string{dirPath}, accountID, group)
 }
 
-// GetGlobalAccounts 获取全局 SSH 帐号
+// GetGlobalAccounts ???? SSH ??
 func (a *App) GetGlobalAccounts() []data.GlobalAccountDTO {
 	return a.configManager.GetGlobalAccounts()
 }
 
-// SaveGlobalAccounts 保存全局 SSH 帐号
+// SaveGlobalAccounts ???? SSH ??
 func (a *App) SaveGlobalAccounts(accounts []data.GlobalAccount) error {
 	return a.configManager.SaveGlobalAccounts(accounts)
 }
 
-// SaveGlobalAccountsFromDTO 保存全局 SSH 帐号（前端明文密码）
+// SaveGlobalAccountsFromDTO ???? SSH ??????????
 func (a *App) SaveGlobalAccountsFromDTO(accounts []data.GlobalAccountDTO) error {
 	stored := make([]data.GlobalAccount, 0, len(accounts))
 	for _, dto := range accounts {
@@ -810,11 +831,11 @@ func (a *App) SaveGlobalAccountsFromDTO(accounts []data.GlobalAccountDTO) error 
 	return a.configManager.SaveGlobalAccounts(stored)
 }
 
-// CreateMachine 创建机器并保存连接信息
+// CreateMachine ???????????
 func (a *App) CreateMachine(machine define.Machine, sensitiveData define.SensitiveData) (string, error) {
 	machine.EnsureID()
 	if err := machine.SetSensitiveData(&sensitiveData); err != nil {
-		return "", fmt.Errorf("设置敏感数据失败: %w", err)
+		return "", fmt.Errorf("????????: %w", err)
 	}
 	if err := a.configManager.AddMachineToGlobal(&machine); err != nil {
 		return "", err
@@ -822,24 +843,24 @@ func (a *App) CreateMachine(machine define.Machine, sensitiveData define.Sensiti
 	return machine.ID, nil
 }
 
-// OpenMachineConfig 打开机器配置对话框（供菜单调用）
+// OpenMachineConfig ????????????????
 func (a *App) OpenMachineConfig() {
-	// 发送事件到前端打开机器配置对话框
+	// ????????????????
 	if a.ctx != nil {
 		wailsRuntime.EventsEmit(a.ctx, "open:machine-config", map[string]interface{}{
 			"timestamp": time.Now().Unix(),
 		})
-		fmt.Println("发送打开机器配置事件")
+		fmt.Println("??????????")
 	} else {
-		fmt.Println("警告: ctx 为 nil，无法发送事件")
-		a.emitOperationEvent(define.OpTypeMachineConfig, "无法发送事件，ctx 为 nil", define.MsgTypeError, false, nil)
+		fmt.Println("??: ctx ? nil???????")
+		a.emitOperationEvent(define.OpTypeMachineConfig, "???????ctx ? nil", define.MsgTypeError, false, nil)
 	}
 }
 
-// RefreshAll 全局刷新功能
+// RefreshAll ??????
 func (a *App) RefreshConfigMenu() error {
-	// 刷新配置列表时，确保执行上下文也同步使用新配置
-	// 否则 subProjectRunner 内部仍会持有旧的 configManager 引用。
+	// ???????????????????????
+	// ?? subProjectRunner ???????? configManager ???
 	_ = a.StopAllSubProjects()
 	a.ClearOutput()
 
@@ -848,18 +869,18 @@ func (a *App) RefreshConfigMenu() error {
 	if a.ctx != nil {
 		err := a.UpdateApplicationMenu()
 		if err != nil {
-			fmt.Printf("更新菜单失败: %v\n", err)
+			fmt.Printf("??????: %v\n", err)
 		} else {
-			fmt.Println("菜单更新完成")
+			fmt.Println("??????")
 		}
 	}
 	return nil
 }
 
-// RefreshConfigMenuWithEvent 全局刷新功能（带事件通知）
+// RefreshConfigMenuWithEvent ?????????????
 func (a *App) RefreshConfigMenuWithEvent() error {
-	// 刷新配置列表时，确保执行上下文也同步使用新配置
-	// 否则 subProjectRunner 内部仍会持有旧的 configManager 引用。
+	// ???????????????????????
+	// ?? subProjectRunner ???????? configManager ???
 	_ = a.StopAllSubProjects()
 	a.ClearOutput()
 
@@ -868,19 +889,19 @@ func (a *App) RefreshConfigMenuWithEvent() error {
 	if a.ctx != nil {
 		err := a.UpdateApplicationMenu()
 		if err != nil {
-			a.emitOperationEvent(define.OpTypeRefreshConfig, fmt.Sprintf("更新菜单失败: %v", err), define.MsgTypeError, true, nil)
+			a.emitOperationEvent(define.OpTypeRefreshConfig, fmt.Sprintf("??????: %v", err), define.MsgTypeError, true, nil)
 			return err
 		} else {
-			fmt.Println("菜单更新完成")
+			fmt.Println("??????")
 		}
 	}
 
-	// 前端仅在 needReload 为 true 时会重载页面，从而刷新“实际上下文”视图。
-	a.emitOperationEvent(define.OpTypeRefreshConfig, "配置列表刷新成功", define.MsgTypeSuccess, true, nil)
+	// ???? needReload ? true ?????????????????????
+	a.emitOperationEvent(define.OpTypeRefreshConfig, "????????", define.MsgTypeSuccess, true, nil)
 	return nil
 }
 
-// UpdateApplicationMenu 通知前端刷新应用内菜单并更新窗口标题
+// UpdateApplicationMenu ??????????????????
 func (a *App) UpdateApplicationMenu() error {
 	if a.ctx != nil {
 		wailsRuntime.EventsEmit(a.ctx, "menu:refresh", nil)
@@ -894,103 +915,103 @@ func (a *App) UpdateApplicationMenu() error {
 	return nil
 }
 
-// CreateApplicationMenu 创建应用程序菜单的公共方法
+// CreateApplicationMenu ?????????????
 func (a *App) CreateApplicationMenu() *menu.Menu {
 	appMenu := menu.NewMenu()
 
-	// 文件菜单
-	fileMenu := appMenu.AddSubmenu("文件")
-	fileMenu.AddText("新建窗口", keys.CmdOrCtrl("n"), func(_ *menu.CallbackData) {
+	// ????
+	fileMenu := appMenu.AddSubmenu("??")
+	fileMenu.AddText("????", keys.CmdOrCtrl("n"), func(_ *menu.CallbackData) {
 		NewWindow()
 	})
 
 	fileMenu.AddSeparator()
-	// 添加机器配置菜单
-	configMenu := appMenu.AddSubmenu("设置")
-	// 配置菜单
-	configFileMenu := appMenu.AddSubmenu("配置文件")
-	// 动态加载配置文件列表
+	// ????????
+	configMenu := appMenu.AddSubmenu("??")
+	// ????
+	configFileMenu := appMenu.AddSubmenu("????")
+	// ??????????
 	configFiles, err := a.GetConfigFiles()
 	if err != nil {
-		// 如果获取失败，添加默认项
-		configFileMenu.AddText("无法加载配置文件", keys.CmdOrCtrl("r"), func(_ *menu.CallbackData) {
+		// ????????????
+		configFileMenu.AddText("????????", keys.CmdOrCtrl("r"), func(_ *menu.CallbackData) {
 			a.RefreshConfigMenuWithEvent()
 		})
 	} else {
-		// 获取当前配置文件
+		// ????????
 		globalConfig, _ := a.GetGlobalConfig()
 		currentConfig := a.configManager.GetConfigPath()
 		if currentConfig == "" && globalConfig != nil {
 			currentConfig = globalConfig.LastOpenedFile
 		}
 
-		// 为每个配置文件添加菜单项
+		// ????????????
 		for _, configFile := range configFiles {
-			// 获取文件名（去掉路径）
+			// ???????????
 			fileName := getFileName(configFile)
-			// 创建菜单项
+			// ?????
 			_ = configFileMenu.AddRadio(fileName, configFile == currentConfig, nil, func(data *menu.CallbackData) {
-				// 切换配置文件
+				// ??????
 				switchConfigFile(a, configFile)
 			})
 		}
 
-		// 添加分隔符和刷新选项
+		// ??????????
 		configFileMenu.AddSeparator()
-		configFileMenu.AddText("刷新配置列表", keys.CmdOrCtrl("r"), func(_ *menu.CallbackData) {
+		configFileMenu.AddText("??????", keys.CmdOrCtrl("r"), func(_ *menu.CallbackData) {
 			a.RefreshConfigMenuWithEvent()
 		})
-		configFileMenu.AddText("打开全局配置", nil, func(_ *menu.CallbackData) {
-			// 获取全局配置文件路径 GlobalConfigManager
+		configFileMenu.AddText("??????", nil, func(_ *menu.CallbackData) {
+			// ?????????? GlobalConfigManager
 			globalConfigPath := a.configManager.GetGlobalConfigPath()
 			if globalConfigPath != "" {
 				OpenCurrentConfig(globalConfigPath)
 			}
 		})
 
-		configFileMenu.AddText("打开当前配置", nil, func(_ *menu.CallbackData) {
+		configFileMenu.AddText("??????", nil, func(_ *menu.CallbackData) {
 			a.OpenCurrentConfigWithEvent()
 		})
 	}
 
-	configMenu.AddText("机器配置", keys.CmdOrCtrl("m"), func(_ *menu.CallbackData) {
-		// 打开机器配置对话框
+	configMenu.AddText("????", keys.CmdOrCtrl("m"), func(_ *menu.CallbackData) {
+		// ?????????
 		a.OpenMachineConfig()
 	})
 
-	configMenu.AddText("连接管理器", keys.CmdOrCtrl("e"), func(_ *menu.CallbackData) {
+	configMenu.AddText("?????", keys.CmdOrCtrl("e"), func(_ *menu.CallbackData) {
 		a.OpenConnectionManager()
 	})
 
-	configMenu.AddText("环境变量", keys.CmdOrCtrl("u"), func(_ *menu.CallbackData) {
-		// 打开环境变量配置对话框
+	configMenu.AddText("????", keys.CmdOrCtrl("u"), func(_ *menu.CallbackData) {
+		// ???????????
 		a.OpenWorkPathConfig()
 	})
 
 	configMenu.AddSeparator()
-	// configMenu.AddText("业务配置编辑", keys.CmdOrCtrl(","), func(_ *menu.CallbackData) {
+	// configMenu.AddText("??????", keys.CmdOrCtrl(","), func(_ *menu.CallbackData) {
 	// 	a.OpenConfigEditor()
 	// })
-	configMenu.AddText("系统设置", keys.CmdOrCtrl(","), func(_ *menu.CallbackData) {
+	configMenu.AddText("????", keys.CmdOrCtrl(","), func(_ *menu.CallbackData) {
 		a.OpenSystemSettings()
 	})
 
-	// 帮助菜单
-	helpMenu := appMenu.AddSubmenu("帮助")
-	helpMenu.AddText("关于", nil, func(_ *menu.CallbackData) {
-		// 显示关于信息
+	// ????
+	helpMenu := appMenu.AddSubmenu("??")
+	helpMenu.AddText("??", nil, func(_ *menu.CallbackData) {
+		// ??????
 		a.OpenAbout()
 	})
 
 	return appMenu
 }
 
-// getFileName 获取文件名（去掉路径）
+// getFileName ???????????
 func getFileName(filePath string) string {
 	if filePath == "" {
 		return ""
 	}
-	// 简单的路径分割，支持 Unix 和 Windows 路径
+	// ?????????? Unix ? Windows ??
 	for i := len(filePath) - 1; i >= 0; i-- {
 		if filePath[i] == '/' || filePath[i] == '\\' {
 			return filePath[i+1:]
@@ -999,39 +1020,39 @@ func getFileName(filePath string) string {
 	return filePath
 }
 
-// switchConfigFile 切换配置文件
+// switchConfigFile ??????
 func switchConfigFile(appInstance *App, configFile string) {
 	err := appInstance.SwitchConfigFileWithEvent(configFile)
 	if err != nil {
-		// 错误已经通过事件发送，这里不需要额外处理
-		println("切换配置文件失败:", err.Error())
+		// ????????????????????
+		println("????????:", err.Error())
 	} else {
-		println("成功切换到配置文件:", configFile)
-		// 配置文件切换成功后，前端会通过事件监听自动刷新
-		// 这里不需要额外的操作，因为 SwitchConfigFileWithEvent 已经发送了事件
+		println("?????????:", configFile)
+		// ???????????????????????
+		// ????????????? SwitchConfigFileWithEvent ???????
 	}
 }
 
-// NewWindow 创建新窗口（通过启动新进程实现，独立会话）
+// NewWindow ?????????????????????
 func NewWindow() {
 	execPath, err := os.Executable()
 	if err != nil {
-		println("启动新窗口失败:", err.Error())
+		println("???????:", err.Error())
 		return
 	}
 	sessionID := data.NewSessionID()
 	cmd := exec.Command(execPath, "-session="+sessionID)
 	if err := cmd.Start(); err != nil {
-		println("启动新窗口失败:", err.Error())
+		println("???????:", err.Error())
 	}
 }
 
-// NewWindow 供前端调用的新建窗口入口
+// NewWindow ????????????
 func (a *App) NewWindow() {
 	NewWindow()
 }
 
-// GetCurrentConfigPath 获取当前业务配置文件路径
+// GetCurrentConfigPath ????????????
 func (a *App) GetCurrentConfigPath() string {
 	currentConfig := a.configManager.GetConfigPath()
 	if currentConfig == "" {
@@ -1043,20 +1064,20 @@ func (a *App) GetCurrentConfigPath() string {
 	return currentConfig
 }
 
-// OpenCurrentConfig 打开当前配置文件（供菜单调用）
+// OpenCurrentConfig ???????????????
 func OpenCurrentConfig(lastOpenedFile string) {
 	if lastOpenedFile == "" {
-		fmt.Println("没有找到当前配置文件")
+		fmt.Println("??????????")
 		return
 	}
 
-	// 检查文件是否存在
+	// ????????
 	if _, err := os.Stat(lastOpenedFile); os.IsNotExist(err) {
-		fmt.Printf("配置文件不存在: %s\n", lastOpenedFile)
+		fmt.Printf("???????: %s\n", lastOpenedFile)
 		return
 	}
 
-	// 使用系统默认程序打开配置文件
+	// ??????????????
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin": // macOS
@@ -1066,39 +1087,39 @@ func OpenCurrentConfig(lastOpenedFile string) {
 	case "linux": // Linux
 		cmd = exec.Command("xdg-open", lastOpenedFile)
 	default:
-		fmt.Printf("不支持的操作系统: %s\n", runtime.GOOS)
+		fmt.Printf("????????: %s\n", runtime.GOOS)
 		return
 	}
 
 	err := cmd.Run()
 	if err != nil {
-		fmt.Printf("打开配置文件失败: %v\n", err)
+		fmt.Printf("????????: %v\n", err)
 	} else {
-		fmt.Printf("成功打开配置文件: %s\n", lastOpenedFile)
+		fmt.Printf("????????: %s\n", lastOpenedFile)
 	}
 }
 
-// OpenCurrentConfigWithEvent 打开当前配置文件（带事件通知）
+// OpenCurrentConfigWithEvent ???????????????
 func (a *App) OpenCurrentConfigWithEvent() {
 	globalConfig, err := a.GetGlobalConfig()
 	if err != nil {
-		a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("获取全局配置失败: %s", err.Error()), define.MsgTypeError, false, nil)
+		a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("????????: %s", err.Error()), define.MsgTypeError, false, nil)
 		return
 	}
 
 	lastOpenedFile := globalConfig.LastOpenedFile
 	if lastOpenedFile == "" {
-		a.emitOperationEvent(define.OpTypeOpenConfig, "没有找到当前配置文件", define.MsgTypeWarning, false, nil)
+		a.emitOperationEvent(define.OpTypeOpenConfig, "??????????", define.MsgTypeWarning, false, nil)
 		return
 	}
 
-	// 检查文件是否存在
+	// ????????
 	if _, err := os.Stat(lastOpenedFile); os.IsNotExist(err) {
-		a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("配置文件不存在: %s", lastOpenedFile), define.MsgTypeError, false, nil)
+		a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("???????: %s", lastOpenedFile), define.MsgTypeError, false, nil)
 		return
 	}
 
-	// 使用系统默认程序打开配置文件
+	// ??????????????
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin": // macOS
@@ -1108,111 +1129,111 @@ func (a *App) OpenCurrentConfigWithEvent() {
 	case "linux": // Linux
 		cmd = exec.Command("xdg-open", lastOpenedFile)
 	default:
-		a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("不支持的操作系统: %s", runtime.GOOS), define.MsgTypeError, false, nil)
+		a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("????????: %s", runtime.GOOS), define.MsgTypeError, false, nil)
 		return
 	}
 
 	err = cmd.Run()
 	if err != nil {
-		a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("打开配置文件失败: %v", err), define.MsgTypeError, false, nil)
+		a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("????????: %v", err), define.MsgTypeError, false, nil)
 		return
 	}
 
-	a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("成功打开配置文件: %s", lastOpenedFile), define.MsgTypeSuccess, false, nil)
+	a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("????????: %s", lastOpenedFile), define.MsgTypeSuccess, false, nil)
 }
 
-// OpenGlobalConfigWithEvent 打开全局配置文件（带事件通知）
+// OpenGlobalConfigWithEvent ???????????????
 func (a *App) OpenGlobalConfigWithEvent() {
 	globalConfigPath := a.configManager.GetGlobalConfigPath()
 	if globalConfigPath == "" {
-		a.emitOperationEvent(define.OpTypeOpenConfig, "没有找到全局配置文件", define.MsgTypeWarning, false, nil)
+		a.emitOperationEvent(define.OpTypeOpenConfig, "??????????", define.MsgTypeWarning, false, nil)
 		return
 	}
 
 	if _, err := os.Stat(globalConfigPath); os.IsNotExist(err) {
-		a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("全局配置文件不存在: %s", globalConfigPath), define.MsgTypeError, false, nil)
+		a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("?????????: %s", globalConfigPath), define.MsgTypeError, false, nil)
 		return
 	}
 
 	if err := openWithSystemApp(globalConfigPath); err != nil {
-		a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("打开全局配置文件失败: %v", err), define.MsgTypeError, false, nil)
+		a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("??????????: %v", err), define.MsgTypeError, false, nil)
 		return
 	}
 
-	a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("成功打开全局配置文件: %s", globalConfigPath), define.MsgTypeSuccess, false, nil)
+	a.emitOperationEvent(define.OpTypeOpenConfig, fmt.Sprintf("??????????: %s", globalConfigPath), define.MsgTypeSuccess, false, nil)
 }
 
-// GetWorkPaths 获取所有工作路径
+// GetWorkPaths ????????
 func (a *App) GetWorkPaths() map[string]string {
 	return a.configManager.GetAllWorkPathsFromGlobal()
 }
 
-// AddWorkPath 添加工作路径
+// AddWorkPath ??????
 func (a *App) AddWorkPath(key, value string) error {
 	return a.configManager.AddWorkPathToGlobal(key, value)
 }
 
-// AddWorkPathWithEvent 添加工作路径（带事件通知）
+// AddWorkPathWithEvent ?????????????
 func (a *App) AddWorkPathWithEvent(key, value string) error {
 	err := a.configManager.AddWorkPathToGlobal(key, value)
 	if err != nil {
-		a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("添加环境变量失败: %s", err.Error()), define.MsgTypeError, false, nil)
+		a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("????????: %s", err.Error()), define.MsgTypeError, false, nil)
 		return err
 	}
 
-	a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("成功添加环境变量: %s", key), define.MsgTypeSuccess, false, nil)
+	a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("????????: %s", key), define.MsgTypeSuccess, false, nil)
 	return nil
 }
 
-// UpdateWorkPath 更新工作路径
+// UpdateWorkPath ??????
 func (a *App) UpdateWorkPath(key, value string) error {
 	return a.configManager.UpdateWorkPathInGlobal(key, value)
 }
 
-// UpdateWorkPathWithEvent 更新工作路径（带事件通知）
+// UpdateWorkPathWithEvent ?????????????
 func (a *App) UpdateWorkPathWithEvent(key, value string) error {
 	err := a.configManager.UpdateWorkPathInGlobal(key, value)
 	if err != nil {
-		a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("更新环境变量失败: %s", err.Error()), define.MsgTypeError, false, nil)
+		a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("????????: %s", err.Error()), define.MsgTypeError, false, nil)
 		return err
 	}
 
-	a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("成功更新环境变量: %s", key), define.MsgTypeSuccess, false, nil)
+	a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("????????: %s", key), define.MsgTypeSuccess, false, nil)
 	return nil
 }
 
-// DeleteWorkPath 删除工作路径
+// DeleteWorkPath ??????
 func (a *App) DeleteWorkPath(key string) error {
 	return a.configManager.RemoveWorkPathFromGlobal(key)
 }
 
-// DeleteWorkPathWithEvent 删除工作路径（带事件通知）
+// DeleteWorkPathWithEvent ?????????????
 func (a *App) DeleteWorkPathWithEvent(key string) error {
 	err := a.configManager.RemoveWorkPathFromGlobal(key)
 	if err != nil {
-		a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("删除环境变量失败: %s", err.Error()), define.MsgTypeError, false, nil)
+		a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("????????: %s", err.Error()), define.MsgTypeError, false, nil)
 		return err
 	}
 
-	a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("成功删除环境变量: %s", key), define.MsgTypeSuccess, false, nil)
+	a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("????????: %s", key), define.MsgTypeSuccess, false, nil)
 	return nil
 }
 
-// OpenWorkPathConfig 打开工作路径配置对话框（供菜单调用）
+// OpenWorkPathConfig ??????????????????
 func (a *App) OpenWorkPathConfig() {
-	// 发送事件到前端打开工作路径配置对话框
+	// ??????????????????
 	if a.ctx != nil {
 		wailsRuntime.EventsEmit(a.ctx, "open:workpath-config", map[string]interface{}{
 			"timestamp": time.Now().Unix(),
 		})
-		fmt.Println("发送打开工作路径配置事件")
+		fmt.Println("????????????")
 	} else {
-		fmt.Println("警告: ctx 为 nil，无法发送事件")
-		a.emitOperationEvent(define.OpTypeEnvConfig, "无法发送事件，ctx 为 nil", define.MsgTypeError, false, nil)
+		fmt.Println("??: ctx ? nil???????")
+		a.emitOperationEvent(define.OpTypeEnvConfig, "???????ctx ? nil", define.MsgTypeError, false, nil)
 	}
 }
 
-// OpenConnectionManager 打开 Shell 连接管理器
+// OpenConnectionManager ?? Shell ?????
 func (a *App) OpenConnectionManager() {
 	if a.ctx != nil {
 		wailsRuntime.EventsEmit(a.ctx, "open:connection-manager", map[string]interface{}{
@@ -1221,22 +1242,22 @@ func (a *App) OpenConnectionManager() {
 	}
 }
 
-// OpenAbout 打开关于对话框（供菜单调用）
+// OpenAbout ??????????????
 func (a *App) OpenAbout() {
 	if a.ctx != nil {
 		wailsRuntime.EventsEmit(a.ctx, "open:about", map[string]interface{}{
 			"timestamp": time.Now().Unix(),
 		})
-		fmt.Println("发送打开关于对话框事件")
+		fmt.Println("???????????")
 		return
 	}
-	fmt.Println("警告: ctx 为 nil，无法发送关于事件")
+	fmt.Println("??: ctx ? nil?????????")
 }
 
-// emitOperationEvent 发送操作事件到前端
+// emitOperationEvent ?????????
 func (a *App) emitOperationEvent(eventType, message, messageType string, needReload bool, data any) {
 	if a.ctx == nil {
-		fmt.Printf("警告: ctx 为 nil，无法发送事件 %s\n", eventType)
+		fmt.Printf("??: ctx ? nil??????? %s\n", eventType)
 		return
 	}
 
@@ -1250,10 +1271,10 @@ func (a *App) emitOperationEvent(eventType, message, messageType string, needRel
 	}
 
 	wailsRuntime.EventsEmit(a.ctx, "operation:result", event)
-	fmt.Printf("发送操作事件: %s - %s (%s)\n", eventType, message, messageType)
+	fmt.Printf("??????: %s - %s (%s)\n", eventType, message, messageType)
 }
 
-// GetSessionInfo 获取当前窗口会话信息
+// GetSessionInfo ??????????
 func (a *App) GetSessionInfo() data.SessionState {
 	if a.sessionManager == nil {
 		return data.SessionState{}
@@ -1261,7 +1282,7 @@ func (a *App) GetSessionInfo() data.SessionState {
 	return a.sessionManager.GetState()
 }
 
-// GetSystemSettings 获取系统设置
+// GetSystemSettings ??????
 func (a *App) GetSystemSettings() (*data.GlobalConfig, error) {
 	cfg, err := a.configManager.GetGlobalConfig()
 	if err != nil {
@@ -1280,12 +1301,12 @@ func (a *App) GetSystemSettings() (*data.GlobalConfig, error) {
 	return cfg, nil
 }
 
-// GetShortcutSettings 获取快捷键配置（~/.flashdock/shortcuts.json）
+// GetShortcutSettings ????????~/.flashdock/shortcuts.json?
 func (a *App) GetShortcutSettings() (data.ShortcutSettings, error) {
 	return data.LoadShortcutSettings()
 }
 
-// SaveShortcutSettings 保存快捷键配置到 JSON，并通知前端刷新
+// SaveShortcutSettings ???????? JSON????????
 func (a *App) SaveShortcutSettings(settings data.ShortcutSettings) error {
 	if err := data.SaveShortcutSettings(settings); err != nil {
 		return err
@@ -1296,7 +1317,7 @@ func (a *App) SaveShortcutSettings(settings data.ShortcutSettings) error {
 	return nil
 }
 
-// SaveSystemSettings 保存系统设置
+// SaveSystemSettings ??????
 func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	a.normalizeThemeSettings(&config.ThemeSettings)
 	normalizeProxySettings(&config.ProxySettings)
@@ -1336,17 +1357,17 @@ func normalizeShellMonitorIntervalMs(ms int) int {
 	return ms
 }
 
-// GetExecutionLogs 获取执行历史列表
+// GetExecutionLogs ????????
 func (a *App) GetExecutionLogs(limit int) ([]data.LogEntry, error) {
 	return a.logManager.ListLogs(limit)
 }
 
-// ReadExecutionLog 读取执行日志内容
+// ReadExecutionLog ????????
 func (a *App) ReadExecutionLog(fileName string) (string, error) {
 	return a.logManager.ReadLog(fileName)
 }
 
-// OpenExecutionLog 用系统默认程序打开日志文件
+// OpenExecutionLog ?????????????
 func (a *App) OpenExecutionLog(fileName string) error {
 	logs, err := a.logManager.ListLogs(200)
 	if err != nil {
@@ -1357,10 +1378,10 @@ func (a *App) OpenExecutionLog(fileName string) error {
 			return openWithSystemApp(entry.FullPath)
 		}
 	}
-	return fmt.Errorf("未找到日志文件: %s", fileName)
+	return fmt.Errorf("???????: %s", fileName)
 }
 
-// OpenConfigEditor 打开业务配置编辑器
+// OpenConfigEditor ?????????
 func (a *App) OpenConfigEditor() {
 	if a.ctx != nil {
 		wailsRuntime.EventsEmit(a.ctx, "open:config-editor", map[string]interface{}{
@@ -1369,7 +1390,7 @@ func (a *App) OpenConfigEditor() {
 	}
 }
 
-// OpenSystemSettings 打开系统设置
+// OpenSystemSettings ??????
 func (a *App) OpenSystemSettings() {
 	if a.ctx != nil {
 		wailsRuntime.EventsEmit(a.ctx, "open:system-settings", map[string]interface{}{
@@ -1378,7 +1399,7 @@ func (a *App) OpenSystemSettings() {
 	}
 }
 
-// OpenExecutionHistory 打开执行历史
+// OpenExecutionHistory ??????
 func (a *App) OpenExecutionHistory() {
 	if a.ctx != nil {
 		wailsRuntime.EventsEmit(a.ctx, "open:execution-history", map[string]interface{}{
@@ -1387,7 +1408,7 @@ func (a *App) OpenExecutionHistory() {
 	}
 }
 
-// GetThemeSettings 获取当前主题设置（会话优先，其次全局）
+// GetThemeSettings ???????????????????
 func (a *App) GetThemeSettings() data.ThemeSettings {
 	globalConfig, err := a.configManager.GetGlobalConfig()
 	settings := data.ThemeSettings{
@@ -1435,7 +1456,7 @@ func (a *App) normalizeThemeSettings(settings *data.ThemeSettings) {
 	}
 }
 
-// SaveThemeSettings 保存主题设置到会话与全局
+// SaveThemeSettings ????????????
 func (a *App) SaveThemeSettings(settings data.ThemeSettings) error {
 	a.normalizeThemeSettings(&settings)
 	if a.sessionManager != nil {
@@ -1473,48 +1494,75 @@ func (a *App) applyWindowTheme(mode string) {
 		wailsRuntime.WindowSetBackgroundColour(a.ctx, 255, 255, 255, 255)
 	}
 }
-
-// ConnectShell 连接远程 Shell（支持多会话；可与任务执行并行）
-func (a *App) ConnectShell(machineName string) error {
-	if machine.IsLocalShellID(machineName) {
-		return fmt.Errorf("请使用 ConnectLocalShell 创建本地终端")
+// ConnectShell ???? Shell ??????? ID???????name / name#2?
+func (a *App) ConnectShell(configName string) (string, error) {
+	if machine.IsLocalShellID(configName) {
+		return "", fmt.Errorf("??? ConnectLocalShell ??????")
 	}
-	machineConfig := a.configManager.GetMachine(machineName)
+	configName = strings.TrimSpace(configName)
+	configName = a.remoteConfigName(configName)
+	machineConfig := a.configManager.GetMachine(configName)
 	if machineConfig == nil {
-		return fmt.Errorf("未找到机器配置: %s", machineName)
+		return "", fmt.Errorf("???????: %s", configName)
 	}
 
-	// 已连接：确保辅助通道附着 PTY SSH
-	if a.shellPool.IsConnected(machineName) {
-		a.ensureShellAux(machineName, machineConfig)
-		a.emitShellSessions()
-		return nil
-	}
-
-	err := a.shellPool.Connect(machineName, machineConfig, a.configManager.GetWorkPathVars(), a.shellHandlerFor(machineName))
+	sessionID, err := a.shellPool.Connect(machineConfig, a.configManager.GetWorkPathVars(), a.shellHandlerFor)
 	if err != nil {
-		return err
+		return "", err
 	}
 
-	a.ensureShellAux(machineName, machineConfig)
+	a.ensureShellAux(sessionID, machineConfig)
+	if err := a.ensureMachineTunnels(machineConfig); err != nil {
+		fmt.Printf("SSH ??????(%s): %v\n", configName, err)
+	}
 
 	if sensitive, sErr := machineConfig.GetSensitiveData(); sErr == nil && a.shellHistory != nil {
 		_ = a.shellHistory.RecordConnect(machineConfig, sensitive.Host, sensitive.Port, sensitive.User)
 	}
 
 	a.emitShellSessions()
-	return nil
+	return sessionID, nil
 }
 
-// ConnectLocalShell 创建或重连本地终端。sessionID 为空则新建并返回新 ID；非空则按该 ID 重连。
+
+// ReconnectShell ??? ID ????????
+func (a *App) ReconnectShell(sessionID string) (string, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return "", fmt.Errorf("?? ID ??")
+	}
+	if machine.IsLocalShellID(sessionID) {
+		return a.ConnectLocalShell(sessionID)
+	}
+	configName := a.remoteConfigName(sessionID)
+	machineConfig := a.configManager.GetMachine(configName)
+	if machineConfig == nil {
+		return "", fmt.Errorf("???????: %s", configName)
+	}
+	if a.shellPool.IsConnected(sessionID) {
+		a.ensureShellAux(sessionID, machineConfig)
+		a.emitShellSessions()
+		return sessionID, nil
+	}
+	if err := a.shellPool.ConnectID(sessionID, machineConfig, a.configManager.GetWorkPathVars(), a.shellHandlerFor(sessionID)); err != nil {
+		return "", err
+	}
+	a.ensureShellAux(sessionID, machineConfig)
+	if err := a.ensureMachineTunnels(machineConfig); err != nil {
+		fmt.Printf("SSH ??????(%s): %v\n", configName, err)
+	}
+	a.emitShellSessions()
+	return sessionID, nil
+}
+// ConnectLocalShell ??????????sessionID ????????? ID?????? ID ???
 func (a *App) ConnectLocalShell(sessionID string) (string, error) {
 	if a.localShellPool == nil {
-		return "", fmt.Errorf("本地终端不可用")
+		return "", fmt.Errorf("???????")
 	}
 	sessionID = strings.TrimSpace(sessionID)
 	if sessionID != "" {
 		if !machine.IsLocalShellID(sessionID) {
-			return "", fmt.Errorf("非法本地会话 ID")
+			return "", fmt.Errorf("?????? ID")
 		}
 		if err := a.localShellPool.ConnectID(sessionID, a.shellHandlerFor); err != nil {
 			return "", err
@@ -1529,24 +1577,38 @@ func (a *App) ConnectLocalShell(sessionID string) (string, error) {
 	a.emitShellSessions()
 	return id, nil
 }
+func (a *App) resolveAuxKey(sessionOrConfig string) string {
+	if machine.IsLocalShellID(sessionOrConfig) {
+		return sessionOrConfig
+	}
+	return a.remoteConfigName(sessionOrConfig)
+}
 
-func (a *App) ensureShellAux(machineName string, machineConfig *define.Machine) {
+func (a *App) getShellAux(sessionOrConfig string) (*machine.ShellAuxManager, error) {
+	return a.shellAuxPool.Get(a.resolveAuxKey(sessionOrConfig))
+}
+
+func (a *App) ensureShellAux(sessionID string, machineConfig *define.Machine) {
+	if machineConfig == nil {
+		return
+	}
+	auxKey := machineConfig.Name
 	host := ""
 	if s, err := machineConfig.GetSensitiveData(); err == nil && s != nil {
 		host = s.Host
 	}
 	var ptyClient *machine.SSHClient
-	if sm := a.shellPool.GetSession(machineName); sm != nil {
+	if sm := a.shellPool.GetSession(sessionID); sm != nil {
 		ptyClient = sm.SharedSSHClient()
 	}
-	if auxErr := a.shellAuxPool.EnsureAttached(machineName, machineConfig, a.configManager.GetWorkPathVars(), ptyClient, host); auxErr != nil {
-		fmt.Printf("辅助连接失败(%s): %v\n", machineName, auxErr)
+	if auxErr := a.shellAuxPool.EnsureAttached(auxKey, machineConfig, a.configManager.GetWorkPathVars(), ptyClient, host); auxErr != nil {
+		fmt.Printf("??????(%s): %v\n", auxKey, auxErr)
 		return
 	}
-	if aux, err := a.shellAuxPool.Get(machineName); err == nil {
+	if aux, err := a.shellAuxPool.Get(auxKey); err == nil {
 		_ = machine.UninstallShellCwdHook(aux)
 	}
-	a.seedShellCwdIfEmpty(machineName)
+	a.seedShellCwdIfEmpty(sessionID)
 }
 
 func (a *App) seedShellCwdIfEmpty(machineName string) {
@@ -1560,8 +1622,7 @@ func (a *App) seedShellCwdIfEmpty(machineName string) {
 		a.pushShellCwd(machineName, home)
 	}
 }
-
-// DisconnectShell 断开指定机器的 Shell
+// DisconnectShell ??????
 func (a *App) DisconnectShell(machineName string) error {
 	a.executionMutex.Lock()
 	defer a.executionMutex.Unlock()
@@ -1571,15 +1632,19 @@ func (a *App) DisconnectShell(machineName string) error {
 			err = a.localShellPool.Disconnect(machineName, a.shellHandlerFor(machineName))
 		}
 	} else {
-		_ = a.shellAuxPool.Disconnect(machineName)
+		configName := a.remoteConfigName(machineName)
 		err = a.shellPool.Disconnect(machineName, a.shellHandlerFor(machineName))
+		if !a.shellPool.HasConnectedConfig(configName) {
+			_ = a.shellAuxPool.Disconnect(configName)
+			a.stopMachineTunnels(configName)
+		}
 	}
 	a.clearShellCwd(machineName)
 	a.emitShellSessions()
 	return err
 }
 
-// GetShellHistory 获取连接历史
+// GetShellHistory ??????
 func (a *App) GetShellHistory() []define.ShellHistoryRecord {
 	if a.shellHistory == nil {
 		return nil
@@ -1587,7 +1652,7 @@ func (a *App) GetShellHistory() []define.ShellHistoryRecord {
 	return a.shellHistory.List()
 }
 
-// ClearShellHistory 清空连接历史
+// ClearShellHistory ??????
 func (a *App) ClearShellHistory() error {
 	if a.shellHistory == nil {
 		return nil
@@ -1595,7 +1660,7 @@ func (a *App) ClearShellHistory() error {
 	return a.shellHistory.Clear()
 }
 
-// RemoveShellHistory 删除一条连接历史
+// RemoveShellHistory ????????
 func (a *App) RemoveShellHistory(machineID, machineName string) error {
 	if a.shellHistory == nil {
 		return nil
@@ -1603,9 +1668,9 @@ func (a *App) RemoveShellHistory(machineID, machineName string) error {
 	return a.shellHistory.Remove(machineID, machineName)
 }
 
-// GetShellMonitor 获取机器监控快照
+// GetShellMonitor ????????
 func (a *App) GetShellMonitor(machineName string) *define.ShellMonitorSnapshot {
-	aux, err := a.shellAuxPool.Get(machineName)
+	aux, err := a.getShellAux(machineName)
 	if err != nil {
 		host := ""
 		if m := a.configManager.GetMachine(machineName); m != nil {
@@ -1613,7 +1678,7 @@ func (a *App) GetShellMonitor(machineName string) *define.ShellMonitorSnapshot {
 				host = s.Host
 			}
 		}
-		// 辅助通道未建立（如已断开）：返回空快照，不向 UI 暴露错误文案
+		// ?????????????????????? UI ??????
 		return &define.ShellMonitorSnapshot{
 			MachineName: machineName,
 			Host:        host,
@@ -1630,42 +1695,42 @@ func (a *App) GetShellMonitor(machineName string) *define.ShellMonitorSnapshot {
 	return snap
 }
 
-// ListShellFiles 列出远端目录
+// ListShellFiles ??????
 func (a *App) ListShellFiles(machineName, dirPath string, showHidden bool) ([]define.SftpEntry, error) {
-	aux, err := a.shellAuxPool.Get(machineName)
+	aux, err := a.getShellAux(machineName)
 	if err != nil {
 		return nil, err
 	}
 	return aux.ListDir(dirPath, showHidden)
 }
 
-// DeleteShellFile 删除远端文件或目录
+// DeleteShellFile ?????????
 func (a *App) DeleteShellFile(machineName, remotePath string) error {
 	if strings.TrimSpace(remotePath) == "" || remotePath == "/" {
-		return fmt.Errorf("非法路径")
+		return fmt.Errorf("????")
 	}
-	aux, err := a.shellAuxPool.Get(machineName)
+	aux, err := a.getShellAux(machineName)
 	if err != nil {
 		return err
 	}
 	return aux.RemovePath(remotePath)
 }
 
-// GetShellRemoteHome 远端登录 home（SFTP 初始目录）
+// GetShellRemoteHome ???? home?SFTP ?????
 func (a *App) GetShellRemoteHome(machineName string) (string, error) {
 	return a.getRemoteHome(machineName)
 }
 
-// GetShellRemotePwd 获取辅助通道 pwd（兼容旧调用；新逻辑请用 GetShellPtyCwd）
+// GetShellRemotePwd ?????? pwd???????????? GetShellPtyCwd?
 func (a *App) GetShellRemotePwd(machineName string) (string, error) {
-	aux, err := a.shellAuxPool.Get(machineName)
+	aux, err := a.getShellAux(machineName)
 	if err != nil {
 		return "", err
 	}
 	return aux.Pwd()
 }
 
-// GetShellPtyCwd 获取 PTY 终端当前工作目录（内存缓存 / home）
+// GetShellPtyCwd ?? PTY ????????????? / home?
 func (a *App) GetShellPtyCwd(machineName string) (string, error) {
 	a.shellCwdMu.RLock()
 	raw := a.shellCwds[machineName]
@@ -1676,10 +1741,10 @@ func (a *App) GetShellPtyCwd(machineName string) (string, error) {
 	if home, err := a.getRemoteHome(machineName); err == nil && home != "" {
 		return NormalizeRemoteAbs(home), nil
 	}
-	return "", fmt.Errorf("PTY cwd 未知")
+	return "", fmt.Errorf("PTY cwd ??")
 }
 
-// SyncShellCwd 根据终端 cd 命令行同步 cwd（Enter 后调用；不修改远端 shell 配置）
+// SyncShellCwd ???? cd ????? cwd?Enter ????????? shell ???
 func (a *App) SyncShellCwd(machineName, cdLine string) (string, error) {
 	cdLine = strings.TrimSpace(cdLine)
 	if cdLine == "" {
@@ -1689,10 +1754,10 @@ func (a *App) SyncShellCwd(machineName, cdLine string) (string, error) {
 		if clean, ok := machine.SanitizePtyCwd(raw); ok {
 			return clean, nil
 		}
-		return "", fmt.Errorf("PTY cwd 未知")
+		return "", fmt.Errorf("PTY cwd ??")
 	}
 	if len(cdLine) < 2 || !strings.EqualFold(cdLine[:2], "cd") {
-		return "", fmt.Errorf("非 cd 命令")
+		return "", fmt.Errorf("? cd ??")
 	}
 	target := strings.TrimSpace(cdLine[2:])
 	home, err := a.getRemoteHome(machineName)
@@ -1715,16 +1780,16 @@ func (a *App) SyncShellCwd(machineName, cdLine string) (string, error) {
 	return resolved, nil
 }
 
-// ShellDirExists 远端路径是否为目录
+// ShellDirExists ?????????
 func (a *App) ShellDirExists(machineName, dirPath string) (bool, error) {
-	aux, err := a.shellAuxPool.Get(machineName)
+	aux, err := a.getShellAux(machineName)
 	if err != nil {
 		return false, err
 	}
 	return aux.DirExists(dirPath)
 }
 
-// ResolveShellPath 规范化远端路径（相对 → 基于 base；空 base 回退 home）
+// ResolveShellPath ?????????? ? ?? base?? base ?? home?
 func (a *App) ResolveShellPath(machineName, basePath, target string) (string, error) {
 	home, err := a.getRemoteHome(machineName)
 	if err != nil {
@@ -1733,11 +1798,11 @@ func (a *App) ResolveShellPath(machineName, basePath, target string) (string, er
 	return ResolveRemotePath(basePath, target, home)
 }
 
-// ApplyShellCd 解析 cd 目标并用 SFTP 校验；目录不存在则返回原 current。
+// ApplyShellCd ?? cd ???? SFTP ???????????? current?
 func (a *App) ApplyShellCd(machineName, current, target string) (string, error) {
 	home, err := a.getRemoteHome(machineName)
 	if err != nil {
-		return "", fmt.Errorf("获取 home 失败: %w", err)
+		return "", fmt.Errorf("?? home ??: %w", err)
 	}
 	if strings.TrimSpace(current) == "" {
 		current = home
@@ -1752,18 +1817,18 @@ func (a *App) ApplyShellCd(machineName, current, target string) (string, error) 
 	}
 	exists, err := a.shellDirExistsReliable(machineName, resolved)
 	if err != nil {
-		return "", fmt.Errorf("校验目录失败 %s: %w", resolved, err)
+		return "", fmt.Errorf("?????? %s: %w", resolved, err)
 	}
 	return ChooseCdPath(current, resolved, exists), nil
 }
 
-// shellDirExistsReliable：Stat/ReadDir，失败时再扫父目录子项（相对 cd 更稳）
+// shellDirExistsReliable?Stat/ReadDir?????????????? cd ???
 func (a *App) shellDirExistsReliable(machineName, dirPath string) (bool, error) {
 	exists, err := a.ShellDirExists(machineName, dirPath)
 	if err == nil {
 		return exists, nil
 	}
-	// Stat 链路异常时，用父目录列表核对
+	// Stat ??????????????
 	parent := path.Dir(dirPath)
 	base := path.Base(dirPath)
 	if dirPath == "/" || base == "." || base == "/" {
@@ -1782,7 +1847,7 @@ func (a *App) shellDirExistsReliable(machineName, dirPath string) (bool, error) 
 }
 
 func (a *App) getRemoteHome(machineName string) (string, error) {
-	aux, err := a.shellAuxPool.Get(machineName)
+	aux, err := a.getShellAux(machineName)
 	if err != nil {
 		return "", err
 	}
@@ -1792,51 +1857,119 @@ func (a *App) getRemoteHome(machineName string) (string, error) {
 	}
 	return NormalizeRemoteAbs(home), nil
 }
+func (a *App) ensureMachineTunnels(machineConfig *define.Machine) error {
+	if a.tunnelMgr == nil || machineConfig == nil || len(machineConfig.Tunnels) == 0 {
+		return nil
+	}
+	var client *machine.SSHClient
+	if id := a.shellPool.FirstSessionOfConfig(machineConfig.Name); id != "" {
+		if sm := a.shellPool.GetSession(id); sm != nil {
+			client = sm.SharedSSHClient()
+		}
+	}
+	if client == nil {
+		return fmt.Errorf("??? SSH ??")
+	}
+	return a.tunnelMgr.EnsureForMachine(machineConfig.Name, machineConfig.Tunnels, client)
+}
 
-// SendShellInput 向指定 PTY Shell 发送输入
+func (a *App) stopMachineTunnels(configName string) {
+	if a.tunnelMgr != nil {
+		a.tunnelMgr.StopAllFor(configName)
+	}
+}
+
+// GetShellTunnelStatus ????????
+func (a *App) GetShellTunnelStatus(configName string) []define.SSHTunnelStatus {
+	if a.tunnelMgr == nil {
+		return nil
+	}
+	return a.tunnelMgr.StatusList(a.remoteConfigName(configName))
+}
+
+// BroadcastShellInput ?????????
+func (a *App) BroadcastShellInput(sessionIDs []string, input string) error {
+	a.executionMutex.RLock()
+	defer a.executionMutex.RUnlock()
+	if len(sessionIDs) == 0 {
+		return fmt.Errorf("???????")
+	}
+	var firstErr error
+	ok := 0
+	for _, id := range sessionIDs {
+		id = strings.TrimSpace(id)
+		if id == "" {
+			continue
+		}
+		var err error
+		if machine.IsLocalShellID(id) {
+			if a.localShellPool == nil {
+				err = fmt.Errorf("???????")
+			} else {
+				err = a.localShellPool.SendInput(id, input)
+			}
+		} else {
+			err = a.shellPool.SendInput(id, input)
+		}
+		if err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		ok++
+	}
+	if ok == 0 && firstErr != nil {
+		return firstErr
+	}
+	return nil
+}
+
+
+// SendShellInput ??? PTY Shell ????
 func (a *App) SendShellInput(machineName, input string) error {
 	a.executionMutex.RLock()
 	defer a.executionMutex.RUnlock()
 	if machine.IsLocalShellID(machineName) {
 		if a.localShellPool == nil {
-			return fmt.Errorf("本地终端不可用")
+			return fmt.Errorf("???????")
 		}
 		return a.localShellPool.SendInput(machineName, input)
 	}
 	return a.shellPool.SendInput(machineName, input)
 }
 
-// SendShellInterrupt 向指定 PTY Shell 发送 Ctrl+C
+// SendShellInterrupt ??? PTY Shell ?? Ctrl+C
 func (a *App) SendShellInterrupt(machineName string) error {
 	a.executionMutex.RLock()
 	defer a.executionMutex.RUnlock()
 	if machine.IsLocalShellID(machineName) {
 		if a.localShellPool == nil {
-			return fmt.Errorf("本地终端不可用")
+			return fmt.Errorf("???????")
 		}
 		return a.localShellPool.SendInterrupt(machineName)
 	}
 	return a.shellPool.SendInterrupt(machineName)
 }
 
-// ResizeShell 调整指定 PTY 终端尺寸
+// ResizeShell ???? PTY ????
 func (a *App) ResizeShell(machineName string, cols, rows int) error {
 	a.executionMutex.RLock()
 	defer a.executionMutex.RUnlock()
 	if machine.IsLocalShellID(machineName) {
 		if a.localShellPool == nil {
-			return fmt.Errorf("本地终端不可用")
+			return fmt.Errorf("???????")
 		}
 		return a.localShellPool.Resize(machineName, cols, rows)
 	}
 	return a.shellPool.Resize(machineName, cols, rows)
 }
 
-// ExecuteShellCommand 兼容旧接口
+// ExecuteShellCommand ?????
 func (a *App) ExecuteShellCommand(machineName, command string) error {
 	command = strings.TrimSpace(command)
 	if command == "" {
-		return fmt.Errorf("命令不能为空")
+		return fmt.Errorf("??????")
 	}
 	if !strings.HasSuffix(command, "\n") {
 		command += "\n"
@@ -1844,17 +1977,17 @@ func (a *App) ExecuteShellCommand(machineName, command string) error {
 	return a.SendShellInput(machineName, command)
 }
 
-// StopShellCommand 兼容旧接口
+// StopShellCommand ?????
 func (a *App) StopShellCommand(machineName string) error {
 	return a.SendShellInterrupt(machineName)
 }
 
-// GetShellSessions 获取所有 Shell 会话状态
+// GetShellSessions ???? Shell ????
 func (a *App) GetShellSessions() []define.ShellStatus {
 	return a.listAllShellSessions()
 }
 
-// GetShellStatus 兼容旧接口，返回首个会话或空状态
+// GetShellStatus ????????????????
 func (a *App) GetShellStatus() *define.ShellStatus {
 	sessions := a.listAllShellSessions()
 	if len(sessions) == 0 {
@@ -1863,7 +1996,7 @@ func (a *App) GetShellStatus() *define.ShellStatus {
 	return &sessions[0]
 }
 
-// ClearShellOutput 清空指定终端显示
+// ClearShellOutput ????????
 func (a *App) ClearShellOutput(machineName string) {
 	a.emitShellClear(machineName)
 }
@@ -1878,7 +2011,7 @@ func openWithSystemApp(path string) error {
 	case "linux":
 		cmd = exec.Command("xdg-open", path)
 	default:
-		return fmt.Errorf("不支持的操作系统: %s", runtime.GOOS)
+		return fmt.Errorf("????????: %s", runtime.GOOS)
 	}
 	return cmd.Run()
 }

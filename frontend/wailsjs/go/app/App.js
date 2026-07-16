@@ -26,6 +26,10 @@ export function ApplyShellCd(arg1, arg2, arg3) {
   return window['go']['app']['App']['ApplyShellCd'](arg1, arg2, arg3);
 }
 
+export function BroadcastShellInput(arg1, arg2) {
+  return window['go']['app']['App']['BroadcastShellInput'](arg1, arg2);
+}
+
 export function CheckForUpdates() {
   return window['go']['app']['App']['CheckForUpdates']();
 }
@@ -202,6 +206,10 @@ export function GetShellStatus() {
   return window['go']['app']['App']['GetShellStatus']();
 }
 
+export function GetShellTunnelStatus(arg1) {
+  return window['go']['app']['App']['GetShellTunnelStatus'](arg1);
+}
+
 export function GetShortcutSettings() {
   return window['go']['app']['App']['GetShortcutSettings']();
 }
@@ -328,6 +336,10 @@ export function PickShellUploadPaths() {
 
 export function ReadExecutionLog(arg1) {
   return window['go']['app']['App']['ReadExecutionLog'](arg1);
+}
+
+export function ReconnectShell(arg1) {
+  return window['go']['app']['App']['ReconnectShell'](arg1);
 }
 
 export function RefreshConfigMenu() {

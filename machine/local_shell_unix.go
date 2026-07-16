@@ -134,6 +134,8 @@ func (s *LocalShellSession) GetStatus() *define.ShellStatus {
 	return &define.ShellStatus{
 		Connected:   s.connected,
 		MachineName: s.id,
+		ConfigName:  s.id,
+		TabLabel:    ShellTabLabel(s.id, s.id, ShellKindLocal),
 		Host:        "localhost",
 		User:        localUserName(),
 		Kind:        ShellKindLocal,

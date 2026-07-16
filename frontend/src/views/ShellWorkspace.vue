@@ -62,7 +62,13 @@
           :search-query="searchQuery"
           :view-visible="active"
           :transfer-active-count="transferActiveCount"
+          :broadcast-enabled="broadcastEnabled"
+          :broadcast-targets="broadcastTargets"
+          :split-session-ids="splitSessionIds"
           @update:active-machine="(name) => $emit('update:activeMachine', name)"
+          @update:broadcast-enabled="(v) => $emit('update:broadcast-enabled', v)"
+          @update:broadcast-targets="(v) => $emit('update:broadcast-targets', v)"
+          @update:split-session-ids="(v) => $emit('update:split-session-ids', v)"
           @close-session="(name) => $emit('close-session', name)"
           @reconnect="onReconnect"
           @clear="onClear"
@@ -115,6 +121,9 @@
     <ShellStatusBar
       :connected-count="connectedCount"
       :active-machine="activeMachine"
+      :active-tab-label="activeTabLabel"
+      :tunnels="tunnelStatuses"
+      :tunnel-loading="tunnelLoading"
       :app-info="appInfo"
     />
 
@@ -149,6 +158,7 @@ import ShellFilePanel from '../components/shell/ShellFilePanel.vue'
 import ShellTransferPanel from '../components/shell/ShellTransferPanel.vue'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
+import { remoteConfigName, buildKnownMachineNames } from '../utils/sessionId'
 
 export default {
   name: 'ShellWorkspace',
@@ -176,10 +186,14 @@ export default {
     activeMachine: { type: String, default: '' },
     connectingName: { type: String, default: '' },
     testingName: { type: String, default: '' },
+    broadcastEnabled: { type: Boolean, default: false },
+    broadcastTargets: { type: Array, default: () => [] },
+    splitSessionIds: { type: Array, default: () => [] },
   },
   emits: [
-    'back', 'connect', 'disconnect', 'close-session', 'test', 'add-machine', 'edit-machine',
+    'back', 'connect', 'disconnect', 'close-session', 'reconnect', 'test', 'add-machine', 'edit-machine',
     'add-local', 'start-resize', 'update:activeMachine', 'history-changed',
+    'update:broadcast-enabled', 'update:broadcast-targets', 'update:split-session-ids',
   ],
   setup(props, { emit }) {
     const tabsRef = ref(null)
@@ -195,6 +209,45 @@ export default {
     const historyRecords = ref([])
     const cwdHints = reactive({})
     const ptyCwds = reactive({})
+    const tunnelStatuses = ref([])
+    const tunnelLoading = ref(false)
+    let tunnelTimer = null
+
+    const knownMachineNames = computed(() => buildKnownMachineNames(props.machines))
+
+    const resolveRemoteConfigName = (sessionID) =>
+      remoteConfigName(sessionID, knownMachineNames.value)
+
+    const activeSession = computed(() =>
+      (props.workspaceSessions || []).find((s) => s.machineName === props.activeMachine),
+    )
+
+    const activeTabLabel = computed(() =>
+      activeSession.value?.tabLabel || props.activeMachine || '',
+    )
+
+    const activeConfigName = computed(() => {
+      const s = activeSession.value
+      if (!s || isLocalSessionName(s.machineName)) return ''
+      return s.configName || resolveRemoteConfigName(s.machineName)
+    })
+
+    const loadTunnels = async () => {
+      const cfg = activeConfigName.value
+      if (!cfg || !activeConnected.value) {
+        tunnelStatuses.value = []
+        tunnelLoading.value = false
+        return
+      }
+      tunnelLoading.value = true
+      try {
+        tunnelStatuses.value = (await App.GetShellTunnelStatus(cfg)) || []
+      } catch {
+        tunnelStatuses.value = []
+      } finally {
+        tunnelLoading.value = false
+      }
+    }
 
     const isLocalSessionName = (name) => {
       const n = String(name || '')
@@ -290,13 +343,20 @@ export default {
       })
     }
 
+    watch([activeConfigName, activeConnected], () => {
+      loadTunnels()
+    })
+
     onMounted(() => {
       loadHistory()
       EventsOn('shell:cwd', onShellCwd)
+      loadTunnels()
+      tunnelTimer = setInterval(loadTunnels, 5000)
     })
 
     onUnmounted(() => {
       EventsOff('shell:cwd')
+      if (tunnelTimer) clearInterval(tunnelTimer)
     })
 
     /** 终端 cd 后同步 SFTP（直接驱动面板，不依赖 shell:cwd 事件） */
@@ -374,7 +434,7 @@ export default {
     }
 
     const onReconnect = (name) => {
-      emit('connect', name || props.activeMachine)
+      emit('reconnect', name || props.activeMachine)
     }
 
     const onAddLocal = () => {
@@ -523,6 +583,9 @@ export default {
       onFilePanelLayout,
       onCwdSync,
       loadHistory,
+      activeTabLabel,
+      tunnelStatuses,
+      tunnelLoading,
     }
   },
 }

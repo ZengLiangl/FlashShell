@@ -91,5 +91,16 @@ export function splitMachineTree(machines) {
 }
 
 export function isMachineConnected(machineName, sessions) {
-  return (sessions || []).some((s) => s.machineName === machineName && s.connected)
+  return (sessions || []).some(
+    (s) =>
+      s.connected &&
+      (s.machineName === machineName || s.configName === machineName),
+  )
+}
+
+/** 某机器配置当前活动会话数 */
+export function countMachineSessions(configName, sessions) {
+  return (sessions || []).filter(
+    (s) => s.connected && (s.configName === configName || s.machineName === configName),
+  ).length
 }

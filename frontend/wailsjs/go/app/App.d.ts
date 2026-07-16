@@ -17,6 +17,8 @@ export function AddWorkPathWithEvent(arg1:string,arg2:string):Promise<void>;
 
 export function ApplyShellCd(arg1:string,arg2:string,arg3:string):Promise<string>;
 
+export function BroadcastShellInput(arg1:Array<string>,arg2:string):Promise<void>;
+
 export function CheckForUpdates():Promise<app.UpdateCheckResult>;
 
 export function ClearFinishedShellTransfers():Promise<void>;
@@ -33,7 +35,7 @@ export function ConfirmQuit():Promise<void>;
 
 export function ConnectLocalShell(arg1:string):Promise<string>;
 
-export function ConnectShell(arg1:string):Promise<void>;
+export function ConnectShell(arg1:string):Promise<string>;
 
 export function CreateApplicationMenu():Promise<menu.Menu>;
 
@@ -105,6 +107,8 @@ export function GetShellSessions():Promise<Array<define.ShellStatus>>;
 
 export function GetShellStatus():Promise<define.ShellStatus>;
 
+export function GetShellTunnelStatus(arg1:string):Promise<Array<define.SSHTunnelStatus>>;
+
 export function GetShortcutSettings():Promise<data.ShortcutSettings>;
 
 export function GetSkippedUpdateVersion():Promise<string>;
@@ -168,6 +172,8 @@ export function PickShellUploadFolder():Promise<string>;
 export function PickShellUploadPaths():Promise<Array<string>>;
 
 export function ReadExecutionLog(arg1:string):Promise<string>;
+
+export function ReconnectShell(arg1:string):Promise<string>;
 
 export function RefreshConfigMenu():Promise<void>;
 

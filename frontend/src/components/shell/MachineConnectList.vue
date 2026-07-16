@@ -44,7 +44,7 @@
           <div class="ml-body">
             <div class="ml-line">
               <span class="ml-name">{{ machine.name }}</span>
-              <span v-if="isConnected(machine.name)" class="ml-badge">已连接</span>
+              <span v-if="sessionCount(machine.name) > 0" class="ml-badge">{{ sessionCount(machine.name) }} 会话</span>
               <span v-else-if="connectingName === machine.name" class="ml-badge connecting">连接中</span>
             </div>
             <div class="ml-addr">{{ formatMachineAddr(machine) }}</div>
@@ -78,7 +78,7 @@
         <div class="ml-body">
           <div class="ml-line">
             <span class="ml-name">{{ machine.name }}</span>
-            <span v-if="isConnected(machine.name)" class="ml-badge">已连接</span>
+            <span v-if="sessionCount(machine.name) > 0" class="ml-badge">{{ sessionCount(machine.name) }} 会话</span>
             <span v-else-if="connectingName === machine.name" class="ml-badge connecting">连接中</span>
           </div>
           <div class="ml-addr">{{ formatMachineAddr(machine) }}</div>
@@ -100,6 +100,7 @@ import {
   splitMachineTree,
   formatMachineAddr,
   isMachineConnected,
+  countMachineSessions,
 } from '../../utils/machineGroups'
 
 export default {
@@ -148,6 +149,7 @@ export default {
     )
 
     const isConnected = (name) => isMachineConnected(name, props.sessions)
+    const sessionCount = (name) => countMachineSessions(name, props.sessions)
 
     const onConnect = (machine) => {
       if (props.connectingName) return
@@ -161,6 +163,7 @@ export default {
       isGroupExpanded,
       toggleGroup,
       isConnected,
+      sessionCount,
       formatMachineAddr,
       onConnect,
     }

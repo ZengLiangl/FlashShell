@@ -259,6 +259,34 @@
                 <el-form-item label="密码" prop="password">
                     <el-input v-model="machineForm.password" type="password" placeholder="请输入密码（可选）" show-password />
                 </el-form-item>
+
+                <el-divider content-position="left">SSH 隧道</el-divider>
+                <p class="tunnel-hint">连接成功后自动建立；本地转发：本机端口 → 远端地址</p>
+                <div
+                    v-for="(tun, idx) in machineForm.tunnels"
+                    :key="idx"
+                    class="tunnel-row"
+                >
+                    <el-switch v-model="tun.enabled" size="small" />
+                    <el-select v-model="tun.type" size="small" style="width: 88px">
+                        <el-option label="本地" value="local" />
+                        <el-option label="远程" value="remote" />
+                        <el-option label="SOCKS" value="dynamic" />
+                    </el-select>
+                    <el-input v-model="tun.name" size="small" placeholder="名称" style="width: 72px" />
+                    <el-input-number v-model="tun.localPort" size="small" :min="1" :max="65535" controls-position="right" style="width: 96px" />
+                    <template v-if="tun.type !== 'dynamic'">
+                        <el-input v-model="tun.remoteHost" size="small" placeholder="远端主机" style="width: 96px" />
+                        <el-input-number v-model="tun.remotePort" size="small" :min="1" :max="65535" controls-position="right" style="width: 96px" />
+                    </template>
+                    <el-button size="small" text type="danger" @click="machineForm.tunnels.splice(idx, 1)">
+                        <el-icon><Delete /></el-icon>
+                    </el-button>
+                </div>
+                <el-button size="small" text type="primary" @click="addTunnel">
+                    <el-icon><Plus /></el-icon>
+                    添加隧道
+                </el-button>
             </el-form>
 
             <template #footer>
@@ -444,8 +472,23 @@ export default {
             host: '',
             port: 22,
             user: '',
-            password: ''
+            password: '',
+            tunnels: [],
         })
+
+        const emptyTunnel = () => ({
+            enabled: true,
+            name: '',
+            type: 'local',
+            localHost: '127.0.0.1',
+            localPort: 0,
+            remoteHost: '127.0.0.1',
+            remotePort: 0,
+        })
+
+        const addTunnel = () => {
+            machineForm.tunnels.push(emptyTunnel())
+        }
 
         const machineRules = {
             name: [{ required: true, message: '请输入机器名称', trigger: 'blur' }],
@@ -509,6 +552,15 @@ export default {
             machineForm.name = machine.name
             machineForm.group = machine.group || ''
             machineForm.key_file = machine.key_file || ''
+            machineForm.tunnels = (machine.tunnels || []).map((t) => ({
+                enabled: t.enabled !== false,
+                name: t.name || '',
+                type: t.type || 'local',
+                localHost: t.localHost || '127.0.0.1',
+                localPort: t.localPort || 0,
+                remoteHost: t.remoteHost || '127.0.0.1',
+                remotePort: t.remotePort || 0,
+            }))
             try {
                 const sensitiveData = await GetMachineSensitiveData(machine.id)
                 if (sensitiveData) {
@@ -556,6 +608,7 @@ export default {
             machineForm.port = 22
             machineForm.user = ''
             machineForm.password = ''
+            machineForm.tunnels = []
         }
 
         const normalizeGroup = (g) => {
@@ -629,7 +682,8 @@ export default {
                 const machineData = {
                     name: machineForm.name,
                     group: normalizeGroup(machineForm.group),
-                    key_file: machineForm.key_file
+                    key_file: machineForm.key_file,
+                    tunnels: (machineForm.tunnels || []).filter((t) => t.localPort > 0),
                 }
                 const sensitiveData = {
                     host: machineForm.host,
@@ -851,6 +905,7 @@ export default {
             machineFormRef,
             machineForm,
             machineRules,
+            addTunnel,
             selectedAccountId,
             importAccountId,
             importGroup,
@@ -1123,6 +1178,27 @@ export default {
     display: flex;
     gap: 8px;
     width: 100%;
+}
+
+.tunnel-hint {
+    margin: 0 0 10px;
+    font-size: 12px;
+    color: var(--app-text-muted);
+    line-height: 1.4;
+}
+
+.tunnel-row {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+    overflow-x: auto;
+    scrollbar-width: thin;
+}
+
+.tunnel-row > * {
+    flex-shrink: 0;
 }
 
 .group-add-row {

@@ -53,12 +53,38 @@ type Machine struct {
 	Name          string `yaml:"name" json:"name"`
 	Group         string `yaml:"group,omitempty" json:"group,omitempty"`
 	KeyFile       string `yaml:"key_file,omitempty" json:"key_file,omitempty"`
+	// Tunnels SSH 隧道（本地/远程/动态），连接后自动建立
+	Tunnels []SSHTunnel `yaml:"tunnels,omitempty" json:"tunnels,omitempty"`
 	// 列表展示用（不落盘；由 GetMachines 从敏感数据填充）
 	Host string `yaml:"-" json:"host,omitempty"`
 	Port int    `yaml:"-" json:"port,omitempty"`
 	User string `yaml:"-" json:"user,omitempty"`
 	// 运行时数据（不序列化）
 	sensitiveData *SensitiveData `yaml:"-"`
+}
+
+// SSHTunnel 单条隧道配置
+type SSHTunnel struct {
+	Enabled    bool   `yaml:"enabled" json:"enabled"`
+	Name       string `yaml:"name,omitempty" json:"name,omitempty"`
+	Type       string `yaml:"type" json:"type"` // local | remote | dynamic
+	LocalHost  string `yaml:"localHost,omitempty" json:"localHost,omitempty"`
+	LocalPort  int    `yaml:"localPort" json:"localPort"`
+	RemoteHost string `yaml:"remoteHost,omitempty" json:"remoteHost,omitempty"`
+	RemotePort int    `yaml:"remotePort,omitempty" json:"remotePort,omitempty"`
+}
+
+// SSHTunnelStatus 隧道运行状态
+type SSHTunnelStatus struct {
+	Name       string `json:"name"`
+	Type       string `json:"type"`
+	LocalHost  string `json:"localHost"`
+	LocalPort  int    `json:"localPort"`
+	RemoteHost string `json:"remoteHost"`
+	RemotePort int    `json:"remotePort"`
+	Active     bool   `json:"active"`
+	Error      string `json:"error,omitempty"`
+	StartedAt  int64  `json:"startedAt"`
 }
 
 // EnsureID 确保机器有唯一 ID

@@ -186,7 +186,7 @@ const shellMonitorScript = `set +e
 echo __UP__
 awk '{print $1; exit}' /proc/uptime 2>/dev/null
 echo __MEM__
-free -b 2>/dev/null | awk '/^Mem:/{print $2,$3; exit}'
+LANG=C free -b 2>/dev/null | awk '/^Mem:/{print $2,$3; exit}'
 echo __TOPRAW__
 LC_ALL=C top -bn2 -d 0.5 -w 512 2>/dev/null
 `

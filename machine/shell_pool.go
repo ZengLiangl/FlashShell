@@ -7,55 +7,92 @@ import (
 	"FlashDock/define"
 )
 
-// ShellSessionPool 管理多台机器的 PTY 会话
+// ShellSessionPool 管理远程 PTY 会话（同一机器可开多个：web1 / web1#2）
 type ShellSessionPool struct {
 	mu       sync.RWMutex
 	sessions map[string]*ShellSessionManager
+	seq      map[string]int // configName → 已分配最大序号
 }
 
 // NewShellSessionPool 创建会话池
 func NewShellSessionPool() *ShellSessionPool {
 	return &ShellSessionPool{
 		sessions: make(map[string]*ShellSessionManager),
+		seq:      make(map[string]int),
 	}
 }
 
-// GetSession 获取指定机器的 PTY 会话（可能为 nil）
-func (p *ShellSessionPool) GetSession(machineName string) *ShellSessionManager {
+// GetSession 获取指定会话（可能为 nil）
+func (p *ShellSessionPool) GetSession(sessionID string) *ShellSessionManager {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	return p.sessions[machineName]
+	return p.sessions[sessionID]
 }
 
-// Connect 连接指定机器（允许多会话并存；已连接则幂等成功）
-func (p *ShellSessionPool) Connect(machineName string, machine *define.Machine, workVars map[string]string, handler ShellOutputHandler) error {
-	p.mu.Lock()
-	if existing, ok := p.sessions[machineName]; ok {
-		if existing.IsConnected() {
-			p.mu.Unlock()
-			return nil // 已连接，视为成功（前端切到该会话即可）
-		}
-		delete(p.sessions, machineName)
+func (p *ShellSessionPool) nextSessionID(configName string) string {
+	p.seq[configName]++
+	n := p.seq[configName]
+	return FormatRemoteSessionID(configName, n)
+}
+
+// ensureSeqAtLeast 保证序号至少覆盖已有会话
+func (p *ShellSessionPool) ensureSeqAtLeast(configName string, index int) {
+	if index > p.seq[configName] {
+		p.seq[configName] = index
 	}
+}
+
+// Connect 新建远程会话，返回会话 ID
+func (p *ShellSessionPool) Connect(machine *define.Machine, workVars map[string]string, handlerFor func(sessionID string) ShellOutputHandler) (string, error) {
+	if machine == nil || machine.Name == "" {
+		return "", fmt.Errorf("机器配置无效")
+	}
+	p.mu.Lock()
+	sessionID := p.nextSessionID(machine.Name)
 	sm := NewShellSessionManager()
-	p.sessions[machineName] = sm
+	p.sessions[sessionID] = sm
 	p.mu.Unlock()
 
-	if err := sm.Connect(machine, workVars, handler); err != nil {
+	if err := sm.Connect(sessionID, machine, workVars, handlerFor(sessionID)); err != nil {
 		p.mu.Lock()
-		delete(p.sessions, machineName)
+		delete(p.sessions, sessionID)
+		p.mu.Unlock()
+		return "", err
+	}
+	return sessionID, nil
+}
+
+// ConnectID 按指定会话 ID 连接（软断开后重连）
+func (p *ShellSessionPool) ConnectID(sessionID string, machine *define.Machine, workVars map[string]string, handler ShellOutputHandler) error {
+	if sessionID == "" || machine == nil {
+		return fmt.Errorf("会话或机器配置无效")
+	}
+	configName := machine.Name
+	p.mu.Lock()
+	if existing, ok := p.sessions[sessionID]; ok && existing.IsConnected() {
+		p.mu.Unlock()
+		return nil
+	}
+	p.ensureSeqAtLeast(configName, RemoteSessionIndexForConfig(sessionID, configName))
+	sm := NewShellSessionManager()
+	p.sessions[sessionID] = sm
+	p.mu.Unlock()
+
+	if err := sm.Connect(sessionID, machine, workVars, handler); err != nil {
+		p.mu.Lock()
+		delete(p.sessions, sessionID)
 		p.mu.Unlock()
 		return err
 	}
 	return nil
 }
 
-// Disconnect 断开指定机器会话
-func (p *ShellSessionPool) Disconnect(machineName string, handler ShellOutputHandler) error {
+// Disconnect 断开会话
+func (p *ShellSessionPool) Disconnect(sessionID string, handler ShellOutputHandler) error {
 	p.mu.Lock()
-	sm, ok := p.sessions[machineName]
+	sm, ok := p.sessions[sessionID]
 	if ok {
-		delete(p.sessions, machineName)
+		delete(p.sessions, sessionID)
 	}
 	p.mu.Unlock()
 	if !ok {
@@ -67,20 +104,20 @@ func (p *ShellSessionPool) Disconnect(machineName string, handler ShellOutputHan
 // DisconnectAll 断开所有会话
 func (p *ShellSessionPool) DisconnectAll(handler ShellOutputHandler) {
 	p.mu.Lock()
-	names := make([]string, 0, len(p.sessions))
-	for name := range p.sessions {
-		names = append(names, name)
+	ids := make([]string, 0, len(p.sessions))
+	for id := range p.sessions {
+		ids = append(ids, id)
 	}
 	p.mu.Unlock()
-	for _, name := range names {
-		_ = p.Disconnect(name, handler)
+	for _, id := range ids {
+		_ = p.Disconnect(id, handler)
 	}
 }
 
 // RemoveSession 从池中移除会话（远端断开时）
-func (p *ShellSessionPool) RemoveSession(machineName string) {
+func (p *ShellSessionPool) RemoveSession(sessionID string) {
 	p.mu.Lock()
-	delete(p.sessions, machineName)
+	delete(p.sessions, sessionID)
 	p.mu.Unlock()
 }
 
@@ -96,12 +133,61 @@ func (p *ShellSessionPool) IsAnyConnected() bool {
 	return false
 }
 
-// IsConnected 指定机器是否已连接
-func (p *ShellSessionPool) IsConnected(machineName string) bool {
+// IsConnected 指定会话是否已连接
+func (p *ShellSessionPool) IsConnected(sessionID string) bool {
 	p.mu.RLock()
-	sm := p.sessions[machineName]
+	sm := p.sessions[sessionID]
 	p.mu.RUnlock()
 	return sm != nil && sm.IsConnected()
+}
+
+// HasConnectedConfig 该机器配置是否仍有活动会话
+func (p *ShellSessionPool) HasConnectedConfig(configName string) bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	for _, sm := range p.sessions {
+		if !sm.IsConnected() {
+			continue
+		}
+		st := sm.GetStatus()
+		if st != nil && st.ConfigName == configName {
+			return true
+		}
+	}
+	return false
+}
+
+// CountConnectedConfig 该机器配置的活动会话数
+func (p *ShellSessionPool) CountConnectedConfig(configName string) int {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	n := 0
+	for _, sm := range p.sessions {
+		if !sm.IsConnected() {
+			continue
+		}
+		st := sm.GetStatus()
+		if st != nil && st.ConfigName == configName {
+			n++
+		}
+	}
+	return n
+}
+
+// FirstSessionOfConfig 返回该配置下任一活动会话 ID
+func (p *ShellSessionPool) FirstSessionOfConfig(configName string) string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	for id, sm := range p.sessions {
+		if !sm.IsConnected() {
+			continue
+		}
+		st := sm.GetStatus()
+		if st != nil && st.ConfigName == configName {
+			return id
+		}
+	}
+	return ""
 }
 
 // ListSessions 列出所有活动会话状态
@@ -118,28 +204,43 @@ func (p *ShellSessionPool) ListSessions() []define.ShellStatus {
 }
 
 // SendInput 向指定会话发送输入
-func (p *ShellSessionPool) SendInput(machineName, data string) error {
+func (p *ShellSessionPool) SendInput(sessionID, data string) error {
 	p.mu.RLock()
-	sm := p.sessions[machineName]
+	sm := p.sessions[sessionID]
 	p.mu.RUnlock()
 	if sm == nil || !sm.IsConnected() {
-		return fmt.Errorf("未连接: %s", machineName)
+		return fmt.Errorf("未连接: %s", sessionID)
 	}
 	return sm.SendInput(data)
 }
 
+// BroadcastInput 向多个会话广播输入（忽略单个失败）
+func (p *ShellSessionPool) BroadcastInput(sessionIDs []string, data string) (ok int, err error) {
+	var firstErr error
+	for _, id := range sessionIDs {
+		if e := p.SendInput(id, data); e != nil {
+			if firstErr == nil {
+				firstErr = e
+			}
+			continue
+		}
+		ok++
+	}
+	return ok, firstErr
+}
+
 // SendInterrupt 向指定会话发送 Ctrl+C
-func (p *ShellSessionPool) SendInterrupt(machineName string) error {
-	return p.SendInput(machineName, "\x03")
+func (p *ShellSessionPool) SendInterrupt(sessionID string) error {
+	return p.SendInput(sessionID, "\x03")
 }
 
 // Resize 调整指定会话终端尺寸
-func (p *ShellSessionPool) Resize(machineName string, cols, rows int) error {
+func (p *ShellSessionPool) Resize(sessionID string, cols, rows int) error {
 	p.mu.RLock()
-	sm := p.sessions[machineName]
+	sm := p.sessions[sessionID]
 	p.mu.RUnlock()
 	if sm == nil {
-		return fmt.Errorf("未连接: %s", machineName)
+		return fmt.Errorf("未连接: %s", sessionID)
 	}
 	return sm.Resize(cols, rows)
 }

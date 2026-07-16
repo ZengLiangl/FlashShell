@@ -24,7 +24,8 @@ type ShellOutputHandler struct {
 type ShellSessionManager struct {
 	mu          sync.Mutex
 	client      *SSHClient
-	machineName string
+	sessionID   string // 池内唯一键（web1 / web1#2）
+	configName  string // 机器配置名
 	host        string
 	user        string
 	session     *ssh.Session
@@ -47,9 +48,15 @@ func (sm *ShellSessionManager) GetStatus() *define.ShellStatus {
 
 func (sm *ShellSessionManager) statusLocked() *define.ShellStatus {
 	connected := sm.client != nil && sm.client.IsConnected() && sm.session != nil
+	configName := sm.configName
+	if configName == "" {
+		configName = sm.sessionID
+	}
 	return &define.ShellStatus{
 		Connected:   connected,
-		MachineName: sm.machineName,
+		MachineName: sm.sessionID,
+		ConfigName:  configName,
+		TabLabel:    ShellTabLabel(sm.sessionID, configName, ShellKindRemote),
 		Host:        sm.host,
 		User:        sm.user,
 		IsRunning:   false,
@@ -74,8 +81,8 @@ func (sm *ShellSessionManager) SharedSSHClient() *SSHClient {
 	return sm.client
 }
 
-// Connect 建立 SSH 连接并启动交互式 PTY Shell
-func (sm *ShellSessionManager) Connect(machine *define.Machine, workVars map[string]string, handler ShellOutputHandler) error {
+// Connect 建立 SSH 连接并启动交互式 PTY Shell。sessionID 为池内唯一键。
+func (sm *ShellSessionManager) Connect(sessionID string, machine *define.Machine, workVars map[string]string, handler ShellOutputHandler) error {
 	sm.mu.Lock()
 
 	if sm.client != nil && sm.client.IsConnected() {
@@ -141,8 +148,12 @@ func (sm *ShellSessionManager) Connect(machine *define.Machine, workVars map[str
 	ctx, cancel := context.WithCancel(context.Background())
 	readDone := make(chan struct{})
 
+	if sessionID == "" {
+		sessionID = machine.Name
+	}
 	sm.client = client
-	sm.machineName = machine.Name
+	sm.sessionID = sessionID
+	sm.configName = machine.Name
 	sm.host = sensitive.Host
 	sm.user = sensitive.User
 	sm.session = session
@@ -152,7 +163,8 @@ func (sm *ShellSessionManager) Connect(machine *define.Machine, workVars map[str
 
 	go sm.readPTY(stdout, handler, ctx, readDone)
 
-	connectMsg := fmt.Sprintf("已连接到 %s (%s@%s:%d)", machine.Name, sensitive.User, sensitive.Host, sensitive.Port)
+	label := ShellTabLabel(sessionID, machine.Name, ShellKindRemote)
+	connectMsg := fmt.Sprintf("已连接到 %s (%s@%s:%d)", label, sensitive.User, sensitive.Host, sensitive.Port)
 	sm.mu.Unlock()
 
 	if handler.OnLine != nil {
@@ -216,7 +228,7 @@ func (sm *ShellSessionManager) readPTY(stdout io.Reader, handler ShellOutputHand
 // Disconnect 断开 Shell 连接
 func (sm *ShellSessionManager) Disconnect(handler ShellOutputHandler) error {
 	sm.mu.Lock()
-	name := sm.machineName
+	label := ShellTabLabel(sm.sessionID, sm.configName, ShellKindRemote)
 	if sm.cancelRead != nil {
 		sm.cancelRead()
 	}
@@ -228,8 +240,8 @@ func (sm *ShellSessionManager) Disconnect(handler ShellOutputHandler) error {
 		<-readDone
 	}
 
-	if name != "" && handler.OnLine != nil {
-		handler.OnLine(fmt.Sprintf("已断开与 %s 的连接", name))
+	if label != "" && handler.OnLine != nil {
+		handler.OnLine(fmt.Sprintf("已断开与 %s 的连接", label))
 	}
 	sm.emitStatus(handler)
 	return nil
@@ -250,7 +262,8 @@ func (sm *ShellSessionManager) closeResourcesLocked() {
 		_ = sm.client.Close()
 		sm.client = nil
 	}
-	sm.machineName = ""
+	sm.sessionID = ""
+	sm.configName = ""
 	sm.host = ""
 	sm.user = ""
 }

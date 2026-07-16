@@ -50,9 +50,16 @@
         :left-panel-width="Math.min(leftPanelWidth, 320)" :is-resizing="isResizing" :app-info="statusBarInfo"
         :machines="shellMachines" :sessions="shellSessions" :workspace-sessions="workspaceSessions"
         :connected-count="connectedCount" :open-session-count="openSessionCount" v-model:active-machine="activeMachine"
-        :connecting-name="connectingName" :testing-name="testingName" @back="leaveShellMode"
-        @connect="(name) => connectOrReconnectShell(name)" @disconnect="disconnectShell" @close-session="closeShellSession"
+        :connecting-name="connectingName" :testing-name="testingName"
+        :broadcast-enabled="broadcastEnabled" :broadcast-targets="broadcastTargets"
+        :split-session-ids="splitSessionIds"
+        @back="leaveShellMode"
+        @connect="(name) => connectShell(name)" @disconnect="disconnectShell" @close-session="closeShellSession"
+        @reconnect="(name) => connectOrReconnectShell(name)"
         @add-local="() => connectLocalShell()" @test="testShellConnection"
+        @update:broadcast-enabled="(v) => (broadcastEnabled = v)"
+        @update:broadcast-targets="(v) => (broadcastTargets = v)"
+        @update:split-session-ids="(v) => (splitSessionIds = v)"
         @add-machine="openShellMachineDialog" @edit-machine="openShellMachineEdit"
         @start-resize="startResize" />
     </div>
@@ -184,6 +191,12 @@ export default {
       disconnect: disconnectShell,
       closeSession: closeShellSession,
       testMachine: testShellConnection,
+      broadcastEnabled,
+      broadcastTargets,
+      splitSessionIds,
+      toggleBroadcastTarget,
+      setSplitSessions,
+      toggleSplitSession,
     } = useShell();
     const terminalOutputRef = ref(null);
     const terminalSearchVisible = ref(false);
@@ -1391,6 +1404,12 @@ export default {
       homePageRef,
       shellWorkspaceRef,
       testShellConnection,
+      broadcastEnabled,
+      broadcastTargets,
+      splitSessionIds,
+      toggleBroadcastTarget,
+      setSplitSessions,
+      toggleSplitSession,
     };
   },
 };
