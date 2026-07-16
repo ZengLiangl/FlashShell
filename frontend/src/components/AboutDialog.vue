@@ -29,12 +29,6 @@
                 <div v-if="updateResult?.hasUpdate" class="update-banner">
                     <div class="update-banner-title">发现新版本 {{ updateResult.latestVersion }}</div>
                     <div class="update-banner-sub">当前 {{ updateResult.currentVersion }}</div>
-                    <div
-                        v-if="updateResult.releaseNotes"
-                        class="update-notes markdown-body"
-                        v-html="renderReleaseNotes(updateResult.releaseNotes)"
-                        @click="onNotesClick"
-                    ></div>
                     <div v-if="updateResult.assetName" class="asset-line">
                         适配安装包：{{ updateResult.assetName }}
                     </div>
@@ -64,11 +58,31 @@
                     </div>
                 </div>
                 <div v-else-if="updateResult && !updateResult.error" class="update-ok">
-                    已是最新版本
+                    已是最新版本{{ updateResult.latestVersion ? ` ${updateResult.latestVersion}` : '' }}
                 </div>
                 <div v-else-if="updateResult?.error" class="update-err">
                     {{ updateResult.error }}
                 </div>
+
+                <div v-if="updateResult?.releaseNotes" class="release-section">
+                    <div class="release-section-title">
+                        <span>{{ updateResult.hasUpdate ? '更新说明' : '最新 Release' }}</span>
+                        <el-button
+                            v-if="updateResult.releaseURL && !updateResult.hasUpdate"
+                            size="small"
+                            text
+                            @click="openRelease"
+                        >
+                            查看 Release
+                        </el-button>
+                    </div>
+                    <div
+                        class="update-notes markdown-body"
+                        v-html="renderReleaseNotes(updateResult.releaseNotes)"
+                        @click="onNotesClick"
+                    ></div>
+                </div>
+
                 <el-button v-if="!promptMode" size="small" text :loading="checking" @click="checkUpdate">
                     检查更新
                 </el-button>
@@ -414,9 +428,24 @@ export default {
     color: #f56c6c;
 }
 
+.release-section {
+    margin: 10px 0 8px;
+}
+
+.release-section-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--app-text, #303133);
+}
+
 .update-notes {
-    margin: 10px 0;
-    max-height: 200px;
+    margin: 0;
+    max-height: 240px;
     overflow: auto;
     padding: 10px 12px;
     border-radius: 8px;
