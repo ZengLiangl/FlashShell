@@ -413,6 +413,12 @@ jobs:
               body="$(git log -1 --pretty=format:'%b' "$hash")"
               [ -z "$subject" ] && continue
 
+              # 版本号提交（如 bump version to 1.2.3）不写入 Release body
+              if printf '%s' "$subject" | grep -qiE 'bump[[:space:]]+version[[:space:]]+to[[:space:]]+'; then
+                echo "↩️ 跳过版本号提交: ${subject}"
+                continue
+              fi
+
               body_key="$(normalize_body_key "$body")"
               if [ -n "$body_key" ]; then
                 if [[ -n "${SEEN_BODIES[$body_key]+x}" ]]; then
