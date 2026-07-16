@@ -20,6 +20,18 @@
   --terminal-search-active: #1f6feb;
   --step-bg: #f8f9fa;
   --step-border: #e9ecef;
+
+  --app-radius-sm: 6px;
+  --app-radius-md: 8px;
+  --app-radius-lg: 10px;
+  --app-radius-xl: 12px;
+  --app-radius-panel: 14px;
+  --app-space-page: 28px 32px 24px;
+  --app-space-panel-head: 16px 18px 12px;
+  --app-space-panel-body: 14px 16px 18px;
+  --app-space-toolbar-gap: 8px;
+  --app-content-narrow: 520px;
+  --app-content-dialog: 560px;
 }
 
 html.dark {

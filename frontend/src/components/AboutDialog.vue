@@ -96,7 +96,7 @@
                 >
                     跳过此版本
                 </el-button>
-                <el-button type="primary" @click="handleClose">关闭</el-button>
+                <!-- <el-button type="primary" @click="handleClose">关闭</el-button> -->
             </span>
         </template>
     </el-dialog>

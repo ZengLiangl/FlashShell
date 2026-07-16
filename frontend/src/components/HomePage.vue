@@ -61,7 +61,7 @@
               clearable
               size="small"
               placeholder="搜索名称 / IP"
-              class="machine-search"
+              class="app-toolbar-search compact machine-search"
             >
               <template #prefix>
                 <el-icon><Search /></el-icon>
@@ -82,20 +82,21 @@
           </div>
         </div>
 
-        <div class="zone-body">
-          <div v-if="machines.length === 0" class="empty-hint">
-            <p>暂无机器</p>
-            <span>点击右上角 + 添加机器</span>
+        <div class="zone-body" :class="{ 'zone-body--narrow': !hasProjects }">
+          <div v-if="machines.length === 0" class="app-empty">
+            <p class="app-empty-title">暂无机器</p>
+            <p class="app-empty-desc">点击右上角 + 添加机器</p>
           </div>
-          <MachineConnectList
-            v-else
-            :machines="filteredMachines"
-            :sessions="sessions"
-            :connecting-name="connectingName"
-            :filter-keyword="machineKeyword"
-            empty-text="无匹配机器"
-            @connect="onConnectMachine"
-          />
+          <div v-else class="zone-list-wrap">
+            <MachineConnectList
+              :machines="filteredMachines"
+              :sessions="sessions"
+              :connecting-name="connectingName"
+              :filter-keyword="machineKeyword"
+              empty-text="无匹配机器"
+              @connect="onConnectMachine"
+            />
+          </div>
         </div>
       </section>
     </div>
@@ -183,11 +184,8 @@ export default {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 28px 32px 24px;
-  background:
-    radial-gradient(ellipse 80% 50% at 0% 0%, color-mix(in srgb, var(--app-accent-color) 8%, transparent), transparent 55%),
-    radial-gradient(ellipse 70% 45% at 100% 0%, color-mix(in srgb, #67c23a 7%, transparent), transparent 50%),
-    var(--app-bg);
+  padding: var(--app-space-page, 28px 32px 24px);
+  background: var(--app-bg);
 }
 
 .home-hero {
@@ -233,7 +231,7 @@ export default {
   flex-direction: column;
   min-height: 0;
   border: 1px solid var(--app-border);
-  border-radius: 14px;
+  border-radius: var(--app-radius-panel, 14px);
   background: var(--app-panel-bg);
   overflow: hidden;
 }
@@ -251,7 +249,7 @@ export default {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  padding: 16px 18px 12px;
+  padding: var(--app-space-panel-head, 16px 18px 12px);
   border-bottom: 1px solid var(--app-border);
   flex-shrink: 0;
 }
@@ -311,7 +309,7 @@ export default {
 }
 
 .machine-search {
-  width: 148px;
+  width: 160px;
 }
 
 .zone-body {
@@ -319,8 +317,23 @@ export default {
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  padding: 14px 16px 18px;
+  padding: var(--app-space-panel-body, 14px 16px 18px);
   scrollbar-gutter: stable;
+}
+
+.zone-body--narrow {
+  display: flex;
+  justify-content: center;
+}
+
+.zone-body--narrow .zone-list-wrap,
+.zone-body--narrow .app-empty {
+  width: 100%;
+  max-width: var(--app-content-narrow, 520px);
+}
+
+.zone-list-wrap {
+  width: 100%;
 }
 
 .zone-body::-webkit-scrollbar {
@@ -338,28 +351,6 @@ export default {
 
 .zone-body::-webkit-scrollbar-thumb:hover {
   background: color-mix(in srgb, var(--app-text-muted) 55%, transparent);
-}
-
-.empty-hint {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  min-height: 180px;
-  color: var(--app-text-muted);
-  text-align: center;
-}
-
-.empty-hint p {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 560;
-  color: var(--app-text-secondary);
-}
-
-.empty-hint span {
-  font-size: 12px;
 }
 
 .item-grid {

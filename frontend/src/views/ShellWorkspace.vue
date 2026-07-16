@@ -75,9 +75,9 @@
           @cwd-sync="onCwdSync"
         >
           <template #empty>
-            <div v-if="connectingName" class="shell-connecting">
+            <div v-if="connectingName" class="app-empty shell-connecting">
               <el-icon class="is-loading" :size="28"><Loading /></el-icon>
-              <p>正在连接 {{ connectingName }}…</p>
+              <p class="app-empty-title">正在连接 {{ connectingName }}…</p>
             </div>
             <ShellConnectionHistory
               v-else
@@ -566,18 +566,8 @@ export default {
 }
 
 .shell-connecting {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 14px;
   min-height: 240px;
-  color: var(--app-text-secondary);
-  font-size: 14px;
-}
-
-.shell-connecting p {
-  margin: 0;
+  gap: 14px;
 }
 
 .shell-body {

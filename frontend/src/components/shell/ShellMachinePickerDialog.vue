@@ -6,23 +6,25 @@
     class="machine-picker-dialog"
     append-to-body
   >
-    <div class="toolbar">
+    <div class="app-toolbar picker-toolbar">
       <el-input
         v-model="keyword"
         clearable
         placeholder="搜索名称 / IP"
         size="small"
-        class="picker-search"
+        class="app-toolbar-search"
       >
         <template #prefix>
           <el-icon><Search /></el-icon>
         </template>
       </el-input>
-      <el-tooltip content="添加机器" placement="top">
-        <el-button size="small" type="primary" circle @click="$emit('add-machine')">
-          <el-icon><Plus /></el-icon>
-        </el-button>
-      </el-tooltip>
+      <div class="icon-actions">
+        <el-tooltip content="添加机器" placement="top">
+          <el-button size="small" type="primary" circle @click="$emit('add-machine')">
+            <el-icon><Plus /></el-icon>
+          </el-button>
+        </el-tooltip>
+      </div>
     </div>
 
     <div class="picker-body">
@@ -85,17 +87,8 @@ export default {
 </script>
 
 <style scoped>
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 8px;
+.picker-toolbar {
   margin-bottom: 12px;
-}
-
-.picker-search {
-  flex: 1;
-  max-width: 280px;
 }
 
 .picker-body {

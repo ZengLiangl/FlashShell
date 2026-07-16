@@ -187,7 +187,7 @@ export default {
 
 .hub-main-title {
   flex-shrink: 0;
-  padding: 14px 18px 8px;
+  padding: var(--app-space-panel-head, 14px 18px 8px);
   font-size: 15px;
   font-weight: 600;
   color: var(--app-text);
@@ -197,7 +197,7 @@ export default {
   flex: 1;
   min-height: 0;
   overflow: hidden;
-  padding: 4px 18px 0;
+  padding: 4px 18px 16px;
   display: flex;
   flex-direction: column;
 }

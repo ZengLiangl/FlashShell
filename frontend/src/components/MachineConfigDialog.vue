@@ -11,7 +11,7 @@
                             clearable
                             size="small"
                             placeholder="搜索名称 / IP"
-                            class="list-search"
+                            class="app-toolbar-search compact list-search"
                         >
                             <template #prefix>
                                 <el-icon class="filter-icon"><Search /></el-icon>
@@ -84,23 +84,27 @@
             </div>
 
             <div v-if="listViewMode === 'table'" class="machine-table-wrap" v-loading="machinesLoading">
-                <div v-if="!filteredMachines.length" class="cfg-empty">暂无机器</div>
-                <ul v-else class="cfg-list">
+                <div v-if="!filteredMachines.length" class="app-empty">
+                    <p class="app-empty-desc">暂无机器</p>
+                </div>
+                <ul v-else class="ml-list">
                     <li
                         v-for="machine in filteredMachines"
                         :key="machine.id || machine.name"
-                        class="cfg-item"
+                        class="ml-item"
                         @click="editMachine(machine)"
                     >
-                        <div class="cfg-dot" aria-hidden="true" />
-                        <div class="cfg-body">
-                            <div class="cfg-line">
-                                <span class="cfg-name">{{ machine.name }}</span>
-                                <span class="cfg-group">{{ machine.group || DEFAULT_MACHINE_GROUP }}</span>
-                            </div>
-                            <div class="cfg-addr">{{ formatMachineAddr(machine) }}</div>
+                        <div class="ml-machine-icon" aria-hidden="true">
+                            <el-icon :size="16"><Monitor /></el-icon>
                         </div>
-                        <div class="cfg-actions icon-actions" @click.stop>
+                        <div class="ml-body">
+                            <div class="ml-line">
+                                <span class="ml-name">{{ machine.name }}</span>
+                                <span class="ml-badge is-group">{{ machine.group || DEFAULT_MACHINE_GROUP }}</span>
+                            </div>
+                            <div class="ml-addr">{{ formatMachineAddr(machine) }}</div>
+                        </div>
+                        <div class="ml-side ml-actions-fade icon-actions" @click.stop>
                             <el-tooltip content="编辑" placement="top">
                                 <el-button size="small" text type="primary" @click="editMachine(machine)">
                                     <el-icon><Edit /></el-icon>
@@ -135,7 +139,7 @@
                     >
                         <header class="board-column-head">
                             <span class="board-column-title">{{ group.name }}</span>
-                            <span class="board-column-count">{{ group.machines.length }}</span>
+                            <span class="ml-group-count">{{ group.machines.length }}</span>
                         </header>
                         <div class="board-column-body">
                             <div
@@ -148,10 +152,12 @@
                                 @dragend="onBoardDragEnd"
                                 @dblclick="editMachine(machine)"
                             >
-                                <div class="cfg-dot" aria-hidden="true" />
+                                <div class="ml-machine-icon" aria-hidden="true">
+                                    <el-icon :size="16"><Monitor /></el-icon>
+                                </div>
                                 <div class="board-card-main">
-                                    <span class="board-card-name">{{ machine.name }}</span>
-                                    <span class="board-card-host">{{ formatMachineAddr(machine) }}</span>
+                                    <span class="ml-name">{{ machine.name }}</span>
+                                    <span class="ml-addr">{{ formatMachineAddr(machine) }}</span>
                                 </div>
                                 <div class="board-card-actions icon-actions" @mousedown.stop @click.stop>
                                     <el-tooltip content="编辑" placement="top">
@@ -316,7 +322,7 @@
 import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-    Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid, Close, Check,
+    Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid, Close, Check, Monitor,
 } from '@element-plus/icons-vue'
 import {
     GetMachines,
@@ -348,7 +354,7 @@ import {
 export default {
     name: 'MachineConfigDialog',
     components: {
-        Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid, Close, Check,
+        Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid, Close, Check, Monitor,
     },
     props: {
         modelValue: { type: Boolean, default: false },
@@ -931,7 +937,7 @@ export default {
 }
 
 .list-search {
-    width: 168px;
+    width: 160px;
 }
 
 .import-group-select {
@@ -966,103 +972,6 @@ export default {
     min-height: 0;
     max-height: 100%;
     overflow: auto;
-}
-
-.cfg-empty {
-    text-align: center;
-    color: var(--app-text-muted);
-    font-size: 13px;
-    padding: 40px 12px;
-}
-
-.cfg-list {
-    list-style: none;
-    margin: 0;
-    padding: 6px;
-    border: 1px solid var(--app-border);
-    border-radius: 12px;
-    background: var(--app-card-bg, var(--app-panel-bg));
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-}
-
-.cfg-item {
-    display: grid;
-    grid-template-columns: 8px minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 8px 10px 10px;
-    border-radius: 8px;
-    cursor: pointer;
-    transition: background 0.12s ease;
-}
-
-.cfg-item:hover {
-    background: var(--app-accent-bg);
-}
-
-.cfg-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 50%;
-    background: var(--app-border);
-    justify-self: center;
-    flex-shrink: 0;
-}
-
-.cfg-item:hover .cfg-dot,
-.board-card:hover .cfg-dot {
-    background: var(--app-accent-color);
-}
-
-.cfg-body {
-    min-width: 0;
-}
-
-.cfg-line {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    min-width: 0;
-}
-
-.cfg-name {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--app-text);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.cfg-group {
-    flex-shrink: 0;
-    font-size: 10px;
-    line-height: 1;
-    padding: 3px 6px;
-    border-radius: 4px;
-    color: var(--app-text-muted);
-    background: color-mix(in srgb, var(--app-text-muted) 12%, transparent);
-}
-
-.cfg-addr {
-    margin-top: 3px;
-    font-size: 12px;
-    color: var(--app-text-muted);
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.cfg-actions {
-    flex-shrink: 0;
-    opacity: 0;
-}
-
-.cfg-item:hover .cfg-actions {
-    opacity: 1;
 }
 
 .view-mode-toggle {
@@ -1136,19 +1045,6 @@ export default {
     white-space: nowrap;
 }
 
-.board-column-count {
-    flex-shrink: 0;
-    min-width: 20px;
-    height: 20px;
-    padding: 0 6px;
-    border-radius: 10px;
-    font-size: 11px;
-    line-height: 20px;
-    text-align: center;
-    color: var(--el-text-color-secondary, #909399);
-    background: var(--el-fill-color, #f0f2f5);
-}
-
 .board-column-body {
     flex: 1;
     min-height: 120px;
@@ -1161,11 +1057,11 @@ export default {
 
 .board-card {
     display: grid;
-    grid-template-columns: 8px minmax(0, 1fr) auto;
+    grid-template-columns: 32px minmax(0, 1fr) auto;
     align-items: center;
     gap: 8px;
     padding: 10px 8px 10px 10px;
-    border-radius: 8px;
+    border-radius: var(--app-radius-md, 8px);
     border: 1px solid var(--app-border, #ebeef5);
     background: var(--app-card-bg, #fff);
     cursor: grab;
@@ -1176,6 +1072,11 @@ export default {
 .board-card:hover {
     background: var(--app-accent-bg);
     border-color: color-mix(in srgb, var(--app-accent-color) 35%, var(--app-border));
+}
+
+.board-card:hover .ml-machine-icon {
+    color: var(--app-accent-color);
+    background: color-mix(in srgb, var(--app-accent-color) 16%, transparent);
 }
 
 .board-card:active {
@@ -1191,25 +1092,7 @@ export default {
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 2px;
-}
-
-.board-card-name {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--el-text-color-primary, #303133);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-}
-
-.board-card-host {
-    font-size: 12px;
-    color: var(--app-text-muted, #909399);
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    gap: 0;
 }
 
 .board-card-actions {
