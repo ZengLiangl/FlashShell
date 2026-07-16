@@ -106,6 +106,7 @@ import AppMenuBar from "./components/AppMenuBar.vue";
 import { useTheme } from "./composables/useTheme";
 import { mergeShortcuts, matchesShortcut } from "./utils/shortcuts";
 import { hasOverlayAboveSettingsHub } from "./utils/dialogOverlay";
+import { setCachedUpdateCheck, isUsableUpdateResult } from "./utils/updateCheckCache";
 
 export default {
   name: "App",
@@ -231,6 +232,9 @@ export default {
       if (aboutVisible.value) return;
       try {
         const result = await App.CheckForUpdates();
+        if (isUsableUpdateResult(result)) {
+          setCachedUpdateCheck(result);
+        }
         if (!result?.hasUpdate) return;
         const skipped = await App.GetSkippedUpdateVersion();
         if (skipped && normalizeVer(skipped) === normalizeVer(result.latestVersion)) {

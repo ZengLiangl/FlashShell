@@ -32,9 +32,6 @@
                     <div v-if="updateResult.assetName" class="asset-line">
                         适配安装包：{{ updateResult.assetName }}
                     </div>
-                    <div v-else-if="updateResult.error" class="update-err" style="margin-top: 8px">
-                        {{ updateResult.error }}
-                    </div>
                     <div class="update-actions">
                         <el-button
                             type="primary"
@@ -57,11 +54,8 @@
                         {{ downloadMessage }}
                     </div>
                 </div>
-                <div v-else-if="updateResult && !updateResult.error" class="update-ok">
+                <div v-else-if="updateResult" class="update-ok">
                     已是最新版本{{ updateResult.latestVersion ? ` ${updateResult.latestVersion}` : '' }}
-                </div>
-                <div v-else-if="updateResult?.error" class="update-err">
-                    {{ updateResult.error }}
                 </div>
 
                 <div v-if="updateResult?.releaseNotes" class="release-section">
@@ -83,7 +77,7 @@
                     ></div>
                 </div>
 
-                <el-button v-if="!promptMode" size="small" text :loading="checking" @click="checkUpdate">
+                <el-button v-if="!promptMode" size="small" text :loading="checking" @click="() => checkUpdate(true)">
                     检查更新
                 </el-button>
             </div>
@@ -108,6 +102,11 @@ import { marked } from 'marked'
 import { ElMessage } from 'element-plus'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
+import {
+    getCachedUpdateCheck,
+    setCachedUpdateCheck,
+    isUsableUpdateResult,
+} from '../utils/updateCheckCache'
 
 marked.setOptions({
     breaks: true,
@@ -176,15 +175,32 @@ export default {
             }
         }
 
-        const checkUpdate = async () => {
+        const applyUpdateResult = (result) => {
+            if (isUsableUpdateResult(result)) {
+                updateResult.value = result
+                setCachedUpdateCheck(result)
+            } else {
+                updateResult.value = null
+            }
+        }
+
+        const checkUpdate = async (force = false) => {
+            if (!force) {
+                const hit = getCachedUpdateCheck()
+                if (hit) {
+                    updateResult.value = hit
+                    return
+                }
+            }
             checking.value = true
             downloadPercent.value = 0
             downloadMessage.value = ''
             downloadFailed.value = false
             try {
-                updateResult.value = await App.CheckForUpdates()
-            } catch (e) {
-                updateResult.value = { error: String(e), hasUpdate: false }
+                const result = await App.CheckForUpdates()
+                applyUpdateResult(result)
+            } catch {
+                updateResult.value = null
             } finally {
                 checking.value = false
             }
@@ -273,10 +289,9 @@ export default {
             downloadFailed.value = false
             await loadVersion()
             if (props.initialUpdateResult) {
-                updateResult.value = props.initialUpdateResult
+                applyUpdateResult(props.initialUpdateResult)
             } else {
-                updateResult.value = null
-                await checkUpdate()
+                await checkUpdate(false)
             }
         })
 
@@ -519,13 +534,6 @@ export default {
     margin-bottom: 6px;
     font-size: 13px;
     color: #67c23a;
-}
-
-.update-err {
-    margin-bottom: 6px;
-    font-size: 12px;
-    color: #f56c6c;
-    line-height: 1.45;
 }
 
 .dialog-footer {

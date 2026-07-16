@@ -230,7 +230,7 @@
 
                 <div class="about-update-block" v-loading="checkingUpdate">
                     <div class="about-update-actions">
-                        <el-button size="small" :loading="checkingUpdate" @click="checkUpdate">
+                        <el-button size="small" :loading="checkingUpdate" @click="() => checkUpdate(true)">
                             检查更新
                         </el-button>
                         <el-button
@@ -268,11 +268,8 @@
                             {{ downloadMessage }}
                         </div>
                     </div>
-                    <div v-else-if="updateResult && !updateResult.error" class="update-ok">
+                    <div v-else-if="updateResult" class="update-ok">
                         已是最新版本
-                    </div>
-                    <div v-else-if="updateResult?.error" class="update-err">
-                        {{ updateResult.error }}
                     </div>
 
                     <div v-if="updateResult?.releaseNotes" class="release-section">
@@ -335,6 +332,11 @@ import { Edit, Delete, Plus, Close, Check } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import { useTheme } from '../composables/useTheme'
+import {
+    getCachedUpdateCheck,
+    setCachedUpdateCheck,
+    isUsableUpdateResult,
+} from '../utils/updateCheckCache'
 import {
     UI_ACCENTS,
     TERMINAL_PRESETS,
@@ -494,7 +496,6 @@ theme preview · ${theme.foreground}`
             } catch {
                 appVersion.value = ''
             }
-            updateResult.value = null
             await loadSystemFonts()
         }
 
@@ -510,15 +511,32 @@ theme preview · ${theme.foreground}`
             }
         }
 
-        const checkUpdate = async () => {
+        const applyUpdateResult = (result) => {
+            if (isUsableUpdateResult(result)) {
+                updateResult.value = result
+                setCachedUpdateCheck(result)
+            } else {
+                updateResult.value = null
+            }
+        }
+
+        const checkUpdate = async (force = false) => {
+            if (!force) {
+                const hit = getCachedUpdateCheck()
+                if (hit) {
+                    updateResult.value = hit
+                    return
+                }
+            }
             checkingUpdate.value = true
             downloadPercent.value = 0
             downloadMessage.value = ''
             downloadFailed.value = false
             try {
-                updateResult.value = await App.CheckForUpdates()
-            } catch (e) {
-                updateResult.value = { error: String(e), hasUpdate: false }
+                const result = await App.CheckForUpdates()
+                applyUpdateResult(result)
+            } catch {
+                updateResult.value = null
             } finally {
                 checkingUpdate.value = false
             }
@@ -590,8 +608,8 @@ theme preview · ${theme.foreground}`
             if (props.embedded && open) load()
         }, { immediate: true })
         watch(settingsTab, (tab) => {
-            if (tab === 'about' && !updateResult.value && !checkingUpdate.value) {
-                checkUpdate()
+            if (tab === 'about' && !checkingUpdate.value) {
+                checkUpdate(false)
             }
         })
 
