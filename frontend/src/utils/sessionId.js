@@ -4,6 +4,12 @@ export function remoteConfigName(sessionID, knownNames) {
   if (!id) return id
   if (knownNames?.has?.(id)) return id
 
+  if (knownNames) {
+    for (const cfg of knownNames) {
+      if (sessionBelongsToConfig(id, cfg)) return cfg
+    }
+  }
+
   const hash = id.match(/^(.+)#(\d+)$/)
   if (hash && parseInt(hash[2], 10) >= 2) {
     if (!knownNames || knownNames.has(hash[1])) return hash[1]
@@ -15,6 +21,20 @@ export function remoteConfigName(sessionID, knownNames) {
   }
 
   return id
+}
+
+/** 会话 ID 是否属于某机器配置（web1 / web1-2、va-test-66 / va-test-66-2） */
+export function sessionBelongsToConfig(sessionID, configName) {
+  const id = String(sessionID || '').trim()
+  const cfg = String(configName || '').trim()
+  if (!id || !cfg) return false
+  if (id === cfg) return true
+  const m = id.match(new RegExp(`^${escapeRegExp(cfg)}-(\\d+)$`))
+  return !!m && parseInt(m[1], 10) >= 2
+}
+
+function escapeRegExp(s) {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 export function buildKnownMachineNames(machines) {

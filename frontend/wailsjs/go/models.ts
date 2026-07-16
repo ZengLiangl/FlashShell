@@ -769,6 +769,7 @@ export namespace define {
 	    user: string;
 	    cpu: number;
 	    mem: number;
+	    memRss: string;
 	    command: string;
 	
 	    static createFrom(source: any = {}) {
@@ -781,6 +782,7 @@ export namespace define {
 	        this.user = source["user"];
 	        this.cpu = source["cpu"];
 	        this.mem = source["mem"];
+	        this.memRss = source["memRss"];
 	        this.command = source["command"];
 	    }
 	}
@@ -793,7 +795,16 @@ export namespace define {
 	    memPercent: number;
 	    memUsed: string;
 	    memTotal: string;
+	    swapPercent: number;
+	    swapUsed: string;
+	    swapTotal: string;
 	    topMem: ShellProcessStat[];
+	    netIface: string;
+	    netIfaces: string[];
+	    netRxRate: number;
+	    netTxRate: number;
+	    netRxText: string;
+	    netTxText: string;
 	    error?: string;
 	    updatedAt: number;
 	
@@ -811,7 +822,16 @@ export namespace define {
 	        this.memPercent = source["memPercent"];
 	        this.memUsed = source["memUsed"];
 	        this.memTotal = source["memTotal"];
+	        this.swapPercent = source["swapPercent"];
+	        this.swapUsed = source["swapUsed"];
+	        this.swapTotal = source["swapTotal"];
 	        this.topMem = this.convertValues(source["topMem"], ShellProcessStat);
+	        this.netIface = source["netIface"];
+	        this.netIfaces = source["netIfaces"];
+	        this.netRxRate = source["netRxRate"];
+	        this.netTxRate = source["netTxRate"];
+	        this.netRxText = source["netRxText"];
+	        this.netTxText = source["netTxText"];
 	        this.error = source["error"];
 	        this.updatedAt = source["updatedAt"];
 	    }
@@ -861,6 +881,34 @@ export namespace define {
 	        this.isRunning = source["isRunning"];
 	        this.currentCommand = source["currentCommand"];
 	        this.kind = source["kind"];
+	    }
+	}
+	export class ShellSystemInfo {
+	    machineName: string;
+	    host: string;
+	    hostname: string;
+	    os: string;
+	    kernel: string;
+	    arch: string;
+	    cpuModel: string;
+	    diskSummary: string;
+	    error?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShellSystemInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.machineName = source["machineName"];
+	        this.host = source["host"];
+	        this.hostname = source["hostname"];
+	        this.os = source["os"];
+	        this.kernel = source["kernel"];
+	        this.arch = source["arch"];
+	        this.cpuModel = source["cpuModel"];
+	        this.diskSummary = source["diskSummary"];
+	        this.error = source["error"];
 	    }
 	}
 	

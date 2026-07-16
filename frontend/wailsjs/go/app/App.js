@@ -182,8 +182,8 @@ export function GetShellHistory() {
   return window['go']['app']['App']['GetShellHistory']();
 }
 
-export function GetShellMonitor(arg1) {
-  return window['go']['app']['App']['GetShellMonitor'](arg1);
+export function GetShellMonitor(arg1, arg2) {
+  return window['go']['app']['App']['GetShellMonitor'](arg1, arg2);
 }
 
 export function GetShellPtyCwd(arg1) {
@@ -204,6 +204,10 @@ export function GetShellSessions() {
 
 export function GetShellStatus() {
   return window['go']['app']['App']['GetShellStatus']();
+}
+
+export function GetShellSystemInfo(arg1) {
+  return window['go']['app']['App']['GetShellSystemInfo'](arg1);
 }
 
 export function GetShellTunnelStatus(arg1) {

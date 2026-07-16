@@ -2,6 +2,7 @@ package machine
 
 import (
 	"fmt"
+	"os"
 	"os/user"
 	"strings"
 	"sync"
@@ -24,7 +25,6 @@ func IsLocalShellID(id string) bool {
 type LocalShellPool struct {
 	mu       sync.RWMutex
 	sessions map[string]*LocalShellSession
-	seq      int
 }
 
 // NewLocalShellPool 创建本地会话池
@@ -35,11 +35,17 @@ func NewLocalShellPool() *LocalShellPool {
 }
 
 func (p *LocalShellPool) nextID() string {
-	p.seq++
-	if p.seq == 1 {
-		return LocalShellIDPrefix
+	used := make(map[int]bool)
+	for id := range p.sessions {
+		if idx := LocalSessionIndex(id); idx >= 1 {
+			used[idx] = true
+		}
 	}
-	return fmt.Sprintf("%s-%d", LocalShellIDPrefix, p.seq)
+	for slot := 1; ; slot++ {
+		if !used[slot] {
+			return FormatLocalSessionID(slot)
+		}
+	}
 }
 
 // Connect 新建本地终端，返回会话 ID
@@ -168,6 +174,14 @@ func (p *LocalShellPool) Resize(id string, cols, rows int) error {
 func localUserName() string {
 	if u, err := user.Current(); err == nil && u.Username != "" {
 		return u.Username
+	}
+	return ""
+}
+
+// localShellStartDir 本地终端默认工作目录（用户主目录）。
+func localShellStartDir() string {
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		return home
 	}
 	return ""
 }

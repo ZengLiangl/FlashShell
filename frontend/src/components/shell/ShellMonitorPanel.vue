@@ -22,9 +22,30 @@
           <span class="mono">{{ snapshot?.host || '-' }}</span>
           <el-tooltip content="复制" placement="top">
             <el-button size="small" text type="primary" :disabled="!snapshot?.host" @click="copyHost">
-              <el-icon><CopyDocument /></el-icon>
+              <el-icon>
+                <CopyDocument />
+              </el-icon>
             </el-button>
           </el-tooltip>
+        </div>
+      </div>
+
+      <div v-if="activeConnected" class="sysinfo-block">
+        <button type="button" class="sysinfo-toggle" @click="sysinfoOpen = !sysinfoOpen">
+          <span>系统信息</span>
+          <el-icon :class="{ rotated: sysinfoOpen }">
+            <ArrowDown />
+          </el-icon>
+        </button>
+        <div v-show="sysinfoOpen" class="sysinfo-body">
+          <div v-if="sysinfoLoading" class="empty-sm">加载中…</div>
+          <div v-else-if="sysinfoError" class="error-sm">{{ sysinfoError }}</div>
+          <template v-else-if="sysinfo">
+            <div v-for="row in sysinfoRows" :key="row.label" class="sysinfo-row">
+              <span class="sysinfo-label">{{ row.label }}</span>
+              <span class="sysinfo-value">{{ row.value || '-' }}</span>
+            </div>
+          </template>
         </div>
       </div>
 
@@ -40,12 +61,8 @@
             {{ formatPct(snapshot?.cpuPercent) }}
           </span>
         </div>
-        <el-progress
-          :percentage="clampPct(snapshot?.cpuPercent)"
-          :stroke-width="10"
-          :status="progressStatus(snapshot?.cpuPercent)"
-          :show-text="false"
-        />
+        <el-progress :percentage="clampPct(snapshot?.cpuPercent)" :stroke-width="12"
+          :status="progressStatus(snapshot?.cpuPercent)" :show-text="false" />
       </div>
 
       <div class="metric" :class="{ 'is-high': isHighUsage(snapshot?.memPercent) }">
@@ -55,12 +72,8 @@
             {{ formatPct(snapshot?.memPercent) }} · {{ snapshot?.memUsed || '0' }}/{{ snapshot?.memTotal || '0' }}
           </span>
         </div>
-        <el-progress
-          :percentage="clampPct(snapshot?.memPercent)"
-          :stroke-width="10"
-          :status="progressStatus(snapshot?.memPercent)"
-          :show-text="false"
-        />
+        <el-progress :percentage="clampPct(snapshot?.memPercent)" :stroke-width="12"
+          :status="progressStatus(snapshot?.memPercent)" :show-text="false" />
       </div>
 
       <div class="top-block">
@@ -80,6 +93,32 @@
         </div>
       </div>
 
+      <div v-if="netIfaces.length" class="net-block">
+        <div class="net-head">
+          <span class="net-up">↑ {{ snapshot?.netTxText || '0B/s' }}</span>
+          <span class="net-down">↓ {{ snapshot?.netRxText || '0B/s' }}</span>
+          <el-select v-model="selectedNetIface" class="net-iface-select" size="small" :disabled="!activeConnected"
+            @change="onNetIfaceChange">
+            <el-option v-for="iface in netIfaces" :key="iface" :label="iface" :value="iface" />
+          </el-select>
+        </div>
+        <div class="net-chart">
+          <div class="net-chart-y">
+            <span>{{ netChartMaxText }}</span>
+            <span>{{ netChartMidText }}</span>
+            <span>0</span>
+          </div>
+          <div class="net-chart-bars">
+            <div v-for="(pt, idx) in netHistory" :key="idx" class="net-bar-group">
+              <div class="net-bar net-bar-tx" :style="{ height: barHeight(pt.tx) }"
+                :title="`上行 ${formatRate(pt.tx)}`" />
+              <div class="net-bar net-bar-rx" :style="{ height: barHeight(pt.rx) }"
+                :title="`下行 ${formatRate(pt.rx)}`" />
+            </div>
+          </div>
+        </div>
+      </div>
+
       <div v-if="displayError" class="error">{{ displayError }}</div>
     </template>
   </div>
@@ -88,12 +127,13 @@
 <script>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Connection, SwitchButton } from '@element-plus/icons-vue'
+import { Connection, SwitchButton, ArrowDown } from '@element-plus/icons-vue'
 import { EventsOn, EventsOff } from '../../../wailsjs/runtime/runtime'
 import * as App from '../../../wailsjs/go/app/App'
 
 const isAuxMissingError = (msg) => /辅助连接(未建立|不存在)/.test(String(msg || ''))
 const DEFAULT_INTERVAL_MS = 1000
+const NET_CHART_DEFAULT_MAX = 200 * 1024
 
 const clampIntervalMs = (ms) => {
   const n = Number(ms)
@@ -103,7 +143,7 @@ const clampIntervalMs = (ms) => {
 
 export default {
   name: 'ShellMonitorPanel',
-  components: { Connection, SwitchButton },
+  components: { Connection, SwitchButton, ArrowDown },
   props: {
     activeMachine: { type: String, default: '' },
     activeConnected: { type: Boolean, default: false },
@@ -114,7 +154,15 @@ export default {
     const snapshot = ref(null)
     const loading = ref(false)
     const intervalMs = ref(DEFAULT_INTERVAL_MS)
+    const netHistory = ref([])
+    const selectedNetIface = ref('')
+    const netIfaces = ref([])
+    const sysinfoOpen = ref(false)
+    const sysinfoLoading = ref(false)
+    const sysinfo = ref(null)
+    const sysinfoError = ref('')
     let timer = null
+    const NET_HISTORY_LEN = 24
 
     /** 占用 ≥80% 视为过高，标红提示 */
     const HIGH_USAGE = 80
@@ -162,6 +210,88 @@ export default {
     }
     const progressStatus = (v) => (isHighUsage(v) ? 'exception' : undefined)
 
+    const formatRate = (bps) => {
+      const n = Number(bps) || 0
+      if (n < 1024) return `${Math.round(n)}B/s`
+      if (n < 1024 * 1024) return `${Math.round(n / 1024)}K/s`
+      return `${(n / 1024 / 1024).toFixed(1)}M/s`
+    }
+
+    const pushNetHistory = (rx, tx) => {
+      const next = [...netHistory.value, { rx: Number(rx) || 0, tx: Number(tx) || 0 }]
+      netHistory.value = next.slice(-NET_HISTORY_LEN)
+    }
+
+    const netChartMax = computed(() => {
+      let max = NET_CHART_DEFAULT_MAX
+      for (const pt of netHistory.value) {
+        max = Math.max(max, pt.rx, pt.tx)
+      }
+      return max
+    })
+
+    const netChartMaxText = computed(() => formatRate(netChartMax.value).replace('/s', ''))
+    const netChartMidText = computed(() => formatRate(netChartMax.value / 2).replace('/s', ''))
+
+    const barHeight = (v) => {
+      const max = netChartMax.value || 1
+      const n = Number(v) || 0
+      if (n <= 0) return '0'
+      const pct = (n / max) * 100
+      return `${Math.max(2, Math.min(100, pct))}%`
+    }
+
+    const sysinfoRows = computed(() => {
+      const i = sysinfo.value
+      if (!i) return []
+      return [
+        { label: '主机名', value: i.hostname },
+        { label: '操作系统', value: i.os },
+        { label: '内核', value: i.kernel },
+        { label: '架构', value: i.arch },
+        { label: 'CPU', value: i.cpuModel },
+        { label: '磁盘', value: i.diskSummary },
+      ]
+    })
+
+    const loadSystemInfo = async () => {
+      if (!props.activeMachine || !props.activeConnected) {
+        sysinfo.value = null
+        sysinfoError.value = ''
+        return
+      }
+      sysinfoLoading.value = true
+      sysinfoError.value = ''
+      try {
+        const data = await App.GetShellSystemInfo(props.activeMachine)
+        if (data?.error) {
+          sysinfoError.value = data.error
+          sysinfo.value = data
+        } else {
+          sysinfo.value = data
+        }
+      } catch (e) {
+        sysinfoError.value = String(e)
+        sysinfo.value = null
+      } finally {
+        sysinfoLoading.value = false
+      }
+    }
+
+    const syncNetIfaces = (snap) => {
+      const list = Array.isArray(snap?.netIfaces) ? snap.netIfaces.filter(Boolean) : []
+      if (list.length) netIfaces.value = list
+      const iface = snap?.netIface || list[0] || ''
+      if (iface && (!selectedNetIface.value || !netIfaces.value.includes(selectedNetIface.value))) {
+        selectedNetIface.value = iface
+      }
+    }
+
+    const onNetIfaceChange = () => {
+      netHistory.value = []
+      refresh()
+    }
+
     const refresh = async () => {
       if (!props.activeMachine) {
         snapshot.value = null
@@ -173,7 +303,7 @@ export default {
       }
       loading.value = true
       try {
-        const snap = await App.GetShellMonitor(props.activeMachine)
+        const snap = await App.GetShellMonitor(props.activeMachine, selectedNetIface.value || '')
         // 辅助通道缺失：保留标题布局，数值归零
         if (isAuxMissingError(snap?.error)) {
           snapshot.value = {
@@ -188,7 +318,15 @@ export default {
             memUsed: snap?.memUsed || '0',
             memTotal: snap?.memTotal || '0',
             topMem: snap?.topMem || [],
+            netIface: snap?.netIface || '',
+            netIfaces: snap?.netIfaces || [],
+            netRxText: snap?.netRxText || '',
+            netTxText: snap?.netTxText || '',
             error: snap?.error || '',
+          }
+          syncNetIfaces(snap)
+          if (snap?.netIface) {
+            pushNetHistory(snap.netRxRate, snap.netTxRate)
           }
         }
       } catch (e) {
@@ -247,9 +385,23 @@ export default {
 
     watch(
       () => [props.activeMachine, props.activeConnected],
-      () => startTimer(),
+      () => {
+        netHistory.value = []
+        selectedNetIface.value = ''
+        netIfaces.value = []
+        sysinfo.value = null
+        sysinfoError.value = ''
+        if (props.activeConnected) loadSystemInfo()
+        startTimer()
+      },
       { immediate: true },
     )
+
+    watch(sysinfoOpen, (open) => {
+      if (open && props.activeConnected && !sysinfo.value && !sysinfoLoading.value) {
+        loadSystemInfo()
+      }
+    })
     onMounted(async () => {
       await loadInterval()
       EventsOn('system-settings:changed', onSettingsChanged)
@@ -264,9 +416,22 @@ export default {
       snapshot,
       loading,
       displayError,
+      netHistory,
+      netIfaces,
+      selectedNetIface,
+      sysinfoOpen,
+      sysinfoLoading,
+      sysinfo,
+      sysinfoError,
+      sysinfoRows,
+      onNetIfaceChange,
+      netChartMaxText,
+      netChartMidText,
       clampPct,
       formatPct,
       formatPct1,
+      formatRate,
+      barHeight,
       isHighUsage,
       progressStatus,
       copyHost,
@@ -325,6 +490,13 @@ export default {
   margin-bottom: 4px;
 }
 
+.top-block .label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--app-text);
+  margin-bottom: 6px;
+}
+
 .value-row {
   display: flex;
   align-items: center;
@@ -338,11 +510,38 @@ export default {
   font-size: 13px;
 }
 
+.metric {
+  margin-bottom: 16px;
+}
+
 .metric-head {
   display: flex;
   justify-content: space-between;
-  font-size: 12px;
-  margin-bottom: 4px;
+  align-items: baseline;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.metric-head span:first-child {
+  color: var(--app-text);
+  letter-spacing: 0.02em;
+}
+
+.metric-value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.metric :deep(.el-progress-bar__outer) {
+  height: 12px;
+  background: color-mix(in srgb, var(--app-border) 65%, transparent);
+}
+
+.metric :deep(.el-progress-bar__inner) {
+  border-radius: 6px;
 }
 
 .metric.is-high .metric-head span:first-child {
@@ -409,5 +608,160 @@ export default {
   color: var(--terminal-error);
   font-size: 12px;
   margin-top: 8px;
+}
+
+.net-block {
+  margin-bottom: 10px;
+  padding-top: 4px;
+  border-top: 1px solid var(--app-border);
+}
+
+.net-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  margin-bottom: 4px;
+  color: var(--app-text-muted);
+}
+
+.net-up {
+  color: color-mix(in srgb, var(--app-text-muted) 82%, #9a8470 18%);
+}
+
+.net-down {
+  color: color-mix(in srgb, var(--app-text-muted) 82%, #708870 18%);
+}
+
+.net-iface {
+  margin-left: auto;
+  color: var(--app-text-muted);
+  font-size: 11px;
+}
+
+.net-chart {
+  display: flex;
+  gap: 4px;
+  height: 52px;
+  align-items: stretch;
+}
+
+.net-chart-y {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  font-size: 10px;
+  color: var(--app-text-muted);
+  width: 28px;
+  flex-shrink: 0;
+}
+
+.net-chart-bars {
+  flex: 1;
+  display: flex;
+  align-items: flex-end;
+  gap: 3px;
+  border-bottom: 1px solid color-mix(in srgb, var(--app-border) 80%, transparent);
+  padding-bottom: 1px;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.net-bar-group {
+  flex: 0 0 5px;
+  width: 5px;
+  min-width: 5px;
+  max-width: 5px;
+  height: 100%;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1px;
+}
+
+.net-bar {
+  width: 2px;
+  flex: 0 0 2px;
+  min-height: 0;
+  border-radius: 1px 1px 0 0;
+  opacity: 0.85;
+}
+
+.net-bar-tx {
+  background: color-mix(in srgb, var(--app-text-muted) 78%, #9a8470 22%);
+}
+
+.net-bar-rx {
+  background: color-mix(in srgb, var(--app-text-muted) 78%, #708870 22%);
+}
+
+.sysinfo-block {
+  margin-bottom: 14px;
+}
+
+.sysinfo-toggle {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border: none;
+  background: transparent;
+  color: var(--app-text);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.sysinfo-toggle .el-icon {
+  transition: transform 0.2s ease;
+  color: var(--app-text-muted);
+}
+
+.sysinfo-toggle .el-icon.rotated {
+  transform: rotate(180deg);
+}
+
+.sysinfo-body {
+  padding: 4px 0 8px;
+}
+
+.sysinfo-row {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.sysinfo-label {
+  font-size: 11px;
+  color: var(--app-text-muted);
+}
+
+.sysinfo-value {
+  font-size: 12px;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.error-sm {
+  color: var(--terminal-error);
+  font-size: 12px;
+}
+
+.net-iface-select {
+  margin-left: auto;
+  width: 88px;
+  flex-shrink: 0;
+}
+
+.net-iface-select :deep(.el-input__wrapper) {
+  padding: 0 6px;
+}
+
+.net-iface-select :deep(.el-input__inner) {
+  font-size: 11px;
 }
 </style>

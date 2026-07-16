@@ -24,7 +24,7 @@ type ShellOutputHandler struct {
 type ShellSessionManager struct {
 	mu          sync.Mutex
 	client      *SSHClient
-	sessionID   string // 池内唯一键（web1 / web1#2）
+	sessionID   string // 池内唯一键（web1 / web1-2）
 	configName  string // 机器配置名
 	host        string
 	user        string
@@ -163,13 +163,8 @@ func (sm *ShellSessionManager) Connect(sessionID string, machine *define.Machine
 
 	go sm.readPTY(stdout, handler, ctx, readDone)
 
-	label := ShellTabLabel(sessionID, machine.Name, ShellKindRemote)
-	connectMsg := fmt.Sprintf("已连接到 %s (%s@%s:%d)", label, sensitive.User, sensitive.Host, sensitive.Port)
 	sm.mu.Unlock()
 
-	if handler.OnLine != nil {
-		handler.OnLine(connectMsg)
-	}
 	sm.notifyStatus(handler)
 	return nil
 }

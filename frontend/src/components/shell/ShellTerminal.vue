@@ -34,7 +34,7 @@ import { SearchAddon } from 'xterm-addon-search'
 import 'xterm/css/xterm.css'
 import * as App from '../../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../../wailsjs/runtime/runtime'
-import { registerShellWriter } from '../../utils/shellOutputBuffer'
+import { registerShellWriter, resetShellWriterReplay } from '../../utils/shellOutputBuffer'
 import { useTheme } from '../../composables/useTheme'
 import { terminalThemeForPreset, getTerminalFont } from '../../utils/themePresets'
 import {
@@ -49,12 +49,13 @@ import {
 
 export default {
   name: 'ShellTerminal',
-  props: {
+    props: {
     machineName: { type: String, required: true },
     active: { type: Boolean, default: false },
     /** Shell 工作区是否可见（回首页时为 false，避免 display:none 下 fit 成极窄列宽） */
     viewVisible: { type: Boolean, default: true },
     connected: { type: Boolean, default: false },
+    connecting: { type: Boolean, default: false },
     searchQuery: { type: String, default: '' },
     broadcastEnabled: { type: Boolean, default: false },
     broadcastTargets: { type: Array, default: () => [] },
@@ -263,6 +264,7 @@ export default {
     const initTerminal = async () => {
       if (initialized || !terminalRef.value || !props.active || !props.viewVisible) return
       await nextTick()
+      if (initialized || !terminalRef.value || !props.active || !props.viewVisible) return
       const terminal = new Terminal({
         cursorBlink: true,
         fontSize: shellFontSize.value || 13,
@@ -299,7 +301,7 @@ export default {
       fitAddon.value = fit
       searchAddon.value = search
       initialized = true
-      if (props.connected) attachWriter(terminal)
+      if (props.connected || props.connecting) attachWriter(terminal, { replay: true })
       setupObservers()
       scheduleFit()
       terminal.focus()
@@ -309,6 +311,7 @@ export default {
       clearFitTimers()
       clearCwdSyncTimer()
       detachWriter()
+      resetShellWriterReplay(props.machineName)
       searchResultsListener?.dispose?.()
       searchResultsListener = null
       if (resizeObserver) {
@@ -479,6 +482,7 @@ export default {
       inputListener = terminal.onData((data) => {
         if (!props.active || !props.viewVisible) return
         if (!props.connected) {
+          if (props.connecting) return
           // 断开后：Enter 触发重连，其余输入忽略
           if (data === '\r' || data === '\n') {
             emit('reconnect', props.machineName)
@@ -491,13 +495,17 @@ export default {
       })
     }
 
-    const attachWriter = (terminal) => {
+    const attachWriter = (terminal, { replay = false } = {}) => {
       unregisterWriter?.()
-      unregisterWriter = registerShellWriter(props.machineName, {
-        writeData: (b64) => writeHighlighted(terminal, decodeBase64(b64)),
-        writeLine: (line) => terminal.writeln(`\x1b[33m${line}\x1b[0m`),
-        clear: () => terminal.clear(),
-      })
+      unregisterWriter = registerShellWriter(
+        props.machineName,
+        {
+          writeData: (b64) => writeHighlighted(terminal, decodeBase64(b64)),
+          writeLine: (line) => terminal.writeln(`\x1b[33m${line}\x1b[0m`),
+          clear: () => terminal.clear(),
+        },
+        { replay },
+      )
     }
 
     const detachWriter = () => {
@@ -515,15 +523,20 @@ export default {
       window.addEventListener('resize', scheduleFit)
     }
 
-    watch(() => props.connected, async (val) => {
+    const ensureWriter = () => {
+      if (!term.value || unregisterWriter) return
+      attachWriter(term.value, { replay: true })
+    }
+
+    watch(() => [props.connected, props.connecting], async ([val, connecting]) => {
       if (!term.value) {
-        if (val && props.active) await initTerminal()
+        if ((val || connecting) && props.active) await initTerminal()
         return
       }
-      if (val) {
-        if (props.active) attachWriter(term.value)
+      if (val || connecting) {
+        ensureWriter()
         scheduleFit()
-        if (props.active) {
+        if (props.active && val) {
           scheduleCwdSync()
           await nextTick()
           term.value.focus()
@@ -540,19 +553,16 @@ export default {
         else {
           setupObservers()
           scheduleFit()
-          if (term.value && props.connected) attachWriter(term.value)
+          if (term.value && (props.connected || props.connecting)) ensureWriter()
         }
         await nextTick()
         term.value?.focus()
-      } else if (term.value) {
-        detachWriter()
       }
     })
 
     watch(() => props.viewVisible, async (visible) => {
       if (!visible) {
         clearFitTimers()
-        detachWriter()
         return
       }
       if (!props.active) return
@@ -560,7 +570,7 @@ export default {
       if (!initialized) await initTerminal()
       else {
         scheduleFit()
-        if (term.value && props.connected) attachWriter(term.value)
+        if (term.value && (props.connected || props.connecting)) ensureWriter()
       }
       await nextTick()
       term.value?.focus()

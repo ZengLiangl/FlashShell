@@ -1504,7 +1504,7 @@ func (a *App) applyWindowTheme(mode string) {
 	}
 }
 
-// ConnectShell 连接远程 Shell，返回新会话 ID（同机可多开：web1 / web2）
+// ConnectShell 连接远程 Shell，返回新会话 ID（同机可多开：web1 / web1-2）
 func (a *App) ConnectShell(configName string) (string, error) {
 	if machine.IsLocalShellID(configName) {
 		return "", fmt.Errorf("请使用 ConnectLocalShell 创建本地终端")
@@ -1679,12 +1679,13 @@ func (a *App) RemoveShellHistory(machineID, machineName string) error {
 	return a.shellHistory.Remove(machineID, machineName)
 }
 
-// GetShellMonitor 获取机器监控快照
-func (a *App) GetShellMonitor(machineName string) *define.ShellMonitorSnapshot {
+// GetShellMonitor 获取机器监控快照；netIface 为空时使用默认网卡
+func (a *App) GetShellMonitor(machineName, netIface string) *define.ShellMonitorSnapshot {
 	aux, err := a.getShellAux(machineName)
 	if err != nil {
 		host := ""
-		if m := a.configManager.GetMachine(machineName); m != nil {
+		cfgName := a.remoteConfigName(machineName)
+		if m := a.configManager.GetMachine(cfgName); m != nil {
 			if s, e := m.GetSensitiveData(); e == nil {
 				host = s.Host
 			}
@@ -1695,15 +1696,42 @@ func (a *App) GetShellMonitor(machineName string) *define.ShellMonitorSnapshot {
 			Host:        host,
 			UpdatedAt:   time.Now().Unix(),
 			TopMem:      []define.ShellProcessStat{},
+			NetIfaces:   []string{},
 		}
 	}
-	snap := aux.FetchMonitor()
-	if m := a.configManager.GetMachine(machineName); m != nil {
+	snap := aux.FetchMonitor(netIface)
+	if m := a.configManager.GetMachine(a.remoteConfigName(machineName)); m != nil {
 		if s, e := m.GetSensitiveData(); e == nil && s.Host != "" {
 			snap.Host = s.Host
 		}
 	}
 	return snap
+}
+
+// GetShellSystemInfo 获取机器系统信息
+func (a *App) GetShellSystemInfo(machineName string) *define.ShellSystemInfo {
+	aux, err := a.getShellAux(machineName)
+	if err != nil {
+		host := ""
+		cfgName := a.remoteConfigName(machineName)
+		if m := a.configManager.GetMachine(cfgName); m != nil {
+			if s, e := m.GetSensitiveData(); e == nil {
+				host = s.Host
+			}
+		}
+		return &define.ShellSystemInfo{
+			MachineName: machineName,
+			Host:        host,
+			Error:       err.Error(),
+		}
+	}
+	info := aux.FetchSystemInfo()
+	if m := a.configManager.GetMachine(a.remoteConfigName(machineName)); m != nil {
+		if s, e := m.GetSensitiveData(); e == nil && s.Host != "" {
+			info.Host = s.Host
+		}
+	}
+	return info
 }
 
 // ListShellFiles 列出远端目录

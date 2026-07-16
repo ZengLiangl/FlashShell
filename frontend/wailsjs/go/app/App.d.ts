@@ -95,7 +95,7 @@ export function GetShellDownloadDir():Promise<string>;
 
 export function GetShellHistory():Promise<Array<define.ShellHistoryRecord>>;
 
-export function GetShellMonitor(arg1:string):Promise<define.ShellMonitorSnapshot>;
+export function GetShellMonitor(arg1:string,arg2:string):Promise<define.ShellMonitorSnapshot>;
 
 export function GetShellPtyCwd(arg1:string):Promise<string>;
 
@@ -106,6 +106,8 @@ export function GetShellRemotePwd(arg1:string):Promise<string>;
 export function GetShellSessions():Promise<Array<define.ShellStatus>>;
 
 export function GetShellStatus():Promise<define.ShellStatus>;
+
+export function GetShellSystemInfo(arg1:string):Promise<define.ShellSystemInfo>;
 
 export function GetShellTunnelStatus(arg1:string):Promise<Array<define.SSHTunnelStatus>>;
 

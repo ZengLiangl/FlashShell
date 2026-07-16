@@ -36,7 +36,11 @@ func (s *LocalShellSession) Start(handler ShellOutputHandler) error {
 		return fmt.Errorf("当前 Windows 版本不支持 ConPTY 本地终端")
 	}
 	cmdLine := defaultWindowsShell()
-	cpty, err := conpty.Start(cmdLine, conpty.ConPtyDimensions(120, 40))
+	opts := []conpty.ConPtyOption{conpty.ConPtyDimensions(120, 40)}
+	if dir := localShellStartDir(); dir != "" {
+		opts = append(opts, conpty.ConPtyWorkDir(dir))
+	}
+	cpty, err := conpty.Start(cmdLine, opts...)
 	if err != nil {
 		return fmt.Errorf("启动本地终端失败: %w", err)
 	}
@@ -54,9 +58,6 @@ func (s *LocalShellSession) Start(handler ShellOutputHandler) error {
 	go s.readLoop(handler, ctx, done)
 	go s.waitExit(handler)
 
-	if handler.OnLine != nil {
-		handler.OnLine(fmt.Sprintf("已启动本机 (%s)", cmdLine))
-	}
 	if handler.OnStatus != nil {
 		handler.OnStatus(s.GetStatus())
 	}

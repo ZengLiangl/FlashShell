@@ -50,18 +50,14 @@
         :left-panel-width="Math.min(leftPanelWidth, 320)" :is-resizing="isResizing" :app-info="statusBarInfo"
         :machines="shellMachines" :sessions="shellSessions" :workspace-sessions="workspaceSessions"
         :connected-count="connectedCount" :open-session-count="openSessionCount" v-model:active-machine="activeMachine"
-        :connecting-name="connectingName" :testing-name="testingName"
-        :broadcast-enabled="broadcastEnabled" :broadcast-targets="broadcastTargets"
-        :split-session-ids="splitSessionIds"
-        @back="leaveShellMode"
+        :connecting-name="connectingName" :testing-name="testingName" :broadcast-enabled="broadcastEnabled"
+        :broadcast-targets="broadcastTargets" :split-session-ids="splitSessionIds" @back="leaveShellMode"
         @connect="(name) => connectShell(name)" @disconnect="disconnectShell" @close-session="closeShellSession"
-        @reconnect="(name) => connectOrReconnectShell(name)"
-        @add-local="() => connectLocalShell()" @test="testShellConnection"
-        @update:broadcast-enabled="(v) => (broadcastEnabled = v)"
+        @reconnect="(name) => connectOrReconnectShell(name)" @add-local="() => connectLocalShell()"
+        @test="testShellConnection" @update:broadcast-enabled="(v) => (broadcastEnabled = v)"
         @update:broadcast-targets="(v) => (broadcastTargets = v)"
-        @update:split-session-ids="(v) => (splitSessionIds = v)"
-        @add-machine="openShellMachineDialog" @edit-machine="openShellMachineEdit"
-        @start-resize="startResize" />
+        @update:split-session-ids="(v) => (splitSessionIds = v)" @reorder-tabs="({ from, to }) => reorderTabs(from, to)"
+        @add-machine="openShellMachineDialog" @edit-machine="openShellMachineEdit" @start-resize="startResize" />
     </div>
 
     <!-- 首页：任务模式 + Shell 模式入口 -->
@@ -69,9 +65,9 @@
       <div class="projectlist-fullscreen">
         <HomePage ref="homePageRef" :projects="projects" :connected-count="connectedCount" :has-task="!!selectedProject"
           :task-running="status.isRunning" :connecting-name="connectingName" :sessions="shellSessions"
-          @refresh="refreshConfig" @select-project="selectProject"
-          @resume-task="resumeTaskView" @open-shell="enterShellMode" @connect-machine="openShellAndConnect"
-          @add-machine="openShellMachineDialog" @open-system-settings="openSettingsHub('general')" />
+          @refresh="refreshConfig" @select-project="selectProject" @resume-task="resumeTaskView"
+          @open-shell="enterShellMode" @connect-machine="openShellAndConnect" @add-machine="openShellMachineDialog"
+          @open-system-settings="openSettingsHub('general')" />
       </div>
     </template>
 
@@ -79,14 +75,8 @@
       @machines-changed="onMachinesChanged" @machines-closed="machineEditId = ''" />
 
     <!-- 关于弹框 -->
-    <AboutDialog
-      v-model="aboutVisible"
-      :intro-html="aboutIntroHtml"
-      :prompt-mode="aboutPromptMode"
-      :initial-update-result="aboutInitialUpdate"
-      @dismissed="onAboutPromptDismissed"
-      @skipped="onAboutPromptSkipped"
-    />
+    <AboutDialog v-model="aboutVisible" :intro-html="aboutIntroHtml" :prompt-mode="aboutPromptMode"
+      :initial-update-result="aboutInitialUpdate" @dismissed="onAboutPromptDismissed" @skipped="onAboutPromptSkipped" />
 
     <ConfigEditorDialog v-model="configEditorVisible" @saved="refreshProjectConfig" />
   </div>
@@ -197,6 +187,7 @@ export default {
       toggleBroadcastTarget,
       setSplitSessions,
       toggleSplitSession,
+      reorderTabs,
     } = useShell();
     const terminalOutputRef = ref(null);
     const terminalSearchVisible = ref(false);
@@ -497,10 +488,8 @@ export default {
     };
 
     const openShellAndConnect = async (machineName) => {
-      // 先发起连接（立即标记 connectingName），再切到 Shell 展示「连接中」
-      const connectPromise = connectShell(machineName);
       await enterShellMode();
-      await connectPromise;
+      await connectShell(machineName);
     };
 
     const openSettingsHub = (section = 'general') => {

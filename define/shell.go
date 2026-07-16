@@ -30,6 +30,7 @@ type ShellProcessStat struct {
 	User    string  `json:"user"`
 	CPU     float64 `json:"cpu"`
 	Mem     float64 `json:"mem"`
+	MemRSS  string  `json:"memRss"` // top RES 列原始值，如 829.4M
 	Command string  `json:"command"`
 }
 
@@ -43,9 +44,31 @@ type ShellMonitorSnapshot struct {
 	MemPercent  float64            `json:"memPercent"`
 	MemUsed     string             `json:"memUsed"`
 	MemTotal    string             `json:"memTotal"`
+	SwapPercent float64            `json:"swapPercent"`
+	SwapUsed    string             `json:"swapUsed"`
+	SwapTotal   string             `json:"swapTotal"`
 	TopMem      []ShellProcessStat `json:"topMem"`
+	NetIface    string             `json:"netIface"`
+	NetIfaces   []string           `json:"netIfaces"`
+	NetRxRate   float64            `json:"netRxRate"` // bytes/s
+	NetTxRate   float64            `json:"netTxRate"` // bytes/s
+	NetRxText   string             `json:"netRxText"`
+	NetTxText   string             `json:"netTxText"`
 	Error       string             `json:"error,omitempty"`
 	UpdatedAt   int64              `json:"updatedAt"`
+}
+
+// ShellSystemInfo 系统信息
+type ShellSystemInfo struct {
+	MachineName string `json:"machineName"`
+	Host        string `json:"host"`
+	Hostname    string `json:"hostname"`
+	OS          string `json:"os"`
+	Kernel      string `json:"kernel"`
+	Arch        string `json:"arch"`
+	CPUModel    string `json:"cpuModel"`
+	DiskSummary string `json:"diskSummary"`
+	Error       string `json:"error,omitempty"`
 }
 
 // SftpEntry 远端文件/目录项

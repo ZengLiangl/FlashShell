@@ -7,9 +7,9 @@
         <span class="broadcast-count">{{ targetCount }} 个会话</span>
       </div>
 
-      <div class="broadcast-targets">
+      <div class="broadcast-targets" ref="targetsContainerRef">
         <button
-          v-for="s in connectedSessions"
+          v-for="s in visibleTargets"
           :key="s.machineName"
           type="button"
           class="target-chip"
@@ -18,6 +18,27 @@
         >
           {{ s.tabLabel || s.machineName }}
         </button>
+        <el-dropdown
+          v-if="overflowTargets.length"
+          trigger="click"
+          @command="toggleTarget"
+        >
+          <button type="button" class="target-chip target-more" title="更多会话">
+            <el-icon :size="12"><MoreFilled /></el-icon>
+          </button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item
+                v-for="s in overflowTargets"
+                :key="s.machineName"
+                :command="s.machineName"
+              >
+                {{ s.tabLabel || s.machineName }}
+                <span v-if="isTarget(s.machineName)" class="chip-mark"> ✓</span>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <button type="button" class="target-action" @click="selectAll">全选</button>
       </div>
 
@@ -56,12 +77,13 @@
 
 <script>
 import { ref, watch, computed, nextTick } from 'vue'
-import { Close, Promotion } from '@element-plus/icons-vue'
+import { Close, Promotion, MoreFilled } from '@element-plus/icons-vue'
 import * as App from '../../../wailsjs/go/app/App'
+import { useHorizontalOverflow } from '../../composables/useHorizontalOverflow'
 
 export default {
   name: 'ShellBroadcastBar',
-  components: { Close, Promotion },
+  components: { Close, Promotion, MoreFilled },
   props: {
     enabled: { type: Boolean, default: false },
     targets: { type: Array, default: () => [] },
@@ -75,6 +97,15 @@ export default {
     const connectedSessions = computed(() =>
       (props.sessions || []).filter((s) => s.connected),
     )
+
+    const activeTargetKey = ref('')
+    const { containerRef: targetsContainerRef, split: targetSplit } = useHorizontalOverflow(
+      connectedSessions,
+      activeTargetKey,
+      { itemWidth: 88, moreWidth: 36 },
+    )
+    const visibleTargets = computed(() => targetSplit.value.visible)
+    const overflowTargets = computed(() => targetSplit.value.overflow)
 
     const effectiveTargets = computed(() => {
       if (props.targets?.length) return props.targets
@@ -156,7 +187,10 @@ export default {
     return {
       draft,
       inputRef,
+      targetsContainerRef,
       connectedSessions,
+      visibleTargets,
+      overflowTargets,
       targetCount,
       isTarget,
       toggleTarget,
@@ -262,7 +296,11 @@ export default {
   padding: 4px 6px;
 }
 
-.target-action:hover {
+.target-more {
+  padding: 5px 8px;
+}
+
+.chip-mark {
   color: var(--app-accent-color);
 }
 

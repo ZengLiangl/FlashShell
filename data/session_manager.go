@@ -113,6 +113,15 @@ func (sm *SessionManager) save() error {
 	return os.WriteFile(sm.sessionPath(), data, 0644)
 }
 
+// Delete 删除窗口会话文件（不存在时视为成功）。
+func (sm *SessionManager) Delete() error {
+	err := os.Remove(sm.sessionPath())
+	if os.IsNotExist(err) {
+		return nil
+	}
+	return err
+}
+
 // NewSessionID 生成新会话 ID
 func NewSessionID() string {
 	return uuid.NewString()

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,6 +25,10 @@ type ShellAuxManager struct {
 	uidNames    map[uint32]string
 	gidNames    map[uint32]string
 	idMapsReady bool
+	lastNetAt   time.Time
+	lastNetRx   uint64
+	lastNetTx   uint64
+	lastNetIface string
 }
 
 // NewShellAuxManager 创建辅助连接管理器
@@ -187,32 +192,78 @@ echo __UP__
 awk '{print $1; exit}' /proc/uptime 2>/dev/null
 echo __MEM__
 LANG=C free -b 2>/dev/null | awk '/^Mem:/{print $2,$3; exit}'
+echo __SWAP__
+LANG=C free -b 2>/dev/null | awk '/^Swap:/{print $2,$3; exit}'
+echo __NETLIST__
+ls /sys/class/net 2>/dev/null | grep -Ev '^(lo|veth)'
+echo __NET__
+iface="${MONITOR_IFACE:-}"
+if [ -z "$iface" ]; then
+  iface=$(ip -o -4 route show to default 2>/dev/null | awk '{print $5; exit}')
+fi
+if [ -z "$iface" ]; then
+  iface=$(ls /sys/class/net 2>/dev/null | grep -Ev '^(lo|veth)' | grep -E '^(eth|ens|enp|eno)' | head -1)
+fi
+if [ -z "$iface" ]; then
+  iface=$(ls /sys/class/net 2>/dev/null | grep -Ev '^(lo|veth)' | head -1)
+fi
+echo "IFACE=$iface"
+if [ -n "$iface" ]; then
+  awk -v d="$iface" '$1 ~ d":" {print $2, $10; exit}' /proc/net/dev 2>/dev/null
+fi
 echo __TOPRAW__
 LC_ALL=C top -bn2 -d 0.5 -w 512 2>/dev/null
 `
 
-// FetchMonitor 拉取监控快照
-func (a *ShellAuxManager) FetchMonitor() *define.ShellMonitorSnapshot {
+const shellSystemInfoScript = `set +e
+echo __HOST__
+hostname 2>/dev/null
+echo __UNAME__
+uname -sr 2>/dev/null
+echo __ARCH__
+uname -m 2>/dev/null
+echo __OS__
+if [ -f /etc/os-release ]; then
+  . /etc/os-release 2>/dev/null
+  printf '%s\n' "${PRETTY_NAME:-$NAME}"
+else
+  uname -o 2>/dev/null
+fi
+echo __CPU__
+awk -F: '/model name/{print $2; exit}' /proc/cpuinfo 2>/dev/null
+echo __DISK__
+df -hT --total 2>/dev/null | awk 'END{print $3" used / "$2" total ("$6")"}'
+`
+
+// FetchMonitor 拉取监控快照；netIface 为空时使用默认路由网卡
+func (a *ShellAuxManager) FetchMonitor(netIface string) *define.ShellMonitorSnapshot {
 	snap := &define.ShellMonitorSnapshot{
 		MachineName: a.machineName,
 		Host:        a.host,
 		UpdatedAt:   time.Now().Unix(),
 		TopMem:      []define.ShellProcessStat{},
+		NetIfaces:   []string{},
 	}
 	if !a.IsConnected() {
 		return snap
 	}
 
-	out, err := a.execBashPath("/bin/bash", shellMonitorScript)
+	script := shellMonitorScript
+	if strings.TrimSpace(netIface) != "" {
+		safe := strings.ReplaceAll(strings.TrimSpace(netIface), "'", "'\\''")
+		script = fmt.Sprintf("MONITOR_IFACE='%s'\n%s", safe, shellMonitorScript)
+	}
+
+	out, err := a.execBashPath("/bin/bash", script)
 	if err != nil && strings.TrimSpace(out) == "" {
-		out, err = a.execBashPath("bash", shellMonitorScript)
+		out, err = a.execBashPath("bash", script)
 	}
 	if err != nil && strings.TrimSpace(out) == "" {
 		snap.Error = err.Error()
 		return snap
 	}
 
-	sections := parseTaggedSections(out, []string{"__UP__", "__MEM__", "__TOPRAW__"})
+	sections := parseTaggedSections(out, []string{"__UP__", "__MEM__", "__SWAP__", "__NETLIST__", "__NET__", "__TOPRAW__"})
 	if v := strings.TrimSpace(sections["__UP__"]); v != "" {
 		if sec, err := strconv.ParseFloat(v, 64); err == nil {
 			snap.UptimeSec = sec
@@ -231,10 +282,149 @@ func (a *ShellAuxManager) FetchMonitor() *define.ShellMonitorSnapshot {
 			}
 		}
 	}
+	if swapLine := strings.TrimSpace(sections["__SWAP__"]); swapLine != "" {
+		parts := strings.Fields(swapLine)
+		if len(parts) >= 2 {
+			total, _ := strconv.ParseFloat(parts[0], 64)
+			used, _ := strconv.ParseFloat(parts[1], 64)
+			if total > 0 {
+				snap.SwapPercent = used / total * 100
+				snap.SwapTotal = formatBytes(total)
+				snap.SwapUsed = formatBytes(used)
+			}
+		}
+	}
 	sysCPU, procs := parseTopBatch(sections["__TOPRAW__"], 5)
 	snap.CPUPercent = sysCPU
 	snap.TopMem = procs
+	snap.NetIfaces = parseNetIfaces(sections["__NETLIST__"])
+	a.applyNetRates(snap, sections["__NET__"])
 	return snap
+}
+
+func parseNetIfaces(raw string) []string {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	out := make([]string, 0)
+	seen := make(map[string]bool)
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || seen[line] {
+			continue
+		}
+		seen[line] = true
+		out = append(out, line)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		ri, rj := netIfaceRank(out[i]), netIfaceRank(out[j])
+		if ri != rj {
+			return ri < rj
+		}
+		return out[i] < out[j]
+	})
+	return out
+}
+
+func netIfaceRank(name string) int {
+	switch {
+	case strings.HasPrefix(name, "eth"),
+		strings.HasPrefix(name, "ens"),
+		strings.HasPrefix(name, "enp"),
+		strings.HasPrefix(name, "eno"):
+		return 0
+	case strings.HasPrefix(name, "docker"):
+		return 10
+	case strings.HasPrefix(name, "br-"):
+		return 20
+	default:
+		return 50
+	}
+}
+
+// FetchSystemInfo 拉取系统信息
+func (a *ShellAuxManager) FetchSystemInfo() *define.ShellSystemInfo {
+	info := &define.ShellSystemInfo{
+		MachineName: a.machineName,
+		Host:        a.host,
+	}
+	if !a.IsConnected() {
+		return info
+	}
+	out, err := a.execBashPath("/bin/bash", shellSystemInfoScript)
+	if err != nil && strings.TrimSpace(out) == "" {
+		out, err = a.execBashPath("bash", shellSystemInfoScript)
+	}
+	if err != nil && strings.TrimSpace(out) == "" {
+		info.Error = err.Error()
+		return info
+	}
+	sections := parseTaggedSections(out, []string{"__HOST__", "__UNAME__", "__ARCH__", "__OS__", "__CPU__", "__DISK__"})
+	info.Hostname = strings.TrimSpace(sections["__HOST__"])
+	info.Kernel = strings.TrimSpace(sections["__UNAME__"])
+	info.Arch = strings.TrimSpace(sections["__ARCH__"])
+	info.OS = strings.TrimSpace(sections["__OS__"])
+	info.CPUModel = strings.TrimSpace(sections["__CPU__"])
+	info.DiskSummary = strings.TrimSpace(sections["__DISK__"])
+	return info
+}
+
+func (a *ShellAuxManager) applyNetRates(snap *define.ShellMonitorSnapshot, raw string) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return
+	}
+	iface := ""
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "IFACE=") {
+			iface = strings.TrimPrefix(line, "IFACE=")
+		}
+	}
+	var rx, tx uint64
+	for _, line := range strings.Split(raw, "\n") {
+		parts := strings.Fields(line)
+		if len(parts) < 2 {
+			continue
+		}
+		if _, err := strconv.ParseUint(parts[0], 10, 64); err != nil {
+			continue
+		}
+		rx, _ = strconv.ParseUint(parts[0], 10, 64)
+		tx, _ = strconv.ParseUint(parts[1], 10, 64)
+		break
+	}
+	if iface != "" {
+		snap.NetIface = iface
+	}
+	now := time.Now()
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.lastNetIface != iface {
+		a.lastNetAt = time.Time{}
+		a.lastNetRx = 0
+		a.lastNetTx = 0
+	}
+	if !a.lastNetAt.IsZero() && a.lastNetIface == iface {
+		secs := now.Sub(a.lastNetAt).Seconds()
+		if secs > 0.05 {
+			snap.NetRxRate = float64(rx-a.lastNetRx) / secs
+			snap.NetTxRate = float64(tx-a.lastNetTx) / secs
+			if snap.NetRxRate < 0 {
+				snap.NetRxRate = 0
+			}
+			if snap.NetTxRate < 0 {
+				snap.NetTxRate = 0
+			}
+		}
+	}
+	a.lastNetAt = now
+	a.lastNetRx = rx
+	a.lastNetTx = tx
+	a.lastNetIface = iface
+	snap.NetRxText = formatRate(snap.NetRxRate)
+	snap.NetTxText = formatRate(snap.NetTxRate)
 }
 
 // Home 远端登录用户 HOME
@@ -614,7 +804,7 @@ func parseTopBatch(raw string, limit int) (float64, []define.ShellProcessStat) {
 	}
 
 	headerFields := strings.Fields(strings.TrimSpace(lines[headerIdx]))
-	idxPID, idxUser, idxCPU, idxMem, idxCmd := -1, -1, -1, -1, -1
+	idxPID, idxUser, idxCPU, idxMem, idxRes, idxCmd := -1, -1, -1, -1, -1, -1
 	for i, h := range headerFields {
 		switch strings.ToUpper(strings.TrimPrefix(h, "%")) {
 		case "PID":
@@ -625,6 +815,8 @@ func parseTopBatch(raw string, limit int) (float64, []define.ShellProcessStat) {
 			idxCPU = i
 		case "MEM":
 			idxMem = i
+		case "RES", "RSS":
+			idxRes = i
 		case "COMMAND", "CMD":
 			idxCmd = i
 		}
@@ -670,11 +862,16 @@ func parseTopBatch(raw string, limit int) (float64, []define.ShellProcessStat) {
 		if idxUser >= 0 && idxUser < len(fields) {
 			user = fields[idxUser]
 		}
+		memRSS := ""
+		if idxRes >= 0 && idxRes < len(fields) {
+			memRSS = fields[idxRes]
+		}
 		out = append(out, define.ShellProcessStat{
 			PID:     fields[idxPID],
 			User:    user,
 			CPU:     cpu,
 			Mem:     mem,
+			MemRSS:  memRSS,
 			Command: strings.Join(fields[idxCmd:], " "),
 		})
 	}
@@ -743,4 +940,21 @@ func formatBytes(b float64) string {
 		return fmt.Sprintf("%.0f%s", v, units[i])
 	}
 	return fmt.Sprintf("%.1f%s", v, units[i])
+}
+
+func formatRate(bps float64) string {
+	if bps < 0 {
+		bps = 0
+	}
+	units := []string{"B/s", "K/s", "M/s", "G/s"}
+	v := bps
+	i := 0
+	for v >= 1024 && i < len(units)-1 {
+		v /= 1024
+		i++
+	}
+	if i == 0 {
+		return fmt.Sprintf("%.0f%s", v, units[i])
+	}
+	return fmt.Sprintf("%.0f%s", v, units[i])
 }

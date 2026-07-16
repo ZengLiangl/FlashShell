@@ -19,7 +19,11 @@ func TestRemoteConfigName(t *testing.T) {
 		{"web1#2", "web1"},
 		{"local", "local"},
 	}
+	known := []string{"web1", "va-test-66", "aml-plus-92"}
 	for _, c := range cases {
+		if got := RemoteConfigNameForKnown(c.in, known); got != c.want {
+			t.Fatalf("RemoteConfigNameForKnown(%q)=%q want %q", c.in, got, c.want)
+		}
 		if got := RemoteConfigNameWithResolver(c.in, resolver); got != c.want {
 			t.Fatalf("RemoteConfigNameWithResolver(%q)=%q want %q", c.in, got, c.want)
 		}
@@ -51,6 +55,9 @@ func TestShellTabLabel(t *testing.T) {
 	if got := ShellTabLabel("local", "local", ShellKindLocal); got != "本机" {
 		t.Fatalf("got %q", got)
 	}
+	if got := ShellTabLabel("local-2", "local", ShellKindLocal); got != "本机-2" {
+		t.Fatalf("got %q", got)
+	}
 }
 
 func TestFormatRemoteSessionID(t *testing.T) {
@@ -62,5 +69,23 @@ func TestFormatRemoteSessionID(t *testing.T) {
 	}
 	if got := FormatRemoteSessionID("va-test-66", 2); got != "va-test-66-2" {
 		t.Fatalf("got %q", got)
+	}
+}
+
+func TestFormatLocalSessionID(t *testing.T) {
+	if got := FormatLocalSessionID(1); got != "local" {
+		t.Fatalf("got %q", got)
+	}
+	if got := FormatLocalSessionID(2); got != "local-2" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestLocalSessionIndex(t *testing.T) {
+	if got := LocalSessionIndex("local"); got != 1 {
+		t.Fatalf("got %d", got)
+	}
+	if got := LocalSessionIndex("local-2"); got != 2 {
+		t.Fatalf("got %d", got)
 	}
 }

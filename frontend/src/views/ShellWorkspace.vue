@@ -9,9 +9,9 @@
       >
         <ShellMonitorPanel
           v-show="!leftCollapsed"
-          :active-machine="activeMachine"
-          :active-connected="activeConnected"
-          :connecting="connectingName === activeMachine"
+          :active-machine="monitorMachineName"
+          :active-connected="monitorConnected"
+          :connecting="monitorConnecting"
           @toggle-connection="onToggleConnection"
         />
         <!-- 右边框：拖拽改宽 + 悬停显示收起 -->
@@ -79,6 +79,7 @@
           @search-result="onSearchResult"
           @open-transfer="transferVisible = true"
           @cwd-sync="onCwdSync"
+          @reorder-tabs="(payload) => $emit('reorder-tabs', payload)"
         >
           <template #empty>
             <div v-if="connectingName" class="app-empty shell-connecting">
@@ -194,6 +195,7 @@ export default {
     'back', 'connect', 'disconnect', 'close-session', 'reconnect', 'test', 'add-machine', 'edit-machine',
     'add-local', 'start-resize', 'update:activeMachine', 'history-changed',
     'update:broadcast-enabled', 'update:broadcast-targets', 'update:split-session-ids',
+    'reorder-tabs',
   ],
   setup(props, { emit }) {
     const tabsRef = ref(null)
@@ -254,10 +256,33 @@ export default {
       return n === 'local' || n.startsWith('local-')
     }
 
-    const showMonitorPanel = computed(() => {
-      if (!props.openSessionCount) return false
-      return !isLocalSessionName(props.activeMachine)
+    const showMonitorPanel = computed(() => !!monitorSession.value)
+
+    const monitorSession = computed(() => {
+      const sessions = props.workspaceSessions || []
+      const active = String(props.activeMachine || '')
+      if (!active) return null
+      const tab = sessions.find((s) => s.machineName === active)
+      if (!tab) return null
+      if (tab.kind === 'local' || isLocalSessionName(tab.machineName)) return null
+      return tab
     })
+
+    const monitorMachineName = computed(() => {
+      const tab = monitorSession.value
+      if (!tab) return ''
+      if (String(tab.machineName).startsWith('__pending__')) {
+        return tab.configName || tab.tabLabel || ''
+      }
+      return tab.machineName
+    })
+
+    const monitorConnected = computed(() => {
+      const tab = monitorSession.value
+      return !!(tab?.connected && !tab?.connecting)
+    })
+
+    const monitorConnecting = computed(() => !!monitorSession.value?.connecting)
 
     const activeConnected = computed(() => {
       const name = props.activeMachine
@@ -268,6 +293,10 @@ export default {
     watch(showMonitorPanel, async () => {
       await nextTick()
       tabsRef.value?.fitActive?.()
+    })
+
+    watch(monitorConnecting, (connecting) => {
+      if (connecting) leftCollapsed.value = false
     })
 
     const formatSearchSummary = (result) => {
@@ -456,7 +485,7 @@ export default {
       if (activeConnected.value) {
         emit('disconnect', name)
       } else {
-        emit('connect', name)
+        emit('reconnect', name)
       }
     }
 
@@ -562,6 +591,9 @@ export default {
       cwdHints,
       activeConnected,
       showMonitorPanel,
+      monitorMachineName,
+      monitorConnected,
+      monitorConnecting,
       isLocalSessionName,
       clearTerminal,
       onClear,
@@ -575,6 +607,7 @@ export default {
       onPickerConnect,
       onReconnect,
       onAddLocal,
+      onPickerAddLocal,
       onToggleConnection,
       onSearchResult,
       clearHistory,

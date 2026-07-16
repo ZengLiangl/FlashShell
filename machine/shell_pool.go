@@ -7,18 +7,16 @@ import (
 	"FlashDock/define"
 )
 
-// ShellSessionPool 管理远程 PTY 会话（同一机器可开多个：web1 / web1#2）
+// ShellSessionPool 管理远程 PTY 会话（同一机器可开多个：web1 / web1-2）
 type ShellSessionPool struct {
 	mu       sync.RWMutex
 	sessions map[string]*ShellSessionManager
-	seq      map[string]int // configName → 已分配最大序号
 }
 
 // NewShellSessionPool 创建会话池
 func NewShellSessionPool() *ShellSessionPool {
 	return &ShellSessionPool{
 		sessions: make(map[string]*ShellSessionManager),
-		seq:      make(map[string]int),
 	}
 }
 
@@ -29,16 +27,26 @@ func (p *ShellSessionPool) GetSession(sessionID string) *ShellSessionManager {
 	return p.sessions[sessionID]
 }
 
+// nextSessionID 分配最小可用序号（关闭 tab 后复用空位）。
 func (p *ShellSessionPool) nextSessionID(configName string) string {
-	p.seq[configName]++
-	n := p.seq[configName]
-	return FormatRemoteSessionID(configName, n)
-}
-
-// ensureSeqAtLeast 保证序号至少覆盖已有会话
-func (p *ShellSessionPool) ensureSeqAtLeast(configName string, index int) {
-	if index > p.seq[configName] {
-		p.seq[configName] = index
+	used := make(map[int]bool)
+	for id, sm := range p.sessions {
+		st := sm.GetStatus()
+		if st == nil || st.ConfigName != configName {
+			continue
+		}
+		if idx := RemoteSessionIndexForConfig(id, configName); idx >= 1 {
+			used[idx] = true
+			continue
+		}
+		if id == configName {
+			used[1] = true
+		}
+	}
+	for slot := 1; ; slot++ {
+		if !used[slot] {
+			return FormatRemoteSessionID(configName, slot)
+		}
 	}
 }
 
@@ -67,13 +75,11 @@ func (p *ShellSessionPool) ConnectID(sessionID string, machine *define.Machine, 
 	if sessionID == "" || machine == nil {
 		return fmt.Errorf("会话或机器配置无效")
 	}
-	configName := machine.Name
 	p.mu.Lock()
 	if existing, ok := p.sessions[sessionID]; ok && existing.IsConnected() {
 		p.mu.Unlock()
 		return nil
 	}
-	p.ensureSeqAtLeast(configName, RemoteSessionIndexForConfig(sessionID, configName))
 	sm := NewShellSessionManager()
 	p.sessions[sessionID] = sm
 	p.mu.Unlock()

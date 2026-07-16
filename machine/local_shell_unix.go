@@ -36,6 +36,9 @@ func (s *LocalShellSession) Start(handler ShellOutputHandler) error {
 	shell, args := defaultUnixShell()
 	cmd := exec.Command(shell, args...)
 	cmd.Env = os.Environ()
+	if dir := localShellStartDir(); dir != "" {
+		cmd.Dir = dir
+	}
 
 	ptmx, err := pty.Start(cmd)
 	if err != nil {
@@ -56,9 +59,6 @@ func (s *LocalShellSession) Start(handler ShellOutputHandler) error {
 
 	go s.readLoop(handler, ctx, done)
 
-	if handler.OnLine != nil {
-		handler.OnLine(fmt.Sprintf("已启动本机 (%s)", shell))
-	}
 	if handler.OnStatus != nil {
 		handler.OnStatus(s.GetStatus())
 	}
