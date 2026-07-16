@@ -36,6 +36,114 @@ type ProxySettings struct {
 	Port int    `yaml:"port" json:"port"`
 }
 
+// ShellLogHighlightColors Shell 日志高亮配色（hex，如 #92d050）
+type ShellLogHighlightColors struct {
+	Timestamp string `yaml:"timestamp" json:"timestamp"`
+	ThreadId  string `yaml:"threadId" json:"threadId"`
+	Info      string `yaml:"info" json:"info"`
+	Debug     string `yaml:"debug" json:"debug"`
+	Warn      string `yaml:"warn" json:"warn"`
+	Error     string `yaml:"error" json:"error"`
+	Logger    string `yaml:"logger" json:"logger"`
+	Sql       string `yaml:"sql" json:"sql"`
+	Label     string `yaml:"label" json:"label"`
+}
+
+// ShellLogHighlightRuleKeys 可单独关闭的高亮项
+var ShellLogHighlightRuleKeys = []string{
+	"timestamp", "threadId", "info", "debug", "warn", "error", "logger", "sql", "label",
+}
+
+// NormalizeShellLogHighlightDisabled 校验并去重 disabled 列表
+func NormalizeShellLogHighlightDisabled(list []string) []string {
+	if len(list) == 0 {
+		return nil
+	}
+	allowed := map[string]struct{}{
+		"timestamp": {}, "threadId": {}, "info": {}, "debug": {}, "warn": {},
+		"error": {}, "logger": {}, "sql": {}, "label": {},
+	}
+	seen := map[string]struct{}{}
+	out := make([]string, 0, len(list))
+	for _, k := range list {
+		k = strings.TrimSpace(k)
+		if _, ok := allowed[k]; !ok {
+			continue
+		}
+		if _, dup := seen[k]; dup {
+			continue
+		}
+		seen[k] = struct{}{}
+		out = append(out, k)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+// DefaultShellLogHighlightColors 默认配色（接近 WindTerm）
+func DefaultShellLogHighlightColors() ShellLogHighlightColors {
+	return ShellLogHighlightColors{
+		Timestamp: "#92d050",
+		ThreadId:  "#c586c0",
+		Info:      "#569cd6",
+		Debug:     "#ce9178",
+		Warn:      "#dcdcaa",
+		Error:     "#f44747",
+		Logger:    "#4ec9b0",
+		Sql:       "#dcdcaa",
+		Label:     "#9cdcfe",
+	}
+}
+
+// NormalizeShellLogHighlightColors 合并缺省项并校验 hex
+func NormalizeShellLogHighlightColors(c ShellLogHighlightColors) ShellLogHighlightColors {
+	def := DefaultShellLogHighlightColors()
+	out := def
+	if isHexColor(c.Timestamp) {
+		out.Timestamp = c.Timestamp
+	}
+	if isHexColor(c.ThreadId) {
+		out.ThreadId = c.ThreadId
+	}
+	if isHexColor(c.Info) {
+		out.Info = c.Info
+	}
+	if isHexColor(c.Debug) {
+		out.Debug = c.Debug
+	}
+	if isHexColor(c.Warn) {
+		out.Warn = c.Warn
+	}
+	if isHexColor(c.Error) {
+		out.Error = c.Error
+	}
+	if isHexColor(c.Logger) {
+		out.Logger = c.Logger
+	}
+	if isHexColor(c.Sql) {
+		out.Sql = c.Sql
+	}
+	if isHexColor(c.Label) {
+		out.Label = c.Label
+	}
+	return out
+}
+
+func isHexColor(s string) bool {
+	s = strings.TrimSpace(s)
+	if len(s) != 7 || s[0] != '#' {
+		return false
+	}
+	for _, ch := range s[1:] {
+		if !((ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f') || (ch >= 'A' && ch <= 'F')) {
+			return false
+		}
+	}
+	return true
+}
+
 // GlobalConfig 全局配置结构
 type GlobalConfig struct {
 	AppId          string            `yaml:"appId" json:"appId"`
@@ -53,6 +161,12 @@ type GlobalConfig struct {
 	ShellMonitorIntervalMs int `yaml:"shellMonitorIntervalMs" json:"shellMonitorIntervalMs"`
 	// ShellMonitorIntervalSec 旧字段（秒），仅用于迁移
 	ShellMonitorIntervalSec int `yaml:"shellMonitorIntervalSec,omitempty" json:"-"`
+	// ShellLogHighlight Shell 终端日志关键字高亮；nil 表示默认开启
+	ShellLogHighlight *bool `yaml:"shellLogHighlight,omitempty" json:"shellLogHighlight"`
+	// ShellLogHighlightColors 日志高亮配色
+	ShellLogHighlightColors ShellLogHighlightColors `yaml:"shellLogHighlightColors,omitempty" json:"shellLogHighlightColors"`
+	// ShellLogHighlightDisabled 关闭高亮的关键字（缺省或空表示全部开启）
+	ShellLogHighlightDisabled []string `yaml:"shellLogHighlightDisabled,omitempty" json:"shellLogHighlightDisabled"`
 }
 
 // GlobalConfigManager 全局配置管理器
@@ -306,10 +420,22 @@ func (gcm *GlobalConfigManager) createDefaultGlobalConfig() error {
 			Host: "",
 			Port: 7890,
 		},
-		ShellMonitorIntervalMs: 1000,
+		ShellMonitorIntervalMs:  1000,
+		ShellLogHighlight:       boolPtr(true),
+		ShellLogHighlightColors: DefaultShellLogHighlightColors(),
 	}
 
 	return gcm.SaveGlobalConfig(defaultConfig)
+}
+
+func boolPtr(v bool) *bool { return &v }
+
+// ShellLogHighlightEnabled 日志高亮是否开启（缺省 true）
+func ShellLogHighlightEnabled(cfg *GlobalConfig) bool {
+	if cfg == nil || cfg.ShellLogHighlight == nil {
+		return true
+	}
+	return *cfg.ShellLogHighlight
 }
 
 // AddMachine 添加或更新机器配置（按 ID）

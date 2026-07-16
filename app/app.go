@@ -1270,6 +1270,12 @@ func (a *App) GetSystemSettings() (*data.GlobalConfig, error) {
 	if cfg != nil {
 		cfg.ShellMonitorIntervalMs = normalizeShellMonitorIntervalMs(cfg.ShellMonitorIntervalMs)
 		normalizeProxySettings(&cfg.ProxySettings)
+		if cfg.ShellLogHighlight == nil {
+			v := true
+			cfg.ShellLogHighlight = &v
+		}
+		cfg.ShellLogHighlightColors = data.NormalizeShellLogHighlightColors(cfg.ShellLogHighlightColors)
+		cfg.ShellLogHighlightDisabled = data.NormalizeShellLogHighlightDisabled(cfg.ShellLogHighlightDisabled)
 	}
 	return cfg, nil
 }
@@ -1296,6 +1302,8 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	normalizeProxySettings(&config.ProxySettings)
 	config.ShellMonitorIntervalMs = normalizeShellMonitorIntervalMs(config.ShellMonitorIntervalMs)
 	config.ShellMonitorIntervalSec = 0
+	config.ShellLogHighlightColors = data.NormalizeShellLogHighlightColors(config.ShellLogHighlightColors)
+	config.ShellLogHighlightDisabled = data.NormalizeShellLogHighlightDisabled(config.ShellLogHighlightDisabled)
 	if err := a.configManager.SaveGlobalConfig(config); err != nil {
 		return err
 	}
@@ -1308,8 +1316,11 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	if a.ctx != nil {
 		wailsRuntime.EventsEmit(a.ctx, "theme:changed", config.ThemeSettings)
 		wailsRuntime.EventsEmit(a.ctx, "system-settings:changed", map[string]any{
-			"shellMonitorIntervalMs": config.ShellMonitorIntervalMs,
-			"proxySettings":          config.ProxySettings,
+			"shellMonitorIntervalMs":  config.ShellMonitorIntervalMs,
+			"shellLogHighlight":        data.ShellLogHighlightEnabled(config),
+			"shellLogHighlightColors":  config.ShellLogHighlightColors,
+			"shellLogHighlightDisabled": config.ShellLogHighlightDisabled,
+			"proxySettings":            config.ProxySettings,
 		})
 	}
 	return nil

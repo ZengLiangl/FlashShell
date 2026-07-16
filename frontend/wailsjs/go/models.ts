@@ -107,6 +107,34 @@ export namespace data {
 	        this.password = source["password"];
 	    }
 	}
+	export class ShellLogHighlightColors {
+	    timestamp: string;
+	    threadId: string;
+	    info: string;
+	    debug: string;
+	    warn: string;
+	    error: string;
+	    logger: string;
+	    sql: string;
+	    label: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShellLogHighlightColors(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.timestamp = source["timestamp"];
+	        this.threadId = source["threadId"];
+	        this.info = source["info"];
+	        this.debug = source["debug"];
+	        this.warn = source["warn"];
+	        this.error = source["error"];
+	        this.logger = source["logger"];
+	        this.sql = source["sql"];
+	        this.label = source["label"];
+	    }
+	}
 	export class ProxySettings {
 	    mode: string;
 	    type: string;
@@ -176,6 +204,9 @@ export namespace data {
 	    themeSettings: ThemeSettings;
 	    proxySettings: ProxySettings;
 	    shellMonitorIntervalMs: number;
+	    shellLogHighlight?: boolean;
+	    shellLogHighlightColors: ShellLogHighlightColors;
+	    shellLogHighlightDisabled: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new GlobalConfig(source);
@@ -195,6 +226,9 @@ export namespace data {
 	        this.themeSettings = this.convertValues(source["themeSettings"], ThemeSettings);
 	        this.proxySettings = this.convertValues(source["proxySettings"], ProxySettings);
 	        this.shellMonitorIntervalMs = source["shellMonitorIntervalMs"];
+	        this.shellLogHighlight = source["shellLogHighlight"];
+	        this.shellLogHighlightColors = this.convertValues(source["shellLogHighlightColors"], ShellLogHighlightColors);
+	        this.shellLogHighlightDisabled = source["shellLogHighlightDisabled"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -275,6 +309,7 @@ export namespace data {
 	        this.terminalPreset = source["terminalPreset"];
 	    }
 	}
+	
 	export class ShortcutBinding {
 	    key: string;
 	    useMod: boolean;

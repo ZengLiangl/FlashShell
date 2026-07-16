@@ -27,6 +27,15 @@ import { EventsOn, EventsOff } from '../../../wailsjs/runtime/runtime'
 import { registerShellWriter } from '../../utils/shellOutputBuffer'
 import { useTheme } from '../../composables/useTheme'
 import { terminalThemeForPreset, getTerminalFont } from '../../utils/themePresets'
+import {
+  highlightShellChunk,
+  isProbablyBinary,
+  mergeLogHighlightConfig,
+  mergeLogHighlightColors,
+  mergeLogHighlightRules,
+  rulesToDisabled,
+  DEFAULT_SHELL_LOG_COLORS,
+} from '../../utils/shellLogHighlight'
 
 export default {
   name: 'ShellTerminal',
@@ -56,6 +65,9 @@ export default {
     let lastSearchResults = { resultIndex: -1, resultCount: 0 }
     let cwdSyncTimer = null
     let inputLine = ''
+    let logHighlightEnabled = true
+    let logHighlightConfig = mergeLogHighlightConfig(null)
+    const textDecoder = new TextDecoder('utf-8')
 
     const SEARCH_DECORATIONS = {
       // 普通匹配：淡琥珀色；当前定位：蓝色，和选区颜色一致便于辨认
@@ -132,6 +144,38 @@ export default {
         bytes[i] = binary.charCodeAt(i)
       }
       return bytes
+    }
+
+    const writeHighlighted = (terminal, bytes) => {
+      if (!logHighlightEnabled || isProbablyBinary(bytes)) {
+        terminal.write(bytes)
+        return
+      }
+      try {
+        const text = textDecoder.decode(bytes, { stream: true })
+        terminal.write(highlightShellChunk(text, logHighlightConfig))
+      } catch {
+        terminal.write(bytes)
+      }
+    }
+
+    const loadLogHighlightSetting = async () => {
+      try {
+        const cfg = await App.GetSystemSettings()
+        logHighlightEnabled = cfg?.shellLogHighlight !== false
+        logHighlightConfig = mergeLogHighlightConfig(cfg)
+      } catch {
+        logHighlightEnabled = true
+      }
+    }
+
+    const onSystemSettingsChanged = (payload) => {
+      if (payload && Object.prototype.hasOwnProperty.call(payload, 'shellLogHighlight')) {
+        logHighlightEnabled = payload.shellLogHighlight !== false
+      }
+      if (payload?.shellLogHighlightColors || payload?.shellLogHighlightDisabled) {
+        logHighlightConfig = mergeLogHighlightConfig(payload)
+      }
     }
 
     const clearFitTimers = () => {
@@ -418,7 +462,7 @@ export default {
     const attachWriter = (terminal) => {
       unregisterWriter?.()
       unregisterWriter = registerShellWriter(props.machineName, {
-        writeData: (b64) => terminal.write(decodeBase64(b64)),
+        writeData: (b64) => writeHighlighted(terminal, decodeBase64(b64)),
         writeLine: (line) => terminal.writeln(`\x1b[33m${line}\x1b[0m`),
         clear: () => terminal.clear(),
       })
@@ -510,14 +554,17 @@ export default {
     }
 
     onMounted(() => {
+      loadLogHighlightSetting()
       if (props.active && props.viewVisible) initTerminal()
       EventsOn('theme:changed', onThemeChanged)
+      EventsOn('system-settings:changed', onSystemSettingsChanged)
       window.addEventListener('click', hideContextMenu)
       window.addEventListener('blur', hideContextMenu)
     })
 
     onUnmounted(() => {
       EventsOff('theme:changed')
+      EventsOff('system-settings:changed')
       window.removeEventListener('click', hideContextMenu)
       window.removeEventListener('blur', hideContextMenu)
       window.removeEventListener('resize', scheduleFit)

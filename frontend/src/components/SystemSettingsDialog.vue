@@ -40,6 +40,56 @@
                         <span class="system-setting-unit">毫秒</span>
                     </div>
                 </div>
+                <div class="system-setting-row">
+                    <div class="system-setting-text">
+                        <span class="system-setting-label">日志高亮</span>
+                        <span class="system-setting-hint">识别时间戳 / 级别 / SQL 等关键字并着色（已有 ANSI 颜色的输出不受影响）</span>
+                    </div>
+                    <div class="system-setting-control">
+                        <el-switch v-model="form.shellLogHighlight" size="small" />
+                    </div>
+                </div>
+                <div v-if="form.shellLogHighlight" class="log-hl-colors-block">
+                    <div class="block-label">高亮配色</div>
+                    <div class="log-hl-colors-head">
+                        <p class="log-hl-colors-hint">
+                            适用于 tail -f、less -f 等查看日志；可关闭单项关键字高亮
+                        </p>
+                        <el-button size="small" text type="primary" @click="resetLogHighlightConfig">
+                            恢复默认配置
+                        </el-button>
+                    </div>
+                    <div class="log-hl-colors-grid">
+                        <div
+                            v-for="item in logColorItems"
+                            :key="item.key"
+                            class="log-hl-color-row"
+                        >
+                            <span class="log-hl-color-label">{{ item.label }}</span>
+                            <div class="log-hl-color-actions">
+                                <el-switch
+                                    v-model="form.shellLogHighlightRules[item.key]"
+                                    size="small"
+                                />
+                                <el-color-picker
+                                    v-model="form.shellLogHighlightColors[item.key]"
+                                    size="small"
+                                    color-format="hex"
+                                    :predefine="logColorPredefine"
+                                    :disabled="!form.shellLogHighlightRules[item.key]"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <div class="log-hl-preview">
+                        <div class="block-label">预览</div>
+                        <pre class="log-hl-preview-line"><span
+                            v-for="(part, idx) in logHighlightPreviewParts"
+                            :key="idx"
+                            :style="part.color ? { color: part.color } : null"
+                        >{{ part.text }}</span></pre>
+                    </div>
+                </div>
             </section>
 
             <!-- 账号 -->
@@ -349,6 +399,16 @@ import {
     mergeUiFontOptions,
     mergeTerminalFontOptions,
 } from '../utils/themePresets'
+import {
+    DEFAULT_SHELL_LOG_COLORS,
+    mergeLogHighlightColors,
+    mergeLogHighlightRules,
+    rulesToDisabled,
+    logHighlightPreviewSegments,
+} from '../utils/shellLogHighlight'
+
+const LOG_HIGHLIGHT_SAMPLE =
+    '2024-07-16 14:40:35.719 9992000288484 INFO o.g.f.c.d.r.Framework - Preparing: SELECT id FROM t'
 
 marked.setOptions({
     breaks: true,
@@ -398,7 +458,36 @@ export default {
                 shellLineHeight: 1.2,
             },
             shellMonitorIntervalMs: 1000,
+            shellLogHighlight: true,
+            shellLogHighlightColors: { ...DEFAULT_SHELL_LOG_COLORS },
+            shellLogHighlightRules: mergeLogHighlightRules([]),
         })
+
+        const logColorItems = [
+            { key: 'timestamp', label: '时间戳' },
+            { key: 'threadId', label: '线程号' },
+            { key: 'info', label: 'INFO' },
+            { key: 'debug', label: 'DEBUG' },
+            { key: 'warn', label: 'WARN' },
+            { key: 'error', label: 'ERROR' },
+            { key: 'logger', label: 'Logger' },
+            { key: 'sql', label: 'SQL 关键字' },
+            { key: 'label', label: 'SQL 标签' },
+        ]
+        const logColorPredefine = Object.values(DEFAULT_SHELL_LOG_COLORS)
+
+        const logHighlightPreviewParts = computed(() =>
+            logHighlightPreviewSegments(
+                LOG_HIGHLIGHT_SAMPLE,
+                form.shellLogHighlightColors,
+                form.shellLogHighlightRules,
+            ),
+        )
+
+        const resetLogHighlightConfig = () => {
+            Object.assign(form.shellLogHighlightColors, DEFAULT_SHELL_LOG_COLORS)
+            Object.assign(form.shellLogHighlightRules, mergeLogHighlightRules([]))
+        }
 
         const uiAccents = UI_ACCENTS
         const terminalPresets = TERMINAL_PRESETS
@@ -488,6 +577,15 @@ theme preview · ${theme.foreground}`
             form.shellMonitorIntervalMs = Number.isFinite(interval) && interval >= 200
                 ? Math.min(60000, Math.round(interval))
                 : 1000
+            form.shellLogHighlight = config.shellLogHighlight !== false
+            Object.assign(
+                form.shellLogHighlightColors,
+                mergeLogHighlightColors(config.shellLogHighlightColors),
+            )
+            Object.assign(
+                form.shellLogHighlightRules,
+                mergeLogHighlightRules(config.shellLogHighlightDisabled),
+            )
             accounts.value = await App.GetGlobalAccounts() || []
             const session = await App.GetSessionInfo()
             sessionId.value = session.sessionId || ''
@@ -694,6 +792,9 @@ theme preview · ${theme.foreground}`
                 const config = await App.GetSystemSettings()
                 config.themeSettings = { ...form.themeSettings }
                 config.shellMonitorIntervalMs = form.shellMonitorIntervalMs
+                config.shellLogHighlight = !!form.shellLogHighlight
+                config.shellLogHighlightColors = mergeLogHighlightColors(form.shellLogHighlightColors)
+                config.shellLogHighlightDisabled = rulesToDisabled(form.shellLogHighlightRules)
                 await App.SaveSystemSettings(config)
                 applyThemeSettings(form.themeSettings)
                 ElMessage.success('系统设置已保存')
@@ -711,6 +812,10 @@ theme preview · ${theme.foreground}`
             settingsTab,
             settingsTabs,
             form,
+            logColorItems,
+            logColorPredefine,
+            logHighlightPreviewParts,
+            resetLogHighlightConfig,
             uiAccents,
             terminalPresets,
             uiFonts,
@@ -1060,6 +1165,81 @@ theme preview · ${theme.foreground}`
     gap: 16px;
     padding: 12px 0;
     border-bottom: 1px solid var(--app-border);
+}
+
+.log-hl-colors-block {
+    margin-top: 4px;
+    padding: 12px 14px;
+    border: 1px solid var(--app-border);
+    border-radius: var(--app-radius-md, 8px);
+    background: var(--app-panel-bg, transparent);
+}
+
+.log-hl-colors-hint {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--app-text-muted);
+}
+
+.log-hl-colors-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.log-hl-colors-head .el-button {
+  flex-shrink: 0;
+  padding: 0 4px;
+  height: auto;
+}
+
+.log-hl-colors-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px 16px;
+}
+
+.log-hl-color-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.log-hl-color-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.log-hl-color-label {
+    font-size: 12px;
+    color: var(--app-text-secondary);
+}
+
+.log-hl-preview {
+    margin-top: 14px;
+}
+
+.log-hl-preview-line {
+    margin: 8px 0 10px;
+    padding: 10px 12px;
+    border-radius: var(--app-radius-md, 8px);
+    background: var(--terminal-bg, #1e1e1e);
+    color: var(--terminal-fg, #d4d4d4);
+    font-family: var(--app-font-family-mono, Consolas, 'Courier New', monospace);
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-all;
+    overflow-x: auto;
 }
 
 .system-setting-text {
