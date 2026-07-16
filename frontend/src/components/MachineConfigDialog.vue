@@ -68,7 +68,12 @@
                                 <el-icon><Plus /></el-icon>
                             </el-button>
                         </el-tooltip>
-                        <el-dropdown trigger="click" @command="handleAddCommand">
+                        <el-dropdown
+                            trigger="hover"
+                            :show-timeout="120"
+                            :hide-timeout="160"
+                            @command="handleAddCommand"
+                        >
                             <el-button size="small" circle title="导入机器">
                                 <el-icon><Upload /></el-icon>
                             </el-button>

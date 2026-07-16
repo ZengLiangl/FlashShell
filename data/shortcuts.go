@@ -15,27 +15,29 @@ type ShortcutBinding struct {
 
 // ShortcutSettings 可自定义系统快捷键（独立 JSON 文件）
 type ShortcutSettings struct {
-	NewWindow      ShortcutBinding `json:"newWindow"`
-	MachineConfig  ShortcutBinding `json:"machineConfig"`
-	EnvVars        ShortcutBinding `json:"envVars"`
-	SystemSettings ShortcutBinding `json:"systemSettings"`
-	RefreshConfig  ShortcutBinding `json:"refreshConfig"`
-	Find           ShortcutBinding `json:"find"`
-	Copy           ShortcutBinding `json:"copy"`
-	ClearOutput    ShortcutBinding `json:"clearOutput"`
+	NewWindow          ShortcutBinding `json:"newWindow"`
+	MachineConfig      ShortcutBinding `json:"machineConfig"`
+	ConnectionManager  ShortcutBinding `json:"connectionManager"`
+	EnvVars            ShortcutBinding `json:"envVars"`
+	SystemSettings     ShortcutBinding `json:"systemSettings"`
+	RefreshConfig      ShortcutBinding `json:"refreshConfig"`
+	Find               ShortcutBinding `json:"find"`
+	Copy               ShortcutBinding `json:"copy"`
+	ClearOutput        ShortcutBinding `json:"clearOutput"`
 }
 
 // DefaultShortcutSettings 默认快捷键
 func DefaultShortcutSettings() ShortcutSettings {
 	return ShortcutSettings{
-		NewWindow:      ShortcutBinding{Key: "n", UseMod: true},
-		MachineConfig:  ShortcutBinding{Key: "m", UseMod: true},
-		EnvVars:        ShortcutBinding{Key: "e", UseMod: true},
-		SystemSettings: ShortcutBinding{Key: ",", UseMod: true},
-		RefreshConfig:  ShortcutBinding{Key: "r", UseMod: true},
-		Find:           ShortcutBinding{Key: "f", UseMod: true},
-		Copy:           ShortcutBinding{Key: "c", UseMod: true},
-		ClearOutput:    ShortcutBinding{Key: "k", UseMod: true},
+		NewWindow:         ShortcutBinding{Key: "n", UseMod: true},
+		MachineConfig:     ShortcutBinding{Key: "m", UseMod: true},
+		ConnectionManager: ShortcutBinding{Key: "e", UseMod: true},
+		EnvVars:           ShortcutBinding{Key: "u", UseMod: true},
+		SystemSettings:    ShortcutBinding{Key: ",", UseMod: true},
+		RefreshConfig:     ShortcutBinding{Key: "r", UseMod: true},
+		Find:              ShortcutBinding{Key: "f", UseMod: true},
+		Copy:              ShortcutBinding{Key: "c", UseMod: true},
+		ClearOutput:       ShortcutBinding{Key: "k", UseMod: true},
 	}
 }
 
@@ -55,7 +57,13 @@ func fillShortcutDefaults(s *ShortcutSettings) {
 	if s.MachineConfig.Key == "" {
 		s.MachineConfig = def.MachineConfig
 	}
-	if s.EnvVars.Key == "" {
+	// 旧版默认 Mod+E 绑定环境变量；升级后改为连接管理器，环境变量迁到 Mod+U
+	if s.ConnectionManager.Key == "" {
+		s.ConnectionManager = def.ConnectionManager
+		if s.EnvVars.Key == "" || s.EnvVars.Key == "e" {
+			s.EnvVars = def.EnvVars
+		}
+	} else if s.EnvVars.Key == "" {
 		s.EnvVars = def.EnvVars
 	}
 	if s.SystemSettings.Key == "" {

@@ -46,7 +46,7 @@
 
     <!-- Shell 视图：挂载后用 v-show 保留会话，可与任务并行 -->
     <div v-show="activeView === 'shell'" class="shell-view-host">
-      <ShellWorkspace v-if="shellMounted" :active="activeView === 'shell'"
+      <ShellWorkspace ref="shellWorkspaceRef" v-if="shellMounted" :active="activeView === 'shell'"
         :left-panel-width="Math.min(leftPanelWidth, 320)" :is-resizing="isResizing" :app-info="statusBarInfo"
         :machines="shellMachines" :sessions="shellSessions" :workspace-sessions="workspaceSessions"
         :connected-count="connectedCount" :open-session-count="openSessionCount" v-model:active-machine="activeMachine"
@@ -104,7 +104,7 @@ import ConfigEditorDialog from "./components/ConfigEditorDialog.vue";
 import SettingsHubDialog from "./components/SettingsHubDialog.vue";
 import AppMenuBar from "./components/AppMenuBar.vue";
 import { useTheme } from "./composables/useTheme";
-import { mergeShortcuts, matchesShortcut } from "./utils/shortcuts";
+import { mergeShortcuts, matchesShortcut, isFormFieldTarget, isXtermInput } from "./utils/shortcuts";
 import { hasOverlayAboveSettingsHub } from "./utils/dialogOverlay";
 import { setCachedUpdateCheck, isUsableUpdateResult } from "./utils/updateCheckCache";
 
@@ -164,6 +164,7 @@ export default {
     const activeView = ref('home');
     const shellMounted = ref(false);
     const shellMode = computed(() => activeView.value === 'shell');
+    const shellWorkspaceRef = ref(null);
     const homePageRef = ref(null);
     const {
       sessions: shellSessions,
@@ -460,6 +461,21 @@ export default {
       activeView.value = 'shell';
       await loadShellMachines();
       await syncSessions();
+    };
+
+    const openConnectionManager = async () => {
+      const firstMount = !shellMounted.value;
+      await enterShellMode();
+      await nextTick();
+      if (firstMount) await nextTick();
+      // 首次挂载时 ref 可能晚一拍，短重试
+      for (let i = 0; i < 5; i++) {
+        if (shellWorkspaceRef.value?.openPicker) {
+          shellWorkspaceRef.value.openPicker();
+          return;
+        }
+        await nextTick();
+      }
     };
 
     const leaveShellMode = () => {
@@ -770,6 +786,7 @@ export default {
     };
 
     // 键盘快捷键处理（可在系统设置中自定义，保存至 shortcuts.json）
+    // 使用捕获阶段，确保终端 / xterm 聚焦时也能收到
     const handleKeyDown = (e) => {
       // Escape：只关最上层弹框；有子 Dialog / MessageBox 时不关系统设置
       // 放在输入框判断之前，避免焦点在搜索框时无法关闭设置壳
@@ -781,60 +798,76 @@ export default {
         return;
       }
 
-      // 检查是否在输入框中，如果是则不处理快捷键
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.contentEditable === 'true') {
+      // 普通表单输入中不抢快捷键；xterm 隐藏 textarea 除外
+      if (isFormFieldTarget(e.target)) {
         return;
       }
 
       const sc = shortcutMap.value;
+      const inXterm = isXtermInput(e.target);
 
-      // 终端搜索 — 任务模式；Shell 模式由 ShellWorkspace 处理
-      if (matchesShortcut(e, sc.find)) {
+      const take = () => {
         e.preventDefault();
-        if (activeView.value !== 'shell') {
+        e.stopPropagation();
+      };
+
+      // 终端搜索 — 任务模式 / Shell 模式统一在此处理
+      if (matchesShortcut(e, sc.find)) {
+        take();
+        if (activeView.value === 'shell') {
+          shellWorkspaceRef.value?.openSearch?.();
+        } else {
           terminalSearchVisible.value = true;
         }
         return;
       }
 
+      // Ctrl+C：终端内交给 shell（SIGINT / 选区复制由终端处理），不抢
       if (matchesShortcut(e, sc.copy)) {
-        e.preventDefault();
+        if (inXterm) return;
+        take();
         copySelectedText();
         return;
       }
 
       if (matchesShortcut(e, sc.clearOutput)) {
-        e.preventDefault();
+        take();
         clearOutput();
         return;
       }
 
       if (matchesShortcut(e, sc.machineConfig)) {
-        e.preventDefault();
+        take();
         openMachineConfig();
         return;
       }
 
+      if (matchesShortcut(e, sc.connectionManager)) {
+        take();
+        openConnectionManager();
+        return;
+      }
+
       if (matchesShortcut(e, sc.envVars)) {
-        e.preventDefault();
+        take();
         openWorkPathConfig();
         return;
       }
 
       if (matchesShortcut(e, sc.newWindow)) {
-        e.preventDefault();
+        take();
         App.NewWindow();
         return;
       }
 
       if (matchesShortcut(e, sc.refreshConfig)) {
-        e.preventDefault();
+        take();
         App.RefreshConfigMenuWithEvent();
         return;
       }
 
       if (matchesShortcut(e, sc.systemSettings)) {
-        e.preventDefault();
+        take();
         App.OpenSystemSettings();
         return;
       }
@@ -939,7 +972,7 @@ export default {
       });
 
       // 添加全局键盘事件监听器
-      document.addEventListener('keydown', handleKeyDown);
+      document.addEventListener('keydown', handleKeyDown, true);
 
       // 监听统一的操作结果事件
       EventsOn("operation:result", async (event) => {
@@ -961,6 +994,9 @@ export default {
       // 监听打开设置相关事件（统一进 Settings Hub）
       EventsOn("open:machine-config", async () => {
         await openMachineConfig();
+      });
+      EventsOn("open:connection-manager", async () => {
+        await openConnectionManager();
       });
       EventsOn("open:workpath-config", async () => {
         await openWorkPathConfig();
@@ -1230,12 +1266,13 @@ export default {
     };
 
     onUnmounted(() => {
-      document.removeEventListener('keydown', handleKeyDown);
+      document.removeEventListener('keydown', handleKeyDown, true);
       try {
         EventsOff(
           "operation:result",
           "config:changed",
           "open:machine-config",
+          "open:connection-manager",
           "open:workpath-config",
           "open:about",
           "open:config-editor",
@@ -1341,6 +1378,7 @@ export default {
       openSessionCount,
       enterShellMode,
       leaveShellMode,
+      openConnectionManager,
       openShellAndConnect,
       connectShell,
       connectLocalShell,
@@ -1351,6 +1389,7 @@ export default {
       openShellMachineEdit,
       onMachinesChanged,
       homePageRef,
+      shellWorkspaceRef,
       testShellConnection,
     };
   },

@@ -32,7 +32,12 @@
         <el-button class="add-session-btn" size="small" text title="新建本机" @click="$emit('add-local')">
           <el-icon :size="15"><Plus /></el-icon>
         </el-button>
-        <el-dropdown trigger="click" @command="onAddCommand">
+        <el-dropdown
+          trigger="hover"
+          :show-timeout="120"
+          :hide-timeout="160"
+          @command="onAddCommand"
+        >
           <el-button class="add-session-more" size="small" text title="更多连接方式">
             <el-icon :size="12"><ArrowDown /></el-icon>
           </el-button>

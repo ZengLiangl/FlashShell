@@ -102,7 +102,6 @@
               @layout-change="onFilePanelLayout"
               @cwd-change="(dir) => onPanelCwdChange(am, dir)"
               @clear="clearTerminal"
-              @refresh="refreshSearch"
               @toggle-search="toggleSearch"
               @search-next="findNext"
               @search-prev="findPrevious"
@@ -132,6 +131,7 @@
       @connect="onPickerConnect"
       @edit-machine="(m) => $emit('edit-machine', m)"
       @add-machine="$emit('add-machine')"
+      @add-local="onPickerAddLocal"
     />
   </div>
 </template>
@@ -149,7 +149,6 @@ import ShellFilePanel from '../components/shell/ShellFilePanel.vue'
 import ShellTransferPanel from '../components/shell/ShellTransferPanel.vue'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
-import { mergeShortcuts, matchesShortcut } from '../utils/shortcuts'
 
 export default {
   name: 'ShellWorkspace',
@@ -291,39 +290,13 @@ export default {
       })
     }
 
-    const findShortcut = ref(mergeShortcuts().find)
-
-    const handleKeyDown = (e) => {
-      if (!props.active) return
-      if (matchesShortcut(e, findShortcut.value)) {
-        e.preventDefault()
-        e.stopPropagation()
-        openSearch()
-      }
-    }
-
-    const loadFindShortcut = async () => {
-      try {
-        findShortcut.value = mergeShortcuts(await App.GetShortcutSettings()).find
-      } catch {
-        findShortcut.value = mergeShortcuts().find
-      }
-    }
-
     onMounted(() => {
-      document.addEventListener('keydown', handleKeyDown, true)
       loadHistory()
-      loadFindShortcut()
       EventsOn('shell:cwd', onShellCwd)
-      EventsOn('shortcuts:changed', (data) => {
-        findShortcut.value = mergeShortcuts(data).find
-      })
     })
 
     onUnmounted(() => {
-      document.removeEventListener('keydown', handleKeyDown, true)
       EventsOff('shell:cwd')
-      EventsOff('shortcuts:changed')
     })
 
     /** 终端 cd 后同步 SFTP（直接驱动面板，不依赖 shell:cwd 事件） */
@@ -380,14 +353,6 @@ export default {
       searchMatchSummary.value = formatSearchSummary(result)
     }
 
-    const refreshSearch = () => {
-      if (searchQuery.value.trim()) {
-        findNext()
-      } else {
-        tabsRef.value?.fitActive?.()
-      }
-    }
-
     const toggleLeftPanel = async () => {
       leftCollapsed.value = !leftCollapsed.value
       edgeHover.value = false
@@ -414,6 +379,15 @@ export default {
 
     const onAddLocal = () => {
       emit('add-local')
+    }
+
+    const onPickerAddLocal = () => {
+      pickerVisible.value = false
+      emit('add-local')
+    }
+
+    const openPicker = () => {
+      pickerVisible.value = true
     }
 
     const onToggleConnection = () => {
@@ -521,6 +495,7 @@ export default {
       searchQuery,
       searchMatchSummary,
       pickerVisible,
+      openPicker,
       transferVisible,
       transferActiveCount,
       historyRecords,
@@ -535,7 +510,6 @@ export default {
       closeSearch,
       findNext,
       findPrevious,
-      refreshSearch,
       toggleLeftPanel,
       onHistoryConnect,
       onPickerConnect,

@@ -271,6 +271,7 @@ export namespace data {
 	export class ShortcutSettings {
 	    newWindow: ShortcutBinding;
 	    machineConfig: ShortcutBinding;
+	    connectionManager: ShortcutBinding;
 	    envVars: ShortcutBinding;
 	    systemSettings: ShortcutBinding;
 	    refreshConfig: ShortcutBinding;
@@ -286,6 +287,7 @@ export namespace data {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.newWindow = this.convertValues(source["newWindow"], ShortcutBinding);
 	        this.machineConfig = this.convertValues(source["machineConfig"], ShortcutBinding);
+	        this.connectionManager = this.convertValues(source["connectionManager"], ShortcutBinding);
 	        this.envVars = this.convertValues(source["envVars"], ShortcutBinding);
 	        this.systemSettings = this.convertValues(source["systemSettings"], ShortcutBinding);
 	        this.refreshConfig = this.convertValues(source["refreshConfig"], ShortcutBinding);

@@ -270,6 +270,10 @@ export function OpenConfigEditor() {
   return window['go']['app']['App']['OpenConfigEditor']();
 }
 
+export function OpenConnectionManager() {
+  return window['go']['app']['App']['OpenConnectionManager']();
+}
+
 export function OpenCurrentConfigWithEvent() {
   return window['go']['app']['App']['OpenCurrentConfigWithEvent']();
 }

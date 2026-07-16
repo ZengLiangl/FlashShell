@@ -957,7 +957,11 @@ func (a *App) CreateApplicationMenu() *menu.Menu {
 		a.OpenMachineConfig()
 	})
 
-	configMenu.AddText("环境变量", keys.CmdOrCtrl("e"), func(_ *menu.CallbackData) {
+	configMenu.AddText("连接管理器", keys.CmdOrCtrl("e"), func(_ *menu.CallbackData) {
+		a.OpenConnectionManager()
+	})
+
+	configMenu.AddText("环境变量", keys.CmdOrCtrl("u"), func(_ *menu.CallbackData) {
 		// 打开环境变量配置对话框
 		a.OpenWorkPathConfig()
 	})
@@ -1204,6 +1208,15 @@ func (a *App) OpenWorkPathConfig() {
 	} else {
 		fmt.Println("警告: ctx 为 nil，无法发送事件")
 		a.emitOperationEvent(define.OpTypeEnvConfig, "无法发送事件，ctx 为 nil", define.MsgTypeError, false, nil)
+	}
+}
+
+// OpenConnectionManager 打开 Shell 连接管理器
+func (a *App) OpenConnectionManager() {
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "open:connection-manager", map[string]interface{}{
+			"timestamp": time.Now().Unix(),
+		})
 	}
 }
 

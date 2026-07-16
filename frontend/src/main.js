@@ -6,6 +6,7 @@ import './styles/theme.css'
 import './styles/machine-list.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
 import App from './App.vue'
+import { installPopperAutoClose } from './utils/popperAutoClose'
 
 const app = createApp(App)
 
@@ -17,3 +18,4 @@ for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
 }
 
 app.mount('#app')
+installPopperAutoClose()

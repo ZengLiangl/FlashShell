@@ -284,3 +284,102 @@ html.dark .app-menu-bar .menu-inner {
   height: 28px;
   padding: 0;
 }
+
+/* ========== 全局下拉：圆角 + 悬停高亮 ========== */
+.el-dropdown__popper.el-popper,
+.el-select__popper.el-popper,
+.el-autocomplete__popper.el-popper,
+.el-cascader__dropdown.el-popper,
+.el-popper.is-pure.is-light.el-dropdown__popper,
+.el-popper.is-light.el-select__popper {
+  border-radius: var(--app-radius-xl, 12px) !important;
+  overflow: hidden;
+  border: 1px solid var(--app-border) !important;
+  background: var(--app-card-bg, var(--app-panel-bg)) !important;
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--app-text) 12%, transparent) !important;
+}
+
+.el-dropdown__popper .el-popper__arrow,
+.el-select__popper .el-popper__arrow,
+.el-autocomplete__popper .el-popper__arrow {
+  display: none;
+}
+
+.el-dropdown-menu {
+  padding: 6px !important;
+  border: none !important;
+  border-radius: var(--app-radius-xl, 12px) !important;
+  background: transparent !important;
+}
+
+.el-dropdown-menu__item {
+  border-radius: var(--app-radius-md, 8px) !important;
+  margin: 0 !important;
+  padding: 8px 12px !important;
+  line-height: 1.4 !important;
+}
+
+.el-dropdown-menu__item:not(.is-disabled):hover,
+.el-dropdown-menu__item:not(.is-disabled):focus {
+  background: var(--app-accent-bg) !important;
+  color: var(--app-accent-color) !important;
+}
+
+.el-dropdown-menu__item--divided {
+  margin-top: 6px !important;
+  border-top: 1px solid var(--app-border) !important;
+}
+
+.el-dropdown-menu__item--divided::before {
+  display: none !important;
+}
+
+.el-select-dropdown {
+  border: none !important;
+  border-radius: var(--app-radius-xl, 12px) !important;
+  background: transparent !important;
+  padding: 6px !important;
+}
+
+.el-select-dropdown__list {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+.el-select-dropdown__item {
+  border-radius: var(--app-radius-md, 8px) !important;
+  margin: 0 !important;
+  padding: 0 12px !important;
+  height: 34px !important;
+  line-height: 34px !important;
+}
+
+.el-select-dropdown__item.is-hovering,
+.el-select-dropdown__item:hover {
+  background: var(--app-accent-bg) !important;
+  color: var(--app-accent-color) !important;
+}
+
+.el-select-dropdown__item.is-selected {
+  color: var(--app-accent-color) !important;
+  font-weight: 600;
+  background: color-mix(in srgb, var(--app-accent-color) 10%, transparent);
+}
+
+.el-select-dropdown__item.is-selected.is-hovering,
+.el-select-dropdown__item.is-selected:hover {
+  background: var(--app-accent-bg) !important;
+}
+
+.el-select__wrapper {
+  border-radius: var(--app-radius-md, 8px) !important;
+}
+
+.el-autocomplete-suggestion li {
+  border-radius: var(--app-radius-md, 8px) !important;
+}
+
+.el-autocomplete-suggestion li:hover {
+  background: var(--app-accent-bg) !important;
+  color: var(--app-accent-color) !important;
+}

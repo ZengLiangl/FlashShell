@@ -19,10 +19,11 @@
         </template>
       </el-input>
       <div class="icon-actions">
+        <el-tooltip content="本机终端" placement="top">
+          <el-button class="picker-tool-btn" size="small" circle :icon="Monitor" @click="onAddLocal" />
+        </el-tooltip>
         <el-tooltip content="添加机器" placement="top">
-          <el-button size="small" type="primary" circle @click="$emit('add-machine')">
-            <el-icon><Plus /></el-icon>
-          </el-button>
+          <el-button class="picker-tool-btn" size="small" circle :icon="Plus" @click="$emit('add-machine')" />
         </el-tooltip>
       </div>
     </div>
@@ -44,19 +45,20 @@
 
 <script>
 import { computed, ref } from 'vue'
+import { Monitor, Plus, Search } from '@element-plus/icons-vue'
 import { machineMatchesKeyword } from '../../utils/machineGroups'
 import MachineConnectList from './MachineConnectList.vue'
 
 export default {
   name: 'ShellMachinePickerDialog',
-  components: { MachineConnectList },
+  components: { MachineConnectList, Search },
   props: {
     modelValue: { type: Boolean, default: false },
     machines: { type: Array, default: () => [] },
     sessions: { type: Array, default: () => [] },
     connectingName: { type: String, default: '' },
   },
-  emits: ['update:modelValue', 'connect', 'edit-machine', 'add-machine'],
+  emits: ['update:modelValue', 'connect', 'edit-machine', 'add-machine', 'add-local'],
   setup(props, { emit }) {
     const keyword = ref('')
 
@@ -76,11 +78,19 @@ export default {
 
     const onConnect = (name) => emit('connect', name)
 
+    const onAddLocal = () => {
+      emit('add-local')
+      visibleProxy.value = false
+    }
+
     return {
+      Monitor,
+      Plus,
       visibleProxy,
       keyword,
       filteredMachines,
       onConnect,
+      onAddLocal,
     }
   },
 }
@@ -94,5 +104,35 @@ export default {
 .picker-body {
   max-height: 480px;
   overflow: auto;
+}
+</style>
+
+<!-- append-to-body 弹窗：统一圆钮盒模型，避免 default / primary 视觉大小不一致 -->
+<style>
+.machine-picker-dialog .picker-tool-btn.el-button.is-circle {
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  max-width: 28px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  box-sizing: border-box !important;
+  border-style: solid !important;
+  border-width: 1px !important;
+  font-size: 14px !important;
+  line-height: 1 !important;
+}
+
+/* default 若背景与面板同色，只剩描边会显得更小；补实心底色让外径与 primary 一致 */
+.machine-picker-dialog .picker-tool-btn.el-button--default.is-circle {
+  background-color: var(--el-fill-color-light) !important;
+  border-color: var(--el-border-color) !important;
+}
+
+.machine-picker-dialog .picker-tool-btn.el-button.is-circle .el-icon {
+  width: 14px !important;
+  height: 14px !important;
+  font-size: 14px !important;
+  margin: 0 !important;
 }
 </style>

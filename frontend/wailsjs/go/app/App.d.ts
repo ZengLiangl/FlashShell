@@ -139,6 +139,8 @@ export function OpenAbout():Promise<void>;
 
 export function OpenConfigEditor():Promise<void>;
 
+export function OpenConnectionManager():Promise<void>;
+
 export function OpenCurrentConfigWithEvent():Promise<void>;
 
 export function OpenDownloadsDirectory():Promise<void>;

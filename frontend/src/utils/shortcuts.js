@@ -4,7 +4,8 @@ import { formatShortcutLabel, isMacPlatform } from './platform'
 export const DEFAULT_SHORTCUTS = {
   newWindow: { key: 'n', useMod: true },
   machineConfig: { key: 'm', useMod: true },
-  envVars: { key: 'e', useMod: true },
+  connectionManager: { key: 'e', useMod: true },
+  envVars: { key: 'u', useMod: true },
   systemSettings: { key: ',', useMod: true },
   refreshConfig: { key: 'r', useMod: true },
   find: { key: 'f', useMod: true },
@@ -15,6 +16,7 @@ export const DEFAULT_SHORTCUTS = {
 export const SHORTCUT_LABELS = {
   newWindow: '新建窗口',
   machineConfig: '机器配置',
+  connectionManager: '连接管理器',
   envVars: '环境变量',
   systemSettings: '系统设置',
   refreshConfig: '刷新配置列表',
@@ -43,10 +45,42 @@ export function matchesShortcut(e, binding) {
   if (needMod !== hasMod) return false
   if (e.altKey) return false
 
-  const pressed = e.key === 'Escape' ? 'Escape' : String(e.key)
   const target = String(binding.key)
-  if (target === ',') return pressed === ','
-  return pressed.toLowerCase() === target.toLowerCase()
+  if (target === ',') {
+    return e.key === ',' || e.code === 'Comma'
+  }
+
+  const pressed = e.key === 'Escape' ? 'Escape' : String(e.key || '')
+  if (pressed.toLowerCase() === target.toLowerCase()) return true
+
+  // Ctrl 组合键在部分环境 e.key 不稳定，回退用 e.code（KeyE → e）
+  const code = String(e.code || '')
+  if (/^Key[A-Z]$/i.test(code)) {
+    return code.slice(3).toLowerCase() === target.toLowerCase()
+  }
+  if (/^Digit[0-9]$/.test(code)) {
+    return code.slice(5) === target
+  }
+  return false
+}
+
+/** xterm 隐藏输入框：应放行全局快捷键 */
+export function isXtermInput(el) {
+  if (!el || el.nodeType !== 1) return false
+  return !!el.classList?.contains('xterm-helper-textarea')
+}
+
+/**
+ * 是否为应跳过全局快捷键的表单输入（不含 xterm）。
+ * 终端聚焦时焦点在 textarea 上，不能当作普通输入框屏蔽。
+ */
+export function isFormFieldTarget(el) {
+  if (!el || el.nodeType !== 1) return false
+  if (isXtermInput(el)) return false
+  const tag = el.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
+  if (el.isContentEditable || el.contentEditable === 'true') return true
+  return false
 }
 
 export function formatShortcut(binding, isMac = isMacPlatform()) {

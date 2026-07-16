@@ -10,7 +10,7 @@
     </header>
 
     <div class="home-zones" :class="{ 'shell-only': !hasProjects }">
-      <section v-if="hasProjects" class="zone zone-task" aria-labelledby="zone-task-title">
+      <section class="zone zone-task" aria-labelledby="zone-task-title">
         <div class="zone-head">
           <div class="zone-label">
             <span class="zone-dot task-dot" aria-hidden="true"></span>
@@ -18,10 +18,49 @@
               <h3 id="zone-task-title">任务模式</h3>
             </div>
           </div>
+          <div class="zone-actions">
+            <el-dropdown
+              trigger="hover"
+              :show-timeout="120"
+              :hide-timeout="160"
+              @command="onConfigCommand"
+            >
+              <el-button size="small" circle title="配置文件">
+                <el-icon><FolderOpened /></el-icon>
+              </el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <template v-if="configFiles.length">
+                    <el-dropdown-item
+                      v-for="file in configFiles"
+                      :key="file"
+                      :command="`switch:${file}`"
+                    >
+                      <span class="config-item">
+                        <el-icon v-if="file === currentConfig" class="config-check"><Check /></el-icon>
+                        <span>{{ basename(file) }}</span>
+                      </span>
+                    </el-dropdown-item>
+                  </template>
+                  <el-dropdown-item v-else disabled>无法加载配置文件</el-dropdown-item>
+                  <el-dropdown-item divided command="refresh">
+                    <span>刷新配置列表</span>
+                    <span class="menu-shortcut">{{ labelOf('refreshConfig') }}</span>
+                  </el-dropdown-item>
+                  <el-dropdown-item command="open-global">打开全局配置</el-dropdown-item>
+                  <el-dropdown-item command="open-current">打开当前配置</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
         </div>
 
         <div class="zone-body">
-          <div class="item-grid">
+          <div v-if="!hasProjects" class="app-empty">
+            <p class="app-empty-title">暂无任务项目</p>
+            <p class="app-empty-desc">在业务配置中添加项目后显示在这里</p>
+          </div>
+          <div v-else class="item-grid">
             <button
               v-for="project in projects"
               :key="project.name"
@@ -104,15 +143,24 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
-import { Refresh } from '@element-plus/icons-vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { Refresh, Check, FolderOpened } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
+import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import { machineMatchesKeyword } from '../utils/machineGroups'
+import { mergeShortcuts, formatShortcut } from '../utils/shortcuts'
 import MachineConnectList from './shell/MachineConnectList.vue'
+
+function basename(filePath) {
+  if (!filePath) return ''
+  const normalized = filePath.replace(/\\/g, '/')
+  const idx = normalized.lastIndexOf('/')
+  return idx >= 0 ? normalized.slice(idx + 1) : filePath
+}
 
 export default {
   name: 'HomePage',
-  components: { MachineConnectList },
+  components: { MachineConnectList, Check, FolderOpened },
   props: {
     projects: { type: Array, required: true },
     connectedCount: { type: Number, default: 0 },
@@ -133,12 +181,60 @@ export default {
   setup(props, { emit }) {
     const machines = ref([])
     const machineKeyword = ref('')
+    const configFiles = ref([])
+    const currentConfig = ref('')
+    const shortcuts = ref(mergeShortcuts())
+
+    const labelOf = (id) => formatShortcut(shortcuts.value[id])
 
     const loadMachines = async () => {
       try {
         machines.value = await App.GetMachines() || []
       } catch {
         machines.value = []
+      }
+    }
+
+    const loadConfigMenu = async () => {
+      try {
+        const [files, current] = await Promise.all([
+          App.GetConfigFiles(),
+          App.GetCurrentConfigPath(),
+        ])
+        configFiles.value = files || []
+        currentConfig.value = current || ''
+      } catch {
+        configFiles.value = []
+        currentConfig.value = ''
+      }
+    }
+
+    const loadShortcuts = async () => {
+      try {
+        shortcuts.value = mergeShortcuts(await App.GetShortcutSettings())
+      } catch {
+        shortcuts.value = mergeShortcuts()
+      }
+    }
+
+    const onConfigCommand = (cmd) => {
+      if (cmd === 'refresh') {
+        App.RefreshConfigMenuWithEvent()
+        return
+      }
+      if (cmd === 'open-global') {
+        App.OpenGlobalConfigWithEvent()
+        return
+      }
+      if (cmd === 'open-current') {
+        App.OpenCurrentConfigWithEvent()
+        return
+      }
+      if (typeof cmd === 'string' && cmd.startsWith('switch:')) {
+        const file = cmd.slice('switch:'.length)
+        if (file && file !== currentConfig.value) {
+          App.SwitchConfigFileWithEvent(file)
+        }
       }
     }
 
@@ -157,11 +253,26 @@ export default {
     }
 
     const handleRefresh = async () => {
-      await loadMachines()
+      await Promise.all([loadMachines(), loadConfigMenu()])
       emit('refresh')
     }
 
-    onMounted(loadMachines)
+    onMounted(() => {
+      loadMachines()
+      loadConfigMenu()
+      loadShortcuts()
+      EventsOn('menu:refresh', loadConfigMenu)
+      EventsOn('config:changed', loadConfigMenu)
+      EventsOn('shortcuts:changed', (data) => {
+        shortcuts.value = mergeShortcuts(data)
+      })
+    })
+
+    onUnmounted(() => {
+      EventsOff('menu:refresh')
+      EventsOff('config:changed')
+      EventsOff('shortcuts:changed')
+    })
 
     return {
       Refresh,
@@ -169,6 +280,11 @@ export default {
       machineKeyword,
       filteredMachines,
       hasProjects,
+      configFiles,
+      currentConfig,
+      basename,
+      labelOf,
+      onConfigCommand,
       onConnectMachine,
       loadMachines,
       handleRefresh,
@@ -223,7 +339,7 @@ export default {
 }
 
 .home-zones.shell-only {
-  grid-template-columns: 1fr;
+  grid-template-columns: 1fr 1fr;
 }
 
 .zone {
@@ -246,7 +362,7 @@ export default {
 
 .zone-head {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 12px;
   padding: var(--app-space-panel-head, 16px 18px 12px);
@@ -429,6 +545,23 @@ export default {
   white-space: nowrap;
 }
 
+.config-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.config-check {
+  color: var(--app-accent-color);
+  font-size: 14px;
+}
+
+.menu-shortcut {
+  margin-left: 24px;
+  color: var(--app-text-muted);
+  font-size: 12px;
+}
+
 @media (max-width: 960px) {
   .home-page {
     padding: 20px 16px 20px;
@@ -438,7 +571,8 @@ export default {
     flex-direction: column;
   }
 
-  .home-zones {
+  .home-zones,
+  .home-zones.shell-only {
     grid-template-columns: 1fr;
     grid-auto-rows: minmax(220px, 1fr);
     overflow-y: auto;

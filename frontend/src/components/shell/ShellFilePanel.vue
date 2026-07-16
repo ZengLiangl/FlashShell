@@ -62,7 +62,13 @@
               <el-icon><RefreshRight /></el-icon>
             </el-button>
           </el-tooltip>
-          <el-dropdown size="small" trigger="click" @command="onUploadCommand">
+          <el-dropdown
+            size="small"
+            trigger="hover"
+            :show-timeout="120"
+            :hide-timeout="160"
+            @command="onUploadCommand"
+          >
             <el-button size="small" text title="上传">
               <el-icon><Upload /></el-icon>
             </el-button>
@@ -84,11 +90,6 @@
         <el-tooltip content="清空" placement="top">
           <el-button size="small" @click="emit('clear')">
             <el-icon><Delete /></el-icon>
-          </el-button>
-        </el-tooltip>
-        <el-tooltip content="刷新" placement="top">
-          <el-button size="small" @click="emit('refresh')">
-            <el-icon><Refresh /></el-icon>
           </el-button>
         </el-tooltip>
       </div>
@@ -207,7 +208,6 @@ export default {
     'layout-change',
     'cwd-change',
     'clear',
-    'refresh',
     'toggle-search',
     'search-next',
     'search-prev',
