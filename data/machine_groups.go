@@ -170,3 +170,33 @@ func (gcm *GlobalConfigManager) EnsureMachineGroupRegistered(name string) {
 	}
 	gcm.config.MachineGroups = append(gcm.config.MachineGroups, name)
 }
+
+// UpdateMachineGroup 仅更新机器所属分组，保留加密凭证等其它字段。
+// group 为空或「默认分组」时归入默认分组（清空 group 字段）。
+func (gcm *GlobalConfigManager) UpdateMachineGroup(machineID, group string) error {
+	machineID = strings.TrimSpace(machineID)
+	if machineID == "" {
+		return fmt.Errorf("机器 ID 不能为空")
+	}
+	group = strings.TrimSpace(group)
+	if group == DefaultMachineGroupName {
+		group = ""
+	}
+	if gcm.config == nil {
+		if _, err := gcm.LoadGlobalConfig(); err != nil {
+			return err
+		}
+	}
+	for i := range gcm.config.Machines {
+		if gcm.config.Machines[i].ID != machineID {
+			continue
+		}
+		if strings.TrimSpace(gcm.config.Machines[i].Group) == group {
+			return nil
+		}
+		gcm.config.Machines[i].Group = group
+		gcm.EnsureMachineGroupRegistered(group)
+		return gcm.SaveGlobalConfig(gcm.config)
+	}
+	return fmt.Errorf("机器配置 '%s' 不存在", machineID)
+}

@@ -235,6 +235,8 @@ export function UpdateApplicationMenu():Promise<void>;
 
 export function UpdateMachine(arg1:string,arg2:define.Machine):Promise<void>;
 
+export function UpdateMachineGroup(arg1:string,arg2:string):Promise<void>;
+
 export function UpdateMachineWithEvent(arg1:string,arg2:define.Machine):Promise<void>;
 
 export function UpdateWorkPath(arg1:string,arg2:string):Promise<void>;

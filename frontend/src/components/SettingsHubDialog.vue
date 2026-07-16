@@ -7,6 +7,7 @@
     class="settings-hub-dialog"
     append-to-body
     destroy-on-close
+    :close-on-press-escape="false"
     :before-close="handleClose"
   >
     <div class="settings-hub">

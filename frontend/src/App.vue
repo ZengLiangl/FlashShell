@@ -103,6 +103,7 @@ import SettingsHubDialog from "./components/SettingsHubDialog.vue";
 import AppMenuBar from "./components/AppMenuBar.vue";
 import { useTheme } from "./composables/useTheme";
 import { mergeShortcuts, matchesShortcut } from "./utils/shortcuts";
+import { hasOverlayAboveSettingsHub } from "./utils/dialogOverlay";
 
 export default {
   name: "App",
@@ -762,6 +763,16 @@ export default {
 
     // 键盘快捷键处理（可在系统设置中自定义，保存至 shortcuts.json）
     const handleKeyDown = (e) => {
+      // Escape：只关最上层弹框；有子 Dialog / MessageBox 时不关系统设置
+      // 放在输入框判断之前，避免焦点在搜索框时无法关闭设置壳
+      if (e.key === 'Escape') {
+        if (settingsHubVisible.value && !hasOverlayAboveSettingsHub()) {
+          e.preventDefault();
+          settingsHubVisible.value = false;
+        }
+        return;
+      }
+
       // 检查是否在输入框中，如果是则不处理快捷键
       if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.contentEditable === 'true') {
         return;
@@ -817,14 +828,6 @@ export default {
       if (matchesShortcut(e, sc.systemSettings)) {
         e.preventDefault();
         App.OpenSystemSettings();
-        return;
-      }
-
-      // Escape 键关闭对话框
-      if (e.key === 'Escape') {
-        if (settingsHubVisible.value) {
-          settingsHubVisible.value = false;
-        }
         return;
       }
     };

@@ -49,7 +49,15 @@
                             />
                         </el-select>
                     </div>
-                    <div class="toolbar-ops icon-actions">
+                <div class="toolbar-ops icon-actions">
+                        <el-radio-group v-model="listViewMode" size="small" class="view-mode-toggle">
+                            <el-radio-button label="table">
+                                <el-icon><List /></el-icon>
+                            </el-radio-button>
+                            <el-radio-button label="board">
+                                <el-icon><Grid /></el-icon>
+                            </el-radio-button>
+                        </el-radio-group>
                         <el-tooltip content="分组管理" placement="top">
                             <el-button size="small" circle @click="groupManageVisible = true">
                                 <el-icon><FolderOpened /></el-icon>
@@ -75,7 +83,7 @@
                 </div>
             </div>
 
-            <div class="machine-table-wrap">
+            <div v-if="listViewMode === 'table'" class="machine-table-wrap">
                 <el-table
                     :data="filteredMachines"
                     row-key="id"
@@ -116,6 +124,55 @@
                         </template>
                     </el-table-column>
                 </el-table>
+            </div>
+
+            <div v-else class="machine-board-wrap" v-loading="machinesLoading">
+                <p class="board-hint">拖动机器卡片到其他分组即可快速改组</p>
+                <div class="machine-board">
+                    <section
+                        v-for="group in boardGroups"
+                        :key="group.name"
+                        class="board-column"
+                        :class="{ 'is-drop-target': dragOverGroup === group.name }"
+                        @dragover.prevent="onBoardDragOver(group.name, $event)"
+                        @dragleave="onBoardDragLeave(group.name, $event)"
+                        @drop.prevent="onBoardDrop(group.name, $event)"
+                    >
+                        <header class="board-column-head">
+                            <span class="board-column-title">{{ group.name }}</span>
+                            <span class="board-column-count">{{ group.machines.length }}</span>
+                        </header>
+                        <div class="board-column-body">
+                            <div
+                                v-for="machine in group.machines"
+                                :key="machine.id || machine.name"
+                                class="board-card"
+                                :class="{ 'is-dragging': draggingMachineId === (machine.id || machine.name) }"
+                                draggable="true"
+                                @dragstart="onBoardDragStart(machine, $event)"
+                                @dragend="onBoardDragEnd"
+                            >
+                                <div class="board-card-main">
+                                    <span class="board-card-name">{{ machine.name }}</span>
+                                    <span class="board-card-host">{{ machine.host || '-' }}</span>
+                                </div>
+                                <div class="board-card-actions icon-actions" @mousedown.stop @click.stop>
+                                    <el-tooltip content="编辑" placement="top">
+                                        <el-button size="small" text type="primary" @click="editMachine(machine)">
+                                            <el-icon><Edit /></el-icon>
+                                        </el-button>
+                                    </el-tooltip>
+                                    <el-tooltip content="删除" placement="top">
+                                        <el-button size="small" text type="danger" @click="deleteMachine(machine)">
+                                            <el-icon><Delete /></el-icon>
+                                        </el-button>
+                                    </el-tooltip>
+                                </div>
+                            </div>
+                            <div v-if="!group.machines.length" class="board-empty">拖到此处</div>
+                        </div>
+                    </section>
+                </div>
             </div>
         </div>
 
@@ -250,7 +307,7 @@
 import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-    Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder,
+    Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid,
 } from '@element-plus/icons-vue'
 import {
     GetMachines,
@@ -261,6 +318,7 @@ import {
     GetGlobalAccounts,
     GetMachineSensitiveData,
     UpdateMachine,
+    UpdateMachineGroup,
     SetMachineSensitiveData,
     CreateMachine,
     DeleteMachine,
@@ -270,12 +328,17 @@ import {
     ImportXshellPick,
     ImportFinalShellPick,
 } from '../../wailsjs/go/app/App'
-import { DEFAULT_MACHINE_GROUP, sortMachinesByName, machineMatchesKeyword } from '../utils/machineGroups'
+import {
+    DEFAULT_MACHINE_GROUP,
+    sortMachinesByName,
+    machineMatchesKeyword,
+    getMachineGroup,
+} from '../utils/machineGroups'
 
 export default {
     name: 'MachineConfigDialog',
     components: {
-        Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder,
+        Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid,
     },
     props: {
         modelValue: { type: Boolean, default: false },
@@ -289,12 +352,37 @@ export default {
         const machines = ref([])
         const machineGroups = ref([])
         const machineKeyword = ref('')
+        const listViewMode = ref('board')
+        const draggingMachineId = ref('')
+        const dragOverGroup = ref('')
+        const movingMachine = ref(false)
         const sortedMachines = computed(() => sortMachinesByName(machines.value))
         const filteredMachines = computed(() => {
             const kw = machineKeyword.value
             const list = sortedMachines.value
             if (!String(kw || '').trim()) return list
             return list.filter((m) => machineMatchesKeyword(m, kw))
+        })
+        const boardGroups = computed(() => {
+            const map = new Map()
+            map.set(DEFAULT_MACHINE_GROUP, [])
+            for (const g of machineGroups.value || []) {
+                const name = String(g || '').trim()
+                if (name && name !== DEFAULT_MACHINE_GROUP && !map.has(name)) {
+                    map.set(name, [])
+                }
+            }
+            for (const m of filteredMachines.value) {
+                const name = getMachineGroup(m)
+                if (!map.has(name)) map.set(name, [])
+                map.get(name).push(m)
+            }
+            const names = Array.from(map.keys()).sort((a, b) => {
+                if (a === DEFAULT_MACHINE_GROUP) return -1
+                if (b === DEFAULT_MACHINE_GROUP) return 1
+                return a.localeCompare(b, 'zh-CN')
+            })
+            return names.map((name) => ({ name, machines: map.get(name) || [] }))
         })
         const groupOptions = computed(() => {
             const set = new Set([DEFAULT_MACHINE_GROUP])
@@ -453,6 +541,63 @@ export default {
             const s = String(g || '').trim()
             if (!s || s === DEFAULT_MACHINE_GROUP) return ''
             return s
+        }
+
+        const onBoardDragStart = (machine, event) => {
+            draggingMachineId.value = machine.id || machine.name
+            dragOverGroup.value = ''
+            try {
+                event.dataTransfer.effectAllowed = 'move'
+                event.dataTransfer.setData('text/plain', machine.id || '')
+                event.dataTransfer.setData('application/x-machine-id', machine.id || '')
+            } catch {
+                // ignore
+            }
+        }
+
+        const onBoardDragEnd = () => {
+            draggingMachineId.value = ''
+            dragOverGroup.value = ''
+        }
+
+        const onBoardDragOver = (groupName, event) => {
+            if (!draggingMachineId.value) return
+            event.dataTransfer.dropEffect = 'move'
+            dragOverGroup.value = groupName
+        }
+
+        const onBoardDragLeave = (groupName, event) => {
+            const related = event.relatedTarget
+            if (related && event.currentTarget?.contains?.(related)) return
+            if (dragOverGroup.value === groupName) dragOverGroup.value = ''
+        }
+
+        const onBoardDrop = async (groupName, event) => {
+            dragOverGroup.value = ''
+            const machineId =
+                event.dataTransfer.getData('application/x-machine-id') ||
+                event.dataTransfer.getData('text/plain') ||
+                draggingMachineId.value
+            draggingMachineId.value = ''
+            if (!machineId || movingMachine.value) return
+            const machine = machines.value.find((m) => m.id === machineId)
+            if (!machine) return
+            if (getMachineGroup(machine) === groupName) return
+
+            const prevGroup = machine.group || ''
+            const nextGroup = normalizeGroup(groupName)
+            machine.group = nextGroup
+            movingMachine.value = true
+            try {
+                await UpdateMachineGroup(machine.id, nextGroup)
+                emit('changed')
+                await loadGroups()
+            } catch (error) {
+                machine.group = prevGroup
+                ElMessage.error('移动分组失败: ' + (error.message || error))
+            } finally {
+                movingMachine.value = false
+            }
         }
 
         const saveMachine = async () => {
@@ -666,6 +811,10 @@ export default {
             machines,
             sortedMachines,
             filteredMachines,
+            boardGroups,
+            listViewMode,
+            draggingMachineId,
+            dragOverGroup,
             groupOptions,
             managedGroups,
             machineKeyword,
@@ -697,6 +846,11 @@ export default {
             addGroup,
             renameGroup,
             deleteGroup,
+            onBoardDragStart,
+            onBoardDragEnd,
+            onBoardDragOver,
+            onBoardDragLeave,
+            onBoardDrop,
         }
     }
 }
@@ -715,7 +869,8 @@ export default {
     min-height: 360px;
 }
 
-.machine-config-container.embedded .machine-table-wrap {
+.machine-config-container.embedded .machine-table-wrap,
+.machine-config-container.embedded .machine-board-wrap {
     min-height: 280px;
 }
 
@@ -802,6 +957,164 @@ export default {
     overflow: auto;
     border: 1px solid var(--el-border-color-lighter, var(--app-border));
     border-radius: 6px;
+}
+
+.view-mode-toggle {
+    margin-right: 2px;
+}
+
+.view-mode-toggle :deep(.el-radio-button__inner) {
+    padding: 5px 9px;
+    display: inline-flex;
+    align-items: center;
+}
+
+.machine-board-wrap {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    overflow: hidden;
+}
+
+.board-hint {
+    margin: 0;
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--el-text-color-secondary, #909399);
+}
+
+.machine-board {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    gap: 10px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 4px;
+}
+
+.board-column {
+    flex: 0 0 220px;
+    width: 220px;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    border: 1px solid var(--el-border-color-lighter, var(--app-border));
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--el-fill-color-light, #f5f7fa) 70%, transparent);
+    transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.board-column.is-drop-target {
+    border-color: var(--el-color-primary, #409eff);
+    background: color-mix(in srgb, var(--el-color-primary, #409eff) 8%, transparent);
+}
+
+.board-column-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 10px 12px 8px;
+    flex-shrink: 0;
+}
+
+.board-column-title {
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--el-text-color-primary, #303133);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.board-column-count {
+    flex-shrink: 0;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 6px;
+    border-radius: 10px;
+    font-size: 11px;
+    line-height: 20px;
+    text-align: center;
+    color: var(--el-text-color-secondary, #909399);
+    background: var(--el-fill-color, #f0f2f5);
+}
+
+.board-column-body {
+    flex: 1;
+    min-height: 120px;
+    overflow-y: auto;
+    padding: 0 8px 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.board-card {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 8px 8px 8px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--el-border-color-lighter, #ebeef5);
+    background: var(--el-bg-color, #fff);
+    cursor: grab;
+    user-select: none;
+}
+
+.board-card:active {
+    cursor: grabbing;
+}
+
+.board-card.is-dragging {
+    opacity: 0.45;
+}
+
+.board-card-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.board-card-name {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--el-text-color-primary, #303133);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.board-card-host {
+    font-size: 11px;
+    color: var(--el-text-color-secondary, #909399);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.board-card-actions {
+    flex-shrink: 0;
+    opacity: 0.55;
+}
+
+.board-card:hover .board-card-actions {
+    opacity: 1;
+}
+
+.board-empty {
+    margin: 4px 0;
+    padding: 18px 8px;
+    border: 1px dashed var(--el-border-color, #dcdfe6);
+    border-radius: 6px;
+    text-align: center;
+    font-size: 12px;
+    color: var(--el-text-color-placeholder, #a8abb2);
 }
 
 .key-file-input {

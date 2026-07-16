@@ -462,6 +462,10 @@ export function UpdateMachine(arg1, arg2) {
   return window['go']['app']['App']['UpdateMachine'](arg1, arg2);
 }
 
+export function UpdateMachineGroup(arg1, arg2) {
+  return window['go']['app']['App']['UpdateMachineGroup'](arg1, arg2);
+}
+
 export function UpdateMachineWithEvent(arg1, arg2) {
   return window['go']['app']['App']['UpdateMachineWithEvent'](arg1, arg2);
 }

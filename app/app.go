@@ -492,6 +492,11 @@ func (a *App) DeleteMachineGroup(name string) error {
 	return a.configManager.DeleteMachineGroup(name)
 }
 
+// UpdateMachineGroup 仅更新机器所属分组（保留凭证等其它字段）
+func (a *App) UpdateMachineGroup(machineID, group string) error {
+	return a.configManager.UpdateMachineGroup(machineID, group)
+}
+
 // AddMachine 添加机器配置（到全局配置）
 func (a *App) AddMachine(machine define.Machine) error {
 	machine.EnsureID()

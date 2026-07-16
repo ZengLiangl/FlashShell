@@ -60,6 +60,24 @@ export function groupMachines(machines) {
   return sorted.map((name) => ({ name, machines: groups[name] }))
 }
 
+/**
+ * 树形展示用：自定义分组可折叠；默认分组机器平铺在根级（不包一层「默认分组」）。
+ * 顺序：自定义分组 → 默认分组机器。
+ */
+export function splitMachineTree(machines) {
+  const groups = groupMachines(machines)
+  const customGroups = []
+  let defaultMachines = []
+  for (const g of groups) {
+    if (g.name === DEFAULT_MACHINE_GROUP) {
+      defaultMachines = g.machines
+    } else {
+      customGroups.push(g)
+    }
+  }
+  return { customGroups, defaultMachines }
+}
+
 export function isMachineConnected(machineName, sessions) {
   return (sessions || []).some((s) => s.machineName === machineName && s.connected)
 }

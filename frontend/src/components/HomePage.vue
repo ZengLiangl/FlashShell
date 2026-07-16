@@ -99,14 +99,29 @@
             <p>暂无机器</p>
             <span>点击右上角 + 添加机器</span>
           </div>
-          <div v-else-if="machineGroups.length === 0" class="empty-hint">
+          <div v-else-if="!hasMachineTree" class="empty-hint">
             <p>无匹配机器</p>
             <span>试试其他关键词</span>
           </div>
-          <template v-else>
-            <div v-for="group in machineGroups" :key="group.name" class="machine-group">
-              <div class="group-title">{{ group.name }}</div>
-              <div class="item-grid machines">
+          <div v-else class="machine-tree">
+            <div
+              v-for="group in customGroups"
+              :key="group.name"
+              class="tree-group"
+            >
+              <button
+                type="button"
+                class="tree-group-head"
+                :aria-expanded="isGroupExpanded(group.name)"
+                @click="toggleGroup(group.name)"
+              >
+                <el-icon class="tree-caret" :class="{ open: isGroupExpanded(group.name) }">
+                  <ArrowRight />
+                </el-icon>
+                <span class="tree-group-name">{{ group.name }}</span>
+                <span class="tree-group-count">{{ group.machines.length }}</span>
+              </button>
+              <div v-show="isGroupExpanded(group.name)" class="tree-group-body item-grid machines">
                 <button
                   v-for="machine in group.machines"
                   :key="machine.id || machine.name"
@@ -135,7 +150,36 @@
                 </button>
               </div>
             </div>
-          </template>
+
+            <div v-if="defaultMachines.length" class="tree-default item-grid machines">
+              <button
+                v-for="machine in defaultMachines"
+                :key="machine.id || machine.name"
+                type="button"
+                class="item-card machine-card"
+                :class="{ connecting: connectingName === machine.name }"
+                :disabled="!!connectingName"
+                @click="onConnectMachine(machine.name)"
+              >
+                <div class="item-icon machine-icon">
+                  <el-icon :size="18" :class="{ 'is-loading': connectingName === machine.name }">
+                    <Loading v-if="connectingName === machine.name" />
+                    <Monitor v-else />
+                  </el-icon>
+                </div>
+                <div class="item-meta">
+                  <span class="item-name">{{ machine.name }}</span>
+                  <span class="item-desc">
+                    {{ connectingName === machine.name ? '连接中…' : machineHost(machine) }}
+                  </span>
+                </div>
+                <span v-if="connectingName === machine.name" class="item-badge connecting-badge">连接中</span>
+                <el-icon v-else class="item-chevron">
+                  <ArrowRight />
+                </el-icon>
+              </button>
+            </div>
+          </div>
         </div>
       </section>
     </div>
@@ -143,10 +187,10 @@
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { Refresh } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
-import { groupMachines, machineMatchesKeyword } from '../utils/machineGroups'
+import { splitMachineTree, machineMatchesKeyword } from '../utils/machineGroups'
 
 export default {
   name: 'HomePage',
@@ -169,6 +213,7 @@ export default {
   setup(props, { emit }) {
     const machines = ref([])
     const machineKeyword = ref('')
+    const expandedGroups = ref([])
 
     const loadMachines = async () => {
       try {
@@ -185,8 +230,32 @@ export default {
       return list.filter((m) => machineMatchesKeyword(m, kw))
     })
 
-    const machineGroups = computed(() => groupMachines(filteredMachines.value))
+    const machineTree = computed(() => splitMachineTree(filteredMachines.value))
+    const customGroups = computed(() => machineTree.value.customGroups)
+    const defaultMachines = computed(() => machineTree.value.defaultMachines)
+    const hasMachineTree = computed(
+      () => customGroups.value.length > 0 || defaultMachines.value.length > 0,
+    )
     const hasProjects = computed(() => (props.projects || []).length > 0)
+
+    const isGroupExpanded = (name) => expandedGroups.value.includes(name)
+
+    const toggleGroup = (name) => {
+      if (isGroupExpanded(name)) {
+        expandedGroups.value = expandedGroups.value.filter((g) => g !== name)
+      } else {
+        expandedGroups.value = [...expandedGroups.value, name]
+      }
+    }
+
+    // 搜索时自动展开命中分组；清空搜索后恢复收起
+    watch(machineKeyword, (kw) => {
+      if (String(kw || '').trim()) {
+        expandedGroups.value = customGroups.value.map((g) => g.name)
+      } else {
+        expandedGroups.value = []
+      }
+    })
 
     const machineHost = (machine) => {
       const host = machine.host || machine.ip || ''
@@ -211,8 +280,12 @@ export default {
       Refresh,
       machines,
       machineKeyword,
-      machineGroups,
+      customGroups,
+      defaultMachines,
+      hasMachineTree,
       hasProjects,
+      isGroupExpanded,
+      toggleGroup,
       machineHost,
       onConnectMachine,
       loadMachines,
@@ -438,19 +511,77 @@ export default {
   gap: 8px;
 }
 
-.machine-group+.machine-group {
-  margin-top: 16px;
-  padding-top: 14px;
-  border-top: 1px dashed var(--app-border);
+.machine-tree {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.group-title {
+.tree-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tree-group-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 6px 4px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.tree-group-head:hover {
+  background: color-mix(in srgb, var(--app-text-muted) 8%, transparent);
+}
+
+.tree-caret {
   font-size: 12px;
-  font-weight: 600;
   color: var(--app-text-muted);
-  letter-spacing: 0.02em;
-  margin-bottom: 8px;
-  text-transform: none;
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+
+.tree-caret.open {
+  transform: rotate(90deg);
+}
+
+.tree-group-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--app-text-secondary, var(--app-text));
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tree-group-count {
+  flex-shrink: 0;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: 9px;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+  color: var(--app-text-muted);
+  background: color-mix(in srgb, var(--app-text-muted) 12%, transparent);
+}
+
+.tree-group-body {
+  padding-left: 18px;
+}
+
+.tree-default {
+  margin-top: 2px;
 }
 
 .item-card {
