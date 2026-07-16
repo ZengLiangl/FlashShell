@@ -1,0 +1,56 @@
+---
+description: FlashDock 后端 Go 约定：分层、Wails API、配置、错误与事件
+globs: "**/*.go"
+alwaysApply: false
+---
+
+# 后端 Go 约定
+
+## 分层
+
+```
+frontend  →  app.App（Wails 导出）  →  data / machine / netproxy / define
+```
+
+- `app`：编排、参数校验、发事件；不写底层协议细节。
+- `data`：YAML 读写、全局配置、历史；类型可引用 `define`。
+- `define`：跨包契约（Machine、Step、ShellStatus、Dial）；避免依赖 `app`。
+- `machine`：SSH/SFTP/本地 Shell/步骤执行。
+- 独立能力（代理等）新建包（如 `netproxy`），`app` 只做 `Normalize`/`Apply` 胶水。
+
+## Wails 导出方法
+
+- 导出方法挂在 `func (a *App) Xxx(...)`，导出给前端的必须是公开方法。
+- 用户可读错误用中文：`fmt.Errorf("请填写代理主机和端口")`。
+- 返回值优先 `(T, error)` 或明确结果结构体；进度类用 `EventsEmit` 推送。
+- 配置变更后按需 `EventsEmit`（如 `theme:changed`、`shortcuts:changed`、`config:changed`）。
+
+```go
+// 事件：域:动作
+wailsRuntime.EventsEmit(a.ctx, "theme:changed", config.ThemeSettings)
+```
+
+## 配置与类型
+
+- 持久化结构同时带 `yaml` 与 `json` tag；字段名前端 camelCase（如 `uiAccent`）。
+- 敏感字段加密：`define.Machine` + `crypto`；列表展示用运行时填充、`yaml:"-"`。
+- 读入后做 `Normalize` / 默认值（端口、mode、interval），与 `netproxy.Normalize`、`ProxySettings` 同模式。
+- 旧字段迁移：保留 omitempty 旧字段 + 注释，读时转换到新字段。
+
+## 并发与资源
+
+- `App` 内共享 map/会话用 `sync.Mutex` / `RWMutex`。
+- Context 超时用于网络探测（如代理测试 5s）；可取消操作用 `context.CancelFunc` 登记（传输任务）。
+- 平台相关文件：`*_windows.go` / `*_other.go` / `*_unix.go` 按 build tag 拆分。
+
+## 测试
+
+- 包内 `_test.go`；纯逻辑（Normalize、路径、编码）优先单测。
+- 不在测试里写真实凭据；SSH/加密用 fixture 或内存数据。
+
+## 反模式
+
+- 在 `machine` 或 `netproxy` 里直接 `EventsEmit`（应由 `app` 转发）
+- 把大段业务塞进单个 `app.go` 而不按域拆文件（`proxy.go`、`update.go`、`shell_transfer.go`）
+- 导出 API 返回英文错误给 UI
+- 手改 `frontend/wailsjs/` 代替修正 Go 签名后重新生成

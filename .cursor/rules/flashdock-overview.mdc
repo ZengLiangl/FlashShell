@@ -1,0 +1,34 @@
+---
+description: FlashDock 项目总览：技术栈、目录职责与跨端协作约定
+alwaysApply: true
+---
+
+# FlashDock 项目总览
+
+桌面运维工作台：**Go + Wails v2** 后端，**Vue 3 + Element Plus + xterm.js** 前端。模块名 `FlashDock`。
+
+## 目录职责
+
+| 路径 | 职责 |
+|------|------|
+| `app/` | Wails 绑定层：`App` 方法暴露给前端；事件 `EventsEmit` |
+| `data/` | 配置/会话/历史持久化（YAML） |
+| `define/` | 领域类型、步骤、Shell/SFTP 契约 |
+| `machine/` | 本地/SSH/SFTP/Shell 会话与执行 |
+| `netproxy/` | HTTP/SOCKS 代理与 Dial |
+| `crypto/` | 敏感字段加解密 |
+| `frontend/src/` | Vue UI；`wailsjs/` 为生成绑定，勿手改业务逻辑 |
+
+## 跨端约定
+
+- 前端只通过 `wailsjs/go/app/App` 调后端；实时通道用 `EventsOn`/`EventsOff`。
+- 事件名用 `域:动作`：`shell:data`、`theme:changed`、`config:changed`、`open:system-settings`。
+- 配置结构同时打 `yaml` + `json` tag；敏感数据加密落盘，展示字段用 `yaml:"-"`。
+- 用户可见文案与错误信息用中文；代码标识符用英文。
+- 改 API 后需重新生成 Wails 绑定（`wails generate` / 开发热重载），勿直接改 `wailsjs/` 业务语义。
+
+## 改动原则
+
+- 新功能优先落在已有包内；跨层能力（如代理）抽独立包，再由 `app` 编排。
+- UI 必须跟 `theme.css` / `machine-list.css` 令牌与现有设置面板模式一致。
+- 不做无关重构；不主动写用户未要的 markdown 文档。

@@ -1,0 +1,133 @@
+---
+description: FlashDock UI 设计规范：主题令牌、组件布局、图标按钮与设置面板模式
+globs: frontend/src/**/*.{vue,css}
+alwaysApply: false
+---
+
+# UI 设计规范
+
+视觉源：`frontend/src/styles/theme.css`、`machine-list.css`。颜色/圆角/间距一律用 CSS 变量，禁止硬编码主题色。
+
+## 主题令牌
+
+```css
+/* 语义色 */
+--app-bg / --app-panel-bg / --app-card-bg
+--app-text / --app-text-secondary / --app-text-muted
+--app-border / --app-card-border
+--app-accent-bg / --app-accent-color
+--app-card-active-bg / --app-card-hover-shadow
+
+/* 终端（仅终端区域） */
+--terminal-bg / --terminal-fg / --terminal-success / --terminal-error / --terminal-progress
+
+/* 圆角 */
+--app-radius-sm: 6px;  /* 小控件 */
+--app-radius-md: 8px;  /* 输入框、列表项、导航项 */
+--app-radius-lg: 10px; /* 内容块 */
+--app-radius-xl: 12px; /* 下拉、列表容器 */
+--app-radius-panel: 14px;
+
+/* 间距 */
+--app-space-page / --app-space-panel-head / --app-space-panel-body / --app-space-toolbar-gap
+--app-content-narrow: 520px;  /* 窄栏居中 */
+--app-content-dialog: 560px;
+```
+
+深色模式写在 `html.dark`，组件只消费变量。强调色来自主题设置的 `uiAccent`，勿写死 `#409eff`（除非在 `themePresets` 定义预设）。
+
+## 字体与字号阶梯
+
+| 用途 | 字号 | 字重 / 色 |
+|------|------|-----------|
+| 面板主标题（hub-main-title） | 15px | 600 / `--app-text` |
+| 区块标题（section-head h4） | 14px | 默认 / `--app-text` |
+| 正文、列表名、行标签 | 13px | 500–600 / `--app-text` |
+| 说明 / hint | 12px | 默认 / `--app-text-muted` |
+| 分区小标题（app-section-label） | 12px | 600 / `--app-text-muted` |
+| 徽章 | 10px | — |
+
+界面字体：`--app-font-family`（可被系统设置覆盖）。终端字体只用 Shell 相关设置，不套到普通 UI。
+
+## 图标按钮（强制）
+
+对话框 footer、面板保存区、工具栏主操作：**圆形图标按钮 + tooltip**，不用大块文字按钮。
+
+```vue
+<div class="dialog-footer icon-actions">
+  <el-tooltip content="取消" placement="top">
+    <el-button circle @click="close">
+      <el-icon><Close /></el-icon>
+    </el-button>
+  </el-tooltip>
+  <el-tooltip content="保存" placement="top">
+    <el-button type="primary" circle :loading="saving" @click="save">
+      <el-icon v-if="!saving"><Check /></el-icon>
+    </el-button>
+  </el-tooltip>
+</div>
+```
+
+规则：
+- 成组操作用 `.icon-actions`（小尺寸加 `.icon-actions--sm`）。
+- loading 时用 `:loading` + `v-if="!saving"` 隐藏图标，避免叠位（theme.css 已修 circle loading）。
+- 表格行内次要操作用 `text` + 图标 + tooltip，不必强制 circle。
+- 图标来自 `@element-plus/icons-vue`。
+
+## 设置 / 面板布局
+
+Hub 壳：`SettingsHubDialog`（左导航 + 右内容）。内嵌面板：
+
+```
+.panel  (flex column, height 100%, overflow hidden)
+  .panel-scroll  (flex 1, overflow auto)
+  .panel-actions.icon-actions  (底栏保存，border-top)
+```
+
+设置行（标签左、控件右）：
+
+```vue
+<div class="system-setting-row">
+  <div class="system-setting-text">
+    <span class="system-setting-label">…</span>
+    <span class="system-setting-hint">…</span>
+  </div>
+  <div class="system-setting-control">…</div>
+</div>
+```
+
+- 区块标题用 `.block-label`（13px/600 或 12px/650）。
+- 分组说明用 `.proxy-hint` / `.shortcut-hint`：13px、`--app-text-muted`。
+- 可折叠配置块：`border + --app-radius-md + --app-panel-bg` 内边距约 `12px 14px`。
+- 控件默认 `size="small"`；数字输入 `controls-position="right"`。
+
+## 对话框
+
+- `append-to-body` + 需要时 `destroy-on-close`。
+- 可嵌入 Hub 的内容组件支持 `embedded` / `active` props；Hub 内用 `v-if` 按 section 挂载。
+- 宽度：简单表单 ~420px；一般设置 ~560–720px；Hub 960px、`top="5vh"`。
+- 弹层样式跟主题：下拉圆角 `--app-radius-xl`、悬停用 `--app-accent-bg`（已在 theme.css 全局处理，勿重复造轮子）。
+
+## 列表与空状态
+
+复用 `machine-list.css`：
+- 窄栏：`.app-surface-narrow`
+- 工具栏：`.app-toolbar` + `.app-toolbar-search`
+- 空状态：`.app-empty` / `.app-empty-title` / `.app-empty-desc`
+- 机器列表：`.ml-list` / `.ml-item` / `.ml-name` / `.ml-addr` / `.ml-badge`
+
+列表项悬停/焦点：`--app-accent-bg`；选中/连接中用 accent 的 `color-mix` 浅底，勿另起一套颜色。
+
+## 反馈
+
+- 成功 / 失败 / 校验：`ElMessage.success|error|warning`，文案中文、可带原因。
+- 异步按钮必须有 loading；禁止静默吞错。
+- 危险操作用 `type="danger"` 图标或确认框，与现有删除帐号/机器一致。
+
+## 反模式
+
+- 硬编码 `#303133`、`#409eff` 等主题色（预设定义除外）
+- 设置底栏用「保存」「取消」文字大按钮替代圆图标
+- 新造与 `.system-setting-row` / `.icon-actions` / `.app-empty` 平行的私有布局且不复用变量
+- 在普通 UI 区域使用 `--terminal-*` 色
+- 忽略 `html.dark`，只写浅色样式

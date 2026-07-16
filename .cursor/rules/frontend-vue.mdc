@@ -1,0 +1,59 @@
+---
+description: FlashDock 前端 Vue/Wails 约定：组件结构、绑定调用、事件与状态
+globs: frontend/src/**/*.{vue,js,ts}
+alwaysApply: false
+---
+
+# 前端 Vue / Wails 约定
+
+## 组件形态
+
+- Options API + `setup()` 组合（与现有组件一致），`name` 必填。
+- 单文件组件：`<template>` → `<script>` → `<style scoped>`；需穿透弹层时再加非 scoped 块（如 `.settings-hub-dialog`）。
+- 设置类面板：`props.active` 为 true 时加载数据（`watch` + `immediate`）。
+- 可嵌入对话框：支持 `embedded`；独立打开与 Hub 内嵌共用同一组件。
+
+## 后端调用
+
+```js
+import * as App from '../../wailsjs/go/app/App'
+import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
+```
+
+- 读改配置：先 `Get*`，改字段，再 `Save*`（见 Proxy / SystemSettings）。
+- 错误：`catch` 后 `ElMessage.error(\`…: ${e}\`)` 或 `e?.message`。
+- 校验失败用 `ElMessage.warning`，不要抛到后端。
+
+## 事件
+
+```js
+// onMounted / 打开时注册，onBeforeUnmount / 关闭时 EventsOff
+EventsOn('theme:changed', handler)
+EventsOn('shell:data', handler)
+```
+
+已有事件前缀：`shell:`、`output:`、`execution:`、`theme:`、`shortcuts:`、`config:`、`open:`、`update:`、`menu:`、`app:`、`operation:`。新增事件保持 `域:动作`。
+
+## 状态与工具
+
+- 表单用 `reactive`；开关/loading 用 `ref`。
+- 快捷键、主题预设、平台修饰键放 `frontend/src/utils/`，组件内不复制常量表。
+- Shell 相关逻辑优先 `composables/useShell.js`，避免在多个视图重复订事件。
+- `v-model` 对话框：`modelValue` + `update:modelValue`（或 computed get/set）。
+
+## 样式
+
+- 优先 `var(--app-*)`；布局工具类见 `machine-list.css`。
+- 控件 `size="small"`；主操作区套 `.icon-actions`。
+- 列表/卡片交互过渡约 `0.12s ease`，与 `.ml-item` 一致。
+
+## 文件放置
+
+| 类型 | 位置 |
+|------|------|
+| 全局对话框 / 设置 | `components/` |
+| Shell 工作区 | `components/shell/`、`views/ShellWorkspace.vue` |
+| 主题/快捷键工具 | `utils/` |
+| 组合逻辑 | `composables/` |
+
+新增设置页：在 `SettingsHubDialog` 的 `NAV_ITEMS` 注册，内容做成独立 Panel 组件。
