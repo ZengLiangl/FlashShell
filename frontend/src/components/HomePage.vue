@@ -445,23 +445,6 @@ export default {
   width: 100%;
 }
 
-.zone-body::-webkit-scrollbar {
-  width: 8px;
-}
-
-.zone-body::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.zone-body::-webkit-scrollbar-thumb {
-  background: color-mix(in srgb, var(--app-text-muted) 35%, transparent);
-  border-radius: 4px;
-}
-
-.zone-body::-webkit-scrollbar-thumb:hover {
-  background: color-mix(in srgb, var(--app-text-muted) 55%, transparent);
-}
-
 .item-grid {
   display: flex;
   flex-direction: column;

@@ -24,13 +24,31 @@
                 </div>
                 <div class="system-setting-row">
                     <div class="system-setting-text">
+                        <span class="system-setting-label">SSH 握手超时</span>
+                        <span class="system-setting-hint">TCP 连接与 SSH 协商总超时，Shell 终端与任务远程执行共用，范围 5–300 秒</span>
+                    </div>
+                    <div class="system-setting-control">
+                        <el-input-number
+                            v-model="form.sshHandshakeTimeoutSec"
+                            class="system-setting-num"
+                            size="small"
+                            :min="5"
+                            :max="300"
+                            :step="5"
+                            controls-position="right"
+                        />
+                        <span class="system-setting-unit">秒</span>
+                    </div>
+                </div>
+                <div class="system-setting-row">
+                    <div class="system-setting-text">
                         <span class="system-setting-label">监控同步间隔</span>
                         <span class="system-setting-hint">侧边监控面板刷新频率，范围 200–60000 毫秒</span>
                     </div>
                     <div class="system-setting-control">
                         <el-input-number
                             v-model="form.shellMonitorIntervalMs"
-                            class="ms-num"
+                            class="system-setting-num"
                             size="small"
                             :min="200"
                             :max="60000"
@@ -348,7 +366,13 @@
             </el-tooltip>
         </div>
 
-        <el-dialog v-model="accountEditVisible" :title="editingAccountIndex >= 0 ? '编辑帐号' : '添加帐号'" width="480px" append-to-body>
+        <el-dialog
+            v-model="accountEditVisible"
+            :title="editingAccountIndex >= 0 ? '编辑帐号' : '添加帐号'"
+            width="480px"
+            class="settings-sub-dialog"
+            append-to-body
+        >
             <el-form :model="accountForm" label-width="90px">
                 <el-form-item label="帐号名称">
                     <el-input v-model="accountForm.name" placeholder="例如：生产环境" />
@@ -463,6 +487,7 @@ export default {
                 shellMemorySaver: false,
             },
             shellMonitorIntervalMs: 1000,
+            sshHandshakeTimeoutSec: 30,
             shellLogHighlight: true,
             shellLogHighlightColors: { ...DEFAULT_SHELL_LOG_COLORS },
             shellLogHighlightRules: mergeLogHighlightRules([]),
@@ -583,6 +608,10 @@ theme preview · ${theme.foreground}`
             form.shellMonitorIntervalMs = Number.isFinite(interval) && interval >= 200
                 ? Math.min(60000, Math.round(interval))
                 : 1000
+            const sshTimeout = Number(config.sshHandshakeTimeoutSec)
+            form.sshHandshakeTimeoutSec = Number.isFinite(sshTimeout) && sshTimeout >= 5
+                ? Math.min(300, Math.round(sshTimeout))
+                : 30
             form.shellLogHighlight = config.shellLogHighlight !== false
             Object.assign(
                 form.shellLogHighlightColors,
@@ -798,6 +827,7 @@ theme preview · ${theme.foreground}`
                 const config = await App.GetSystemSettings()
                 config.themeSettings = { ...form.themeSettings }
                 config.shellMonitorIntervalMs = form.shellMonitorIntervalMs
+                config.sshHandshakeTimeoutSec = form.sshHandshakeTimeoutSec
                 config.shellLogHighlight = !!form.shellLogHighlight
                 config.shellLogHighlightColors = mergeLogHighlightColors(form.shellLogHighlightColors)
                 config.shellLogHighlightDisabled = rulesToDisabled(form.shellLogHighlightRules)
@@ -1284,7 +1314,8 @@ theme preview · ${theme.foreground}`
 }
 
 .system-setting-control {
-    display: flex;
+    display: grid;
+    grid-template-columns: 120px 36px;
     align-items: center;
     gap: 8px;
     flex-shrink: 0;
@@ -1293,14 +1324,15 @@ theme preview · ${theme.foreground}`
 .system-setting-unit {
     font-size: 12px;
     color: var(--app-text-muted);
+    white-space: nowrap;
 }
 
-.ms-num {
+.system-setting-num {
     width: 120px !important;
 }
 
-.ms-num :deep(.el-input-number),
-.ms-num.el-input-number {
+.system-setting-num :deep(.el-input-number),
+.system-setting-num.el-input-number {
     width: 120px;
 }
 

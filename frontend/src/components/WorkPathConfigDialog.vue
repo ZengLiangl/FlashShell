@@ -38,6 +38,7 @@
             v-model="workPathEditVisible"
             :title="editingWorkPath ? '编辑环境变量' : '添加环境变量'"
             width="500px"
+            class="settings-sub-dialog"
             append-to-body
         >
             <el-form :model="workPathForm" :rules="workPathRules" ref="workPathFormRef" label-width="100px">

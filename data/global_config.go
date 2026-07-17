@@ -161,6 +161,8 @@ type GlobalConfig struct {
 	ProxySettings  ProxySettings     `yaml:"proxySettings" json:"proxySettings"`
 	// ShellMonitorIntervalMs Shell 监控面板刷新间隔（毫秒），默认 1000
 	ShellMonitorIntervalMs int `yaml:"shellMonitorIntervalMs" json:"shellMonitorIntervalMs"`
+	// SSHHandshakeTimeoutSec SSH 握手超时（秒）：TCP 连接 + SSH 协商，Shell 与任务远程执行共用，默认 30
+	SSHHandshakeTimeoutSec int `yaml:"sshHandshakeTimeoutSec" json:"sshHandshakeTimeoutSec"`
 	// ShellMonitorIntervalSec 旧字段（秒），仅用于迁移
 	ShellMonitorIntervalSec int `yaml:"shellMonitorIntervalSec,omitempty" json:"-"`
 	// ShellLogHighlight Shell 终端日志关键字高亮；nil 表示默认开启
@@ -423,6 +425,7 @@ func (gcm *GlobalConfigManager) createDefaultGlobalConfig() error {
 			Port: 7890,
 		},
 		ShellMonitorIntervalMs:  1000,
+		SSHHandshakeTimeoutSec:  30,
 		ShellLogHighlight:       boolPtr(true),
 		ShellLogHighlightColors: DefaultShellLogHighlightColors(),
 	}

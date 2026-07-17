@@ -753,7 +753,6 @@ export default {
   max-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
-  scrollbar-width: thin;
 }
 
 .tabs-bar-left {

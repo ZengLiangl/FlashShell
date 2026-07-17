@@ -79,7 +79,6 @@ export default {
   min-width: 0;
   flex: 1;
   overflow-x: auto;
-  scrollbar-width: thin;
 }
 
 .tunnel-chip {

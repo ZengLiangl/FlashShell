@@ -70,6 +70,7 @@ func NewApp(sessionID string) *App {
 	}
 	app.refreshLogSettings()
 	app.applyProxyFromConfig()
+	app.applySSHHandshakeFromConfig()
 	go app.outputEventLoop()
 	return app
 }
@@ -1347,6 +1348,7 @@ func (a *App) GetSystemSettings() (*data.GlobalConfig, error) {
 	}
 	if cfg != nil {
 		cfg.ShellMonitorIntervalMs = normalizeShellMonitorIntervalMs(cfg.ShellMonitorIntervalMs)
+		cfg.SSHHandshakeTimeoutSec = normalizeSSHHandshakeTimeoutSec(cfg.SSHHandshakeTimeoutSec)
 		normalizeProxySettings(&cfg.ProxySettings)
 		if cfg.ShellLogHighlight == nil {
 			v := true
@@ -1379,6 +1381,7 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	a.normalizeThemeSettings(&config.ThemeSettings)
 	normalizeProxySettings(&config.ProxySettings)
 	config.ShellMonitorIntervalMs = normalizeShellMonitorIntervalMs(config.ShellMonitorIntervalMs)
+	config.SSHHandshakeTimeoutSec = normalizeSSHHandshakeTimeoutSec(config.SSHHandshakeTimeoutSec)
 	config.ShellMonitorIntervalSec = 0
 	config.ShellLogHighlightColors = data.NormalizeShellLogHighlightColors(config.ShellLogHighlightColors)
 	config.ShellLogHighlightDisabled = data.NormalizeShellLogHighlightDisabled(config.ShellLogHighlightDisabled)
@@ -1387,6 +1390,7 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	}
 	a.refreshLogSettings()
 	a.applyProxySettings(config.ProxySettings)
+	a.applySSHHandshakeTimeout(config.SSHHandshakeTimeoutSec)
 	if a.sessionManager != nil && config.ThemeSettings.Mode != "" {
 		_ = a.sessionManager.SetTheme(config.ThemeSettings.Mode, config.ThemeSettings.TerminalPreset)
 	}
@@ -1395,6 +1399,7 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 		wailsRuntime.EventsEmit(a.ctx, "theme:changed", config.ThemeSettings)
 		wailsRuntime.EventsEmit(a.ctx, "system-settings:changed", map[string]any{
 			"shellMonitorIntervalMs":    config.ShellMonitorIntervalMs,
+			"sshHandshakeTimeoutSec":    config.SSHHandshakeTimeoutSec,
 			"shellLogHighlight":         data.ShellLogHighlightEnabled(config),
 			"shellLogHighlightColors":   config.ShellLogHighlightColors,
 			"shellLogHighlightDisabled": config.ShellLogHighlightDisabled,
@@ -1412,6 +1417,32 @@ func normalizeShellMonitorIntervalMs(ms int) int {
 		return 60000
 	}
 	return ms
+}
+
+func normalizeSSHHandshakeTimeoutSec(sec int) int {
+	if sec <= 0 {
+		return 30
+	}
+	if sec < 5 {
+		return 5
+	}
+	if sec > 300 {
+		return 300
+	}
+	return sec
+}
+
+func (a *App) applySSHHandshakeTimeout(sec int) {
+	define.SetSSHHandshakeTimeout(time.Duration(normalizeSSHHandshakeTimeoutSec(sec)) * time.Second)
+}
+
+func (a *App) applySSHHandshakeFromConfig() {
+	cfg, err := a.configManager.GetGlobalConfig()
+	if err != nil || cfg == nil {
+		a.applySSHHandshakeTimeout(30)
+		return
+	}
+	a.applySSHHandshakeTimeout(cfg.SSHHandshakeTimeoutSec)
 }
 
 // GetExecutionLogs 获取执行历史列表

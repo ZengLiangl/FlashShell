@@ -259,7 +259,6 @@ export default {
   flex: 0 1 auto;
   min-width: 0;
   overflow-x: auto;
-  scrollbar-width: thin;
   padding: 2px 0;
 }
 

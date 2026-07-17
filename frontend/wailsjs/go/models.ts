@@ -206,6 +206,7 @@ export namespace data {
 	    themeSettings: ThemeSettings;
 	    proxySettings: ProxySettings;
 	    shellMonitorIntervalMs: number;
+	    sshHandshakeTimeoutSec: number;
 	    shellLogHighlight?: boolean;
 	    shellLogHighlightColors: ShellLogHighlightColors;
 	    shellLogHighlightDisabled: string[];
@@ -228,6 +229,7 @@ export namespace data {
 	        this.themeSettings = this.convertValues(source["themeSettings"], ThemeSettings);
 	        this.proxySettings = this.convertValues(source["proxySettings"], ProxySettings);
 	        this.shellMonitorIntervalMs = source["shellMonitorIntervalMs"];
+	        this.sshHandshakeTimeoutSec = source["sshHandshakeTimeoutSec"];
 	        this.shellLogHighlight = source["shellLogHighlight"];
 	        this.shellLogHighlightColors = this.convertValues(source["shellLogHighlightColors"], ShellLogHighlightColors);
 	        this.shellLogHighlightDisabled = source["shellLogHighlightDisabled"];

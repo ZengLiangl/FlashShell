@@ -1,6 +1,7 @@
 {
     "name": "FlashDock-frontend",
     "version": "1.0.0",
+    "type": "module",
     "description": "FlashDock Frontend",
     "main": "index.js",
     "scripts": {
@@ -20,6 +21,8 @@
     },
     "devDependencies": {
         "@vitejs/plugin-vue": "^4.2.3",
+        "unplugin-auto-import": "^21.0.0",
+        "unplugin-vue-components": "^32.1.0",
         "vite": "^4.4.0"
     }
 }

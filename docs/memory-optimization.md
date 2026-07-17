@@ -91,7 +91,17 @@ Go 后端（常驻）
 
 - **文件：** `main.js`、`utils/registerIcons.js`
 - **做法：** 仅注册实际使用的图标组件
-- **预期：** 打包与运行时注册表缩小
+
+#### 1.6 Element Plus 组件按需引入（已完成）
+
+- **文件：** `vite.config.js`、`main.js`
+- **做法：** `unplugin-vue-components` + `unplugin-auto-import` + `ElementPlusResolver`
+- **效果：** 构建产物 element-plus JS ~1018KB → ~533KB；CSS ~360KB → ~156KB
+
+#### 1.7 默认窗口 Normal 启动（已完成）
+
+- **文件：** `main.go`
+- **做法：** `WindowStartState: options.Normal`（默认 1200×768）
 
 ---
 

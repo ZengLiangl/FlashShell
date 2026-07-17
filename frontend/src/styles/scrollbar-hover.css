@@ -1,0 +1,43 @@
+/* 全局：滚动条仅在鼠标进入可滚动区域时显示（xterm 终端除外） */
+:root {
+  --scroll-thumb: color-mix(in srgb, var(--app-text-muted) 35%, transparent);
+  --scroll-thumb-active: color-mix(in srgb, var(--app-text-muted) 55%, transparent);
+  --scroll-track: transparent;
+}
+
+html :where(:not(.xterm, .xterm *)) {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+html :where(:not(.xterm, .xterm *)):hover {
+  scrollbar-color: var(--scroll-thumb) var(--scroll-track);
+}
+
+html :where(:not(.xterm, .xterm *))::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+html :where(:not(.xterm, .xterm *))::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+html :where(:not(.xterm, .xterm *))::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 4px;
+}
+
+html :where(:not(.xterm, .xterm *)):hover::-webkit-scrollbar-thumb {
+  background: var(--scroll-thumb);
+}
+
+html :where(:not(.xterm, .xterm *)):hover::-webkit-scrollbar-thumb:hover {
+  background: var(--scroll-thumb-active);
+}
+
+/* append-to-body 子弹框：内容区限高，滚动发生在弹框内 */
+.settings-sub-dialog.el-dialog .el-dialog__body {
+  max-height: min(56vh, 520px);
+  overflow: auto;
+}

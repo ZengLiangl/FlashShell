@@ -194,6 +194,7 @@
             v-model="machineEditVisible"
             :title="editingMachine ? '编辑机器' : '添加机器'"
             width="600px"
+            class="settings-sub-dialog"
             append-to-body
         >
             <el-form :model="machineForm" :rules="machineRules" ref="machineFormRef" label-width="100px">
@@ -267,7 +268,13 @@
                 </el-form-item>
 
                 <el-divider content-position="left">SSH 隧道</el-divider>
-                <p class="tunnel-hint">连接成功后自动建立；本地转发：本机端口 → 远端地址</p>
+                <div class="tunnel-head">
+                    <span class="tunnel-hint">连接成功后自动建立；本地转发：本机端口 → 远端地址</span>
+                    <el-button size="small" text type="primary" class="tunnel-add-btn" @click="addTunnel">
+                        <el-icon><Plus /></el-icon>
+                        添加隧道
+                    </el-button>
+                </div>
                 <div
                     v-for="(tun, idx) in machineForm.tunnels"
                     :key="idx"
@@ -289,10 +296,6 @@
                         <el-icon><Delete /></el-icon>
                     </el-button>
                 </div>
-                <el-button size="small" text type="primary" @click="addTunnel">
-                    <el-icon><Plus /></el-icon>
-                    添加隧道
-                </el-button>
             </el-form>
 
             <template #footer>
@@ -316,7 +319,14 @@
             </template>
         </el-dialog>
 
-        <el-dialog v-model="groupManageVisible" title="分组管理" width="480px" append-to-body @open="loadGroups">
+        <el-dialog
+            v-model="groupManageVisible"
+            title="分组管理"
+            width="480px"
+            class="settings-sub-dialog"
+            append-to-body
+            @open="loadGroups"
+        >
             <div class="group-add-row">
                 <el-input v-model="newGroupName" placeholder="新分组名称" clearable @keydown.enter.exact.prevent="addGroup" />
                 <el-tooltip content="添加分组" placement="top">
@@ -1256,11 +1266,24 @@ export default {
     width: 100%;
 }
 
+.tunnel-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+}
+
 .tunnel-hint {
-    margin: 0 0 10px;
+    margin: 0;
     font-size: 12px;
     color: var(--app-text-muted);
     line-height: 1.4;
+}
+
+.tunnel-add-btn {
+    padding: 0;
+    height: auto;
 }
 
 .tunnel-row {
@@ -1270,7 +1293,6 @@ export default {
     gap: 6px;
     margin-bottom: 8px;
     overflow-x: auto;
-    scrollbar-width: thin;
 }
 
 .tunnel-row > * {

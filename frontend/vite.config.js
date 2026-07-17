@@ -1,8 +1,21 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
+import AutoImport from 'unplugin-auto-import/vite'
+import Components from 'unplugin-vue-components/vite'
+import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 export default defineConfig({
-    plugins: [vue()],
+    plugins: [
+        vue(),
+        AutoImport({
+            resolvers: [ElementPlusResolver({ importStyle: 'css' })],
+            dts: 'src/auto-imports.d.ts',
+        }),
+        Components({
+            resolvers: [ElementPlusResolver({ importStyle: 'css' })],
+            dts: 'src/components.d.ts',
+        }),
+    ],
     build: {
         outDir: 'dist',
         assetsDir: 'assets',
@@ -24,6 +37,8 @@ export default defineConfig({
         },
     },
     server: {
+        // 必须与 wails.json 的 frontend:dev:serverUrl 端口一致
         port: 3000,
+        strictPort: true,
     },
 })
