@@ -44,11 +44,13 @@ import { useTheme } from '../../composables/useTheme'
 import { terminalThemeForPreset, getTerminalFont } from '../../utils/themePresets'
 import {
   highlightShellChunk,
+  hasInteractiveTerminalSequences,
   isProbablyBinary,
   mergeLogHighlightConfig,
   mergeLogHighlightColors,
   mergeLogHighlightRules,
   rulesToDisabled,
+  updateTuiModeDepth,
   DEFAULT_SHELL_LOG_COLORS,
 } from '../../utils/shellLogHighlight'
 
@@ -90,6 +92,7 @@ export default {
     let inputLine = ''
     let logHighlightEnabled = true
     let logHighlightConfig = mergeLogHighlightConfig(null)
+    let tuiModeDepth = 0
     const textDecoder = new TextDecoder('utf-8')
 
     const SEARCH_DECORATIONS = {
@@ -190,15 +193,27 @@ export default {
     }
 
     const writeHighlighted = (terminal, bytes) => {
-      if (!logHighlightEnabled || isProbablyBinary(bytes)) {
-        terminal.write(bytes)
+      const raw = bytes instanceof Uint8Array ? bytes : decodeBase64(bytes)
+      if (!logHighlightEnabled || isProbablyBinary(raw)) {
+        terminal.write(raw)
+        return
+      }
+      let text = ''
+      try {
+        text = textDecoder.decode(raw, { stream: true })
+      } catch {
+        terminal.write(raw)
+        return
+      }
+      tuiModeDepth = updateTuiModeDepth(tuiModeDepth, text)
+      if (tuiModeDepth > 0 || hasInteractiveTerminalSequences(text)) {
+        terminal.write(raw)
         return
       }
       try {
-        const text = textDecoder.decode(bytes, { stream: true })
         terminal.write(highlightShellChunk(text, logHighlightConfig))
       } catch {
-        terminal.write(bytes)
+        terminal.write(raw)
       }
     }
 
@@ -324,6 +339,7 @@ export default {
       clearCwdSyncTimer()
       detachWriter()
       resetShellWriterReplay(props.machineName)
+      tuiModeDepth = 0
       searchResultsListener?.dispose?.()
       searchResultsListener = null
       if (resizeObserver) {

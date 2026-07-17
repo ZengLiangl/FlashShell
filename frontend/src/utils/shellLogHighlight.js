@@ -1,6 +1,6 @@
 /**
  * Shell 日志高亮：对完整行注入 ANSI（风格接近 WindTerm）。
- * - 先剥离 ANSI/控制序列再识别（less -f / less 翻页同样生效）
+ * - 仅处理换行结束的完整日志行；less 等分页器的行内重绘原样透传
  * - 仅处理「像日志」的行
  * - 可按关键字单独关闭高亮
  */
@@ -32,6 +32,12 @@ export const DEFAULT_SHELL_LOG_COLORS = {
 }
 
 const RE_ANSI = /\x1b(?:\[[0-9;?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\))/g
+
+/** less/vim 等全屏或行内重绘用的控制序列（非单纯配色 SGR） */
+const RE_INTERACTIVE_TERMINAL = /\x1b(?:\[\??(?:1049|1047|47)[hl]|\[[0-9;]*[HJKsuABCDEFG]|\[7m|\[27m|\][^\x07\x1b]*(?:\x07|\x1b\\)|[78])/g
+
+const RE_ALT_SCREEN_ENTER = /\x1b\[\??(?:1049|1047|47)h|\x1b\[1049h/g
+const RE_ALT_SCREEN_LEAVE = /\x1b\[\??(?:1049|1047|47)l|\x1b\[1049l/g
 
 const RE_TIMESTAMP =
   /\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d{1,9})?|\b\d{2}:\d{2}:\d{2}(?:[.,]\d{1,3})?\b/g
@@ -136,6 +142,20 @@ export function stripTerminalControls(text) {
   return String(text || '')
     .replace(RE_ANSI, '')
     .replace(/[\x00-\x08\x0b\x0c\x0e-\x1a\x7f]/g, '')
+}
+
+/** 是否包含分页器/全屏程序的交互控制序列（搜索反显、清行、光标定位等） */
+export function hasInteractiveTerminalSequences(text) {
+  RE_INTERACTIVE_TERMINAL.lastIndex = 0
+  return RE_INTERACTIVE_TERMINAL.test(String(text || ''))
+}
+
+/** 根据 alternate screen 进出序列更新 TUI 嵌套深度 */
+export function updateTuiModeDepth(depth, text) {
+  const s = String(text || '')
+  const enters = s.match(RE_ALT_SCREEN_ENTER)?.length || 0
+  const leaves = s.match(RE_ALT_SCREEN_LEAVE)?.length || 0
+  return Math.max(0, depth + enters - leaves)
 }
 
 function looksLikeLogLine(line) {
@@ -278,9 +298,10 @@ export function logHighlightPreviewSegments(sample, colors, rules) {
   return segs
 }
 
-/** 高亮单行（不含换行符）；less 等带 ANSI 的行会先剥离再着色 */
+/** 高亮单行（不含换行符）；仅处理完整日志行，保留分页器自带的 ANSI */
 export function highlightLogLine(line, config) {
   if (!line) return line
+  if (hasInteractiveTerminalSequences(line)) return line
   const plain = stripTerminalControls(line).replace(/\r+$/, '')
   if (!plain || !looksLikeLogLine(plain)) return line
   return applyMatches(plain, collectMatches(plain, config))
@@ -293,6 +314,7 @@ export function highlightLogLine(line, config) {
  */
 export function highlightShellChunk(text, config) {
   if (!text) return text
+  if (hasInteractiveTerminalSequences(text)) return text
 
   let result = ''
   let start = 0
@@ -308,9 +330,9 @@ export function highlightShellChunk(text, config) {
       start = i + 1
       continue
     }
+    // less 搜索等行内重绘：不可剥离/重着色，否则字符错位
     if (ch === '\r' && text[i + 1] !== '\n') {
-      const segment = text.slice(start, i)
-      result += highlightLogLine(segment, config) + '\r'
+      result += text.slice(start, i + 1)
       start = i + 1
     }
   }
