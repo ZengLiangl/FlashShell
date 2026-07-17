@@ -701,18 +701,15 @@ export default {
   flex: 1;
   display: flex;
   align-items: flex-end;
-  gap: 3px;
+  gap: 2px;
   border-bottom: 1px solid color-mix(in srgb, var(--app-border) 80%, transparent);
   padding-bottom: 1px;
   min-width: 0;
-  overflow: hidden;
 }
 
 .net-bar-group {
-  flex: 0 0 5px;
-  width: 5px;
-  min-width: 5px;
-  max-width: 5px;
+  flex: 1 1 0;
+  min-width: 0;
   height: 100%;
   display: flex;
   flex-direction: row;
@@ -722,8 +719,9 @@ export default {
 }
 
 .net-bar {
-  width: 2px;
-  flex: 0 0 2px;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 6px;
   min-height: 0;
   border-radius: 1px 1px 0 0;
   opacity: 0.85;
