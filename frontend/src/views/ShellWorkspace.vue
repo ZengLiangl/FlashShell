@@ -72,7 +72,7 @@
           @close-session="(name) => $emit('close-session', name)"
           @reconnect="onReconnect"
           @clear="onClear"
-          @open-picker="pickerVisible = true"
+          @open-picker="() => openPicker()"
           @add-local="onAddLocal"
           @back="$emit('back')"
           @open-search="openSearch"
@@ -91,7 +91,7 @@
               :records="historyRecords"
               :sessions="sessions"
               @connect="onHistoryConnect"
-              @open-picker="pickerVisible = true"
+              @open-picker="(tab) => openPicker(tab)"
               @clear="clearHistory"
               @remove="removeHistory"
               @back="$emit('back')"
@@ -139,10 +139,17 @@
       :sessions="sessions"
       :workspace-sessions="workspaceSessions"
       :connecting-name="connectingName"
+      :history-records="historyRecords"
+      :initial-tab="pickerInitialTab"
       @connect="onPickerConnect"
       @edit-machine="(m) => $emit('edit-machine', m)"
+      @copy-machine="(m) => $emit('copy-machine', m)"
+      @delete-machine="(m) => $emit('delete-machine', m)"
       @add-machine="$emit('add-machine')"
       @add-local="onPickerAddLocal"
+      @clear-history="clearHistory"
+      @remove-history="removeHistory"
+      @open="loadHistory"
     />
   </div>
 </template>
@@ -194,6 +201,7 @@ export default {
   },
   emits: [
     'back', 'connect', 'disconnect', 'close-session', 'reconnect', 'test', 'add-machine', 'edit-machine',
+    'copy-machine', 'delete-machine',
     'add-local', 'start-resize', 'update:activeMachine', 'history-changed',
     'update:broadcast-enabled', 'update:broadcast-targets', 'update:split-session-ids',
     'reorder-tabs',
@@ -207,6 +215,7 @@ export default {
     const searchQuery = ref('')
     const searchMatchSummary = ref('')
     const pickerVisible = ref(false)
+    const pickerInitialTab = ref('')
     const transferVisible = ref(false)
     const transferActiveCount = ref(0)
     const historyRecords = ref([])
@@ -476,7 +485,8 @@ export default {
       emit('add-local')
     }
 
-    const openPicker = () => {
+    const openPicker = (tab = '') => {
+      pickerInitialTab.value = tab === 'history' || tab === 'machines' ? tab : ''
       pickerVisible.value = true
     }
 
@@ -585,6 +595,7 @@ export default {
       searchQuery,
       searchMatchSummary,
       pickerVisible,
+      pickerInitialTab,
       openPicker,
       transferVisible,
       transferActiveCount,

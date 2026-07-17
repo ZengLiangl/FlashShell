@@ -16,7 +16,7 @@ export const DEFAULT_SHORTCUTS = {
 export const SHORTCUT_LABELS = {
   newWindow: '新建窗口',
   machineConfig: '机器配置',
-  connectionManager: '连接管理器',
+  connectionManager: '连接',
   envVars: '环境变量',
   systemSettings: '系统设置',
   refreshConfig: '刷新配置列表',

@@ -7,7 +7,7 @@
           <ArrowLeft />
         </el-icon>
       </el-button>
-      <el-button class="folder-btn" size="small" text title="连接管理器" @click="$emit('open-picker')">
+      <el-button class="folder-btn" size="small" text title="连接（最近 / 全部机器）" @click="$emit('open-picker')">
         <el-icon :size="16">
           <Folder />
         </el-icon>

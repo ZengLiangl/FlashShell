@@ -97,17 +97,19 @@
                         v-for="machine in filteredMachines"
                         :key="machine.id || machine.name"
                         class="ml-item"
+                        :class="{ 'is-context-target': isContextTarget(machine) }"
                         @click="editMachine(machine)"
+                        @contextmenu.prevent="onMachineContextMenu($event, machine)"
                     >
                         <div class="ml-machine-icon" aria-hidden="true">
                             <el-icon :size="16"><Monitor /></el-icon>
                         </div>
                         <div class="ml-body">
                             <div class="ml-line">
-                                <span class="ml-name">{{ machine.name }}</span>
+                                <TextOverflowTooltip :text="machine.name" text-class="ml-name" />
                                 <span class="ml-badge is-group">{{ machine.group || DEFAULT_MACHINE_GROUP }}</span>
                             </div>
-                            <div class="ml-addr">{{ formatMachineAddr(machine) }}</div>
+                            <TextOverflowTooltip :text="formatMachineAddr(machine)" text-class="ml-addr" />
                         </div>
                         <div class="ml-side ml-actions-fade icon-actions" @click.stop>
                             <el-tooltip content="编辑" placement="top">
@@ -151,18 +153,22 @@
                                 v-for="machine in group.machines"
                                 :key="machine.id || machine.name"
                                 class="board-card"
-                                :class="{ 'is-dragging': draggingMachineId === (machine.id || machine.name) }"
+                                :class="{
+                                    'is-dragging': draggingMachineId === (machine.id || machine.name),
+                                    'is-context-target': isContextTarget(machine),
+                                }"
                                 draggable="true"
                                 @dragstart="onBoardDragStart(machine, $event)"
                                 @dragend="onBoardDragEnd"
                                 @dblclick="editMachine(machine)"
+                                @contextmenu.prevent="onMachineContextMenu($event, machine)"
                             >
                                 <div class="ml-machine-icon" aria-hidden="true">
                                     <el-icon :size="16"><Monitor /></el-icon>
                                 </div>
                                 <div class="board-card-main">
-                                    <span class="ml-name">{{ machine.name }}</span>
-                                    <span class="ml-addr">{{ formatMachineAddr(machine) }}</span>
+                                    <TextOverflowTooltip :text="machine.name" text-class="ml-name" />
+                                    <TextOverflowTooltip :text="formatMachineAddr(machine)" text-class="ml-addr" />
                                 </div>
                                 <div class="board-card-actions icon-actions" @mousedown.stop @click.stop>
                                     <el-tooltip content="编辑" placement="top">
@@ -348,6 +354,13 @@
                 </div>
             </template>
         </el-dialog>
+
+        <MachineContextMenu
+            :ctx="ctx"
+            @copy="onContextCopy"
+            @edit="onContextEdit"
+            @delete="onContextDelete"
+        />
     </div>
 </template>
 
@@ -383,11 +396,17 @@ import {
     getMachineGroup,
     formatMachineAddr,
 } from '../utils/machineGroups'
+import { copyMachineRecord } from '../utils/machineCopy'
+import { useMachineContextMenu } from '../composables/useMachineContextMenu'
+import MachineContextMenu from './shell/MachineContextMenu.vue'
+import TextOverflowTooltip from './TextOverflowTooltip.vue'
 
 export default {
     name: 'MachineConfigDialog',
     components: {
         Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid, Close, Check, Monitor,
+        MachineContextMenu,
+        TextOverflowTooltip,
     },
     props: {
         modelValue: { type: Boolean, default: false },
@@ -405,6 +424,8 @@ export default {
         const draggingMachineId = ref('')
         const dragOverGroup = ref('')
         const movingMachine = ref(false)
+        const copyingMachine = ref(false)
+        const { ctx, hideContextMenu, onMachineContextMenu, isContextTarget } = useMachineContextMenu()
         const sortedMachines = computed(() => sortMachinesByName(machines.value))
         const filteredMachines = computed(() => {
             const kw = machineKeyword.value
@@ -725,6 +746,37 @@ export default {
             }
         }
 
+        const copyMachine = async (machine) => {
+            if (!machine?.id || copyingMachine.value) return
+            copyingMachine.value = true
+            try {
+                const copyName = await copyMachineRecord(machine, machines.value)
+                ElMessage.success(`已复制为「${copyName}」`)
+                await loadMachines()
+                emit('changed')
+            } catch (error) {
+                console.error('复制机器配置失败:', error)
+                ElMessage.error('复制机器配置失败: ' + (error.message || error))
+            } finally {
+                copyingMachine.value = false
+            }
+        }
+
+        const onContextCopy = (machine) => {
+            hideContextMenu()
+            if (machine) copyMachine(machine)
+        }
+
+        const onContextEdit = (machine) => {
+            hideContextMenu()
+            if (machine) editMachine(machine)
+        }
+
+        const onContextDelete = (machine) => {
+            hideContextMenu()
+            if (machine) deleteMachine(machine)
+        }
+
         const testConnection = async (machine) => {
             try {
                 machine.testing = true
@@ -914,6 +966,13 @@ export default {
             editMachine,
             saveMachine,
             deleteMachine,
+            copyMachine,
+            onMachineContextMenu,
+            isContextTarget,
+            onContextCopy,
+            onContextEdit,
+            onContextDelete,
+            ctx,
             testConnection,
             testDraftConnection,
             selectKeyFile,
@@ -1153,6 +1212,23 @@ export default {
     display: flex;
     flex-direction: column;
     gap: 0;
+    overflow: hidden;
+}
+
+.board-card-main :deep(.el-tooltip) {
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+}
+
+.ml-line :deep(.el-tooltip) {
+    flex: 1;
+    min-width: 0;
+}
+
+.ml-line :deep(.ml-name) {
+    flex: 1;
+    min-width: 0;
 }
 
 .board-card-actions {

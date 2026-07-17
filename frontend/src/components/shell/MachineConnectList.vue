@@ -32,11 +32,13 @@
           :class="{
             connected: isConnected(machine.name),
             connecting: machineConnecting(machine.name),
+            'is-context-target': showContextMenu && isContextTarget(machine),
           }"
           role="option"
           tabindex="0"
           @click="onConnect(machine)"
           @keydown.enter.prevent="onConnect(machine)"
+          @contextmenu.prevent="onItemContextMenu($event, machine)"
         >
           <div class="ml-machine-icon" aria-hidden="true">
             <el-icon :size="16"><Monitor /></el-icon>
@@ -66,11 +68,13 @@
         :class="{
           connected: isConnected(machine.name),
           connecting: machineConnecting(machine.name),
+          'is-context-target': showContextMenu && isContextTarget(machine),
         }"
         role="option"
         tabindex="0"
         @click="onConnect(machine)"
         @keydown.enter.prevent="onConnect(machine)"
+        @contextmenu.prevent="onItemContextMenu($event, machine)"
       >
           <div class="ml-machine-icon" aria-hidden="true">
             <el-icon :size="16"><Monitor /></el-icon>
@@ -91,6 +95,14 @@
       </li>
     </ul>
   </div>
+
+  <MachineContextMenu
+    v-if="showContextMenu"
+    :ctx="ctx"
+    @copy="onCopy"
+    @edit="onEdit"
+    @delete="onDelete"
+  />
 </template>
 
 <script>
@@ -103,23 +115,27 @@ import {
   isMachineConnecting,
   countMachineSessions,
 } from '../../utils/machineGroups'
+import { useMachineContextMenu } from '../../composables/useMachineContextMenu'
+import MachineContextMenu from './MachineContextMenu.vue'
 
 export default {
   name: 'MachineConnectList',
-  components: { ArrowRight, Setting, Monitor },
+  components: { ArrowRight, Setting, Monitor, MachineContextMenu },
   props: {
     machines: { type: Array, default: () => [] },
     sessions: { type: Array, default: () => [] },
     workspaceSessions: { type: Array, default: () => [] },
     connectingName: { type: String, default: '' },
     showEdit: { type: Boolean, default: false },
+    showContextMenu: { type: Boolean, default: false },
     emptyText: { type: String, default: '暂无机器' },
     autoExpandOnFilter: { type: Boolean, default: true },
     filterKeyword: { type: String, default: '' },
   },
-  emits: ['connect', 'edit-machine'],
+  emits: ['connect', 'edit-machine', 'copy-machine', 'delete-machine'],
   setup(props, { emit }) {
     const expandedGroups = ref([])
+    const { ctx, hideContextMenu, onMachineContextMenu, isContextTarget } = useMachineContextMenu()
 
     const machineTree = computed(() => splitMachineTree(props.machines || []))
     const customGroups = computed(() => machineTree.value.customGroups)
@@ -160,7 +176,28 @@ export default {
       emit('connect', machine.name)
     }
 
+    const onItemContextMenu = (event, machine) => {
+      if (!props.showContextMenu) return
+      onMachineContextMenu(event, machine)
+    }
+
+    const onCopy = (machine) => {
+      hideContextMenu()
+      if (machine) emit('copy-machine', machine)
+    }
+
+    const onEdit = (machine) => {
+      hideContextMenu()
+      if (machine) emit('edit-machine', machine)
+    }
+
+    const onDelete = (machine) => {
+      hideContextMenu()
+      if (machine) emit('delete-machine', machine)
+    }
+
     return {
+      ctx,
       customGroups,
       defaultMachines,
       hasTree,
@@ -171,6 +208,11 @@ export default {
       machineConnecting,
       formatMachineAddr,
       onConnect,
+      onItemContextMenu,
+      isContextTarget,
+      onCopy,
+      onEdit,
+      onDelete,
     }
   },
 }

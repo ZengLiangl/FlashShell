@@ -57,7 +57,8 @@
         @test="testShellConnection" @update:broadcast-enabled="(v) => (broadcastEnabled = v)"
         @update:broadcast-targets="(v) => (broadcastTargets = v)"
         @update:split-session-ids="(v) => (splitSessionIds = v)" @reorder-tabs="({ from, to }) => reorderTabs(from, to)"
-        @add-machine="openShellMachineDialog" @edit-machine="openShellMachineEdit" @start-resize="startResize" />
+        @add-machine="openShellMachineDialog" @edit-machine="openShellMachineEdit"
+        @copy-machine="copyShellMachine" @delete-machine="deleteShellMachine" @start-resize="startResize" />
     </div>
 
     <!-- 首页：任务模式 + Shell 模式入口 -->
@@ -105,6 +106,7 @@ import { useTheme } from "./composables/useTheme";
 import { mergeShortcuts, matchesShortcut, isFormFieldTarget, isXtermInput } from "./utils/shortcuts";
 import { hasOverlayAboveSettingsHub } from "./utils/dialogOverlay";
 import { setCachedUpdateCheck, isUsableUpdateResult } from "./utils/updateCheckCache";
+import { copyMachineRecord } from "./utils/machineCopy";
 
 export default {
   name: "App",
@@ -510,6 +512,32 @@ export default {
       openSettingsHub('machines');
       await loadMachines();
       await loadShellMachines();
+    };
+
+    const copyShellMachine = async (machine) => {
+      if (!machine?.id) return;
+      try {
+        const copyName = await copyMachineRecord(machine, shellMachines.value);
+        ElMessage.success(`已复制为「${copyName}」`);
+        await onMachinesChanged();
+      } catch (error) {
+        console.error('复制机器配置失败:', error);
+        ElMessage.error('复制机器配置失败: ' + (error.message || error));
+      }
+    };
+
+    const deleteShellMachine = async (machine) => {
+      if (!machine?.id) return;
+      try {
+        await ElMessageBox.confirm(`确定删除机器「${machine.name}」吗？`, '确认删除', { type: 'warning' });
+        await App.DeleteMachine(machine.id);
+        ElMessage.success('机器配置删除成功');
+        await onMachinesChanged();
+      } catch (error) {
+        if (error === 'cancel') return;
+        console.error('删除机器配置失败:', error);
+        ElMessage.error('删除机器配置失败: ' + (error.message || error));
+      }
     };
 
     const onMachinesChanged = async () => {
@@ -1390,6 +1418,8 @@ export default {
       closeShellSession,
       openShellMachineDialog,
       openShellMachineEdit,
+      copyShellMachine,
+      deleteShellMachine,
       onMachinesChanged,
       homePageRef,
       shellWorkspaceRef,
