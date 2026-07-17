@@ -339,6 +339,38 @@ func (a *App) GetConfig() (*define.Root, error) {
 	return a.configManager.LoadConfig()
 }
 
+// GetProjectSummaries 首页列表用：仅返回项目摘要，不含 steps
+func (a *App) GetProjectSummaries() ([]define.ProjectSummary, error) {
+	root, err := a.configManager.LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]define.ProjectSummary, 0, len(root.Projects))
+	for _, p := range root.Projects {
+		out = append(out, define.ProjectSummary{
+			Name:            p.Name,
+			Description:     p.Description,
+			SubProjectCount: len(p.SubProjects),
+		})
+	}
+	return out, nil
+}
+
+// GetProject 按名称获取完整项目（含 subprojects/commands/steps）
+func (a *App) GetProject(name string) (*define.Project, error) {
+	root, err := a.configManager.LoadConfig()
+	if err != nil {
+		return nil, err
+	}
+	for i := range root.Projects {
+		if root.Projects[i].Name == name {
+			p := root.Projects[i]
+			return &p, nil
+		}
+	}
+	return nil, fmt.Errorf("未找到项目: %s", name)
+}
+
 // GetConfigForRefresh 获取配置（用于刷新，不更新全局配置）
 func (a *App) GetConfigForRefresh() (*define.Root, error) {
 	return a.configManager.LoadConfigForRefresh()
@@ -512,16 +544,32 @@ func (a *App) TestMachineDraftConnection(m define.Machine, sensitive define.Sens
 	return sshClient.TestConnection()
 }
 
-// 返回副本并填充 host/port/user，便于前端按名称或 IP 搜索与展示。
+// 返回副本并填充 host/port/user（优先 list hint，避免列表全量解密）。
 func (a *App) GetMachines() []define.Machine {
 	src := a.configManager.GetAllMachinesFromGlobal()
+	dirty := false
+	for i := range src {
+		if changed, _ := src[i].EnsureListHints(); changed {
+			dirty = true
+		}
+	}
+	if dirty {
+		if err := a.configManager.SaveGlobalConfigMachines(src); err != nil {
+			a.pushOutput(fmt.Sprintf("迁移机器列表 hint 失败: %s", err.Error()))
+		}
+	}
 	out := make([]define.Machine, len(src))
 	for i := range src {
 		out[i] = src[i]
-		if s, err := src[i].GetSensitiveData(); err == nil && s != nil {
-			out[i].Host = s.Host
-			out[i].Port = s.Port
-			out[i].User = s.User
+		if !out[i].ApplyListFieldsForDisplay() {
+			if s, err := src[i].GetSensitiveData(); err == nil && s != nil {
+				out[i].Host = s.Host
+				out[i].Port = s.Port
+				if out[i].Port <= 0 {
+					out[i].Port = 22
+				}
+				out[i].User = s.User
+			}
 		}
 	}
 	return out

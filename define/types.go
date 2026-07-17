@@ -28,6 +28,13 @@ type Project struct {
 	SubProjects []SubProject `yaml:"subprojects" json:"subprojects"`
 }
 
+// ProjectSummary 首页列表用轻量摘要（不含 steps）
+type ProjectSummary struct {
+	Name            string `json:"name"`
+	Description     string `json:"description"`
+	SubProjectCount int    `json:"subProjectCount"`
+}
+
 // SubProject 子项目配置
 type SubProject struct {
 	Name        string    `yaml:"name" json:"name"`
@@ -55,7 +62,11 @@ type Machine struct {
 	KeyFile       string `yaml:"key_file,omitempty" json:"key_file,omitempty"`
 	// Tunnels SSH 隧道（本地/远程/动态），连接后自动建立
 	Tunnels []SSHTunnel `yaml:"tunnels,omitempty" json:"tunnels,omitempty"`
-	// 列表展示用（不落盘；由 GetMachines 从敏感数据填充）
+	// ListHost/ListPort/ListUser 列表展示与搜索用（明文；密码等仍在 encrypted_data）
+	ListHost string `yaml:"list_host,omitempty" json:"list_host,omitempty"`
+	ListPort int    `yaml:"list_port,omitempty" json:"list_port,omitempty"`
+	ListUser string `yaml:"list_user,omitempty" json:"list_user,omitempty"`
+	// 列表展示用（API 响应字段，由 List* 或敏感数据填充）
 	Host string `yaml:"-" json:"host,omitempty"`
 	Port int    `yaml:"-" json:"port,omitempty"`
 	User string `yaml:"-" json:"user,omitempty"`
@@ -127,8 +138,48 @@ func (m *Machine) SetSensitiveData(data *SensitiveData) error {
 	// 设置加密数据和敏感数据
 	m.EncryptedData = encryptedStr
 	m.sensitiveData = data
+	m.syncListHintsFromSensitive(data)
 
 	return nil
+}
+
+func (m *Machine) syncListHintsFromSensitive(data *SensitiveData) {
+	if m == nil || data == nil {
+		return
+	}
+	m.ListHost = strings.TrimSpace(data.Host)
+	m.ListPort = data.Port
+	if m.ListPort <= 0 {
+		m.ListPort = 22
+	}
+	m.ListUser = strings.TrimSpace(data.User)
+}
+
+// ApplyListFieldsForDisplay 用 List* hint 填充展示字段；有 hint 返回 true
+func (m *Machine) ApplyListFieldsForDisplay() bool {
+	if m == nil || m.ListHost == "" {
+		return false
+	}
+	m.Host = m.ListHost
+	m.Port = m.ListPort
+	if m.Port <= 0 {
+		m.Port = 22
+	}
+	m.User = m.ListUser
+	return true
+}
+
+// EnsureListHints 为缺少 hint 的旧配置从加密块迁移（仅 host/port/user）
+func (m *Machine) EnsureListHints() (changed bool, err error) {
+	if m == nil || m.ListHost != "" || m.EncryptedData == "" {
+		return false, nil
+	}
+	s, err := m.GetSensitiveData()
+	if err != nil || s == nil || strings.TrimSpace(s.Host) == "" {
+		return false, err
+	}
+	m.syncListHintsFromSensitive(s)
+	return true, nil
 }
 
 // GetSensitiveData 获取敏感数据（解密）

@@ -1,10 +1,29 @@
-const MAX_BUFFER_BYTES = 2 * 1024 * 1024
+import {
+  SHELL_OUTPUT_BUFFER_ACTIVE_MAX,
+  SHELL_OUTPUT_BUFFER_BACKGROUND_MAX,
+} from '../constants/shellMemory'
 
-/** @type {Map<string, { bytes: number, items: Array<{ type: string, content: string }>, replayedCount: number }>} */
+/** @type {Map<string, { bytes: number, items: Array<{ type: string, content: string | Uint8Array }>, replayedCount: number }>} */
 const buffers = new Map()
 
 /** @type {Map<string, { writeData: Function, writeLine: Function, clear: Function }>} */
 const writers = new Map()
+
+/** @type {Set<string>} */
+const activeSessions = new Set()
+
+function getMaxBufferBytes(machineName) {
+  return activeSessions.has(machineName)
+    ? SHELL_OUTPUT_BUFFER_ACTIVE_MAX
+    : SHELL_OUTPUT_BUFFER_BACKGROUND_MAX
+}
+
+export function setShellOutputSessionActive(machineName, active) {
+  if (!machineName) return
+  if (active) activeSessions.add(machineName)
+  else activeSessions.delete(machineName)
+  trimBuffer(getBuffer(machineName), machineName)
+}
 
 function getBuffer(machineName) {
   if (!buffers.has(machineName)) {
@@ -13,13 +32,33 @@ function getBuffer(machineName) {
   return buffers.get(machineName)
 }
 
+/** base64 字符串 → Uint8Array（Wails 事件 JSON 传输仍为 base64，此处只解码一次） */
+export function decodeShellOutputData(content) {
+  if (content instanceof Uint8Array) return content
+  if (typeof content !== 'string' || !content) return new Uint8Array(0)
+  const binary = atob(content)
+  const bytes = new Uint8Array(binary.length)
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i)
+  }
+  return bytes
+}
+
+function normalizeContent(type, content) {
+  if (type === 'data') return decodeShellOutputData(content)
+  return content
+}
+
 function estimateSize(type, content) {
-  if (type === 'data') return content.length
+  if (type === 'data') {
+    return content instanceof Uint8Array ? content.byteLength : (content?.length || 0)
+  }
   return (content?.length || 0) * 2
 }
 
-function trimBuffer(buf) {
-  while (buf.bytes > MAX_BUFFER_BYTES && buf.items.length > 0) {
+function trimBuffer(buf, machineName) {
+  const maxBytes = getMaxBufferBytes(machineName)
+  while (buf.bytes > maxBytes && buf.items.length > 0) {
     const removed = buf.items.shift()
     buf.bytes -= estimateSize(removed.type, removed.content)
     if (buf.replayedCount > 0) buf.replayedCount -= 1
@@ -37,16 +76,19 @@ function replayBufferItems(buf, writer, fromIndex = 0) {
 }
 
 export function pushShellOutput(machineName, type, content) {
-  if (!machineName || !content) return
+  if (!machineName || content == null || content === '') return
+  const normalized = normalizeContent(type, content)
+  if (type === 'data' && normalized.byteLength === 0) return
+
   const buf = getBuffer(machineName)
-  buf.items.push({ type, content })
-  buf.bytes += estimateSize(type, content)
-  trimBuffer(buf)
+  buf.items.push({ type, content: normalized })
+  buf.bytes += estimateSize(type, normalized)
+  trimBuffer(buf, machineName)
 
   const writer = writers.get(machineName)
   if (!writer) return
-  if (type === 'data') writer.writeData(content)
-  else writer.writeLine(content)
+  if (type === 'data') writer.writeData(normalized)
+  else writer.writeLine(normalized)
   buf.replayedCount = buf.items.length
 }
 
@@ -58,6 +100,7 @@ export function clearShellOutput(machineName) {
 export function removeShellOutput(machineName) {
   buffers.delete(machineName)
   writers.delete(machineName)
+  activeSessions.delete(machineName)
 }
 
 /** 丢弃缓冲但不清空终端画面（软断开后重连时避免回放重复输出） */
@@ -77,6 +120,10 @@ export function migrateShellOutput(fromName, toName) {
   if (writer) {
     writers.set(toName, writer)
     writers.delete(fromName)
+  }
+  if (activeSessions.has(fromName)) {
+    activeSessions.add(toName)
+    activeSessions.delete(fromName)
   }
 }
 

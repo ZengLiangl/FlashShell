@@ -202,6 +202,19 @@ func (cm *ConfigManager) GetAllMachinesFromGlobal() []define.Machine {
 	return cm.globalConfigManager.GetAllMachines()
 }
 
+// SaveGlobalConfigMachines 更新全局配置中的机器列表并落盘
+func (cm *ConfigManager) SaveGlobalConfigMachines(machines []define.Machine) error {
+	if cm.globalConfigManager == nil {
+		return fmt.Errorf("全局配置管理器未初始化")
+	}
+	cfg := cm.globalConfigManager.GetConfig()
+	if cfg == nil {
+		return fmt.Errorf("全局配置未加载")
+	}
+	cfg.Machines = machines
+	return cm.globalConfigManager.SaveGlobalConfig(cfg)
+}
+
 // RemoveMachineFromGlobal 从全局配置移除机器配置
 func (cm *ConfigManager) RemoveMachineFromGlobal(id string) error {
 	if cm.globalConfigManager == nil {

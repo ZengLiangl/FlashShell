@@ -89,6 +89,10 @@ export function GetMachines():Promise<Array<define.Machine>>;
 
 export function GetOutput():Promise<Array<string>>;
 
+export function GetProject(arg1:string):Promise<define.Project>;
+
+export function GetProjectSummaries():Promise<Array<define.ProjectSummary>>;
+
 export function GetSessionInfo():Promise<data.SessionState>;
 
 export function GetShellDownloadDir():Promise<string>;

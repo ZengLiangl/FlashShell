@@ -122,7 +122,7 @@
         </div>
 
         <div class="zone-body" :class="{ 'zone-body--narrow': !hasProjects }">
-          <div v-if="machines.length === 0" class="app-empty">
+          <div v-if="!(machines || []).length" class="app-empty">
             <p class="app-empty-title">暂无机器</p>
             <p class="app-empty-desc">点击右上角 + 添加机器</p>
           </div>
@@ -145,7 +145,7 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { Refresh, Check, FolderOpened } from '@element-plus/icons-vue'
+import { Refresh } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import { machineMatchesKeyword, isMachineConnecting } from '../utils/machineGroups'
@@ -161,9 +161,10 @@ function basename(filePath) {
 
 export default {
   name: 'HomePage',
-  components: { MachineConnectList, Check, FolderOpened },
+  components: { MachineConnectList },
   props: {
     projects: { type: Array, required: true },
+    machines: { type: Array, default: () => [] },
     connectedCount: { type: Number, default: 0 },
     hasTask: { type: Boolean, default: false },
     taskRunning: { type: Boolean, default: false },
@@ -181,21 +182,12 @@ export default {
     'open-system-settings',
   ],
   setup(props, { emit }) {
-    const machines = ref([])
     const machineKeyword = ref('')
     const configFiles = ref([])
     const currentConfig = ref('')
     const shortcuts = ref(mergeShortcuts())
 
     const labelOf = (id) => formatShortcut(shortcuts.value[id])
-
-    const loadMachines = async () => {
-      try {
-        machines.value = await App.GetMachines() || []
-      } catch {
-        machines.value = []
-      }
-    }
 
     const loadConfigMenu = async () => {
       try {
@@ -242,7 +234,7 @@ export default {
 
     const filteredMachines = computed(() => {
       const kw = machineKeyword.value
-      const list = machines.value || []
+      const list = props.machines || []
       if (!String(kw || '').trim()) return list
       return list.filter((m) => machineMatchesKeyword(m, kw))
     })
@@ -256,12 +248,11 @@ export default {
     }
 
     const handleRefresh = async () => {
-      await Promise.all([loadMachines(), loadConfigMenu()])
+      await loadConfigMenu()
       emit('refresh')
     }
 
     onMounted(() => {
-      loadMachines()
       loadConfigMenu()
       loadShortcuts()
       EventsOn('menu:refresh', loadConfigMenu)
@@ -279,7 +270,7 @@ export default {
 
     return {
       Refresh,
-      machines,
+      machines: computed(() => props.machines || []),
       machineKeyword,
       filteredMachines,
       hasProjects,
@@ -289,7 +280,6 @@ export default {
       labelOf,
       onConfigCommand,
       onConnectMachine,
-      loadMachines,
       handleRefresh,
     }
   },

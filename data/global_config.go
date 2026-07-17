@@ -26,6 +26,8 @@ type ThemeSettings struct {
 	ShellFontFamily string  `yaml:"shellFontFamily" json:"shellFontFamily"` // 终端字体 id
 	ShellFontSize   int     `yaml:"shellFontSize" json:"shellFontSize"`     // Shell 终端字号，默认 13
 	ShellLineHeight float64 `yaml:"shellLineHeight" json:"shellLineHeight"` // Shell 终端行高倍数，默认 1.2
+	// ShellMemorySaver 离开 Shell 时卸载工作区 UI（Go 端会话保持，回 Shell 时重建终端）
+	ShellMemorySaver bool `yaml:"shellMemorySaver" json:"shellMemorySaver"`
 }
 
 // ProxySettings HTTP/SOCKS 代理

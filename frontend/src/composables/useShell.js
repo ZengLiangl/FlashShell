@@ -1,7 +1,7 @@
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as App from '../../wailsjs/go/app/App'
-import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
+import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { sortMachinesByName, isMachineConnected } from '../utils/machineGroups'
 import {
   pushShellOutput,
@@ -607,15 +607,21 @@ export function useShell() {
     splitSessionIds.value = [...set]
   }
 
+  let shellEventsActive = false
+  let offShellStatus = null
+  let offShellData = null
+  let offShellLine = null
+  let offShellClear = null
+
   const setupShellEvents = () => {
-    teardownShellEvents()
-    EventsOn('shell:status', handleShellStatus)
-    EventsOn('shell:data', (payload) => {
+    if (shellEventsActive) return
+    offShellStatus = EventsOn('shell:status', handleShellStatus)
+    offShellData = EventsOn('shell:data', (payload) => {
       if (payload?.machineName && payload?.data) {
         pushShellOutput(payload.machineName, 'data', payload.data)
       }
     })
-    EventsOn('shell:line', (payload) => {
+    offShellLine = EventsOn('shell:line', (payload) => {
       if (!payload?.machineName || !payload?.line) return
       pushShellOutput(payload.machineName, 'line', payload.line)
       const line = String(payload.line)
@@ -623,20 +629,30 @@ export function useShell() {
         markTabFailed(payload.machineName)
       }
     })
-    EventsOn('shell:clear', (payload) => {
+    offShellClear = EventsOn('shell:clear', (payload) => {
       if (payload?.machineName) clearShellOutput(payload.machineName)
     })
+    shellEventsActive = true
     syncSessions()
   }
 
   const teardownShellEvents = () => {
-    EventsOff('shell:status', 'shell:data', 'shell:line', 'shell:clear')
+    offShellStatus?.()
+    offShellData?.()
+    offShellLine?.()
+    offShellClear?.()
+    offShellStatus = null
+    offShellData = null
+    offShellLine = null
+    offShellClear = null
+    shellEventsActive = false
   }
 
-  onMounted(() => {
+  /** 首次进入 Shell 或需要后台会话同步时调用 */
+  const ensureShellReady = async () => {
     setupShellEvents()
-    loadMachines()
-  })
+    await loadMachines()
+  }
 
   onUnmounted(() => {
     teardownShellEvents()
@@ -671,6 +687,7 @@ export function useShell() {
     reorderTabs,
     setupShellEvents,
     teardownShellEvents,
+    ensureShellReady,
     isMachineConnected: (name) => isMachineConnected(name, sessions.value),
   }
 }

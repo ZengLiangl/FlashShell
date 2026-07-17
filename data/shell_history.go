@@ -19,6 +19,8 @@ type ShellHistoryManager struct {
 	records  []define.ShellHistoryRecord
 }
 
+const maxShellHistoryRecords = 500
+
 // NewShellHistoryManager 创建历史管理器
 func NewShellHistoryManager() *ShellHistoryManager {
 	path := "shell_history.json"
@@ -111,6 +113,12 @@ func (m *ShellHistoryManager) RecordConnect(machine *define.Machine, host string
 		LastConnectedAt: now,
 		ConnectCount:    1,
 	})
+	if len(m.records) > maxShellHistoryRecords {
+		sort.Slice(m.records, func(i, j int) bool {
+			return m.records[i].LastConnectedAt < m.records[j].LastConnectedAt
+		})
+		m.records = m.records[len(m.records)-maxShellHistoryRecords:]
+	}
 	return m.save()
 }
 

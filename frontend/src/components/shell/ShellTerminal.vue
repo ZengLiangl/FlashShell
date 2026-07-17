@@ -33,8 +33,13 @@ import { FitAddon } from 'xterm-addon-fit'
 import { SearchAddon } from 'xterm-addon-search'
 import 'xterm/css/xterm.css'
 import * as App from '../../../wailsjs/go/app/App'
-import { EventsOn, EventsOff } from '../../../wailsjs/runtime/runtime'
-import { registerShellWriter, resetShellWriterReplay } from '../../utils/shellOutputBuffer'
+import { EventsOn } from '../../../wailsjs/runtime/runtime'
+import {
+  registerShellWriter,
+  resetShellWriterReplay,
+  setShellOutputSessionActive,
+} from '../../utils/shellOutputBuffer'
+import { SHELL_TERMINAL_SCROLLBACK } from '../../constants/shellMemory'
 import { useTheme } from '../../composables/useTheme'
 import { terminalThemeForPreset, getTerminalFont } from '../../utils/themePresets'
 import {
@@ -170,12 +175,18 @@ export default {
     }
 
     const decodeBase64 = (b64) => {
+      if (b64 instanceof Uint8Array) return b64
       const binary = atob(b64)
       const bytes = new Uint8Array(binary.length)
       for (let i = 0; i < binary.length; i++) {
         bytes[i] = binary.charCodeAt(i)
       }
       return bytes
+    }
+
+    const writeDataToTerminal = (terminal, data) => {
+      const bytes = data instanceof Uint8Array ? data : decodeBase64(data)
+      writeHighlighted(terminal, bytes)
     }
 
     const writeHighlighted = (terminal, bytes) => {
@@ -267,6 +278,7 @@ export default {
       if (initialized || !terminalRef.value || !props.active || !props.viewVisible) return
       const terminal = new Terminal({
         cursorBlink: true,
+        scrollback: SHELL_TERMINAL_SCROLLBACK,
         fontSize: shellFontSize.value || 13,
         lineHeight: shellLineHeight.value || 1.2,
         fontFamily: getTerminalFont(shellFontFamily.value).value,
@@ -500,7 +512,7 @@ export default {
       unregisterWriter = registerShellWriter(
         props.machineName,
         {
-          writeData: (b64) => writeHighlighted(terminal, decodeBase64(b64)),
+          writeData: (data) => writeDataToTerminal(terminal, data),
           writeLine: (line) => terminal.writeln(`\x1b[33m${line}\x1b[0m`),
           clear: () => terminal.clear(),
         },
@@ -548,6 +560,7 @@ export default {
     })
 
     watch(() => props.active, async (val) => {
+      setShellOutputSessionActive(props.machineName, val)
       if (val && props.viewVisible) {
         if (!initialized) await initTerminal()
         else {
@@ -557,12 +570,15 @@ export default {
         }
         await nextTick()
         term.value?.focus()
+      } else if (!val) {
+        destroyTerminal()
       }
     })
 
     watch(() => props.viewVisible, async (visible) => {
       if (!visible) {
         clearFitTimers()
+        destroyTerminal()
         return
       }
       if (!props.active) return
@@ -595,18 +611,23 @@ export default {
       applyTerminalAppearance()
     }
 
+    let offThemeChanged = null
+    let offSystemSettingsChanged = null
+
     onMounted(() => {
+      setShellOutputSessionActive(props.machineName, props.active)
       loadLogHighlightSetting()
       if (props.active && props.viewVisible) initTerminal()
-      EventsOn('theme:changed', onThemeChanged)
-      EventsOn('system-settings:changed', onSystemSettingsChanged)
+      offThemeChanged = EventsOn('theme:changed', onThemeChanged)
+      offSystemSettingsChanged = EventsOn('system-settings:changed', onSystemSettingsChanged)
       window.addEventListener('click', hideContextMenu)
       window.addEventListener('blur', hideContextMenu)
     })
 
     onUnmounted(() => {
-      EventsOff('theme:changed')
-      EventsOff('system-settings:changed')
+      setShellOutputSessionActive(props.machineName, false)
+      offThemeChanged?.()
+      offSystemSettingsChanged?.()
       window.removeEventListener('click', hideContextMenu)
       window.removeEventListener('blur', hideContextMenu)
       window.removeEventListener('resize', scheduleFit)

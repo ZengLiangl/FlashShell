@@ -213,6 +213,10 @@
                                 <span>字号</span>
                                 <span>行高</span>
                             </div>
+                            <div class="memory-saver-row">
+                                <span class="memory-saver-label">离开 Shell 时卸载终端界面（省内存，会话保持）</span>
+                                <el-switch v-model="form.themeSettings.shellMemorySaver" size="small" />
+                            </div>
                             <div class="preset-grid terminal-grid">
                                 <button
                                     v-for="preset in terminalPresets"
@@ -456,6 +460,7 @@ export default {
                 shellFontFamily: 'consolas',
                 shellFontSize: 13,
                 shellLineHeight: 1.2,
+                shellMemorySaver: false,
             },
             shellMonitorIntervalMs: 1000,
             shellLogHighlight: true,
@@ -572,6 +577,7 @@ theme preview · ${theme.foreground}`
                 shellFontFamily: config.themeSettings?.shellFontFamily || 'consolas',
                 shellFontSize: config.themeSettings?.shellFontSize > 0 ? config.themeSettings.shellFontSize : 13,
                 shellLineHeight: config.themeSettings?.shellLineHeight > 0 ? config.themeSettings.shellLineHeight : 1.2,
+                shellMemorySaver: !!config.themeSettings?.shellMemorySaver,
             }
             const interval = Number(config.shellMonitorIntervalMs)
             form.shellMonitorIntervalMs = Number.isFinite(interval) && interval >= 200
@@ -1133,6 +1139,22 @@ theme preview · ${theme.foreground}`
     font-size: 11px;
     color: var(--app-text-muted);
     flex-shrink: 0;
+}
+
+.memory-saver-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin: 8px 0 4px;
+    font-size: 12px;
+    color: var(--app-text-muted);
+}
+
+.memory-saver-label {
+    flex: 1;
+    min-width: 0;
+    line-height: 1.4;
 }
 
 .shell-setting-row {

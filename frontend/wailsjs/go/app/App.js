@@ -170,6 +170,14 @@ export function GetOutput() {
   return window['go']['app']['App']['GetOutput']();
 }
 
+export function GetProject(arg1) {
+  return window['go']['app']['App']['GetProject'](arg1);
+}
+
+export function GetProjectSummaries() {
+  return window['go']['app']['App']['GetProjectSummaries']();
+}
+
 export function GetSessionInfo() {
   return window['go']['app']['App']['GetSessionInfo']();
 }

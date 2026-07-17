@@ -8,6 +8,19 @@ export default defineConfig({
         assetsDir: 'assets',
         rollupOptions: {
             external: [],
+            output: {
+                manualChunks(id) {
+                    if (id.includes('node_modules/xterm')) {
+                        return 'xterm'
+                    }
+                    if (id.includes('node_modules/element-plus')) {
+                        return 'element-plus'
+                    }
+                    if (id.includes('/views/ShellWorkspace.vue') || id.includes('/components/shell/')) {
+                        return 'shell'
+                    }
+                },
+            },
         },
     },
     server: {

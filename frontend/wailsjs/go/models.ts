@@ -161,6 +161,7 @@ export namespace data {
 	    shellFontFamily: string;
 	    shellFontSize: number;
 	    shellLineHeight: number;
+	    shellMemorySaver: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ThemeSettings(source);
@@ -175,6 +176,7 @@ export namespace data {
 	        this.shellFontFamily = source["shellFontFamily"];
 	        this.shellFontSize = source["shellFontSize"];
 	        this.shellLineHeight = source["shellLineHeight"];
+	        this.shellMemorySaver = source["shellMemorySaver"];
 	    }
 	}
 	export class LogSettings {
@@ -480,6 +482,9 @@ export namespace define {
 	    group?: string;
 	    key_file?: string;
 	    tunnels?: SSHTunnel[];
+	    list_host?: string;
+	    list_port?: number;
+	    list_user?: string;
 	    host?: string;
 	    port?: number;
 	    user?: string;
@@ -496,6 +501,9 @@ export namespace define {
 	        this.group = source["group"];
 	        this.key_file = source["key_file"];
 	        this.tunnels = this.convertValues(source["tunnels"], SSHTunnel);
+	        this.list_host = source["list_host"];
+	        this.list_port = source["list_port"];
+	        this.list_user = source["list_user"];
 	        this.host = source["host"];
 	        this.port = source["port"];
 	        this.user = source["user"];
@@ -590,6 +598,22 @@ export namespace define {
 		    }
 		    return a;
 		}
+	}
+	export class ProjectSummary {
+	    name: string;
+	    description: string;
+	    subProjectCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ProjectSummary(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.description = source["description"];
+	        this.subProjectCount = source["subProjectCount"];
+	    }
 	}
 	export class Root {
 	    projects: Project[];

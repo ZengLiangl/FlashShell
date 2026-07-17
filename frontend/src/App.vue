@@ -64,7 +64,8 @@
     <!-- 首页：任务模式 + Shell 模式入口 -->
     <template v-if="activeView === 'home'">
       <div class="projectlist-fullscreen">
-        <HomePage ref="homePageRef" :projects="projects" :connected-count="connectedCount" :has-task="!!selectedProject"
+        <HomePage ref="homePageRef" :projects="projects" :machines="shellMachines"
+          :connected-count="connectedCount" :has-task="!!selectedProject"
           :task-running="status.isRunning" :connecting-name="connectingName" :sessions="shellSessions"
           :workspace-sessions="workspaceSessions"
           @refresh="refreshConfig" @select-project="selectProject" @resume-task="resumeTaskView"
@@ -85,7 +86,7 @@
 </template>
 
 <script>
-import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from "vue";
+import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick, defineAsyncComponent } from "vue";
 import { ElMessage, ElMessageBox } from "element-plus";
 import * as App from "../wailsjs/go/app/App";
 import { EventsOn, EventsOff } from "../wailsjs/runtime/runtime";
@@ -94,19 +95,20 @@ import TerminalOutput from "./components/TerminalOutput.vue";
 import StatusBar from "./components/StatusBar.vue";
 import ProjectList from "./components/ProjectList.vue";
 import HomePage from "./components/HomePage.vue";
-import ShellWorkspace from "./views/ShellWorkspace.vue";
 import { useShell } from "./composables/useShell";
 import SubProjectList from "./components/SubProjectList.vue";
 import TerminalHeader from "./components/TerminalHeader.vue";
-import AboutDialog from "./components/AboutDialog.vue";
-import ConfigEditorDialog from "./components/ConfigEditorDialog.vue";
-import SettingsHubDialog from "./components/SettingsHubDialog.vue";
 import AppMenuBar from "./components/AppMenuBar.vue";
 import { useTheme } from "./composables/useTheme";
 import { mergeShortcuts, matchesShortcut, isFormFieldTarget, isXtermInput } from "./utils/shortcuts";
 import { hasOverlayAboveSettingsHub } from "./utils/dialogOverlay";
 import { setCachedUpdateCheck, isUsableUpdateResult } from "./utils/updateCheckCache";
 import { copyMachineRecord } from "./utils/machineCopy";
+
+const ShellWorkspace = defineAsyncComponent(() => import("./views/ShellWorkspace.vue"));
+const AboutDialog = defineAsyncComponent(() => import("./components/AboutDialog.vue"));
+const ConfigEditorDialog = defineAsyncComponent(() => import("./components/ConfigEditorDialog.vue"));
+const SettingsHubDialog = defineAsyncComponent(() => import("./components/SettingsHubDialog.vue"));
 
 export default {
   name: "App",
@@ -178,6 +180,7 @@ export default {
       openSessionCount,
       syncSessions,
       loadMachines: loadShellMachines,
+      ensureShellReady,
       connect: connectShell,
       connectLocal: connectLocalShell,
       connectOrReconnect: connectOrReconnectShell,
@@ -323,20 +326,22 @@ export default {
       stream: false
     });
 
-    // 加载配置
+    const mapProjectSummaries = (summaries) =>
+      (summaries || []).map((item) => ({
+        name: item.name,
+        description: item.description,
+        subprojects: Array.from({ length: item.subProjectCount || 0 }),
+      }));
+
+    // 加载配置（首页仅摘要，完整项目在 selectProject 时加载）
     const loadConfig = async () => {
       try {
         console.log("开始加载配置...");
-        console.log("App 对象:", App);
-
-        const config = await App.GetConfig();
-        console.log("原始配置数据:", config);
-
-        projects.value = config.projects || [];
+        const summaries = await App.GetProjectSummaries();
+        projects.value = mapProjectSummaries(summaries);
         console.log("设置的项目数据:", projects.value);
         console.log("项目数量:", projects.value.length);
 
-        // 初始不自动选中项目，展示项目列表
         selectedProject.value = null;
         subProjects.value = [];
       } catch (error) {
@@ -368,16 +373,11 @@ export default {
     const loadConfigForRefresh = async () => {
       try {
         console.log("开始刷新项目配置...");
-        console.log("App 对象:", App);
-
-        const config = await App.GetConfigForRefresh();
-        console.log("刷新后的项目配置数据:", config);
-
-        projects.value = config.projects || [];
+        const summaries = await App.GetProjectSummaries();
+        projects.value = mapProjectSummaries(summaries);
         console.log("设置的项目数据:", projects.value);
         console.log("项目数量:", projects.value.length);
 
-        // 刷新后保持在项目列表，避免误触发执行
         selectedProject.value = null;
         subProjects.value = [];
 
@@ -401,6 +401,7 @@ export default {
 
         // 第二步：再刷新项目配置
         await loadConfigForRefresh();
+        await loadShellMachines();
 
         console.log("配置刷新完成");
         ElMessage.success("配置已刷新");
@@ -429,28 +430,32 @@ export default {
       }
     };
     // 选择项目（可与 Shell 会话并行）
-    const selectProject = (project) => {
-      selectedProject.value = project;
-      selectedSubProject.value = null;
-      activeView.value = 'task';
+    const selectProject = async (project) => {
+      try {
+        const full = await App.GetProject(project.name);
+        selectedProject.value = full;
+        selectedSubProject.value = null;
+        activeView.value = 'task';
 
-      // 显示该项目下的所有 SubProjects
-      if (project.subprojects) {
-        subProjects.value = project.subprojects.map(subproject => ({
-          ...subproject,
-          projectName: project.name,
-          commandCount: subproject.commands ? subproject.commands.length : 0,
-          stepCount: subproject.commands ? subproject.commands.reduce((total, command) => total + (command.steps?.length || 0), 0) : 0
-        }));
-      } else {
-        subProjects.value = [];
+        if (full?.subprojects) {
+          subProjects.value = full.subprojects.map(subproject => ({
+            ...subproject,
+            projectName: full.name,
+            commandCount: subproject.commands ? subproject.commands.length : 0,
+            stepCount: subproject.commands ? subproject.commands.reduce((total, command) => total + (command.steps?.length || 0), 0) : 0
+          }));
+        } else {
+          subProjects.value = [];
+        }
+
+        expandedSubProjects.value = {};
+        expandedCommands.value = {};
+
+        console.log(`选择项目: ${full.name}, 找到 ${subProjects.value.length} 个 SubProjects`);
+      } catch (error) {
+        console.error('加载项目详情失败:', error);
+        ElMessage.error('加载项目详情失败: ' + (error.message || error));
       }
-
-      // 重置展开状态
-      expandedSubProjects.value = {};
-      expandedCommands.value = {};
-
-      console.log(`选择项目: ${project.name}, 找到 ${subProjects.value.length} 个 SubProjects`);
     };
 
     const backToProjectList = () => {
@@ -466,7 +471,7 @@ export default {
     const enterShellMode = async () => {
       shellMounted.value = true;
       activeView.value = 'shell';
-      await loadShellMachines();
+      await ensureShellReady();
       await syncSessions();
     };
 
@@ -485,9 +490,16 @@ export default {
       }
     };
 
-    const leaveShellMode = () => {
-      // 保留 Shell 会话与任务状态，仅回到首页
+    const leaveShellMode = async () => {
       activeView.value = 'home';
+      try {
+        const cfg = await App.GetSystemSettings();
+        if (cfg?.themeSettings?.shellMemorySaver) {
+          shellMounted.value = false;
+        }
+      } catch {
+        // 读取设置失败时保持现有 v-show 行为
+      }
     };
 
     const openShellAndConnect = async (machineName) => {
@@ -503,14 +515,12 @@ export default {
     const openShellMachineDialog = async () => {
       machineEditId.value = '';
       openSettingsHub('machines');
-      await loadMachines();
       await loadShellMachines();
     };
 
     const openShellMachineEdit = async (machine) => {
       machineEditId.value = machine?.id || '';
       openSettingsHub('machines');
-      await loadMachines();
       await loadShellMachines();
     };
 
@@ -541,9 +551,7 @@ export default {
     };
 
     const onMachinesChanged = async () => {
-      await loadMachines();
       await loadShellMachines();
-      await homePageRef.value?.loadMachines?.();
     };
 
     // 切换 SubProject 展开状态
@@ -990,6 +998,7 @@ export default {
       loadConfig();
       loadTheme();
       loadShortcutMap();
+      loadShellMachines();
       App.GetSessionInfo().then((info) => { sessionId.value = info.sessionId || ''; }).catch(() => { });
       App.GetAppVersion().then((v) => { appVersion.value = v || ''; }).catch(() => { appVersion.value = ''; });
 
@@ -1053,8 +1062,8 @@ export default {
     const loadMachines = async () => {
       try {
         machinesLoading.value = true;
-        const machinesData = await App.GetMachines();
-        machines.value = machinesData || [];
+        await loadShellMachines();
+        machines.value = shellMachines.value || [];
       } catch (error) {
         console.error('加载机器配置失败:', error);
         ElMessage.error('加载机器配置失败: ' + error.message);
