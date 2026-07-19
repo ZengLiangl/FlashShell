@@ -111,20 +111,55 @@ export function discardShellOutputBuffer(machineName) {
 /** 将某会话的输出缓冲迁移到新会话 ID（连接占位 tab 替换为真实 ID） */
 export function migrateShellOutput(fromName, toName) {
   if (!fromName || !toName || fromName === toName) return
-  const buf = buffers.get(fromName)
-  if (buf) {
-    buffers.set(toName, buf)
+  const fromBuf = buffers.get(fromName)
+  const toBuf = buffers.get(toName)
+
+  if (fromBuf && toBuf && fromBuf !== toBuf) {
+    for (const item of fromBuf.items) {
+      toBuf.items.push(item)
+      toBuf.bytes += estimateSize(item.type, item.content)
+    }
+    trimBuffer(toBuf, toName)
+    buffers.delete(fromName)
+  } else if (fromBuf && !toBuf) {
+    buffers.set(toName, fromBuf)
+    buffers.delete(fromName)
+  } else {
     buffers.delete(fromName)
   }
-  const writer = writers.get(fromName)
-  if (writer) {
-    writers.set(toName, writer)
-    writers.delete(fromName)
-  }
+
+  // writer 绑定具体 xterm 实例，不随 ID 迁移；新终端挂载时会重新 register
+  writers.delete(fromName)
+
   if (activeSessions.has(fromName)) {
     activeSessions.add(toName)
     activeSessions.delete(fromName)
   }
+}
+
+/** 连接完成时合并输出缓冲：目标已有 PTY 输出时只追加 pending 内容，不覆盖 */
+export function finalizeShellOutputMigration(fromName, toName) {
+  if (!fromName || !toName || fromName === toName) return
+  const fromBuf = buffers.get(fromName)
+  const toBuf = buffers.get(toName)
+  const fromLen = fromBuf?.items?.length || 0
+  const toLen = toBuf?.items?.length || 0
+
+  if (toLen > 0) {
+    if (fromLen > 0 && fromBuf !== toBuf) {
+      for (const item of fromBuf.items) {
+        toBuf.items.push(item)
+        toBuf.bytes += estimateSize(item.type, item.content)
+      }
+      trimBuffer(toBuf, toName)
+    }
+    buffers.delete(fromName)
+    writers.delete(fromName)
+    activeSessions.delete(fromName)
+    return
+  }
+
+  migrateShellOutput(fromName, toName)
 }
 
 export function registerShellWriter(machineName, writer, options = {}) {

@@ -2,17 +2,22 @@
   <div class="shell-workspace">
     <el-container class="shell-body main-container">
       <el-aside
-        v-if="showMonitorPanel"
+        v-if="showLeftPanel"
         :width="leftCollapsed ? '0px' : leftPanelWidth + 'px'"
         class="left-panel shell-left-panel"
         :class="{ collapsed: leftCollapsed, resizing: isResizing }"
       >
         <ShellMonitorPanel
+          v-if="monitorSession"
           v-show="!leftCollapsed"
           :active-machine="monitorMachineName"
           :active-connected="monitorConnected"
           :connecting="monitorConnecting"
           @toggle-connection="onToggleConnection"
+        />
+        <LocalFileTreePanel
+          v-else-if="localFileSession"
+          v-show="!leftCollapsed"
         />
         <!-- 右边框：拖拽改宽 + 悬停显示收起 -->
         <div
@@ -26,7 +31,7 @@
             v-show="edgeHover"
             type="button"
             class="panel-edge-btn"
-            title="收起监控面板"
+            title="收起侧栏"
             @mousedown.stop
             @click.stop="toggleLeftPanel"
           >
@@ -37,7 +42,7 @@
 
       <!-- 收起后：贴左边悬停出现展开按钮 -->
       <div
-        v-if="showMonitorPanel && leftCollapsed"
+        v-if="showLeftPanel && leftCollapsed"
         class="left-edge-hotzone"
         @mouseenter="edgeHover = true"
         @mouseleave="edgeHover = false"
@@ -46,7 +51,7 @@
           v-show="edgeHover"
           type="button"
           class="panel-edge-btn panel-edge-btn--expand"
-          title="展开监控面板"
+          title="展开侧栏"
           @click="toggleLeftPanel"
         >
           <el-icon><DArrowRight /></el-icon>
@@ -78,6 +83,7 @@
           @open-search="openSearch"
           @search-result="onSearchResult"
           @open-transfer="transferVisible = true"
+          @open-command-palette="commandPaletteVisible = true"
           @cwd-sync="onCwdSync"
           @reorder-tabs="(payload) => $emit('reorder-tabs', payload)"
         >
@@ -126,6 +132,21 @@
       :tunnels="tunnelStatuses"
       :tunnel-loading="tunnelLoading"
       :app-info="appInfo"
+      @open-tunnels="tunnelDialogVisible = true"
+    />
+
+    <ShellTunnelDialog
+      v-model="tunnelDialogVisible"
+      :session-id="activeMachine"
+      :config-name="activeConfigName"
+      @changed="loadTunnels"
+    />
+
+    <ShellCommandPalette
+      v-model="commandPaletteVisible"
+      :session-id="activeMachine"
+      :config-name="activeConfigName"
+      @insert="onCommandPaletteInsert"
     />
 
     <ShellTransferPanel
@@ -164,7 +185,10 @@ import ShellStatusBar from '../components/shell/ShellStatusBar.vue'
 import ShellConnectionHistory from '../components/shell/ShellConnectionHistory.vue'
 import ShellMachinePickerDialog from '../components/shell/ShellMachinePickerDialog.vue'
 import ShellFilePanel from '../components/shell/ShellFilePanel.vue'
+import LocalFileTreePanel from '../components/shell/LocalFileTreePanel.vue'
 import ShellTransferPanel from '../components/shell/ShellTransferPanel.vue'
+import ShellTunnelDialog from '../components/shell/ShellTunnelDialog.vue'
+import ShellCommandPalette from '../components/shell/ShellCommandPalette.vue'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import { remoteConfigName, buildKnownMachineNames } from '../utils/sessionId'
@@ -180,7 +204,10 @@ export default {
     ShellConnectionHistory,
     ShellMachinePickerDialog,
     ShellFilePanel,
+    LocalFileTreePanel,
     ShellTransferPanel,
+    ShellTunnelDialog,
+    ShellCommandPalette,
   },
   props: {
     active: { type: Boolean, default: true },
@@ -223,6 +250,8 @@ export default {
     const ptyCwds = reactive({})
     const tunnelStatuses = ref([])
     const tunnelLoading = ref(false)
+    const tunnelDialogVisible = ref(false)
+    const commandPaletteVisible = ref(false)
     let tunnelTimer = null
 
     const knownMachineNames = computed(() => buildKnownMachineNames(props.machines))
@@ -268,6 +297,21 @@ export default {
 
     const showMonitorPanel = computed(() => !!monitorSession.value)
 
+    const showLeftPanel = computed(() => !!monitorSession.value || !!localFileSession.value)
+
+    const localFileSession = computed(() => {
+      const sessions = props.workspaceSessions || []
+      const active = String(props.activeMachine || '')
+      if (!active) return null
+      const tab = sessions.find((s) => s.machineName === active)
+      if (!tab) return null
+      if (tab.kind !== 'local' && !isLocalSessionName(tab.machineName)) return null
+      if (isPendingSessionName(tab.machineName)) return null
+      return tab
+    })
+
+    const isPendingSessionName = (name) => String(name || '').startsWith('__pending__')
+
     const monitorSession = computed(() => {
       const sessions = props.workspaceSessions || []
       const active = String(props.activeMachine || '')
@@ -300,7 +344,7 @@ export default {
       return (props.workspaceSessions || []).some((s) => s.machineName === name && s.connected)
     })
 
-    watch(showMonitorPanel, async () => {
+    watch(showLeftPanel, async () => {
       await nextTick()
       tabsRef.value?.fitActive?.()
     })
@@ -429,7 +473,6 @@ export default {
       if (cwd.length > 1) cwd = cwd.replace(/\/+$/, '')
       ptyCwds[machineName] = cwd
       cwdHints[machineName] = cwd
-      // 只驱动当前活动会话的 SFTP 面板
       if (machineName !== props.activeMachine) return
       await nextTick()
       filePanelRef.value?.applyCwdHint?.(cwd)
@@ -586,6 +629,15 @@ export default {
       })
     })
 
+    const onCommandPaletteInsert = async (text) => {
+      if (!props.activeMachine || !text) return
+      try {
+        await App.SendShellInput(props.activeMachine, text)
+      } catch (e) {
+        ElMessage.error('发送失败: ' + e)
+      }
+    }
+
     return {
       tabsRef,
       filePanelRef,
@@ -603,6 +655,9 @@ export default {
       cwdHints,
       activeConnected,
       showMonitorPanel,
+      showLeftPanel,
+      localFileSession,
+      monitorSession,
       monitorMachineName,
       monitorConnected,
       monitorConnecting,
@@ -629,8 +684,13 @@ export default {
       onCwdSync,
       loadHistory,
       activeTabLabel,
+      activeConfigName,
       tunnelStatuses,
       tunnelLoading,
+      tunnelDialogVisible,
+      commandPaletteVisible,
+      onCommandPaletteInsert,
+      loadTunnels,
     }
   },
 }

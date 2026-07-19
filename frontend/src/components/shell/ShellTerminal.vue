@@ -288,8 +288,12 @@ export default {
     }
 
     const initTerminal = async () => {
-      if (initialized || !terminalRef.value || !props.active || !props.viewVisible) return
-      await nextTick()
+      if (initialized || !props.active || !props.viewVisible) return
+      for (let i = 0; i < 4; i++) {
+        await nextTick()
+        if (initialized || !props.active || !props.viewVisible) return
+        if (terminalRef.value) break
+      }
       if (initialized || !terminalRef.value || !props.active || !props.viewVisible) return
       const terminal = new Terminal({
         cursorBlink: true,
@@ -556,6 +560,19 @@ export default {
       attachWriter(term.value, { replay: true })
     }
 
+    const wakeTerminal = async () => {
+      if (!props.active || !props.viewVisible) return
+      if (!initialized) await initTerminal()
+      if (!term.value) {
+        await nextTick()
+        await initTerminal()
+      }
+      if (props.connected || props.connecting) ensureWriter()
+      scheduleFit()
+      await nextTick()
+      term.value?.focus()
+    }
+
     watch(() => [props.connected, props.connecting], async ([val, connecting]) => {
       if (!term.value) {
         if ((val || connecting) && props.active) await initTerminal()
@@ -578,14 +595,7 @@ export default {
     watch(() => props.active, async (val) => {
       setShellOutputSessionActive(props.machineName, val)
       if (val && props.viewVisible) {
-        if (!initialized) await initTerminal()
-        else {
-          setupObservers()
-          scheduleFit()
-          if (term.value && (props.connected || props.connecting)) ensureWriter()
-        }
-        await nextTick()
-        term.value?.focus()
+        await wakeTerminal()
       } else if (!val) {
         destroyTerminal()
       }
@@ -598,14 +608,7 @@ export default {
         return
       }
       if (!props.active) return
-      await nextTick()
-      if (!initialized) await initTerminal()
-      else {
-        scheduleFit()
-        if (term.value && (props.connected || props.connecting)) ensureWriter()
-      }
-      await nextTick()
-      term.value?.focus()
+      await wakeTerminal()
     })
 
     watch(() => props.searchQuery, (query) => {
@@ -633,7 +636,7 @@ export default {
     onMounted(() => {
       setShellOutputSessionActive(props.machineName, props.active)
       loadLogHighlightSetting()
-      if (props.active && props.viewVisible) initTerminal()
+      if (props.active && props.viewVisible) wakeTerminal()
       offThemeChanged = EventsOn('theme:changed', onThemeChanged)
       offSystemSettingsChanged = EventsOn('system-settings:changed', onSystemSettingsChanged)
       window.addEventListener('click', hideContextMenu)
@@ -650,7 +653,7 @@ export default {
       destroyTerminal()
     })
 
-    expose({ clear, fitAndResize, findNext, findPrevious, clearSearch, getSelection })
+    expose({ clear, fitAndResize, findNext, findPrevious, clearSearch, getSelection, wakeTerminal })
 
     return {
       containerRef,

@@ -6,9 +6,10 @@
         <span
           v-for="(t, i) in tunnels"
           :key="`${t.name}-${t.localPort}-${i}`"
-          class="tunnel-chip"
+          class="tunnel-chip clickable"
           :class="{ active: t.active, error: !!t.error }"
           :title="tunnelTitle(t)"
+          @click="$emit('open-tunnels')"
         >
           {{ tunnelShortLabel(t) }}
         </span>
@@ -22,6 +23,7 @@
 <script>
 export default {
   name: 'ShellStatusBar',
+  emits: ['open-tunnels'],
   props: {
     connectedCount: { type: Number, default: 0 },
     activeMachine: { type: String, default: '' },
@@ -104,6 +106,13 @@ export default {
 .tunnel-loading {
   font-size: 11px;
   color: var(--app-text-muted);
+}
+
+.tunnel-chip.clickable {
+  cursor: pointer;
+}
+.tunnel-chip.clickable:hover {
+  opacity: 0.85;
 }
 
 .app-info {

@@ -31,13 +31,13 @@ func NewLocalRunner(workDir string, workVars map[string]string) *LocalRunner {
 }
 
 // Execute 执行命令
-func (lr *LocalRunner) Execute(cmd define.Command, output chan<- string, onStepStart func(step string), onStepComplete func()) error {
+func (lr *LocalRunner) Execute(cmd define.Command, output chan<- string, onStepStart func(step string), onStepComplete func(), shouldStop func() bool) error {
 	workDir := lr.workDir
 	if cmd.WorkDir != "" {
 		workDir = cmd.WorkDir
 	}
 
-	return executeSteps(cmd.Steps, output, onStepStart, onStepComplete, func(command string, out chan<- string) error {
+	return executeSteps(cmd.Steps, output, onStepStart, onStepComplete, shouldStop, func(command string, out chan<- string) error {
 		return lr.executeStep(command, workDir, out)
 	})
 }

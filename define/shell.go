@@ -16,13 +16,13 @@ type ShellStatus struct {
 
 // ShellHistoryRecord 连接历史
 type ShellHistoryRecord struct {
-	MachineID      string `json:"machineId"`
-	MachineName    string `json:"machineName"`
-	Host           string `json:"host"`
-	Port           int    `json:"port"`
-	User           string `json:"user"`
-	LastConnectedAt int64 `json:"lastConnectedAt"` // unix 秒
-	ConnectCount   int    `json:"connectCount"`
+	MachineID       string `json:"machineId"`
+	MachineName     string `json:"machineName"`
+	Host            string `json:"host"`
+	Port            int    `json:"port"`
+	User            string `json:"user"`
+	LastConnectedAt int64  `json:"lastConnectedAt"` // unix 秒
+	ConnectCount    int    `json:"connectCount"`
 }
 
 // ShellProcessStat 进程占用
@@ -84,3 +84,6 @@ type SftpEntry struct {
 	Group   string `json:"group"`   // 组名或 gid
 	Type    string `json:"type"`    // 目录/文件/链接/...
 }
+
+// LocalFileEntry 本地文件/目录项（与 SftpEntry 字段对齐）
+type LocalFileEntry = SftpEntry

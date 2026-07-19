@@ -79,6 +79,24 @@
               </el-dropdown-menu>
             </template>
           </el-dropdown>
+          <el-dropdown
+            size="small"
+            trigger="hover"
+            :show-timeout="120"
+            :hide-timeout="160"
+            @command="onSyncCommand"
+          >
+            <el-button size="small" text title="文件夹同步">
+              <el-icon><RefreshRight /></el-icon>
+            </el-button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="upload">上传到远端</el-dropdown-item>
+                <el-dropdown-item command="download">下载到本地</el-dropdown-item>
+                <el-dropdown-item command="both">双向同步</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </template>
       </div>
       <div class="toolbar-right icon-actions">
@@ -176,16 +194,29 @@
       </div>
     </div>
 
-    <ul
-      v-if="ctx.visible"
-      class="ctx-menu"
-      :style="{ left: ctx.x + 'px', top: ctx.y + 'px' }"
-      @click.stop
-    >
-      <li @click="downloadEntry">下载</li>
-      <li @click="copyPath">复制路径</li>
-      <li class="danger" @click="deleteEntry">删除</li>
-    </ul>
+    <Teleport to="body">
+      <ul
+        v-if="ctx.visible"
+        ref="ctxMenuRef"
+        class="ctx-menu"
+        :style="{ left: ctx.x + 'px', top: ctx.y + 'px' }"
+        @click.stop
+      >
+        <li v-if="ctx.row && !ctx.row.isDir" @click="editEntry">编辑</li>
+        <li v-if="ctx.row && !ctx.row.isDir" @click="openExternalEntry">用系统应用打开</li>
+        <li @click="downloadEntry">下载</li>
+        <li @click="copyPath">复制路径</li>
+        <li class="danger" @click="deleteEntry">删除</li>
+      </ul>
+    </Teleport>
+
+    <el-dialog v-model="editorVisible" :title="editorTitle" width="640px" append-to-body>
+      <el-input v-model="editorContent" type="textarea" :rows="18" class="editor-area" />
+      <template #footer>
+        <el-button @click="editorVisible = false">取消</el-button>
+        <el-button type="primary" :loading="editorSaving" @click="saveEditor">保存</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -193,6 +224,7 @@
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import * as App from '../../../wailsjs/go/app/App'
+import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import { OnFileDrop, OnFileDropOff } from '../../../wailsjs/runtime/runtime'
 
 export default {
@@ -239,6 +271,12 @@ export default {
     const treeRenderKey = ref(0)
     const expandedKeys = ref(['/'])
     const ctx = reactive({ visible: false, x: 0, y: 0, row: null })
+    const ctxMenuRef = ref(null)
+    const editorVisible = ref(false)
+    const editorContent = ref('')
+    const editorPath = ref('')
+    const editorTitle = ref('编辑文件')
+    const editorSaving = ref(false)
     const localSearchQuery = ref(props.searchQuery)
     const searchInputRef = ref(null)
     const dragOver = ref(false)
@@ -702,12 +740,32 @@ export default {
       window.addEventListener('mouseup', onUp)
     }
 
+    const adjustContextMenuPosition = async () => {
+      await nextTick()
+      const el = ctxMenuRef.value
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      const pad = 8
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      let { x, y } = ctx
+      if (x + rect.width > vw - pad) {
+        x = Math.max(pad, vw - rect.width - pad)
+      }
+      if (y + rect.height > vh - pad) {
+        y = Math.max(pad, y - rect.height)
+      }
+      ctx.x = x
+      ctx.y = y
+    }
+
     const onContextMenu = (row, _col, event) => {
       event.preventDefault()
       ctx.row = row
       ctx.x = event.clientX
       ctx.y = event.clientY
       ctx.visible = true
+      adjustContextMenuPosition()
     }
 
     const closeMenu = () => {
@@ -737,6 +795,63 @@ export default {
         emit('transfer-started', { direction: 'download', name: row.name })
       } catch (e) {
         ElMessage.error('下载失败: ' + e)
+      }
+    }
+
+    const editEntry = async () => {
+      const row = ctx.row
+      closeMenu()
+      if (!row?.path || row.isDir || !props.machineName) return
+      try {
+        editorContent.value = await App.ReadShellRemoteFile(props.machineName, row.path)
+        editorPath.value = row.path
+        editorTitle.value = `编辑 — ${row.name}`
+        editorVisible.value = true
+      } catch (e) {
+        ElMessage.error(String(e))
+      }
+    }
+
+    const saveEditor = async () => {
+      if (!editorPath.value || !props.machineName) return
+      editorSaving.value = true
+      try {
+        await App.SaveShellRemoteFile(props.machineName, editorPath.value, editorContent.value)
+        ElMessage.success('已保存')
+        editorVisible.value = false
+        reload()
+      } catch (e) {
+        ElMessage.error('保存失败: ' + e)
+      } finally {
+        editorSaving.value = false
+      }
+    }
+
+    const openExternalEntry = async () => {
+      const row = ctx.row
+      closeMenu()
+      if (!row?.path || !props.machineName) return
+      try {
+        await App.OpenShellRemoteFileExternal(props.machineName, row.path)
+        ElMessage.success('已用系统应用打开，保存后将自动上传回服务端')
+      } catch (e) {
+        ElMessage.error(String(e))
+      }
+    }
+
+    const onSyncCommand = async (direction) => {
+      if (!props.machineName || !cwd.value) {
+        ElMessage.warning('请先进入目标目录')
+        return
+      }
+      try {
+        const localDir = await App.PickShellUploadFolder()
+        if (!localDir) return
+        await App.StartShellFolderSync(props.machineName, localDir, cwd.value, direction)
+        ElMessage.success('已开始文件夹同步')
+        emit('transfer-started', { direction: 'sync', name: cwd.value })
+      } catch (e) {
+        ElMessage.error('同步失败: ' + e)
       }
     }
 
@@ -885,14 +1000,27 @@ export default {
       }
     })
 
+    let offExternalEdit = null
+
     onMounted(() => {
       bindFileDrop()
+      offExternalEdit = EventsOn('shell:external-edit', (payload) => {
+        if (!payload || payload.machineName !== props.machineName) return
+        if (payload.status === 'uploaded') {
+          ElMessage.success(payload.message || '已上传回服务端')
+          reload()
+        } else if (payload.status === 'error') {
+          ElMessage.error(payload.message || '回传失败')
+        }
+      })
     })
 
     onUnmounted(() => {
       stopPwdTimer()
       closeMenu()
       unbindFileDrop()
+      offExternalEdit?.()
+      offExternalEdit = null
     })
 
     expose({
@@ -923,6 +1051,7 @@ export default {
       expandedKeys,
       canGoUp,
       ctx,
+      ctxMenuRef,
       dragOver,
       localSearchQuery,
       searchInputRef,
@@ -947,6 +1076,14 @@ export default {
       closeMenu,
       copyPath,
       downloadEntry,
+      editEntry,
+      saveEditor,
+      openExternalEntry,
+      onSyncCommand,
+      editorVisible,
+      editorContent,
+      editorTitle,
+      editorSaving,
       deleteEntry,
       onDragOver,
       onDragLeave,

@@ -9,9 +9,13 @@ import (
 
 type stepExecutor func(command string, output chan<- string) error
 
-// executeSteps 按顺序执行步骤，支持重试与失败策略
-func executeSteps(steps define.StepList, output chan<- string, onStepStart func(string), onStepComplete func(), exec stepExecutor) error {
+// executeSteps 按顺序执行步骤，支持重试与失败策略；shouldStop 返回 true 时中断执行
+func executeSteps(steps define.StepList, output chan<- string, onStepStart func(string), onStepComplete func(), shouldStop func() bool, exec stepExecutor) error {
 	for i, step := range steps {
+		if shouldStop != nil && shouldStop() {
+			utils.SendOutput(output, "执行已被用户停止")
+			return fmt.Errorf("执行被用户停止")
+		}
 		if onStepStart != nil {
 			onStepStart(step.Command)
 		}
@@ -19,6 +23,10 @@ func executeSteps(steps define.StepList, output chan<- string, onStepStart func(
 		var lastErr error
 		attempts := step.MaxAttempts()
 		for attempt := 1; attempt <= attempts; attempt++ {
+			if shouldStop != nil && shouldStop() {
+				utils.SendOutput(output, "执行已被用户停止")
+				return fmt.Errorf("执行被用户停止")
+			}
 			if attempts > 1 {
 				utils.SendOutput(output, fmt.Sprintf("执行步骤 %d（第 %d/%d 次）: %s", i+1, attempt, attempts, step.Command))
 			} else {

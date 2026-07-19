@@ -30,7 +30,7 @@ type TunnelRuntime struct {
 
 // TunnelManager 按机器配置管理 SSH 隧道（与 PTY 会话独立，复用 Aux/PTY SSH）
 type TunnelManager struct {
-	mu      sync.Mutex
+	mu        sync.Mutex
 	byMachine map[string][]*TunnelRuntime // configName → tunnels
 }
 
@@ -67,23 +67,63 @@ func (tm *TunnelManager) StopAll() {
 func (tm *TunnelManager) StatusList(configName string) []define.SSHTunnelStatus {
 	tm.mu.Lock()
 	defer tm.mu.Unlock()
+	return tm.statusListLocked(configName)
+}
+
+func (tm *TunnelManager) statusListLocked(configName string) []define.SSHTunnelStatus {
 	list := tm.byMachine[configName]
 	out := make([]define.SSHTunnelStatus, 0, len(list))
 	for _, t := range list {
 		st := define.SSHTunnelStatus{
-			Name:      t.Spec.Name,
-			Type:      t.Spec.Type,
-			LocalHost: t.Spec.LocalHost,
-			LocalPort: t.Spec.LocalPort,
+			Name:       t.Spec.Name,
+			Type:       t.Spec.Type,
+			LocalHost:  t.Spec.LocalHost,
+			LocalPort:  t.Spec.LocalPort,
 			RemoteHost: t.Spec.RemoteHost,
 			RemotePort: t.Spec.RemotePort,
-			Active:    t.Listener != nil && t.Error == "",
-			Error:     t.Error,
-			StartedAt: t.StartedAt,
+			Active:     t.Listener != nil && t.Error == "",
+			Error:      t.Error,
+			StartedAt:  t.StartedAt,
+			Temporary:  t.Spec.Temporary,
 		}
 		out = append(out, st)
 	}
 	return out
+}
+
+// AddTemporary 添加临时隧道（不写入机器配置）
+func (tm *TunnelManager) AddTemporary(configName string, spec define.SSHTunnel, client *SSHClient) error {
+	if client == nil || client.remoteMachine == nil || client.remoteMachine.SSHClient == nil {
+		return fmt.Errorf("SSH 未连接，无法启动隧道")
+	}
+	spec = normalizeTunnel(spec)
+	spec.Temporary = true
+	if spec.Name == "" {
+		spec.Name = fmt.Sprintf("temp-%s-%d", spec.Type, spec.LocalPort)
+	}
+	rt, err := startTunnel(spec, client.remoteMachine.SSHClient)
+	if err != nil {
+		return err
+	}
+	tm.mu.Lock()
+	tm.byMachine[configName] = append(tm.byMachine[configName], rt)
+	tm.mu.Unlock()
+	return nil
+}
+
+// RemoveTunnel 按名称停止隧道
+func (tm *TunnelManager) RemoveTunnel(configName, name string) error {
+	tm.mu.Lock()
+	defer tm.mu.Unlock()
+	list := tm.byMachine[configName]
+	for i, t := range list {
+		if t.Spec.Name == name {
+			stopTunnel(t)
+			tm.byMachine[configName] = append(list[:i], list[i+1:]...)
+			return nil
+		}
+	}
+	return fmt.Errorf("未找到隧道: %s", name)
 }
 
 // EnsureForMachine 根据配置启动本地/动态隧道；client 为已连接的 SSH

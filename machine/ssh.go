@@ -5,10 +5,13 @@ import (
 	"io"
 	"regexp"
 	"strings"
+	"sync"
 
 	"FlashDock/cmds"
 	"FlashDock/define"
 	"FlashDock/utils"
+
+	"golang.org/x/crypto/ssh"
 )
 
 // SSHClient SSH客户端封装
@@ -16,6 +19,8 @@ type SSHClient struct {
 	config        *define.Machine
 	remoteMachine *define.RemoteMachine
 	workVars      map[string]string
+	sessionMu     sync.Mutex
+	activeSession *ssh.Session
 }
 
 // NewSSHClient 创建SSH客户端
@@ -34,12 +39,12 @@ func (sc *SSHClient) Connect(machine *define.Machine, withSFTP bool) error {
 }
 
 // Execute 执行命令
-func (sc *SSHClient) Execute(cmd define.Command, output chan<- string, onStepStart func(step string), onStepComplete func()) error {
+func (sc *SSHClient) Execute(cmd define.Command, output chan<- string, onStepStart func(step string), onStepComplete func(), shouldStop func() bool) error {
 	if !sc.remoteMachine.IsConnected() {
 		return fmt.Errorf("SSH客户端未连接")
 	}
 
-	return executeSteps(cmd.Steps, output, onStepStart, onStepComplete, func(command string, out chan<- string) error {
+	return executeSteps(cmd.Steps, output, onStepStart, onStepComplete, shouldStop, func(command string, out chan<- string) error {
 		return sc.executeStep(command, out)
 	})
 }
@@ -55,7 +60,8 @@ func (sc *SSHClient) executeStep(command string, output chan<- string) error {
 	if err != nil {
 		return fmt.Errorf("创建SSH会话失败: %w", err)
 	}
-	defer session.Close()
+	sc.setActiveSession(session)
+	defer sc.clearActiveSession(session)
 
 	stdout, err := session.StdoutPipe()
 	if err != nil {
@@ -130,8 +136,30 @@ func (sc *SSHClient) readOutput(reader io.Reader, output chan<- string, prefix s
 	}
 }
 
-// Stop 停止执行
+func (sc *SSHClient) setActiveSession(session *ssh.Session) {
+	sc.sessionMu.Lock()
+	sc.activeSession = session
+	sc.sessionMu.Unlock()
+}
+
+func (sc *SSHClient) clearActiveSession(session *ssh.Session) {
+	sc.sessionMu.Lock()
+	if sc.activeSession == session {
+		sc.activeSession = nil
+	}
+	sc.sessionMu.Unlock()
+	session.Close()
+}
+
+// Stop 停止执行：关闭当前 SSH session 以中断远程命令
 func (sc *SSHClient) Stop() error {
+	sc.sessionMu.Lock()
+	session := sc.activeSession
+	sc.activeSession = nil
+	sc.sessionMu.Unlock()
+	if session != nil {
+		return session.Close()
+	}
 	return nil
 }
 

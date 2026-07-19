@@ -81,6 +81,8 @@
                                 <el-dropdown-menu>
                                     <el-dropdown-item command="import-xshell">导入 Xshell</el-dropdown-item>
                                     <el-dropdown-item command="import-finalshell">导入 FinalShell</el-dropdown-item>
+                                    <el-dropdown-item command="export-template" divided>导出连接模板</el-dropdown-item>
+                                    <el-dropdown-item command="import-template">导入连接模板</el-dropdown-item>
                                 </el-dropdown-menu>
                             </template>
                         </el-dropdown>
@@ -398,6 +400,8 @@ import {
     SelectKeyFile,
     ImportXshellPick,
     ImportFinalShellPick,
+    ExportMachineTemplateToFile,
+    ImportMachineTemplateFromFile,
 } from '../../wailsjs/go/app/App'
 import {
     DEFAULT_MACHINE_GROUP,
@@ -879,9 +883,39 @@ export default {
             }
         }
 
+        const exportTemplate = async () => {
+            try {
+                const path = await ExportMachineTemplateToFile()
+                if (path) ElMessage.success('已导出: ' + path)
+            } catch (e) {
+                ElMessage.error('导出失败: ' + e)
+            }
+        }
+
+        const importTemplate = async () => {
+            try {
+                const { value } = await ElMessageBox.confirm(
+                    '导入时若机器名称已存在，是否合并更新？',
+                    '导入连接模板',
+                    { confirmButtonText: '合并更新', cancelButtonText: '仅新增', distinguishCancelAndClose: true },
+                ).then(() => true).catch((action) => {
+                    if (action === 'cancel') return false
+                    throw action
+                })
+                const result = await ImportMachineTemplateFromFile(!!value)
+                ElMessage.success(`导入完成：新增 ${result.added}，更新 ${result.updated}，跳过 ${result.skipped}`)
+                await loadMachines()
+                emit('changed')
+            } catch (e) {
+                if (e !== 'close') ElMessage.error('导入失败: ' + e)
+            }
+        }
+
         const handleAddCommand = (command) => {
             if (command === 'import-finalshell') importFinalShell()
             else if (command === 'import-xshell') importXshell()
+            else if (command === 'export-template') exportTemplate()
+            else if (command === 'import-template') importTemplate()
         }
 
         const addGroup = async () => {

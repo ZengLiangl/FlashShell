@@ -253,6 +253,38 @@ export namespace data {
 		    return a;
 		}
 	}
+	export class ImportMachineTemplateResult {
+	    added: number;
+	    updated: number;
+	    skipped: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ImportMachineTemplateResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.added = source["added"];
+	        this.updated = source["updated"];
+	        this.skipped = source["skipped"];
+	    }
+	}
+	export class KnownHostRecord {
+	    host: string;
+	    port: number;
+	    fingerprint: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new KnownHostRecord(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.host = source["host"];
+	        this.port = source["port"];
+	        this.fingerprint = source["fingerprint"];
+	    }
+	}
 	export class LogEntry {
 	    fileName: string;
 	    fullPath: string;
@@ -314,6 +346,24 @@ export namespace data {
 	    }
 	}
 	
+	export class ShellSnippet {
+	    id: string;
+	    name: string;
+	    command: string;
+	    scope?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShellSnippet(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.command = source["command"];
+	        this.scope = source["scope"];
+	    }
+	}
 	export class ShortcutBinding {
 	    key: string;
 	    useMod: boolean;
@@ -338,6 +388,7 @@ export namespace data {
 	    find: ShortcutBinding;
 	    copy: ShortcutBinding;
 	    clearOutput: ShortcutBinding;
+	    snippets?: ShellSnippet[];
 	
 	    static createFrom(source: any = {}) {
 	        return new ShortcutSettings(source);
@@ -354,6 +405,7 @@ export namespace data {
 	        this.find = this.convertValues(source["find"], ShortcutBinding);
 	        this.copy = this.convertValues(source["copy"], ShortcutBinding);
 	        this.clearOutput = this.convertValues(source["clearOutput"], ShortcutBinding);
+	        this.snippets = this.convertValues(source["snippets"], ShellSnippet);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -461,6 +513,7 @@ export namespace define {
 	    localPort: number;
 	    remoteHost?: string;
 	    remotePort?: number;
+	    temporary?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new SSHTunnel(source);
@@ -475,6 +528,7 @@ export namespace define {
 	        this.localPort = source["localPort"];
 	        this.remoteHost = source["remoteHost"];
 	        this.remotePort = source["remotePort"];
+	        this.temporary = source["temporary"];
 	    }
 	}
 	export class Machine {
@@ -660,6 +714,7 @@ export namespace define {
 	    active: boolean;
 	    error?: string;
 	    startedAt: number;
+	    temporary?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new SSHTunnelStatus(source);
@@ -676,6 +731,7 @@ export namespace define {
 	        this.active = source["active"];
 	        this.error = source["error"];
 	        this.startedAt = source["startedAt"];
+	        this.temporary = source["temporary"];
 	    }
 	}
 	export class SensitiveData {

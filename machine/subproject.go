@@ -11,13 +11,13 @@ import (
 
 // SubProjectRunner SubProject 执行器实现
 type SubProjectRunner struct {
-	configManager    ConfigManagerInterface
-	runners          map[string]define.Runner
-	runnerMutex      sync.RWMutex
-	currentStatus    *define.SubProjectStatus
-	statusMutex      sync.RWMutex
-	stopChannel      chan bool
-	onStatusChange   func(*define.SubProjectStatus)
+	configManager  ConfigManagerInterface
+	runners        map[string]define.Runner
+	runnerMutex    sync.RWMutex
+	currentStatus  *define.SubProjectStatus
+	statusMutex    sync.RWMutex
+	stopChannel    chan bool
+	onStatusChange func(*define.SubProjectStatus)
 }
 
 // ConfigManagerInterface 配置管理器接口
@@ -216,6 +216,14 @@ func (spr *SubProjectRunner) executeCommand(command define.Command, ctx *define.
 	spr.runnerMutex.Unlock()
 
 	// 执行命令
+	shouldStop := func() bool {
+		select {
+		case <-spr.stopChannel:
+			return true
+		default:
+			return false
+		}
+	}
 	err = runner.Execute(command, output,
 		func(step string) {
 			// 步骤开始执行时更新当前步骤
@@ -224,7 +232,8 @@ func (spr *SubProjectRunner) executeCommand(command define.Command, ctx *define.
 		func() {
 			// 步骤完成时更新已完成步骤数，清空当前步骤
 			spr.updateStatus(command.Name, "", spr.currentStatus.CompletedCommands, spr.currentStatus.CompletedSteps+1, true)
-		})
+		},
+		shouldStop)
 
 	// 清理执行器
 	spr.runnerMutex.Lock()

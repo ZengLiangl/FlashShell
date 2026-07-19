@@ -33,6 +33,18 @@
           </el-tooltip>
         </div>
       </div>
+
+    <div class="shortcut-section snippets-section">
+      <h4 class="section-title">命令片段</h4>
+      <p class="shortcut-hint">在 Shell 命令面板中快速插入；scope 填 global 或机器配置名</p>
+      <div v-for="(s, i) in snippets" :key="s.id || i" class="snippet-row">
+        <el-input v-model="s.name" size="small" placeholder="名称" class="sn-field" />
+        <el-input v-model="s.scope" size="small" placeholder="global" class="sn-scope" />
+        <el-input v-model="s.command" size="small" placeholder="命令" class="sn-cmd" />
+        <el-button size="small" text type="danger" @click="snippets.splice(i, 1)">删除</el-button>
+      </div>
+      <el-button size="small" @click="addSnippet">添加片段</el-button>
+    </div>
     </div>
     </div>
 
@@ -75,6 +87,7 @@ export default {
     const saving = ref(false)
     const recordingId = ref('')
     const shortcuts = reactive(mergeShortcuts())
+    const snippets = ref([])
     const shortcutItems = Object.keys(DEFAULT_SHORTCUTS).map((id) => ({
       id,
       label: SHORTCUT_LABELS[id] || id,
@@ -86,6 +99,7 @@ export default {
       Object.keys(merged).forEach((id) => {
         shortcuts[id] = { ...merged[id] }
       })
+      snippets.value = [...(data?.snippets || [])]
     }
 
     const load = async () => {
@@ -134,10 +148,19 @@ export default {
       recordingId.value = ''
     }
 
+    const addSnippet = () => {
+      snippets.value.push({
+        id: `sn-${Date.now()}`,
+        name: '新片段',
+        command: '',
+        scope: 'global',
+      })
+    }
+
     const save = async () => {
       saving.value = true
       try {
-        await App.SaveShortcutSettings({ ...shortcuts })
+        await App.SaveShortcutSettings({ ...shortcuts, snippets: snippets.value })
         ElMessage.success('快捷键已保存')
       } catch (e) {
         ElMessage.error(`保存失败: ${e}`)
@@ -158,6 +181,8 @@ export default {
       resetShortcut,
       resetAll,
       save,
+      snippets,
+      addSnippet,
     }
   },
 }
@@ -178,6 +203,27 @@ export default {
   overflow: auto;
   padding: 0 0 12px;
 }
+
+.snippets-section {
+  margin-top: 16px;
+  border-top: 1px solid var(--app-border);
+  padding-top: 12px;
+  border: none;
+  background: transparent;
+}
+.section-title {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.snippet-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+  align-items: center;
+}
+.sn-field { width: 100px; flex-shrink: 0; }
+.sn-scope { width: 88px; flex-shrink: 0; }
+.sn-cmd { flex: 1; min-width: 0; }
 
 .shortcut-section {
   padding: 12px 14px;

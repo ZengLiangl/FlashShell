@@ -2,6 +2,7 @@ package machine
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"sort"
@@ -17,17 +18,17 @@ import (
 
 // ShellAuxManager 辅助 SSH（监控 + SFTP），与 PTY 分离
 type ShellAuxManager struct {
-	mu          sync.Mutex
-	client      *SSHClient
-	ownsClient  bool // false 时复用 PTY 的 SSH，Close 仅释放 SFTP
-	machineName string
-	host        string
-	uidNames    map[uint32]string
-	gidNames    map[uint32]string
-	idMapsReady bool
-	lastNetAt   time.Time
-	lastNetRx   uint64
-	lastNetTx   uint64
+	mu           sync.Mutex
+	client       *SSHClient
+	ownsClient   bool // false 时复用 PTY 的 SSH，Close 仅释放 SFTP
+	machineName  string
+	host         string
+	uidNames     map[uint32]string
+	gidNames     map[uint32]string
+	idMapsReady  bool
+	lastNetAt    time.Time
+	lastNetRx    uint64
+	lastNetTx    uint64
 	lastNetIface string
 }
 
@@ -685,6 +686,56 @@ func removeDirRecursive(c *sftp.Client, dir string) error {
 		}
 	}
 	return c.Remove(dir)
+}
+
+// StatPath 获取远端路径信息
+func (a *ShellAuxManager) StatPath(remotePath string) (*define.SftpEntry, error) {
+	c, err := a.sftpClient()
+	if err != nil {
+		return nil, err
+	}
+	info, err := c.Stat(remotePath)
+	if err != nil {
+		return nil, err
+	}
+	entry := &define.SftpEntry{
+		Name:    path.Base(remotePath),
+		Path:    remotePath,
+		IsDir:   info.IsDir(),
+		Size:    info.Size(),
+		ModTime: info.ModTime().Unix(),
+		Mode:    info.Mode().String(),
+	}
+	if info.IsDir() {
+		entry.Type = "目录"
+	} else {
+		entry.Type = "文件"
+	}
+	return entry, nil
+}
+
+// OpenFile 打开远端文件读取
+func (a *ShellAuxManager) OpenFile(remotePath string) (io.ReadCloser, error) {
+	c, err := a.sftpClient()
+	if err != nil {
+		return nil, err
+	}
+	return c.Open(remotePath)
+}
+
+// WriteFile 写入远端文件
+func (a *ShellAuxManager) WriteFile(remotePath string, data []byte) error {
+	c, err := a.sftpClient()
+	if err != nil {
+		return err
+	}
+	f, err := c.Create(remotePath)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(data)
+	return err
 }
 
 func fileTypeLabel(mode os.FileMode) string {

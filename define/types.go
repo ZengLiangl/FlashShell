@@ -83,6 +83,7 @@ type SSHTunnel struct {
 	LocalPort  int    `yaml:"localPort" json:"localPort"`
 	RemoteHost string `yaml:"remoteHost,omitempty" json:"remoteHost,omitempty"`
 	RemotePort int    `yaml:"remotePort,omitempty" json:"remotePort,omitempty"`
+	Temporary  bool   `yaml:"-" json:"temporary,omitempty"` // 运行时临时隧道，不持久化
 }
 
 // SSHTunnelStatus 隧道运行状态
@@ -96,6 +97,7 @@ type SSHTunnelStatus struct {
 	Active     bool   `json:"active"`
 	Error      string `json:"error,omitempty"`
 	StartedAt  int64  `json:"startedAt"`
+	Temporary  bool   `json:"temporary,omitempty"`
 }
 
 // EnsureID 确保机器有唯一 ID
@@ -259,7 +261,7 @@ func (rm *RemoteMachine) Connect(machine *Machine, withSFTP bool) error {
 	config := &ssh.ClientConfig{
 		User:            sensitiveData.User,
 		Auth:            auth,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // 生产环境应该验证主机密钥
+		HostKeyCallback: currentHostKeyCallback(),
 		Timeout:         SSHHandshakeTimeout(),
 	}
 
@@ -365,7 +367,7 @@ func (rm *RemoteMachine) NewSession() (*ssh.Session, error) {
 
 // Runner 命令执行器接口
 type Runner interface {
-	Execute(cmd Command, output chan<- string, onStepStart func(step string), onStepComplete func()) error
+	Execute(cmd Command, output chan<- string, onStepStart func(step string), onStepComplete func(), shouldStop func() bool) error
 	Stop() error
 }
 

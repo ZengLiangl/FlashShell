@@ -13,17 +13,26 @@ type ShortcutBinding struct {
 	UseMod bool   `json:"useMod"`
 }
 
+// ShellSnippet 终端命令片段
+type ShellSnippet struct {
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Command string `json:"command"`
+	Scope   string `json:"scope,omitempty"` // global 或机器配置名
+}
+
 // ShortcutSettings 可自定义系统快捷键（独立 JSON 文件）
 type ShortcutSettings struct {
-	NewWindow          ShortcutBinding `json:"newWindow"`
-	MachineConfig      ShortcutBinding `json:"machineConfig"`
-	ConnectionManager  ShortcutBinding `json:"connectionManager"`
-	EnvVars            ShortcutBinding `json:"envVars"`
-	SystemSettings     ShortcutBinding `json:"systemSettings"`
-	RefreshConfig      ShortcutBinding `json:"refreshConfig"`
-	Find               ShortcutBinding `json:"find"`
-	Copy               ShortcutBinding `json:"copy"`
-	ClearOutput        ShortcutBinding `json:"clearOutput"`
+	NewWindow         ShortcutBinding `json:"newWindow"`
+	MachineConfig     ShortcutBinding `json:"machineConfig"`
+	ConnectionManager ShortcutBinding `json:"connectionManager"`
+	EnvVars           ShortcutBinding `json:"envVars"`
+	SystemSettings    ShortcutBinding `json:"systemSettings"`
+	RefreshConfig     ShortcutBinding `json:"refreshConfig"`
+	Find              ShortcutBinding `json:"find"`
+	Copy              ShortcutBinding `json:"copy"`
+	ClearOutput       ShortcutBinding `json:"clearOutput"`
+	Snippets          []ShellSnippet  `json:"snippets,omitempty"`
 }
 
 // DefaultShortcutSettings 默认快捷键

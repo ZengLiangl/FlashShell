@@ -1,13 +1,13 @@
 package cmds
 
 import (
+	"FlashDock/define"
+	"FlashDock/utils"
 	"bufio"
 	"errors"
 	"fmt"
 	"io"
 	"os"
-	"FlashDock/define"
-	"FlashDock/utils"
 	"strings"
 	"time"
 )
@@ -60,9 +60,20 @@ func uploadFile(rm *define.RemoteMachine, localPath, remotePath, targetFileName 
 		remotePath = remotePath + fileInfo.Name()
 	}
 
+	transferID := fmt.Sprintf("task-upload-%d", time.Now().UnixNano())
+	reportTransfer(&define.SftpTransferRecord{
+		ID: transferID, Direction: "upload", Name: targetFileName,
+		LocalPath: localPath, RemotePath: remotePath, Status: "running",
+		Total: fileInfo.Size(), StartedAt: time.Now().Unix(),
+	})
+
 	// 创建远程文件
 	dstFile, err := rm.SFTPClient.Create(remotePath)
 	if err != nil {
+		reportTransfer(&define.SftpTransferRecord{
+			ID: transferID, Direction: "upload", Name: targetFileName, Status: "error",
+			Error: err.Error(), FinishedAt: time.Now().Unix(),
+		})
 		return fmt.Errorf("创建远程文件失败: %w", err)
 	}
 	defer dstFile.Close()
@@ -75,6 +86,9 @@ func uploadFile(rm *define.RemoteMachine, localPath, remotePath, targetFileName 
 		fileName:   targetFileName,
 		progressID: fmt.Sprintf("upload_%d_%s", time.Now().UnixNano(), targetFileName),
 		outputChan: outputChan,
+		transferID: transferID,
+		localPath:  localPath,
+		remotePath: remotePath,
 	}
 
 	// 启动进度显示goroutine
@@ -83,8 +97,18 @@ func uploadFile(rm *define.RemoteMachine, localPath, remotePath, targetFileName 
 	// 复制文件并显示进度
 	_, err = utils.CopyBuffer(progressWriter, srcFile)
 	if err != nil {
+		reportTransfer(&define.SftpTransferRecord{
+			ID: transferID, Direction: "upload", Name: targetFileName, Status: "error",
+			Error: err.Error(), FinishedAt: time.Now().Unix(),
+		})
 		return fmt.Errorf("文件传输失败: %w", err)
 	}
+	reportTransfer(&define.SftpTransferRecord{
+		ID: transferID, Direction: "upload", Name: targetFileName,
+		LocalPath: localPath, RemotePath: remotePath, Status: "done",
+		Total: fileInfo.Size(), Transferred: fileInfo.Size(), Percent: 100,
+		FinishedAt: time.Now().Unix(),
+	})
 	return nil
 }
 
@@ -217,6 +241,9 @@ type progressWriter struct {
 	fileName   string         // 文件名
 	progressID string         // 进度唯一标识
 	outputChan chan<- string  // 输出通道
+	transferID string
+	localPath  string
+	remotePath string
 }
 
 // Write 实现io.Writer接口，记录写入的数据
@@ -226,6 +253,15 @@ func (pw *progressWriter) Write(p []byte) (n int, err error) {
 		return n, err
 	}
 	pw.written += int64(n)
+	if pw.transferID != "" && pw.totalSize > 0 {
+		reportTransfer(&define.SftpTransferRecord{
+			ID: pw.transferID, Direction: "upload", Name: pw.fileName,
+			LocalPath: pw.localPath, RemotePath: pw.remotePath, Status: "running",
+			Total: pw.totalSize, Transferred: pw.written,
+			Percent:   float64(pw.written) / float64(pw.totalSize) * 100,
+			UpdatedAt: time.Now().Unix(),
+		})
+	}
 	return n, err
 }
 

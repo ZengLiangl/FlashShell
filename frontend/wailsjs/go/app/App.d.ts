@@ -11,6 +11,8 @@ export function AddMachineGroup(arg1:string):Promise<void>;
 
 export function AddMachineWithEvent(arg1:define.Machine):Promise<void>;
 
+export function AddShellTemporaryTunnel(arg1:string,arg2:define.SSHTunnel):Promise<void>;
+
 export function AddWorkPath(arg1:string,arg2:string):Promise<void>;
 
 export function AddWorkPathWithEvent(arg1:string,arg2:string):Promise<void>;
@@ -26,6 +28,8 @@ export function ClearFinishedShellTransfers():Promise<void>;
 export function ClearMachineSensitiveData(arg1:string):Promise<void>;
 
 export function ClearOutput():Promise<void>;
+
+export function ClearShellCommandHistory(arg1:string):Promise<void>;
 
 export function ClearShellHistory():Promise<void>;
 
@@ -63,6 +67,12 @@ export function ExecuteShellCommand(arg1:string,arg2:string):Promise<void>;
 
 export function ExecuteSubProject(arg1:string,arg2:string):Promise<void>;
 
+export function ExportKnownHosts():Promise<string>;
+
+export function ExportMachineTemplate():Promise<string>;
+
+export function ExportMachineTemplateToFile():Promise<string>;
+
 export function GetAppVersion():Promise<string>;
 
 export function GetConfig():Promise<define.Root>;
@@ -80,6 +90,10 @@ export function GetGlobalAccounts():Promise<Array<data.GlobalAccountDTO>>;
 export function GetGlobalConfig():Promise<data.GlobalConfig>;
 
 export function GetGlobalConfigForRefresh():Promise<data.GlobalConfig>;
+
+export function GetKnownHosts():Promise<Array<data.KnownHostRecord>>;
+
+export function GetLocalHomeDir():Promise<string>;
 
 export function GetMachineGroups():Promise<Array<string>>;
 
@@ -131,11 +145,19 @@ export function GetWorkPaths():Promise<Record<string, string>>;
 
 export function ImportFinalShellPick(arg1:string,arg2:string):Promise<data.MachineImportResult>;
 
+export function ImportKnownHosts(arg1:string):Promise<number>;
+
+export function ImportMachineTemplate(arg1:string,arg2:boolean):Promise<data.ImportMachineTemplateResult>;
+
+export function ImportMachineTemplateFromFile(arg1:boolean):Promise<data.ImportMachineTemplateResult>;
+
 export function ImportXshellFromFile(arg1:string,arg2:string,arg3:string):Promise<data.MachineImportResult>;
 
 export function ImportXshellFromFolder(arg1:string,arg2:string,arg3:string):Promise<data.MachineImportResult>;
 
 export function ImportXshellPick(arg1:string,arg2:string):Promise<data.MachineImportResult>;
+
+export function ListLocalFiles(arg1:string,arg2:boolean):Promise<Array<define.SftpEntry>>;
 
 export function ListShellFiles(arg1:string,arg2:string,arg3:boolean):Promise<Array<define.SftpEntry>>;
 
@@ -167,6 +189,8 @@ export function OpenReleaseURL(arg1:string):Promise<void>;
 
 export function OpenShellDownloadDir():Promise<void>;
 
+export function OpenShellRemoteFileExternal(arg1:string,arg2:string):Promise<void>;
+
 export function OpenSystemSettings():Promise<void>;
 
 export function OpenWorkPathConfig():Promise<void>;
@@ -179,15 +203,21 @@ export function PickShellUploadPaths():Promise<Array<string>>;
 
 export function ReadExecutionLog(arg1:string):Promise<string>;
 
+export function ReadShellRemoteFile(arg1:string,arg2:string):Promise<string>;
+
 export function ReconnectShell(arg1:string):Promise<string>;
 
 export function RefreshConfigMenu():Promise<void>;
 
 export function RefreshConfigMenuWithEvent():Promise<void>;
 
+export function RemoveKnownHost(arg1:string,arg2:number):Promise<void>;
+
 export function RemoveShellHistory(arg1:string,arg2:string):Promise<void>;
 
 export function RemoveShellTransfer(arg1:string):Promise<void>;
+
+export function RemoveShellTunnel(arg1:string,arg2:string):Promise<void>;
 
 export function RenameMachineGroup(arg1:string,arg2:string):Promise<void>;
 
@@ -205,11 +235,15 @@ export function SaveGlobalAccountsFromDTO(arg1:Array<data.GlobalAccountDTO>):Pro
 
 export function SaveGlobalConfig(arg1:data.GlobalConfig):Promise<void>;
 
+export function SaveShellRemoteFile(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function SaveShortcutSettings(arg1:data.ShortcutSettings):Promise<void>;
 
 export function SaveSystemSettings(arg1:data.GlobalConfig):Promise<void>;
 
 export function SaveThemeSettings(arg1:data.ThemeSettings):Promise<void>;
+
+export function SearchShellCommandHistory(arg1:string,arg2:string,arg3:number):Promise<Array<string>>;
 
 export function SelectKeyFile():Promise<string>;
 
@@ -228,6 +262,8 @@ export function ShellDirExists(arg1:string,arg2:string):Promise<boolean>;
 export function SkipUpdateVersion(arg1:string):Promise<void>;
 
 export function StartShellDownload(arg1:string,arg2:string):Promise<string>;
+
+export function StartShellFolderSync(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
 
 export function StartShellUpload(arg1:string,arg2:string,arg3:string):Promise<string>;
 
@@ -250,6 +286,10 @@ export function TestMachineConnection(arg1:string):Promise<void>;
 export function TestMachineDraftConnection(arg1:define.Machine,arg2:define.SensitiveData):Promise<void>;
 
 export function TestProxyConnection(arg1:data.ProxySettings,arg2:string):Promise<string>;
+
+export function TrustHostKey(arg1:string,arg2:number,arg3:string):Promise<void>;
+
+export function TrustHostKeyOnce(arg1:string,arg2:number,arg3:string):Promise<void>;
 
 export function UpdateApplicationMenu():Promise<void>;
 

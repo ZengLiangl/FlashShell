@@ -68,6 +68,12 @@
             </el-icon>
           </el-button>
         </el-tooltip>
+        <el-tooltip content="命令面板 (历史/片段)" placement="bottom">
+          <el-button v-if="sessions.length" size="small" text title="命令面板"
+            @click="$emit('open-command-palette')">
+            <el-icon :size="15"><Memo /></el-icon>
+          </el-button>
+        </el-tooltip>
         <el-button v-if="sessions.length && !isLocalSession(activeTab)" class="transfer-btn" size="small" text
           title="文件传输" @click="$emit('open-transfer')">
           <el-badge :value="transferActiveCount" :hidden="!transferActiveCount" :max="99">
@@ -142,8 +148,8 @@
 </template>
 
 <script>
-import { ref, reactive, watch, computed, onMounted, onUnmounted } from 'vue'
-import { ArrowLeft, ArrowDown, Folder, Upload, Plus, Promotion } from '@element-plus/icons-vue'
+import { ref, reactive, watch, computed, onMounted, onUnmounted, nextTick } from 'vue'
+import { ArrowLeft, ArrowDown, Folder, Upload, Plus, Promotion, Memo } from '@element-plus/icons-vue'
 import ShellTerminal from './ShellTerminal.vue'
 import ShellBroadcastBar from './ShellBroadcastBar.vue'
 
@@ -212,6 +218,7 @@ export default {
     Upload,
     Plus,
     Promotion,
+    Memo,
   },
   props: {
     sessions: { type: Array, default: () => [] },
@@ -225,7 +232,7 @@ export default {
   },
   emits: [
     'update:activeMachine', 'close-session', 'clear', 'open-picker', 'add-local',
-    'back', 'open-search', 'reconnect', 'search-result', 'open-transfer', 'cwd-sync',
+    'back', 'open-search', 'reconnect', 'search-result', 'open-transfer', 'open-command-palette', 'cwd-sync',
     'update:broadcast-enabled', 'update:broadcast-targets', 'update:split-session-ids',
     'reorder-tabs',
   ],
@@ -284,12 +291,21 @@ export default {
     )
 
     watch(() => props.activeMachine, (val) => {
-      if (val) activeTab.value = val
+      activeTab.value = val || ''
+      if (!val) return
+      nextTick(() => {
+        terminalRefs.value[val]?.wakeTerminal?.()
+        setTimeout(() => terminalRefs.value[val]?.wakeTerminal?.(), 120)
+      })
     })
 
     watch(activeTab, (val) => {
       emit('update:activeMachine', val)
       nextTickFit(val)
+      nextTick(() => {
+        terminalRefs.value[val]?.wakeTerminal?.()
+        setTimeout(() => terminalRefs.value[val]?.wakeTerminal?.(), 120)
+      })
     })
 
     watch(splitViewVisible, (visible) => {

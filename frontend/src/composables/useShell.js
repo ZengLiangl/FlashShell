@@ -1,4 +1,4 @@
-import { ref, computed, onUnmounted } from 'vue'
+import { ref, computed, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
@@ -8,9 +8,10 @@ import {
   clearShellOutput,
   removeShellOutput,
   discardShellOutputBuffer,
-  migrateShellOutput,
+  finalizeShellOutputMigration,
 } from '../utils/shellOutputBuffer'
 import { remoteConfigName, buildKnownMachineNames } from '../utils/sessionId'
+import { parseHostKeyError } from '../utils/hostKey'
 
 const isLocalSession = (name) => {
   const n = String(name || '')
@@ -57,6 +58,8 @@ export function useShell() {
   const broadcastEnabled = ref(false)
   /** 平行视图：同时显示的会话 ID（最多 4） */
   const splitSessionIds = ref([])
+  /** 待信任的主机密钥（连接失败时弹出对话框） */
+  const pendingHostKey = ref(null)
 
   const resolveRemoteConfigName = (sessionID) =>
     remoteConfigName(sessionID, buildKnownMachineNames(shellMachines.value))
@@ -87,7 +90,19 @@ export function useShell() {
   const replaceTabOrder = (from, to) => {
     if (!from || !to || from === to) return
     tabOrder.value = tabOrder.value.map((id) => (id === from ? to : id))
+    const seen = new Set()
+    tabOrder.value = tabOrder.value.filter((id) => {
+      if (seen.has(id)) return false
+      seen.add(id)
+      return true
+    })
     if (!tabOrder.value.includes(to)) tabOrder.value.push(to)
+  }
+
+  const pruneOrphanLocalPending = () => {
+    openTabs.value = openTabs.value.filter(
+      (t) => !(isPendingSession(t.machineName) && t.kind === 'local'),
+    )
   }
 
   const removeTabOrder = (machineName) => {
@@ -149,7 +164,7 @@ export function useShell() {
     return tab
   }
 
-  const addPendingTab = ({ configName, kind, tabLabel, sessionID = '' }) => {
+  const addPendingTab = ({ configName, kind, tabLabel, sessionID = '', activate = true }) => {
     const pendingId = createPendingId()
     const label =
       tabLabel ||
@@ -164,8 +179,8 @@ export function useShell() {
       },
       { connected: false, connecting: true },
     )
-    activeMachine.value = pendingId
-    pushShellOutput(pendingId, 'line', '连接中...')
+    if (activate) activeMachine.value = pendingId
+    if (kind !== 'local') pushShellOutput(pendingId, 'line', '连接中...')
     return pendingId
   }
 
@@ -173,7 +188,8 @@ export function useShell() {
     const connected = !!liveStatus?.connected
     const connecting = !!liveStatus?.connecting
     const idx = openTabs.value.findIndex((t) => t.machineName === pendingId)
-    migrateShellOutput(pendingId, sessionID)
+    const kind = liveStatus?.kind || (isLocalSession(sessionID) ? 'local' : 'remote')
+    finalizeShellOutputMigration(pendingId, sessionID)
     if (idx >= 0) {
       const prev = openTabs.value[idx]
       openTabs.value[idx] = {
@@ -184,7 +200,7 @@ export function useShell() {
         connecting,
         tabLabel: liveStatus?.tabLabel || prev.tabLabel,
         configName: liveStatus?.configName || prev.configName,
-        kind: liveStatus?.kind || prev.kind,
+        kind,
       }
       replaceTabOrder(pendingId, sessionID)
     } else {
@@ -209,7 +225,7 @@ export function useShell() {
     if (tab) {
       tab.connecting = true
       tab.connected = false
-      pushShellOutput(sessionID, 'line', '连接中...')
+      if (!isLocalSession(sessionID)) pushShellOutput(sessionID, 'line', '连接中...')
       activeMachine.value = sessionID
       return sessionID
     }
@@ -278,22 +294,37 @@ export function useShell() {
     const order = tabOrder.value.length
       ? [...tabOrder.value]
       : sortTabs(openTabs.value).map((t) => t.machineName)
-    const ordered = order.filter((id) => byName.has(id)).map((id) => byName.get(id))
+    const ordered = []
+    const seenOrder = new Set()
+    for (const id of order) {
+      if (!byName.has(id) || seenOrder.has(id)) continue
+      seenOrder.add(id)
+      ordered.push(byName.get(id))
+    }
     for (const [id, tab] of byName) {
-      if (!order.includes(id)) ordered.push(tab)
+      if (!seenOrder.has(id)) ordered.push(tab)
     }
     openTabs.value = ordered
     tabOrder.value = ordered.map((t) => t.machineName)
   }
 
   const pendingTabForLive = (live, tabs) => {
-    const cfg = live?.configName || live?.machineName
-    return tabs.find(
-      (t) =>
-        isPendingSession(t.machineName) &&
-        t.connecting &&
-        (t.configName === cfg || t.configName === live?.machineName),
-    )
+    if (!live?.machineName) return null
+    if (tabs.some((t) => t.machineName === live.machineName && !isPendingSession(t.machineName))) {
+      return null
+    }
+    const cfg = live.configName || live.machineName
+    const pendings = tabs.filter((t) => isPendingSession(t.machineName) && t.connecting)
+    if (!pendings.length) return null
+
+    const exact = pendings.find((t) => t.configName === cfg || t.configName === live.machineName)
+    if (exact) return exact
+
+    if (isLocalSession(live.machineName)) {
+      const localPending = pendings.filter((t) => t.kind === 'local' && t.configName === 'local')
+      if (localPending.length) return localPending[0]
+    }
+    return null
   }
 
   const mergeOpenTabsFromBackend = (list) => {
@@ -321,7 +352,8 @@ export function useShell() {
             configName: live.configName || tab.configName,
           }
         }
-        // 后端已无此会话（连接失败 / 已断开）→ 清除连接中
+        if (tab.connecting || isPendingSession(tab.machineName)) return tab
+        if (tab.connected && isLocalSession(tab.machineName)) return tab
         return { ...tab, connected: false, connecting: false }
       })
 
@@ -332,7 +364,7 @@ export function useShell() {
       }
       const pending = pendingTabForLive(live, openTabs.value)
       if (pending) {
-        migrateShellOutput(pending.machineName, sessionID)
+        finalizeShellOutputMigration(pending.machineName, sessionID)
         const idx = openTabs.value.indexOf(pending)
         if (idx >= 0) {
           openTabs.value[idx] = {
@@ -344,6 +376,7 @@ export function useShell() {
             connectedAt: pending.connectedAt || Date.now(),
             tabLabel: live.tabLabel || pending.tabLabel,
             configName: live.configName || pending.configName,
+            kind: live.kind || pending.kind || (isLocalSession(sessionID) ? 'local' : 'remote'),
           }
           replaceTabOrder(pending.machineName, sessionID)
           if (activeMachine.value === pending.machineName) activeMachine.value = sessionID
@@ -351,6 +384,8 @@ export function useShell() {
         continue
       }
       if (openTabs.value.some((t) => t.machineName === sessionID)) continue
+      // 本机 tab 仅由 connectLocal 显式打开，避免 status 竞态产生无法输入的占位 tab
+      if (isLocalSession(sessionID)) continue
       openTabs.value.push({
         ...live,
         connected: !!live.connected,
@@ -358,6 +393,7 @@ export function useShell() {
         connectedAt: Date.now(),
         tabLabel: live.tabLabel || live.machineName,
         configName: live.configName || live.machineName,
+        kind: live.kind || 'remote',
       })
       ensureTabOrder(sessionID)
     }
@@ -428,7 +464,12 @@ export function useShell() {
       return true
     } catch (error) {
       failPendingTab(pendingId, error)
-      ElMessage.error('连接失败: ' + error)
+      const hk = parseHostKeyError(error)
+      if (hk) {
+        pendingHostKey.value = { ...hk, configName, pendingId }
+      } else {
+        ElMessage.error('连接失败: ' + error)
+      }
       return false
     }
   }
@@ -437,30 +478,36 @@ export function useShell() {
     if (sessionID) {
       return connectOrReconnect(sessionID)
     }
-    const label = '本机'
-    const pendingId = addPendingTab({
-      configName: 'local',
-      kind: 'local',
-      tabLabel: label,
-      sessionID: '',
-    })
     try {
-      const id = await App.ConnectLocalShell(sessionID || '')
+      const id = await App.ConnectLocalShell('')
       if (!id) throw new Error('未返回会话 ID')
-      if (!openTabs.value.some((t) => t.machineName === pendingId)) return false
-      const live = sessions.value.find((s) => s.machineName === id) || {
-        machineName: id,
-        kind: 'local',
-        tabLabel: localTabLabel(id),
-        connected: true,
-      }
-      finalizePendingTab(pendingId, id, live)
-      await syncSessions()
+
+      pruneOrphanLocalPending()
+      const live =
+        sessions.value.find((s) => s.machineName === id) ||
+        (await App.GetShellSessions())?.find((s) => s.machineName === id) || {
+          machineName: id,
+          configName: id,
+          kind: 'local',
+          tabLabel: localTabLabel(id),
+          connected: true,
+          connecting: false,
+        }
+      upsertOpenTab(id, live, { connected: true, connecting: false })
+      pruneOrphanLocalPending()
       activeMachine.value = id
-      ElMessage.success(sessionID ? '已重新连接本机' : '已打开本机')
+      await nextTick()
+      await syncSessions()
+      const tab = openTabs.value.find((t) => t.machineName === id)
+      if (tab) {
+        tab.connected = true
+        tab.connecting = false
+        tab.kind = 'local'
+      }
+      ElMessage.success('已打开本机')
       return true
     } catch (error) {
-      failPendingTab(pendingId, error)
+      pruneOrphanLocalPending()
       ElMessage.error('打开本机失败: ' + error)
       return false
     }
@@ -481,14 +528,15 @@ export function useShell() {
       }
       if (!realId) throw new Error('未返回会话 ID')
       if (!openTabs.value.some((t) => t.machineName === pendingId)) return false
+      const isLocal = kind === 'local' || isLocalSession(configName)
       const live =
         (await App.GetShellSessions())?.find((s) => s.machineName === realId) || {
           machineName: realId,
-          configName: kind === 'local' ? 'local' : configName,
-          kind: kind === 'local' ? 'local' : 'remote',
-          tabLabel: tab.tabLabel || (kind === 'local' ? localTabLabel(realId) : configName),
-          connected: false,
-          connecting: true,
+          configName: isLocal ? realId : configName,
+          kind: isLocal ? 'local' : 'remote',
+          tabLabel: tab.tabLabel || (isLocal ? localTabLabel(realId) : configName),
+          connected: isLocal,
+          connecting: !isLocal,
         }
       finalizePendingTab(pendingId, realId, live)
       await syncSessions()
@@ -511,11 +559,44 @@ export function useShell() {
     if (existing?.connecting) return false
     if (isPendingSession(sessionID)) return connectPendingTab(sessionID)
 
+    if (isLocalSession(sessionID)) {
+      try {
+        const id = await App.ConnectLocalShell(sessionID)
+        const realId = id || sessionID
+        const live =
+          sessions.value.find((s) => s.machineName === realId) ||
+          (await App.GetShellSessions())?.find((s) => s.machineName === realId) || {
+            machineName: realId,
+            configName: realId,
+            kind: 'local',
+            tabLabel: localTabLabel(realId),
+            connected: true,
+            connecting: false,
+          }
+        upsertOpenTab(realId, live, { connected: true, connecting: false })
+        activeMachine.value = realId
+        await nextTick()
+        await syncSessions()
+        const tab = openTabs.value.find((t) => t.machineName === realId)
+        if (tab) {
+          tab.connected = true
+          tab.connecting = false
+        }
+        return true
+      } catch (error) {
+        const tab = openTabs.value.find((t) => t.machineName === sessionID)
+        if (tab) {
+          tab.connecting = false
+          tab.connected = false
+        }
+        ElMessage.error('重连失败: ' + error)
+        return false
+      }
+    }
+
     const pendingId = markTabConnecting(sessionID)
     try {
-      const id = isLocalSession(sessionID)
-        ? await App.ConnectLocalShell(sessionID)
-        : await App.ReconnectShell(sessionID)
+      const id = await App.ReconnectShell(sessionID)
       const realId = id || sessionID
       if (!openTabs.value.some((t) => t.machineName === sessionID || t.machineName === pendingId)) {
         return false
@@ -555,7 +636,7 @@ export function useShell() {
     }
   }
 
-  /** 关闭 tab：断开（若仍连接）并移除工作区会话 */
+  /** 关闭 tab：断开连接并移除 */
   const closeSession = async (machineName) => {
     if (!machineName) return
     if (!isPendingSession(machineName)) {
@@ -627,6 +708,15 @@ export function useShell() {
       const line = String(payload.line)
       if (line.startsWith('连接失败') || line.startsWith('[连接断开]')) {
         markTabFailed(payload.machineName)
+        const hk = parseHostKeyError(line)
+        if (hk) {
+          const tab = openTabs.value.find((t) => t.machineName === payload.machineName)
+          pendingHostKey.value = {
+            ...hk,
+            configName: tab?.configName || resolveRemoteConfigName(payload.machineName),
+            sessionId: payload.machineName,
+          }
+        }
       }
     })
     offShellClear = EventsOn('shell:clear', (payload) => {
@@ -679,6 +769,7 @@ export function useShell() {
     connectLocal,
     connectOrReconnect,
     disconnect,
+    pendingHostKey,
     closeSession,
     testMachine,
     toggleBroadcastTarget,

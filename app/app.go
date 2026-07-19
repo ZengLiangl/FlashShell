@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"FlashDock/cmds"
 	"FlashDock/data"
 	"FlashDock/define"
 	"FlashDock/machine"
@@ -28,12 +29,14 @@ type App struct {
 	sessionManager   *data.SessionManager
 	logManager       *data.LogManager
 	shellHistory     *data.ShellHistoryManager
+	shellCmdHistory  *data.ShellCommandHistoryManager
 	subProjectRunner *machine.SubProjectRunner
 	shellPool        *machine.ShellSessionPool
 	localShellPool   *machine.LocalShellPool
 	shellAuxPool     *machine.ShellAuxPool
 	tunnelMgr        *machine.TunnelManager
 	transfers        *shellTransferStore
+	externalEdits    *externalEditStore
 	outputChannel    chan string
 	outputIngress    chan string
 	executionMutex   sync.RWMutex
@@ -56,17 +59,19 @@ func NewApp(sessionID string) *App {
 	logManager := data.NewLogManager(data.DefaultLogPathTilde)
 
 	app := &App{
-		outputChannel:  make(chan string, 1000),
-		outputIngress:  make(chan string, 1000),
-		configManager:  configManager,
-		sessionManager: sessionManager,
-		logManager:     logManager,
-		shellHistory:   data.NewShellHistoryManager(),
-		shellPool:      machine.NewShellSessionPool(),
-		localShellPool: machine.NewLocalShellPool(),
-		shellAuxPool:   machine.NewShellAuxPool(),
-		tunnelMgr:      machine.NewTunnelManager(),
-		shellCwds:      make(map[string]string),
+		outputChannel:   make(chan string, 1000),
+		outputIngress:   make(chan string, 1000),
+		configManager:   configManager,
+		sessionManager:  sessionManager,
+		logManager:      logManager,
+		shellHistory:    data.NewShellHistoryManager(),
+		shellCmdHistory: data.NewShellCommandHistoryManager(),
+		shellPool:       machine.NewShellSessionPool(),
+		localShellPool:  machine.NewLocalShellPool(),
+		shellAuxPool:    machine.NewShellAuxPool(),
+		tunnelMgr:       machine.NewTunnelManager(),
+		externalEdits:   newExternalEditStore(),
+		shellCwds:       make(map[string]string),
 	}
 	app.refreshLogSettings()
 	app.applyProxyFromConfig()
@@ -90,6 +95,8 @@ func (a *App) refreshLogSettings() {
 // Startup is called when the app starts up
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
+	define.SetHostKeyCallback(data.GlobalHostKeyManager().Callback())
+	cmds.SetTransferReporter(a.reportTaskTransfer)
 	a.setupSubProjectRunner()
 
 	// 将更新后的机器配置重新保存到全局配置文件中
@@ -1739,6 +1746,10 @@ func (a *App) DisconnectShell(machineName string) error {
 		if !a.shellPool.HasConnectedConfig(configName) {
 			_ = a.shellAuxPool.Disconnect(configName)
 			a.stopMachineTunnels(configName)
+			a.clearSessionHostKeyTrust(configName)
+		}
+		if a.externalEdits != nil {
+			a.externalEdits.stopForMachine(machineName)
 		}
 	}
 	a.clearShellCwd(machineName)
@@ -2059,6 +2070,7 @@ func (a *App) BroadcastShellInput(sessionIDs []string, input string) error {
 func (a *App) SendShellInput(machineName, input string) error {
 	a.executionMutex.RLock()
 	defer a.executionMutex.RUnlock()
+	a.recordShellCommand(machineName, input)
 	if machine.IsLocalShellID(machineName) {
 		if a.localShellPool == nil {
 			return fmt.Errorf("本地终端不可用")

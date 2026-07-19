@@ -82,6 +82,12 @@
       :initial-update-result="aboutInitialUpdate" @dismissed="onAboutPromptDismissed" @skipped="onAboutPromptSkipped" />
 
     <ConfigEditorDialog v-model="configEditorVisible" @saved="refreshProjectConfig" />
+
+    <HostKeyTrustDialog
+      v-model="hostKeyDialogVisible"
+      :host-key-info="pendingHostKey"
+      @trusted="onHostKeyTrusted"
+    />
   </div>
 </template>
 
@@ -109,10 +115,11 @@ const ShellWorkspace = defineAsyncComponent(() => import("./views/ShellWorkspace
 const AboutDialog = defineAsyncComponent(() => import("./components/AboutDialog.vue"));
 const ConfigEditorDialog = defineAsyncComponent(() => import("./components/ConfigEditorDialog.vue"));
 const SettingsHubDialog = defineAsyncComponent(() => import("./components/SettingsHubDialog.vue"));
+const HostKeyTrustDialog = defineAsyncComponent(() => import("./components/shell/HostKeyTrustDialog.vue"));
 
 export default {
   name: "App",
-  components: { AppMenuBar, TerminalOutput, StatusBar, ProjectList, HomePage, ShellWorkspace, SubProjectList, TerminalHeader, AboutDialog, ConfigEditorDialog, SettingsHubDialog },
+  components: { AppMenuBar, TerminalOutput, StatusBar, ProjectList, HomePage, ShellWorkspace, SubProjectList, TerminalHeader, AboutDialog, ConfigEditorDialog, SettingsHubDialog, HostKeyTrustDialog },
   setup() {
     const { isDark, themeMode, terminalPreset, loadTheme, applyThemeSettings } = useTheme();
     const projects = ref([]);
@@ -186,6 +193,7 @@ export default {
       connectOrReconnect: connectOrReconnectShell,
       disconnect: disconnectShell,
       closeSession: closeShellSession,
+      pendingHostKey,
       testMachine: testShellConnection,
       broadcastEnabled,
       broadcastTargets,
@@ -195,6 +203,20 @@ export default {
       toggleSplitSession,
       reorderTabs,
     } = useShell();
+    const hostKeyDialogVisible = computed({
+      get: () => !!pendingHostKey.value,
+      set: (v) => { if (!v) pendingHostKey.value = null },
+    });
+    const onHostKeyTrusted = async () => {
+      const hk = pendingHostKey.value;
+      pendingHostKey.value = null;
+      if (!hk) return;
+      if (hk.configName) {
+        await connectShell(hk.configName);
+      } else if (hk.sessionId) {
+        await connectOrReconnectShell(hk.sessionId);
+      }
+    };
     const terminalOutputRef = ref(null);
     const terminalSearchVisible = ref(false);
     const terminalSearchQuery = ref('');
@@ -1425,6 +1447,9 @@ export default {
       connectOrReconnectShell,
       disconnectShell,
       closeShellSession,
+      hostKeyDialogVisible,
+      pendingHostKey,
+      onHostKeyTrusted,
       openShellMachineDialog,
       openShellMachineEdit,
       copyShellMachine,

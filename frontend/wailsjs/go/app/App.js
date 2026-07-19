@@ -14,6 +14,10 @@ export function AddMachineWithEvent(arg1) {
   return window['go']['app']['App']['AddMachineWithEvent'](arg1);
 }
 
+export function AddShellTemporaryTunnel(arg1, arg2) {
+  return window['go']['app']['App']['AddShellTemporaryTunnel'](arg1, arg2);
+}
+
 export function AddWorkPath(arg1, arg2) {
   return window['go']['app']['App']['AddWorkPath'](arg1, arg2);
 }
@@ -44,6 +48,10 @@ export function ClearMachineSensitiveData(arg1) {
 
 export function ClearOutput() {
   return window['go']['app']['App']['ClearOutput']();
+}
+
+export function ClearShellCommandHistory(arg1) {
+  return window['go']['app']['App']['ClearShellCommandHistory'](arg1);
 }
 
 export function ClearShellHistory() {
@@ -118,6 +126,18 @@ export function ExecuteSubProject(arg1, arg2) {
   return window['go']['app']['App']['ExecuteSubProject'](arg1, arg2);
 }
 
+export function ExportKnownHosts() {
+  return window['go']['app']['App']['ExportKnownHosts']();
+}
+
+export function ExportMachineTemplate() {
+  return window['go']['app']['App']['ExportMachineTemplate']();
+}
+
+export function ExportMachineTemplateToFile() {
+  return window['go']['app']['App']['ExportMachineTemplateToFile']();
+}
+
 export function GetAppVersion() {
   return window['go']['app']['App']['GetAppVersion']();
 }
@@ -152,6 +172,14 @@ export function GetGlobalConfig() {
 
 export function GetGlobalConfigForRefresh() {
   return window['go']['app']['App']['GetGlobalConfigForRefresh']();
+}
+
+export function GetKnownHosts() {
+  return window['go']['app']['App']['GetKnownHosts']();
+}
+
+export function GetLocalHomeDir() {
+  return window['go']['app']['App']['GetLocalHomeDir']();
 }
 
 export function GetMachineGroups() {
@@ -254,6 +282,18 @@ export function ImportFinalShellPick(arg1, arg2) {
   return window['go']['app']['App']['ImportFinalShellPick'](arg1, arg2);
 }
 
+export function ImportKnownHosts(arg1) {
+  return window['go']['app']['App']['ImportKnownHosts'](arg1);
+}
+
+export function ImportMachineTemplate(arg1, arg2) {
+  return window['go']['app']['App']['ImportMachineTemplate'](arg1, arg2);
+}
+
+export function ImportMachineTemplateFromFile(arg1) {
+  return window['go']['app']['App']['ImportMachineTemplateFromFile'](arg1);
+}
+
 export function ImportXshellFromFile(arg1, arg2, arg3) {
   return window['go']['app']['App']['ImportXshellFromFile'](arg1, arg2, arg3);
 }
@@ -264,6 +304,10 @@ export function ImportXshellFromFolder(arg1, arg2, arg3) {
 
 export function ImportXshellPick(arg1, arg2) {
   return window['go']['app']['App']['ImportXshellPick'](arg1, arg2);
+}
+
+export function ListLocalFiles(arg1, arg2) {
+  return window['go']['app']['App']['ListLocalFiles'](arg1, arg2);
 }
 
 export function ListShellFiles(arg1, arg2, arg3) {
@@ -326,6 +370,10 @@ export function OpenShellDownloadDir() {
   return window['go']['app']['App']['OpenShellDownloadDir']();
 }
 
+export function OpenShellRemoteFileExternal(arg1, arg2) {
+  return window['go']['app']['App']['OpenShellRemoteFileExternal'](arg1, arg2);
+}
+
 export function OpenSystemSettings() {
   return window['go']['app']['App']['OpenSystemSettings']();
 }
@@ -350,6 +398,10 @@ export function ReadExecutionLog(arg1) {
   return window['go']['app']['App']['ReadExecutionLog'](arg1);
 }
 
+export function ReadShellRemoteFile(arg1, arg2) {
+  return window['go']['app']['App']['ReadShellRemoteFile'](arg1, arg2);
+}
+
 export function ReconnectShell(arg1) {
   return window['go']['app']['App']['ReconnectShell'](arg1);
 }
@@ -362,12 +414,20 @@ export function RefreshConfigMenuWithEvent() {
   return window['go']['app']['App']['RefreshConfigMenuWithEvent']();
 }
 
+export function RemoveKnownHost(arg1, arg2) {
+  return window['go']['app']['App']['RemoveKnownHost'](arg1, arg2);
+}
+
 export function RemoveShellHistory(arg1, arg2) {
   return window['go']['app']['App']['RemoveShellHistory'](arg1, arg2);
 }
 
 export function RemoveShellTransfer(arg1) {
   return window['go']['app']['App']['RemoveShellTransfer'](arg1);
+}
+
+export function RemoveShellTunnel(arg1, arg2) {
+  return window['go']['app']['App']['RemoveShellTunnel'](arg1, arg2);
 }
 
 export function RenameMachineGroup(arg1, arg2) {
@@ -402,6 +462,10 @@ export function SaveGlobalConfig(arg1) {
   return window['go']['app']['App']['SaveGlobalConfig'](arg1);
 }
 
+export function SaveShellRemoteFile(arg1, arg2, arg3) {
+  return window['go']['app']['App']['SaveShellRemoteFile'](arg1, arg2, arg3);
+}
+
 export function SaveShortcutSettings(arg1) {
   return window['go']['app']['App']['SaveShortcutSettings'](arg1);
 }
@@ -412,6 +476,10 @@ export function SaveSystemSettings(arg1) {
 
 export function SaveThemeSettings(arg1) {
   return window['go']['app']['App']['SaveThemeSettings'](arg1);
+}
+
+export function SearchShellCommandHistory(arg1, arg2, arg3) {
+  return window['go']['app']['App']['SearchShellCommandHistory'](arg1, arg2, arg3);
 }
 
 export function SelectKeyFile() {
@@ -448,6 +516,10 @@ export function SkipUpdateVersion(arg1) {
 
 export function StartShellDownload(arg1, arg2) {
   return window['go']['app']['App']['StartShellDownload'](arg1, arg2);
+}
+
+export function StartShellFolderSync(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['StartShellFolderSync'](arg1, arg2, arg3, arg4);
 }
 
 export function StartShellUpload(arg1, arg2, arg3) {
@@ -492,6 +564,14 @@ export function TestMachineDraftConnection(arg1, arg2) {
 
 export function TestProxyConnection(arg1, arg2) {
   return window['go']['app']['App']['TestProxyConnection'](arg1, arg2);
+}
+
+export function TrustHostKey(arg1, arg2, arg3) {
+  return window['go']['app']['App']['TrustHostKey'](arg1, arg2, arg3);
+}
+
+export function TrustHostKeyOnce(arg1, arg2, arg3) {
+  return window['go']['app']['App']['TrustHostKeyOnce'](arg1, arg2, arg3);
 }
 
 export function UpdateApplicationMenu() {
