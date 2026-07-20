@@ -11,6 +11,7 @@
       class="ctx-menu"
       :style="{ left: ctx.x + 'px', top: ctx.y + 'px' }"
       @click.stop
+      @mouseleave="hideContextMenu"
     >
       <li @click="onCopy">复制</li>
       <li @click="onPaste">粘贴</li>
@@ -659,6 +660,7 @@ export default {
       containerRef,
       terminalRef,
       ctx,
+      hideContextMenu,
       onContextMenu,
       onCopy,
       onPaste,

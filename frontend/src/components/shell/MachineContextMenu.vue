@@ -5,6 +5,7 @@
     :style="{ left: ctx.x + 'px', top: ctx.y + 'px' }"
     @mousedown.stop
     @click.stop
+    @mouseleave="$emit('hide')"
   >
     <li @click="onCopy">复制</li>
     <li @click="onEdit">编辑</li>
@@ -18,7 +19,7 @@ export default {
   props: {
     ctx: { type: Object, required: true },
   },
-  emits: ['copy', 'edit', 'delete'],
+  emits: ['copy', 'edit', 'delete', 'hide'],
   setup(props, { emit }) {
     const machine = () => props.ctx.machine
 

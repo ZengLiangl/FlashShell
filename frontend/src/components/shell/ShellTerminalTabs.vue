@@ -137,7 +137,7 @@
       </div>
 
       <ul v-if="paneMenu.visible" class="pane-ctx-menu" :style="{ left: paneMenu.x + 'px', top: paneMenu.y + 'px' }"
-        @click.stop>
+        @click.stop @mouseleave="hidePaneMenu">
         <li @click="onPaneMenuRemove">移出分屏</li>
         <li @click="onPaneMenuExit">取消全部分屏</li>
       </ul>
@@ -689,6 +689,7 @@ export default {
       draggingSplitPane,
       dropZones,
       paneMenu,
+      hidePaneMenu,
       hasSplitGroup,
       splitViewVisible,
       setTerminalRef,

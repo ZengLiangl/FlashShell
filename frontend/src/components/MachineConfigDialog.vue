@@ -372,6 +372,7 @@
             @copy="onContextCopy"
             @edit="onContextEdit"
             @delete="onContextDelete"
+            @hide="hideContextMenu"
         />
     </div>
 </template>
@@ -1017,6 +1018,7 @@ export default {
             onContextEdit,
             onContextDelete,
             ctx,
+            hideContextMenu,
             testConnection,
             testDraftConnection,
             selectKeyFile,

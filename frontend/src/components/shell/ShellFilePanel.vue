@@ -201,6 +201,7 @@
         class="ctx-menu"
         :style="{ left: ctx.x + 'px', top: ctx.y + 'px' }"
         @click.stop
+        @mouseleave="closeMenu"
       >
         <li v-if="ctx.row && !ctx.row.isDir" @click="editEntry">编辑</li>
         <li v-if="ctx.row && !ctx.row.isDir" @click="openExternalEntry">用系统应用打开</li>

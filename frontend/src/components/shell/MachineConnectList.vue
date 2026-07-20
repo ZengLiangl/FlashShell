@@ -102,6 +102,7 @@
     @copy="onCopy"
     @edit="onEdit"
     @delete="onDelete"
+    @hide="hideContextMenu"
   />
 </template>
 
@@ -198,6 +199,7 @@ export default {
 
     return {
       ctx,
+      hideContextMenu,
       customGroups,
       defaultMachines,
       hasTree,
