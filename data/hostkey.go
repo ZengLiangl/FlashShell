@@ -4,15 +4,21 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
 	"golang.org/x/crypto/ssh"
 )
+
+// 兼容 ssh 包用 %v 包装后无法 errors.As 的情况
+var hostKeyUnknownRe = regexp.MustCompile(`未知主机密钥\s+([^（]+)（指纹\s+(SHA256:[A-Za-z0-9+/=]+)）`)
 
 // HostKeyUnknownError 未知主机密钥，需用户确认信任
 type HostKeyUnknownError struct {
@@ -23,6 +29,48 @@ type HostKeyUnknownError struct {
 
 func (e *HostKeyUnknownError) Error() string {
 	return fmt.Sprintf("未知主机密钥 %s:%d（指纹 %s），请在连接前信任该主机", e.Host, e.Port, e.Fingerprint)
+}
+
+// ParseHostKeyUnknownError 从错误链或文案中解析未知主机密钥
+func ParseHostKeyUnknownError(err error) *HostKeyUnknownError {
+	if err == nil {
+		return nil
+	}
+	var hk *HostKeyUnknownError
+	if errors.As(err, &hk) && hk != nil {
+		return hk
+	}
+	return parseHostKeyUnknownFromMessage(err.Error())
+}
+
+func parseHostKeyUnknownFromMessage(msg string) *HostKeyUnknownError {
+	m := hostKeyUnknownRe.FindStringSubmatch(msg)
+	if m == nil {
+		return nil
+	}
+	hostPort := strings.TrimSpace(m[1])
+	host := hostPort
+	port := 22
+	if i := strings.LastIndex(hostPort, ":"); i >= 0 {
+		host = strings.TrimSpace(hostPort[:i])
+		if p, err := strconv.Atoi(strings.TrimSpace(hostPort[i+1:])); err == nil && p > 0 {
+			port = p
+		}
+	}
+	if host == "" || m[2] == "" {
+		return nil
+	}
+	return &HostKeyUnknownError{Host: host, Port: port, Fingerprint: m[2]}
+}
+
+// TrustSessionIfUnknown 若为未知主机密钥则会话级信任（不落盘），返回是否已信任
+func TrustSessionIfUnknown(err error) bool {
+	hk := ParseHostKeyUnknownError(err)
+	if hk == nil {
+		return false
+	}
+	GlobalHostKeyManager().TrustSession(hk.Host, hk.Port, hk.Fingerprint)
+	return true
 }
 
 // KnownHostRecord 已信任主机记录

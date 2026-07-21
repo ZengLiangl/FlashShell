@@ -1,7 +1,6 @@
 package app
 
 import (
-	"errors"
 	"fmt"
 	"strings"
 
@@ -60,16 +59,11 @@ func (a *App) ImportKnownHosts(jsonData string) (int, error) {
 
 // IsHostKeyUnknownError 判断是否为未知主机密钥错误
 func IsHostKeyUnknownError(err error) (*data.HostKeyUnknownError, bool) {
-	var hk *data.HostKeyUnknownError
-	if errors.As(err, &hk) {
+	if hk := data.ParseHostKeyUnknownError(err); hk != nil {
 		return hk, true
 	}
-	// 兼容包装错误
-	if err != nil {
-		msg := err.Error()
-		if strings.Contains(msg, "未知主机密钥") {
-			return nil, true
-		}
+	if err != nil && strings.Contains(err.Error(), "未知主机密钥") {
+		return nil, true
 	}
 	return nil, false
 }

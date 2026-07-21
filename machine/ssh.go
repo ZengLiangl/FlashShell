@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	"FlashDock/cmds"
+	"FlashDock/data"
 	"FlashDock/define"
 	"FlashDock/utils"
 
@@ -36,6 +37,18 @@ func NewSSHClient(machine *define.Machine, workVars map[string]string) *SSHClien
 // Connect 连接到远程机器
 func (sc *SSHClient) Connect(machine *define.Machine, withSFTP bool) error {
 	return sc.remoteMachine.Connect(machine, withSFTP)
+}
+
+// ConnectAutoTrustOnce 连接远程；遇未知主机密钥则会话级信任一次并自动重试（不弹框）
+func (sc *SSHClient) ConnectAutoTrustOnce(machine *define.Machine, withSFTP bool) error {
+	err := sc.Connect(machine, withSFTP)
+	if err == nil {
+		return nil
+	}
+	if data.TrustSessionIfUnknown(err) {
+		return sc.Connect(machine, withSFTP)
+	}
+	return err
 }
 
 // Execute 执行命令
@@ -171,9 +184,9 @@ func (sc *SSHClient) Close() error {
 	return nil
 }
 
-// TestConnection 测试连接
+// TestConnection 测试连接（未知主机密钥时自动会话信任并重试一次）
 func (sc *SSHClient) TestConnection() error {
-	if err := sc.Connect(sc.config, false); err != nil {
+	if err := sc.ConnectAutoTrustOnce(sc.config, false); err != nil {
 		return err
 	}
 	defer sc.Close()

@@ -386,12 +386,6 @@
             @hide="hideContextMenu"
         />
 
-        <HostKeyTrustDialog
-            v-model="hostKeyDialogVisible"
-            :host-key-info="pendingHostKey"
-            prefer-once
-            @trusted="onHostKeyTrusted"
-        />
     </div>
 </template>
 
@@ -430,10 +424,8 @@ import {
     formatMachineAddr,
 } from '../utils/machineGroups'
 import { copyMachineRecord } from '../utils/machineCopy'
-import { parseHostKeyError } from '../utils/hostKey'
 import { useMachineContextMenu } from '../composables/useMachineContextMenu'
 import MachineContextMenu from './shell/MachineContextMenu.vue'
-import HostKeyTrustDialog from './shell/HostKeyTrustDialog.vue'
 import TextOverflowTooltip from './TextOverflowTooltip.vue'
 
 export default {
@@ -441,7 +433,6 @@ export default {
     components: {
         Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid, Close, Check, Monitor, VideoPlay,
         MachineContextMenu,
-        HostKeyTrustDialog,
         TextOverflowTooltip,
     },
     props: {
@@ -518,17 +509,6 @@ export default {
         const testingDraft = ref(false)
         const editingMachine = ref(null)
         const machineFormRef = ref(null)
-        const pendingHostKey = ref(null)
-        const pendingTestRetry = ref(null)
-        const hostKeyDialogVisible = computed({
-            get: () => !!pendingHostKey.value,
-            set: (v) => {
-                if (!v) {
-                    pendingHostKey.value = null
-                    pendingTestRetry.value = null
-                }
-            },
-        })
         const selectedAccountId = ref('')
         const importAccountId = ref('')
         const importGroup = ref('')
@@ -840,14 +820,6 @@ export default {
 
         const errText = (error) => String(error?.message || error || '')
 
-        const openHostKeyTrust = (error, retry) => {
-            const hk = parseHostKeyError(error)
-            if (!hk) return false
-            pendingTestRetry.value = retry
-            pendingHostKey.value = hk
-            return true
-        }
-
         const testConnection = async (machine) => {
             try {
                 machine.testing = true
@@ -855,9 +827,7 @@ export default {
                 ElMessage.success('连接测试成功')
             } catch (error) {
                 console.error('连接测试失败:', error)
-                if (!openHostKeyTrust(error, { type: 'machine', machine })) {
-                    ElMessage.error('连接测试失败: ' + errText(error))
-                }
+                ElMessage.error('连接测试失败: ' + errText(error))
             } finally {
                 machine.testing = false
             }
@@ -885,23 +855,9 @@ export default {
             } catch (error) {
                 if (error === false || error?.fields) return
                 console.error('连接测试失败:', error)
-                if (!openHostKeyTrust(error, { type: 'draft' })) {
-                    ElMessage.error('连接测试失败: ' + errText(error))
-                }
+                ElMessage.error('连接测试失败: ' + errText(error))
             } finally {
                 testingDraft.value = false
-            }
-        }
-
-        const onHostKeyTrusted = async () => {
-            const retry = pendingTestRetry.value
-            pendingHostKey.value = null
-            pendingTestRetry.value = null
-            if (!retry) return
-            if (retry.type === 'machine' && retry.machine) {
-                await testConnection(retry.machine)
-            } else if (retry.type === 'draft') {
-                await testDraftConnection()
             }
         }
 
@@ -1072,9 +1028,6 @@ export default {
             testingDraft,
             editingMachine,
             machineFormRef,
-            hostKeyDialogVisible,
-            pendingHostKey,
-            onHostKeyTrusted,
             machineForm,
             machineRules,
             addTunnel,

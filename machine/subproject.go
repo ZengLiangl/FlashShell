@@ -199,7 +199,8 @@ func (spr *SubProjectRunner) executeCommand(command define.Command, ctx *define.
 		}
 
 		sshClient := NewSSHClient(machineConfig, ctx.WorkPathVars)
-		if err := sshClient.Connect(machineConfig, CommandNeedsSFTP(command)); err != nil {
+		// 任务模式：未知主机密钥默认只信任本次，不弹框
+		if err := sshClient.ConnectAutoTrustOnce(machineConfig, CommandNeedsSFTP(command)); err != nil {
 			return fmt.Errorf("连接远程机器失败: %w", err)
 		}
 		defer sshClient.Close()
