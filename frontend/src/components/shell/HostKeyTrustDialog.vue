@@ -7,7 +7,7 @@
     append-to-body
     @closed="onClosed"
   >
-    <p class="hk-desc">首次连接该主机，请核对指纹后选择是否信任。</p>
+    <p class="hk-desc">{{ preferOnce ? '测试连接遇到未知主机密钥，请核对指纹。建议先「只信任本次」。' : '首次连接该主机，请核对指纹后选择是否信任。' }}</p>
     <dl class="hk-info">
       <dt>主机</dt>
       <dd>{{ info.host }}:{{ info.port }}</dd>
@@ -16,14 +16,18 @@
     </dl>
     <template #footer>
       <el-button @click="visible = false">取消</el-button>
-      <el-button :loading="trusting" @click="onTrustOnce">只信任本次</el-button>
-      <el-button type="primary" :loading="trusting" @click="onTrustSave">信任并保存</el-button>
+      <el-button :type="preferOnce ? 'primary' : 'default'" :loading="trusting" @click="onTrustOnce">
+        只信任本次
+      </el-button>
+      <el-button :type="preferOnce ? 'default' : 'primary'" :loading="trusting" @click="onTrustSave">
+        信任并保存
+      </el-button>
     </template>
   </el-dialog>
 </template>
 
 <script>
-import { ref, watch } from 'vue'
+import { ref, toRef, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as App from '../../../wailsjs/go/app/App'
 
@@ -32,12 +36,15 @@ export default {
   props: {
     modelValue: { type: Boolean, default: false },
     hostKeyInfo: { type: Object, default: null },
+    /** 测试连接等场景：高亮「只信任本次」为默认操作 */
+    preferOnce: { type: Boolean, default: false },
   },
   emits: ['update:modelValue', 'trusted'],
   setup(props, { emit }) {
     const visible = ref(false)
     const trusting = ref(false)
     const info = ref({ host: '', port: 22, fingerprint: '' })
+    const preferOnce = toRef(props, 'preferOnce')
 
     watch(
       () => props.modelValue,
@@ -82,7 +89,7 @@ export default {
 
     const onClosed = () => emit('update:modelValue', false)
 
-    return { visible, trusting, info, onTrustOnce, onTrustSave, onClosed }
+    return { visible, trusting, info, preferOnce, onTrustOnce, onTrustSave, onClosed }
   },
 }
 </script>

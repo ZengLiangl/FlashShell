@@ -99,6 +99,7 @@
   <MachineContextMenu
     v-if="showContextMenu"
     :ctx="ctx"
+    @connect="onConnect"
     @copy="onCopy"
     @edit="onEdit"
     @delete="onDelete"

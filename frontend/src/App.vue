@@ -75,7 +75,8 @@
     </template>
 
     <SettingsHubDialog v-model="settingsHubVisible" :initial-section="settingsSection" :edit-machine-id="machineEditId"
-      @machines-changed="onMachinesChanged" @machines-closed="machineEditId = ''" />
+      @machines-changed="onMachinesChanged" @machines-closed="machineEditId = ''"
+      @connect-machine="onSettingsConnectMachine" />
 
     <!-- 关于弹框 -->
     <AboutDialog v-model="aboutVisible" :intro-html="aboutIntroHtml" :prompt-mode="aboutPromptMode"
@@ -527,6 +528,12 @@ export default {
     const openShellAndConnect = async (machineName) => {
       await enterShellMode();
       await connectShell(machineName);
+    };
+
+    const onSettingsConnectMachine = async (machineName) => {
+      machineEditId.value = '';
+      settingsHubVisible.value = false;
+      await openShellAndConnect(machineName);
     };
 
     const openSettingsHub = (section = 'general') => {
@@ -1442,6 +1449,7 @@ export default {
       leaveShellMode,
       openConnectionManager,
       openShellAndConnect,
+      onSettingsConnectMachine,
       connectShell,
       connectLocalShell,
       connectOrReconnectShell,

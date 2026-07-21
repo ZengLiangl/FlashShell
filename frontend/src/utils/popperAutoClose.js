@@ -1,5 +1,6 @@
 /**
- * 下拉面板（Dropdown / Select / Autocomplete）鼠标离开后自动关闭。
+ * 1) 下拉面板（Dropdown / Select / Autocomplete）鼠标离开后自动关闭。
+ * 2) 按钮上的 hover Tooltip：点击后立即关闭，避免 loading/disabled 导致 mouseleave 丢失而残留。
  */
 const SELECTORS = [
   '.el-dropdown__popper',
@@ -7,6 +8,9 @@ const SELECTORS = [
   '.el-autocomplete__popper',
   '.el-cascader__dropdown',
 ].join(',')
+
+const MENU_TRIGGER_ANCESTOR =
+  '.el-dropdown, .el-select, .el-cascader, .el-autocomplete, .el-popconfirm'
 
 const HIDE_DELAY_MS = 160
 const bound = new WeakSet()
@@ -186,6 +190,58 @@ function scan() {
   })
 }
 
+/** 是否为按钮类悬浮提示触发器（排除下拉/选择等 click 菜单） */
+function isButtonTooltipTrigger(trigger) {
+  if (!(trigger instanceof Element)) return false
+  if (trigger.closest(MENU_TRIGGER_ANCESTOR)) return false
+  return (
+    trigger.matches('button, .el-button') ||
+    !!trigger.querySelector('button, .el-button')
+  )
+}
+
+/** 只关 ElTooltip，避免误调到其它组件的 hide/blur */
+function callTooltipClose(startEl) {
+  if (!startEl) return false
+  const seen = new Set()
+
+  const tryInst = (inst) => {
+    while (inst && !seen.has(inst)) {
+      seen.add(inst)
+      const name = inst.type?.name || inst.type?.__name
+      if (name === 'ElTooltip') {
+        const bag = inst.exposed || inst.setupState
+        // hide 立即关闭；onClose 可能仍走 hideAfter 延迟
+        if (typeof bag?.hide === 'function') {
+          bag.hide()
+          return true
+        }
+        if (typeof bag?.onClose === 'function') {
+          bag.onClose()
+          return true
+        }
+      }
+      inst = inst.parent
+    }
+    return false
+  }
+
+  let el = startEl
+  while (el) {
+    if (tryInst(el.__vueParentComponent)) return true
+    el = el.parentElement
+  }
+  return false
+}
+
+function hideButtonTooltipFromEvent(e) {
+  const target = e.target
+  if (!(target instanceof Element)) return
+  const trigger = target.closest('.el-tooltip__trigger')
+  if (!isButtonTooltipTrigger(trigger)) return
+  callTooltipClose(trigger)
+}
+
 export function installPopperAutoClose() {
   if (typeof window === 'undefined' || typeof document === 'undefined') return
 
@@ -197,11 +253,23 @@ export function installPopperAutoClose() {
     }
   }
 
+  if (window.__flashdockTooltipClickHide) {
+    try {
+      document.removeEventListener('pointerdown', window.__flashdockTooltipClickHide, true)
+    } catch {
+      /* ignore */
+    }
+  }
+
   const start = () => {
     scan()
     const observer = new MutationObserver(() => scan())
     observer.observe(document.body, { childList: true, subtree: true })
     window.__flashdockPopperAutoCloseObserver = observer
+
+    const onPointerDown = (e) => hideButtonTooltipFromEvent(e)
+    document.addEventListener('pointerdown', onPointerDown, true)
+    window.__flashdockTooltipClickHide = onPointerDown
   }
 
   if (document.body) start()

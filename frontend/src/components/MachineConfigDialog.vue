@@ -114,8 +114,13 @@
                             <TextOverflowTooltip :text="formatMachineAddr(machine)" text-class="ml-addr" />
                         </div>
                         <div class="ml-side ml-actions-fade icon-actions" @click.stop>
+                            <el-tooltip content="连接" placement="top">
+                                <el-button size="small" text type="primary" @click="connectMachine(machine)">
+                                    <el-icon><VideoPlay /></el-icon>
+                                </el-button>
+                            </el-tooltip>
                             <el-tooltip content="编辑" placement="top">
-                                <el-button size="small" text type="primary" @click="editMachine(machine)">
+                                <el-button size="small" text @click="editMachine(machine)">
                                     <el-icon><Edit /></el-icon>
                                 </el-button>
                             </el-tooltip>
@@ -173,8 +178,13 @@
                                     <TextOverflowTooltip :text="formatMachineAddr(machine)" text-class="ml-addr" />
                                 </div>
                                 <div class="board-card-actions icon-actions" @mousedown.stop @click.stop>
+                                    <el-tooltip content="连接" placement="top">
+                                        <el-button size="small" text type="primary" @click="connectMachine(machine)">
+                                            <el-icon><VideoPlay /></el-icon>
+                                        </el-button>
+                                    </el-tooltip>
                                     <el-tooltip content="编辑" placement="top">
-                                        <el-button size="small" text type="primary" @click="editMachine(machine)">
+                                        <el-button size="small" text @click="editMachine(machine)">
                                             <el-icon><Edit /></el-icon>
                                         </el-button>
                                     </el-tooltip>
@@ -369,10 +379,18 @@
 
         <MachineContextMenu
             :ctx="ctx"
+            @connect="onContextConnect"
             @copy="onContextCopy"
             @edit="onContextEdit"
             @delete="onContextDelete"
             @hide="hideContextMenu"
+        />
+
+        <HostKeyTrustDialog
+            v-model="hostKeyDialogVisible"
+            :host-key-info="pendingHostKey"
+            prefer-once
+            @trusted="onHostKeyTrusted"
         />
     </div>
 </template>
@@ -381,7 +399,7 @@
 import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-    Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid, Close, Check, Monitor,
+    Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid, Close, Check, Monitor, VideoPlay,
 } from '@element-plus/icons-vue'
 import {
     GetMachines,
@@ -412,15 +430,18 @@ import {
     formatMachineAddr,
 } from '../utils/machineGroups'
 import { copyMachineRecord } from '../utils/machineCopy'
+import { parseHostKeyError } from '../utils/hostKey'
 import { useMachineContextMenu } from '../composables/useMachineContextMenu'
 import MachineContextMenu from './shell/MachineContextMenu.vue'
+import HostKeyTrustDialog from './shell/HostKeyTrustDialog.vue'
 import TextOverflowTooltip from './TextOverflowTooltip.vue'
 
 export default {
     name: 'MachineConfigDialog',
     components: {
-        Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid, Close, Check, Monitor,
+        Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid, Close, Check, Monitor, VideoPlay,
         MachineContextMenu,
+        HostKeyTrustDialog,
         TextOverflowTooltip,
     },
     props: {
@@ -429,7 +450,7 @@ export default {
         active: { type: Boolean, default: false },
         editMachineId: { type: String, default: '' },
     },
-    emits: ['update:modelValue', 'closed', 'changed'],
+    emits: ['update:modelValue', 'closed', 'changed', 'connect'],
     setup(props, { emit }) {
         const visibleProxy = ref(props.modelValue)
         const machines = ref([])
@@ -497,6 +518,17 @@ export default {
         const testingDraft = ref(false)
         const editingMachine = ref(null)
         const machineFormRef = ref(null)
+        const pendingHostKey = ref(null)
+        const pendingTestRetry = ref(null)
+        const hostKeyDialogVisible = computed({
+            get: () => !!pendingHostKey.value,
+            set: (v) => {
+                if (!v) {
+                    pendingHostKey.value = null
+                    pendingTestRetry.value = null
+                }
+            },
+        })
         const selectedAccountId = ref('')
         const importAccountId = ref('')
         const importGroup = ref('')
@@ -782,6 +814,11 @@ export default {
             if (machine) copyMachine(machine)
         }
 
+        const onContextConnect = (machine) => {
+            hideContextMenu()
+            if (machine) connectMachine(machine)
+        }
+
         const onContextEdit = (machine) => {
             hideContextMenu()
             if (machine) editMachine(machine)
@@ -792,6 +829,25 @@ export default {
             if (machine) deleteMachine(machine)
         }
 
+        const connectMachine = (machine) => {
+            const name = String(machine?.name || '').trim()
+            if (!name) {
+                ElMessage.warning('机器名称无效')
+                return
+            }
+            emit('connect', name)
+        }
+
+        const errText = (error) => String(error?.message || error || '')
+
+        const openHostKeyTrust = (error, retry) => {
+            const hk = parseHostKeyError(error)
+            if (!hk) return false
+            pendingTestRetry.value = retry
+            pendingHostKey.value = hk
+            return true
+        }
+
         const testConnection = async (machine) => {
             try {
                 machine.testing = true
@@ -799,7 +855,9 @@ export default {
                 ElMessage.success('连接测试成功')
             } catch (error) {
                 console.error('连接测试失败:', error)
-                ElMessage.error('连接测试失败: ' + error.message)
+                if (!openHostKeyTrust(error, { type: 'machine', machine })) {
+                    ElMessage.error('连接测试失败: ' + errText(error))
+                }
             } finally {
                 machine.testing = false
             }
@@ -827,9 +885,23 @@ export default {
             } catch (error) {
                 if (error === false || error?.fields) return
                 console.error('连接测试失败:', error)
-                ElMessage.error('连接测试失败: ' + (error.message || error))
+                if (!openHostKeyTrust(error, { type: 'draft' })) {
+                    ElMessage.error('连接测试失败: ' + errText(error))
+                }
             } finally {
                 testingDraft.value = false
+            }
+        }
+
+        const onHostKeyTrusted = async () => {
+            const retry = pendingTestRetry.value
+            pendingHostKey.value = null
+            pendingTestRetry.value = null
+            if (!retry) return
+            if (retry.type === 'machine' && retry.machine) {
+                await testConnection(retry.machine)
+            } else if (retry.type === 'draft') {
+                await testDraftConnection()
             }
         }
 
@@ -1000,6 +1072,9 @@ export default {
             testingDraft,
             editingMachine,
             machineFormRef,
+            hostKeyDialogVisible,
+            pendingHostKey,
+            onHostKeyTrusted,
             machineForm,
             machineRules,
             addTunnel,
@@ -1015,10 +1090,12 @@ export default {
             onMachineContextMenu,
             isContextTarget,
             onContextCopy,
+            onContextConnect,
             onContextEdit,
             onContextDelete,
             ctx,
             hideContextMenu,
+            connectMachine,
             testConnection,
             testDraftConnection,
             selectKeyFile,
@@ -1176,8 +1253,9 @@ export default {
 }
 
 .board-column {
-    flex: 0 0 220px;
-    width: 220px;
+    flex: 1 0 220px;
+    min-width: 220px;
+    max-width: 280px;
     min-height: 0;
     display: flex;
     flex-direction: column;
@@ -1221,11 +1299,12 @@ export default {
 }
 
 .board-card {
+    position: relative;
     display: grid;
-    grid-template-columns: 32px minmax(0, 1fr) auto;
+    grid-template-columns: 32px minmax(0, 1fr);
     align-items: center;
     gap: 8px;
-    padding: 10px 8px 10px 10px;
+    padding: 10px 12px 10px 10px;
     border-radius: var(--app-radius-md, 8px);
     border: 1px solid var(--app-border, #ebeef5);
     background: var(--app-card-bg, #fff);
@@ -1253,20 +1332,26 @@ export default {
 }
 
 .board-card-main {
-    flex: 1;
     min-width: 0;
     display: flex;
     flex-direction: column;
-    gap: 0;
+    gap: 2px;
     overflow: hidden;
 }
 
-.board-card-main :deep(.el-tooltip) {
+.board-card-main :deep(.el-tooltip__trigger),
+.board-card-main :deep(.text-overflow-tooltip) {
     display: block;
     min-width: 0;
     max-width: 100%;
 }
 
+.board-card-main :deep(.ml-name),
+.board-card-main :deep(.ml-addr) {
+    max-width: 100%;
+}
+
+.ml-line :deep(.el-tooltip__trigger),
 .ml-line :deep(.el-tooltip) {
     flex: 1;
     min-width: 0;
@@ -1277,13 +1362,34 @@ export default {
     min-width: 0;
 }
 
+/* 操作浮在右侧，默认不占文本宽度；悬停再显现 */
 .board-card-actions {
-    flex-shrink: 0;
-    opacity: 0.55;
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    gap: 0;
+    padding: 2px;
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--app-card-bg, #fff) 92%, transparent);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.12s ease;
 }
 
-.board-card:hover .board-card-actions {
+.board-card:hover .board-card-actions,
+.board-card.is-context-target .board-card-actions {
     opacity: 1;
+    pointer-events: auto;
+}
+
+.board-card:hover .board-card-main,
+.board-card.is-context-target .board-card-main {
+    padding-right: 78px;
 }
 
 .board-empty {

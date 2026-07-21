@@ -35,6 +35,7 @@
             :edit-machine-id="editMachineId"
             @changed="$emit('machines-changed')"
             @closed="$emit('machines-closed')"
+            @connect="onConnectMachine"
           />
           <WorkPathConfigDialog
             v-if="visibleProxy && section === 'env'"
@@ -97,7 +98,7 @@ export default {
     initialSection: { type: String, default: 'general' },
     editMachineId: { type: String, default: '' },
   },
-  emits: ['update:modelValue', 'machines-changed', 'machines-closed'],
+  emits: ['update:modelValue', 'machines-changed', 'machines-closed', 'connect-machine'],
   setup(props, { emit }) {
     const navItems = NAV_ITEMS
     const resolveSection = (id) => {
@@ -114,6 +115,11 @@ export default {
     const currentTitle = computed(() => {
       return navItems.find((i) => i.id === section.value)?.label || '系统设置'
     })
+
+    const onConnectMachine = (machineName) => {
+      visibleProxy.value = false
+      emit('connect-machine', machineName)
+    }
 
     watch(
       () => [props.modelValue, props.initialSection],
@@ -134,6 +140,7 @@ export default {
       navItems,
       currentTitle,
       handleClose,
+      onConnectMachine,
     }
   },
 }
