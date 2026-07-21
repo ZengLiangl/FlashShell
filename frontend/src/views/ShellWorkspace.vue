@@ -75,6 +75,7 @@
           @update:broadcast-targets="(v) => $emit('update:broadcast-targets', v)"
           @update:split-session-ids="(v) => $emit('update:split-session-ids', v)"
           @close-session="(name) => $emit('close-session', name)"
+          @close-sessions="(names) => $emit('close-sessions', names)"
           @reconnect="onReconnect"
           @clear="onClear"
           @open-picker="() => openPicker()"
@@ -227,7 +228,7 @@ export default {
     splitSessionIds: { type: Array, default: () => [] },
   },
   emits: [
-    'back', 'connect', 'disconnect', 'close-session', 'reconnect', 'test', 'add-machine', 'edit-machine',
+    'back', 'connect', 'disconnect', 'close-session', 'close-sessions', 'reconnect', 'test', 'add-machine', 'edit-machine',
     'copy-machine', 'delete-machine',
     'add-local', 'start-resize', 'update:activeMachine', 'history-changed',
     'update:broadcast-enabled', 'update:broadcast-targets', 'update:split-session-ids',

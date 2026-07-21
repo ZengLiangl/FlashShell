@@ -657,6 +657,14 @@ export function useShell() {
     }
   }
 
+  /** 批量关闭 tab（均断开连接） */
+  const closeSessions = async (machineNames) => {
+    const names = [...new Set((machineNames || []).filter(Boolean))]
+    for (const name of names) {
+      await closeSession(name)
+    }
+  }
+
   const testMachine = async (machineName) => {
     testingName.value = machineName
     try {
@@ -771,6 +779,7 @@ export function useShell() {
     disconnect,
     pendingHostKey,
     closeSession,
+    closeSessions,
     testMachine,
     toggleBroadcastTarget,
     setSplitSessions,

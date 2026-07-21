@@ -22,7 +22,8 @@
             'drop-after': dropReorderTarget === session.machineName && dropReorderAfter,
             'is-reorder-dragging': tabReorderFrom === session.machineName,
           }" :data-session-id="session.machineName" @click="onTabClick(session.machineName)"
-            @mousedown="onTabMouseDown($event, session.machineName)">
+            @mousedown="onTabMouseDown($event, session.machineName)"
+            @contextmenu.prevent="onTabContextMenu($event, session.machineName)">
             <div class="session-tab-main">
               <span class="session-tab-status" :class="tabStatusClass(session)" aria-hidden="true" />
               <span class="session-tab-label">{{ tabDisplayLabel(session) }}</span>
@@ -136,6 +137,13 @@
         </div>
       </div>
 
+      <ul v-if="tabMenu.visible" class="pane-ctx-menu" :style="{ left: tabMenu.x + 'px', top: tabMenu.y + 'px' }"
+        @click.stop @mouseleave="hideTabMenu">
+        <li @click="onTabMenuClose">关闭</li>
+        <li :class="{ disabled: !tabMenuHasRight }" @click="onTabMenuCloseRight">关闭右侧</li>
+        <li @click="onTabMenuCloseAll">全部关闭</li>
+      </ul>
+
       <ul v-if="paneMenu.visible" class="pane-ctx-menu" :style="{ left: paneMenu.x + 'px', top: paneMenu.y + 'px' }"
         @click.stop @mouseleave="hidePaneMenu">
         <li @click="onPaneMenuRemove">移出分屏</li>
@@ -231,7 +239,7 @@ export default {
     splitSessionIds: { type: Array, default: () => [] },
   },
   emits: [
-    'update:activeMachine', 'close-session', 'clear', 'open-picker', 'add-local',
+    'update:activeMachine', 'close-session', 'close-sessions', 'clear', 'open-picker', 'add-local',
     'back', 'open-search', 'reconnect', 'search-result', 'open-transfer', 'open-command-palette', 'cwd-sync',
     'update:broadcast-enabled', 'update:broadcast-targets', 'update:split-session-ids',
     'reorder-tabs',
@@ -248,6 +256,7 @@ export default {
     const tabDragMoved = ref(false)
     const localTabOrder = ref([])
     const paneMenu = reactive({ visible: false, x: 0, y: 0, sessionId: '' })
+    const tabMenu = reactive({ visible: false, x: 0, y: 0, sessionId: '' })
 
     const orderedSessions = computed(() => {
       const map = new Map((props.sessions || []).map((s) => [s.machineName, s]))
@@ -342,7 +351,17 @@ export default {
       paneMenu.sessionId = ''
     }
 
-    const onDocClick = () => hidePaneMenu()
+    const hideTabMenu = () => {
+      tabMenu.visible = false
+      tabMenu.sessionId = ''
+    }
+
+    const hideAllCtxMenus = () => {
+      hidePaneMenu()
+      hideTabMenu()
+    }
+
+    const onDocClick = () => hideAllCtxMenus()
     onMounted(() => document.addEventListener('click', onDocClick))
     onUnmounted(() => {
       document.removeEventListener('click', onDocClick)
@@ -419,6 +438,44 @@ export default {
       emit('close-session', name)
     }
 
+    const tabMenuHasRight = computed(() => {
+      if (!tabMenu.sessionId) return false
+      const ids = orderedSessions.value.map((s) => s.machineName)
+      const idx = ids.indexOf(tabMenu.sessionId)
+      return idx >= 0 && idx < ids.length - 1
+    })
+
+    const onTabContextMenu = (e, sessionId) => {
+      hidePaneMenu()
+      tabMenu.sessionId = sessionId
+      tabMenu.x = e.clientX
+      tabMenu.y = e.clientY
+      tabMenu.visible = true
+      activeTab.value = sessionId
+    }
+
+    const onTabMenuClose = () => {
+      const id = tabMenu.sessionId
+      hideTabMenu()
+      if (id) emit('close-session', id)
+    }
+
+    const onTabMenuCloseRight = () => {
+      const id = tabMenu.sessionId
+      hideTabMenu()
+      if (!id) return
+      const ids = orderedSessions.value.map((s) => s.machineName)
+      const idx = ids.indexOf(id)
+      if (idx < 0 || idx >= ids.length - 1) return
+      emit('close-sessions', ids.slice(idx + 1))
+    }
+
+    const onTabMenuCloseAll = () => {
+      hideTabMenu()
+      const ids = orderedSessions.value.map((s) => s.machineName)
+      if (ids.length) emit('close-sessions', ids)
+    }
+
     const onAddCommand = (cmd) => {
       if (cmd === 'remote') emit('open-picker')
       else emit('add-local')
@@ -463,6 +520,7 @@ export default {
 
     const onTabMouseDown = (e, sessionId) => {
       if (e.button !== 0 || e.target.closest('.session-tab-close')) return
+      hideAllCtxMenus()
 
       const startX = e.clientX
       const startY = e.clientY
@@ -647,6 +705,7 @@ export default {
 
     const onPaneContextMenu = (e, sessionId) => {
       if (!splitViewVisible.value || !props.splitSessionIds.includes(sessionId)) return
+      hideTabMenu()
       paneMenu.sessionId = sessionId
       paneMenu.x = e.clientX
       paneMenu.y = e.clientY
@@ -691,10 +750,17 @@ export default {
       dropZones,
       paneMenu,
       hidePaneMenu,
+      tabMenu,
+      tabMenuHasRight,
+      hideTabMenu,
       hasSplitGroup,
       splitViewVisible,
       setTerminalRef,
       onTabRemove,
+      onTabContextMenu,
+      onTabMenuClose,
+      onTabMenuCloseRight,
+      onTabMenuCloseAll,
       clearActive,
       tabLabel,
       tabDisplayLabel,
@@ -1130,6 +1196,12 @@ export default {
 .pane-ctx-menu li:hover {
   background: var(--app-accent-bg);
   color: var(--app-accent-color);
+}
+
+.pane-ctx-menu li.disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
 }
 
 .split-drop-overlay {

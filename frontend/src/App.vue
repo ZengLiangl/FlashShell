@@ -61,6 +61,7 @@
         :connecting-name="connectingName" :testing-name="testingName" :broadcast-enabled="broadcastEnabled"
         :broadcast-targets="broadcastTargets" :split-session-ids="splitSessionIds" @back="leaveShellMode"
         @connect="(name) => connectShell(name)" @disconnect="disconnectShell" @close-session="closeShellSession"
+        @close-sessions="closeShellSessions"
         @reconnect="(name) => connectOrReconnectShell(name)" @add-local="() => connectLocalShell()"
         @test="testShellConnection" @update:broadcast-enabled="(v) => (broadcastEnabled = v)"
         @update:broadcast-targets="(v) => (broadcastTargets = v)"
@@ -202,6 +203,7 @@ export default {
       connectOrReconnect: connectOrReconnectShell,
       disconnect: disconnectShell,
       closeSession: closeShellSession,
+      closeSessions: closeShellSessions,
       pendingHostKey,
       testMachine: testShellConnection,
       broadcastEnabled,
@@ -1507,6 +1509,7 @@ export default {
       connectOrReconnectShell,
       disconnectShell,
       closeShellSession,
+      closeShellSessions,
       hostKeyDialogVisible,
       pendingHostKey,
       onHostKeyTrusted,
