@@ -1,209 +1,622 @@
 <template>
-    <el-dialog v-model="visibleProxy" title="业务配置编辑" width="90%" top="4vh" :before-close="handleClose">
-        <div class="toolbar">
-            <el-button type="primary" @click="addProject">新增项目</el-button>
-            <el-button @click="load">重新加载</el-button>
+  <el-dialog
+    v-model="visibleProxy"
+    title="任务流水线"
+    width="92%"
+    top="3vh"
+    class="task-config-dialog"
+    append-to-body
+    destroy-on-close
+    :close-on-press-escape="false"
+    :before-close="handleClose"
+  >
+    <div class="task-config-shell">
+      <div class="shell-toolbar">
+        <el-radio-group v-model="mainTab" size="small">
+          <el-radio-button label="flow">流水线</el-radio-button>
+          <el-radio-button label="basic">基本信息</el-radio-button>
+        </el-radio-group>
+        <div class="toolbar-spacer" />
+        <div class="icon-actions">
+          <el-tooltip content="重新加载" placement="top">
+            <el-button size="small" circle @click="reload">
+              <el-icon><Refresh /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip content="保存到配置文件" placement="top">
+            <el-button type="primary" size="small" circle :loading="saving" @click="save">
+              <el-icon v-if="!saving"><Check /></el-icon>
+            </el-button>
+          </el-tooltip>
         </div>
+      </div>
 
-        <el-collapse v-model="expandedProjects" class="editor-collapse">
-            <el-collapse-item v-for="(project, pIndex) in root.projects" :key="pIndex" :name="String(pIndex)">
-                <template #title>
-                    <span class="item-title">项目: {{ project.name || '(未命名)' }}</span>
-                </template>
+      <div class="shell-body">
+        <TaskFlowNav
+          :projects="root.projects"
+          :selected-p="navP"
+          :selected-s="navS"
+          @add-project="addProject"
+          @remove-project="removeProject"
+          @add-sub="addSubProject"
+          @remove-sub="removeSubProject"
+          @select-project="selectProject"
+          @select-sub="selectSub"
+        />
 
-                <el-form label-width="90px" size="small" class="block-form">
-                    <el-form-item label="名称"><el-input v-model="project.name" /></el-form-item>
-                    <el-form-item label="描述"><el-input v-model="project.description" /></el-form-item>
-                    <el-form-item label="工作目录"><el-input v-model="project.workdir" /></el-form-item>
-                    <el-button type="danger" text @click="removeProject(pIndex)">删除项目</el-button>
+        <div class="shell-main">
+          <template v-if="mainTab === 'basic'">
+            <div class="basic-pane">
+              <template v-if="navP != null && root.projects[navP]">
+                <h4 class="basic-title">项目信息</h4>
+                <el-form label-width="90px" size="small" class="basic-form">
+                  <el-form-item label="名称">
+                    <el-input v-model="root.projects[navP].name" />
+                  </el-form-item>
+                  <el-form-item label="描述">
+                    <el-input v-model="root.projects[navP].description" type="textarea" :rows="2" />
+                  </el-form-item>
+                  <el-form-item label="工作目录">
+                    <el-input v-model="root.projects[navP].workdir" placeholder="可选" />
+                  </el-form-item>
                 </el-form>
 
-                <div v-for="(sub, sIndex) in project.subprojects || []" :key="sIndex" class="sub-block">
-                    <div class="sub-header">
-                        <strong>子项目: {{ sub.name || '(未命名)' }}</strong>
-                        <el-button type="danger" size="small" text @click="removeSubProject(project, sIndex)">删除</el-button>
-                    </div>
-                    <el-form label-width="90px" size="small">
-                        <el-form-item label="名称"><el-input v-model="sub.name" /></el-form-item>
-                        <el-form-item label="描述"><el-input v-model="sub.description" /></el-form-item>
-                        <el-form-item label="工作目录"><el-input v-model="sub.workdir" /></el-form-item>
-                    </el-form>
+                <template v-if="navS != null && root.projects[navP].subprojects?.[navS]">
+                  <h4 class="basic-title">子项目信息</h4>
+                  <el-form label-width="90px" size="small" class="basic-form">
+                    <el-form-item label="名称">
+                      <el-input v-model="root.projects[navP].subprojects[navS].name" />
+                    </el-form-item>
+                    <el-form-item label="描述">
+                      <el-input
+                        v-model="root.projects[navP].subprojects[navS].description"
+                        type="textarea"
+                        :rows="2"
+                      />
+                    </el-form-item>
+                    <el-form-item label="工作目录">
+                      <el-input
+                        v-model="root.projects[navP].subprojects[navS].workdir"
+                        placeholder="可选"
+                      />
+                    </el-form-item>
+                  </el-form>
+                </template>
+                <el-alert
+                  v-else
+                  type="info"
+                  :closable="false"
+                  show-icon
+                  title="在左侧展开并选择子项目可编辑其子项目基本信息"
+                />
+              </template>
+              <el-empty v-else description="请先在左侧选择项目" :image-size="64" />
+            </div>
+          </template>
 
-                    <div v-for="(cmd, cIndex) in sub.commands || []" :key="cIndex" class="cmd-block">
-                        <div class="cmd-header">
-                            <span>命令: {{ cmd.name || '(未命名)' }}</span>
-                            <el-button type="danger" size="small" text @click="removeCommand(sub, cIndex)">删除</el-button>
-                        </div>
-                        <el-form label-width="90px" size="small">
-                            <el-form-item label="名称"><el-input v-model="cmd.name" /></el-form-item>
-                            <el-form-item label="类型">
-                                <el-select v-model="cmd.type" style="width: 160px">
-                                    <el-option label="batch" value="batch" />
-                                    <el-option label="remote" value="remote" />
-                                </el-select>
-                            </el-form-item>
-                            <el-form-item v-if="cmd.type === 'remote'" label="机器"><el-input v-model="cmd.machine" /></el-form-item>
-                            <el-form-item label="工作目录"><el-input v-model="cmd.workdir" /></el-form-item>
-                        </el-form>
+          <template v-else>
+            <TaskFlowCanvas
+              :sub-project="activeSub"
+              :selected-path="flowPath"
+              @select-command="selectCommand"
+              @select-step="selectStep"
+              @add-command="addCommand"
+              @insert-command="insertCommand"
+              @remove-command="removeCommand"
+              @add-step="addStep"
+              @remove-step="removeStep"
+            />
+            <TaskFlowDrawer
+              :selection-kind="drawerKind"
+              :draft="editDraft"
+              :machines="machineOptions"
+              @update:draft="onDraftUpdate"
+              @close="closeDrawer"
+              @delete="deleteSelected"
+            />
+          </template>
+        </div>
+      </div>
+    </div>
 
-                        <div class="steps-block">
-                            <div class="steps-header">
-                                <span>步骤</span>
-                                <el-button size="small" @click="addStep(cmd)">添加步骤</el-button>
-                            </div>
-                            <div v-for="(step, stIndex) in normalizedSteps(cmd)" :key="stIndex" class="step-row">
-                                <el-input v-model="step.command" placeholder="cmd / shell 命令" class="step-cmd" />
-                                <el-select v-model="step.onFail" placeholder="失败策略" style="width: 110px">
-                                    <el-option label="abort" value="abort" />
-                                    <el-option label="continue" value="continue" />
-                                </el-select>
-                                <el-input-number v-model="step.retry" :min="0" :max="10" controls-position="right" style="width: 100px" />
-                                <el-button type="danger" text @click="removeStep(cmd, stIndex)">删</el-button>
-                            </div>
-                        </div>
-                    </div>
-                    <el-button size="small" @click="addCommand(sub)">添加命令</el-button>
-                </div>
-                <el-button size="small" @click="addSubProject(project)">添加子项目</el-button>
-            </el-collapse-item>
-        </el-collapse>
-
-        <template #footer>
-            <el-button @click="handleClose">取消</el-button>
-            <el-button type="primary" :loading="saving" @click="save">保存到配置文件</el-button>
-        </template>
-    </el-dialog>
+    <template #footer>
+      <div class="dialog-footer icon-actions">
+        <el-tooltip content="取消" placement="top">
+          <el-button circle @click="handleClose">
+            <el-icon><Close /></el-icon>
+          </el-button>
+        </el-tooltip>
+        <el-tooltip content="保存到配置文件" placement="top">
+          <el-button type="primary" circle :loading="saving" @click="save">
+            <el-icon v-if="!saving"><Check /></el-icon>
+          </el-button>
+        </el-tooltip>
+      </div>
+    </template>
+  </el-dialog>
 </template>
 
 <script>
-import { ref, watch, computed } from 'vue'
-import { ElMessage } from 'element-plus'
+import { computed, ref, watch } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Check, Close, Refresh } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
-
-function emptyProject() {
-    return { name: '', description: '', workdir: '', subprojects: [] }
-}
-function emptySubProject() {
-    return { name: '', description: '', workdir: '', commands: [] }
-}
-function emptyCommand() {
-    return { name: '', description: '', type: 'batch', machine: '', workdir: '', steps: [] }
-}
-function emptyStep() {
-    return { command: '', onFail: 'abort', retry: 0 }
-}
+import TaskFlowNav from './taskflow/TaskFlowNav.vue'
+import TaskFlowCanvas from './taskflow/TaskFlowCanvas.vue'
+import TaskFlowDrawer from './taskflow/TaskFlowDrawer.vue'
+import {
+  cloneNodeByPath,
+  commitByPath,
+  emptyCommand,
+  emptyProject,
+  emptyStep,
+  emptySubProject,
+  getSubProject,
+  normalizeRoot,
+  samePath,
+  serializeRootForSave,
+} from './taskflow/taskFlowModel'
 
 export default {
-    name: 'ConfigEditorDialog',
-    props: { modelValue: { type: Boolean, default: false } },
-    emits: ['update:modelValue', 'saved'],
-    setup(props, { emit }) {
-        const root = ref({ projects: [], machines: [] })
-        const saving = ref(false)
-        const expandedProjects = ref(['0'])
+  name: 'ConfigEditorDialog',
+  components: { TaskFlowNav, TaskFlowCanvas, TaskFlowDrawer, Check, Close, Refresh },
+  props: { modelValue: { type: Boolean, default: false } },
+  emits: ['update:modelValue', 'saved'],
+  setup(props, { emit }) {
+    const root = ref({ projects: [], machines: [] })
+    const machineOptions = ref([])
+    const saving = ref(false)
+    const mainTab = ref('flow')
+    const navP = ref(null)
+    const navS = ref(null)
+    const flowSel = ref(null)
+    const editDraft = ref(null)
 
-        const visibleProxy = computed({
-            get: () => props.modelValue,
-            set: (v) => emit('update:modelValue', v)
-        })
+    const visibleProxy = computed({
+      get: () => props.modelValue,
+      set: (v) => emit('update:modelValue', v),
+    })
 
-        const normalizeSteps = (cmd) => {
-            if (!cmd.steps) cmd.steps = []
-            cmd.steps = cmd.steps.map((s) => {
-                if (typeof s === 'string') {
-                    return { command: s, onFail: 'abort', retry: 0 }
-                }
-                return {
-                    command: s.command || '',
-                    onFail: s.onFail || 'abort',
-                    retry: s.retry || 0
-                }
-            })
-            return cmd.steps
-        }
+    const activeSub = computed(() => {
+      if (navP.value == null || navS.value == null) return null
+      return getSubProject(root.value, navP.value, navS.value)
+    })
 
-        const load = async () => {
-            const config = await App.GetConfigForRefresh()
-            root.value = JSON.parse(JSON.stringify(config))
-            root.value.projects?.forEach((p) => {
-                p.subprojects?.forEach((sp) => {
-                    sp.commands?.forEach((cmd) => normalizeSteps(cmd))
-                })
-            })
-        }
+    const flowPath = computed(() => {
+      if (navP.value == null || navS.value == null || !flowSel.value) return null
+      return {
+        p: navP.value,
+        s: navS.value,
+        c: flowSel.value.c,
+        st: flowSel.value.st,
+      }
+    })
 
-        watch(() => props.modelValue, (open) => { if (open) load() })
+    const drawerKind = computed(() => {
+      if (!flowPath.value) return ''
+      if (flowPath.value.st != null) return 'step'
+      if (flowPath.value.c != null) return 'command'
+      return ''
+    })
 
-        const addProject = () => {
-            root.value.projects.push(emptyProject())
-            expandedProjects.value = [String(root.value.projects.length - 1)]
-        }
-        const removeProject = (index) => root.value.projects.splice(index, 1)
-        const addSubProject = (project) => {
-            if (!project.subprojects) project.subprojects = []
-            project.subprojects.push(emptySubProject())
-        }
-        const removeSubProject = (project, index) => project.subprojects.splice(index, 1)
-        const addCommand = (sub) => {
-            if (!sub.commands) sub.commands = []
-            sub.commands.push(emptyCommand())
-        }
-        const removeCommand = (sub, index) => sub.commands.splice(index, 1)
-        const addStep = (cmd) => {
-            normalizeSteps(cmd).push(emptyStep())
-        }
-        const removeStep = (cmd, index) => normalizeSteps(cmd).splice(index, 1)
-
-        const serializeSteps = (steps) => steps.map((s) => {
-            const hasExtra = (s.onFail && s.onFail !== 'abort') || (s.retry && s.retry > 0)
-            if (!hasExtra) return s.command
-            const obj = { cmd: s.command }
-            if (s.onFail && s.onFail !== 'abort') obj.on_fail = s.onFail
-            if (s.retry > 0) obj.retry = s.retry
-            return obj
-        })
-
-        const save = async () => {
-            saving.value = true
-            try {
-                const payload = JSON.parse(JSON.stringify(root.value))
-                payload.projects?.forEach((p) => {
-                    p.subprojects?.forEach((sp) => {
-                        sp.commands?.forEach((cmd) => {
-                            cmd.steps = serializeSteps(cmd.steps || [])
-                        })
-                    })
-                })
-                await App.SaveConfig(payload)
-                ElMessage.success('配置已保存')
-                emit('saved')
-                visibleProxy.value = false
-            } catch (e) {
-                ElMessage.error(`保存失败: ${e}`)
-            } finally {
-                saving.value = false
-            }
-        }
-
-        const handleClose = () => { visibleProxy.value = false }
-
-        return {
-            visibleProxy, root, saving, expandedProjects,
-            addProject, removeProject, addSubProject, removeSubProject,
-            addCommand, removeCommand, addStep, removeStep,
-            normalizedSteps: normalizeSteps, load, save, handleClose
-        }
+    const commitDraft = () => {
+      if (!flowPath.value || !editDraft.value) return
+      commitByPath(root.value, flowPath.value, editDraft.value)
     }
+
+    const openPath = (path) => {
+      commitDraft()
+      if (!path) {
+        flowSel.value = null
+        editDraft.value = null
+        return
+      }
+      flowSel.value = { c: path.c, st: path.st }
+      const full = { p: navP.value, s: navS.value, c: path.c, st: path.st }
+      editDraft.value = cloneNodeByPath(root.value, full)
+    }
+
+    const onDraftUpdate = (draft) => {
+      editDraft.value = draft
+      if (flowPath.value) {
+        commitByPath(root.value, flowPath.value, draft)
+      }
+    }
+
+    const closeDrawer = () => {
+      commitDraft()
+      flowSel.value = null
+      editDraft.value = null
+    }
+
+    const selectProject = (pIndex) => {
+      commitDraft()
+      flowSel.value = null
+      editDraft.value = null
+      navP.value = pIndex
+      navS.value = null
+      mainTab.value = 'flow'
+    }
+
+    const selectSub = (pIndex, sIndex) => {
+      commitDraft()
+      flowSel.value = null
+      editDraft.value = null
+      navP.value = pIndex
+      navS.value = sIndex
+      mainTab.value = 'flow'
+    }
+
+    const selectCommand = (cIndex) => {
+      const next = { c: cIndex, st: undefined }
+      if (samePath(
+        { p: navP.value, s: navS.value, ...next },
+        flowPath.value,
+      )) {
+        return
+      }
+      openPath(next)
+    }
+
+    const selectStep = (cIndex, stIndex) => {
+      openPath({ c: cIndex, st: stIndex })
+    }
+
+    const ensureSubCommands = () => {
+      const sub = activeSub.value
+      if (!sub) return null
+      if (!Array.isArray(sub.commands)) sub.commands = []
+      return sub
+    }
+
+    const addCommand = (template = 'batch') => {
+      const sub = ensureSubCommands()
+      if (!sub) return
+      commitDraft()
+      sub.commands.push(emptyCommand(template))
+      openPath({ c: sub.commands.length - 1 })
+    }
+
+    const insertCommand = (atIndex) => {
+      const sub = ensureSubCommands()
+      if (!sub) return
+      commitDraft()
+      sub.commands.splice(atIndex, 0, emptyCommand('batch'))
+      openPath({ c: atIndex })
+    }
+
+    const removeCommand = async (cIndex) => {
+      const sub = ensureSubCommands()
+      if (!sub) return
+      try {
+        await ElMessageBox.confirm('确定删除该命令及其全部步骤？', '删除命令', {
+          type: 'warning',
+          confirmButtonText: '删除',
+          cancelButtonText: '取消',
+        })
+      } catch {
+        return
+      }
+      const prevSel = flowSel.value ? { ...flowSel.value } : null
+      if (prevSel?.c === cIndex) {
+        flowSel.value = null
+        editDraft.value = null
+      }
+      sub.commands.splice(cIndex, 1)
+      if (prevSel != null && prevSel.c > cIndex) {
+        flowSel.value = {
+          c: prevSel.c - 1,
+          st: prevSel.st,
+        }
+        editDraft.value = cloneNodeByPath(root.value, {
+          p: navP.value,
+          s: navS.value,
+          ...flowSel.value,
+        })
+      }
+    }
+
+    const addStep = (cIndex) => {
+      const sub = ensureSubCommands()
+      const cmd = sub?.commands?.[cIndex]
+      if (!cmd) return
+      if (!Array.isArray(cmd.steps)) cmd.steps = []
+      commitDraft()
+      cmd.steps.push(emptyStep('shell'))
+      openPath({ c: cIndex, st: cmd.steps.length - 1 })
+    }
+
+    const removeStep = (cIndex, stIndex) => {
+      const cmd = ensureSubCommands()?.commands?.[cIndex]
+      if (!cmd?.steps) return
+      const prevSel = flowSel.value ? { ...flowSel.value } : null
+      if (prevSel?.c === cIndex && prevSel?.st === stIndex) {
+        flowSel.value = { c: cIndex }
+        editDraft.value = null
+      }
+      cmd.steps.splice(stIndex, 1)
+      if (prevSel?.c === cIndex && prevSel?.st === stIndex) {
+        editDraft.value = cloneNodeByPath(root.value, {
+          p: navP.value,
+          s: navS.value,
+          c: cIndex,
+        })
+      } else if (prevSel?.c === cIndex && prevSel?.st != null && prevSel.st > stIndex) {
+        flowSel.value = { c: cIndex, st: prevSel.st - 1 }
+        editDraft.value = cloneNodeByPath(root.value, {
+          p: navP.value,
+          s: navS.value,
+          ...flowSel.value,
+        })
+      }
+    }
+
+    const deleteSelected = async () => {
+      if (!flowSel.value) return
+      if (flowSel.value.st != null) {
+        removeStep(flowSel.value.c, flowSel.value.st)
+        return
+      }
+      await removeCommand(flowSel.value.c)
+    }
+
+    const addProject = () => {
+      commitDraft()
+      if (!root.value.projects) root.value.projects = []
+      root.value.projects.push(emptyProject())
+      const p = root.value.projects.length - 1
+      navP.value = p
+      navS.value = null
+      flowSel.value = null
+      editDraft.value = null
+      mainTab.value = 'basic'
+    }
+
+    const removeProject = async (pIndex) => {
+      try {
+        await ElMessageBox.confirm('确定删除该项目及其全部子项目？', '删除项目', {
+          type: 'warning',
+          confirmButtonText: '删除',
+          cancelButtonText: '取消',
+        })
+      } catch {
+        return
+      }
+      commitDraft()
+      root.value.projects.splice(pIndex, 1)
+      if (navP.value === pIndex) {
+        navP.value = null
+        navS.value = null
+        flowSel.value = null
+        editDraft.value = null
+      } else if (navP.value > pIndex) {
+        navP.value -= 1
+      }
+    }
+
+    const addSubProject = (pIndex) => {
+      const project = root.value.projects[pIndex]
+      if (!project) return
+      if (!Array.isArray(project.subprojects)) project.subprojects = []
+      commitDraft()
+      project.subprojects.push(emptySubProject())
+      navP.value = pIndex
+      navS.value = project.subprojects.length - 1
+      flowSel.value = null
+      editDraft.value = null
+      mainTab.value = 'basic'
+    }
+
+    const removeSubProject = async (pIndex, sIndex) => {
+      try {
+        await ElMessageBox.confirm('确定删除该子项目及其流水线？', '删除子项目', {
+          type: 'warning',
+          confirmButtonText: '删除',
+          cancelButtonText: '取消',
+        })
+      } catch {
+        return
+      }
+      const project = root.value.projects[pIndex]
+      if (!project?.subprojects) return
+      commitDraft()
+      project.subprojects.splice(sIndex, 1)
+      if (navP.value === pIndex && navS.value === sIndex) {
+        navS.value = null
+        flowSel.value = null
+        editDraft.value = null
+      } else if (navP.value === pIndex && navS.value > sIndex) {
+        navS.value -= 1
+      }
+    }
+
+    const loadMachines = async () => {
+      try {
+        const list = await App.GetMachines()
+        machineOptions.value = Array.isArray(list) ? list : []
+      } catch {
+        machineOptions.value = []
+      }
+    }
+
+    const load = async () => {
+      const [config] = await Promise.all([
+        App.GetConfigForRefresh(),
+        loadMachines(),
+      ])
+      root.value = normalizeRoot(config)
+      flowSel.value = null
+      editDraft.value = null
+      navP.value = null
+      navS.value = null
+      mainTab.value = 'flow'
+    }
+
+    const reload = async () => {
+      try {
+        await ElMessageBox.confirm('重新加载将丢弃未保存的修改，是否继续？', '重新加载', {
+          type: 'warning',
+          confirmButtonText: '重新加载',
+          cancelButtonText: '取消',
+        })
+      } catch {
+        return
+      }
+      await load()
+      ElMessage.success('已重新加载')
+    }
+
+    const save = async () => {
+      commitDraft()
+      saving.value = true
+      try {
+        const payload = serializeRootForSave(root.value)
+        await App.SaveConfig(payload)
+        ElMessage.success('配置已保存')
+        emit('saved')
+        visibleProxy.value = false
+      } catch (e) {
+        ElMessage.error(`保存失败: ${e}`)
+      } finally {
+        saving.value = false
+      }
+    }
+
+    const handleClose = () => {
+      visibleProxy.value = false
+    }
+
+    watch(
+      () => props.modelValue,
+      (open) => {
+        if (open) load()
+      },
+    )
+
+    return {
+      visibleProxy,
+      root,
+      machineOptions,
+      saving,
+      mainTab,
+      navP,
+      navS,
+      activeSub,
+      flowPath,
+      drawerKind,
+      editDraft,
+      selectProject,
+      selectSub,
+      selectCommand,
+      selectStep,
+      addCommand,
+      insertCommand,
+      removeCommand,
+      addStep,
+      removeStep,
+      deleteSelected,
+      addProject,
+      removeProject,
+      addSubProject,
+      removeSubProject,
+      onDraftUpdate,
+      closeDrawer,
+      reload,
+      save,
+      handleClose,
+    }
+  },
 }
 </script>
 
 <style scoped>
-.toolbar { margin-bottom: 12px; }
-.editor-collapse { max-height: 65vh; overflow: auto; }
-.block-form { margin-bottom: 8px; }
-.sub-block, .cmd-block { margin: 12px 0 12px 16px; padding: 12px; border: 1px solid var(--app-border, #e4e7ed); border-radius: 8px; }
-.sub-header, .cmd-header, .steps-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-.step-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
-.step-cmd { flex: 1; }
-.item-title { font-weight: 600; }
+.task-config-shell {
+  display: flex;
+  flex-direction: column;
+  height: min(78vh, 720px);
+  min-height: 480px;
+  margin: -4px -12px 0;
+  border-top: 1px solid var(--app-border);
+}
+
+.shell-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-bg);
+  flex-shrink: 0;
+}
+
+.toolbar-spacer {
+  flex: 1;
+}
+
+.shell-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+
+.shell-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+}
+
+.basic-pane {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 20px 24px;
+  background: var(--app-panel-bg);
+}
+
+.basic-title {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.basic-title + .basic-form {
+  margin-bottom: 24px;
+  max-width: 520px;
+  padding: 16px;
+  background: var(--app-card-bg);
+  border: 1px solid var(--app-card-border);
+  border-radius: var(--app-radius-md, 8px);
+}
+
+.dialog-footer {
+  justify-content: flex-end;
+}
+</style>
+
+<style>
+.task-config-dialog.el-dialog {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: 92vh;
+}
+
+.task-config-dialog .el-dialog__header {
+  flex-shrink: 0;
+}
+
+.task-config-dialog .el-dialog__body {
+  padding-top: 4px;
+  padding-bottom: 8px;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.task-config-dialog .el-dialog__footer {
+  flex-shrink: 0;
+  border-top: 1px solid var(--app-border);
+}
 </style>

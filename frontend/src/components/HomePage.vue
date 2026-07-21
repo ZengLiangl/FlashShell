@@ -43,7 +43,8 @@
                     </el-dropdown-item>
                   </template>
                   <el-dropdown-item v-else disabled>无法加载配置文件</el-dropdown-item>
-                  <el-dropdown-item divided command="refresh">
+                  <el-dropdown-item divided command="edit-pipeline">编辑任务流水线</el-dropdown-item>
+                  <el-dropdown-item command="refresh">
                     <span>刷新配置列表</span>
                     <span class="menu-shortcut">{{ labelOf('refreshConfig') }}</span>
                   </el-dropdown-item>
@@ -52,13 +53,23 @@
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
+            <el-tooltip content="编辑任务流水线" placement="top">
+              <el-button size="small" circle title="编辑任务流水线" @click="openConfigEditor">
+                <el-icon><Edit /></el-icon>
+              </el-button>
+            </el-tooltip>
           </div>
         </div>
 
         <div class="zone-body">
           <div v-if="!hasProjects" class="app-empty">
             <p class="app-empty-title">暂无任务项目</p>
-            <p class="app-empty-desc">在业务配置中添加项目后显示在这里</p>
+            <p class="app-empty-desc">在任务流水线中添加项目后显示在这里</p>
+            <el-tooltip content="编辑任务流水线" placement="top">
+              <el-button type="primary" size="small" circle @click="openConfigEditor">
+                <el-icon><Edit /></el-icon>
+              </el-button>
+            </el-tooltip>
           </div>
           <div v-else class="item-grid">
             <button
@@ -180,6 +191,7 @@ export default {
     'connect-machine',
     'add-machine',
     'open-system-settings',
+    'open-config-editor',
   ],
   setup(props, { emit }) {
     const machineKeyword = ref('')
@@ -188,6 +200,10 @@ export default {
     const shortcuts = ref(mergeShortcuts())
 
     const labelOf = (id) => formatShortcut(shortcuts.value[id])
+
+    const openConfigEditor = () => {
+      emit('open-config-editor')
+    }
 
     const loadConfigMenu = async () => {
       try {
@@ -212,6 +228,10 @@ export default {
     }
 
     const onConfigCommand = (cmd) => {
+      if (cmd === 'edit-pipeline') {
+        openConfigEditor()
+        return
+      }
       if (cmd === 'refresh') {
         App.RefreshConfigMenuWithEvent()
         return
@@ -279,6 +299,7 @@ export default {
       basename,
       labelOf,
       onConfigCommand,
+      openConfigEditor,
       onConnectMachine,
       handleRefresh,
     }

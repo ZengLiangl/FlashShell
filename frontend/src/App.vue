@@ -79,7 +79,8 @@
           :workspace-sessions="workspaceSessions"
           @refresh="refreshConfig" @select-project="selectProject" @resume-task="resumeTaskView"
           @open-shell="enterShellMode" @connect-machine="openShellAndConnect" @add-machine="openShellMachineDialog"
-          @open-system-settings="openSettingsHub('general')" />
+          @open-system-settings="openSettingsHub('general')"
+          @open-config-editor="configEditorVisible = true" />
       </div>
     </template>
 

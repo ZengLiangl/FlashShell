@@ -1054,9 +1054,6 @@ func (a *App) CreateApplicationMenu() *menu.Menu {
 	})
 
 	configMenu.AddSeparator()
-	// configMenu.AddText("业务配置编辑", keys.CmdOrCtrl(","), func(_ *menu.CallbackData) {
-	// 	a.OpenConfigEditor()
-	// })
 	configMenu.AddText("系统设置", keys.CmdOrCtrl(","), func(_ *menu.CallbackData) {
 		a.OpenSystemSettings()
 	})
