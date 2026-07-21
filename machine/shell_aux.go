@@ -75,15 +75,14 @@ func (a *ShellAuxManager) Connect(machine *define.Machine, workVars map[string]s
 	return nil
 }
 
-// Attach 复用 PTY 已有 SSH 连接初始化 SFTP/Exec（避免第二路 TCP 触发 MaxSessions / packet too long）。
+// Attach 复用 PTY 已有 SSH 连接初始化 Exec/SFTP（避免第二路 TCP 触发 MaxSessions / packet too long）。
+// SFTP 尽力初始化：失败不阻断监控（Exec 不依赖 SFTP）。
 func (a *ShellAuxManager) Attach(client *SSHClient, machineName, host string) error {
 	if client == nil || !client.IsConnected() {
 		return fmt.Errorf("共享 SSH 未连接")
 	}
 	if rm := client.remoteMachine; rm != nil {
-		if err := rm.EnsureSFTP(); err != nil {
-			return err
-		}
+		_ = rm.EnsureSFTP()
 	}
 
 	a.mu.Lock()

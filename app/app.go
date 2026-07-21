@@ -1693,7 +1693,32 @@ func (a *App) resolveAuxKey(sessionOrConfig string) string {
 }
 
 func (a *App) getShellAux(sessionOrConfig string) (*machine.ShellAuxManager, error) {
-	return a.shellAuxPool.Get(a.resolveAuxKey(sessionOrConfig))
+	key := a.resolveAuxKey(sessionOrConfig)
+	if aux, err := a.shellAuxPool.Get(key); err == nil {
+		return aux, nil
+	}
+	// 辅助通道缺失时按当前 PTY 会话补挂载（连接竞态 / 初次 SFTP 失败等）
+	a.ensureShellAuxFor(sessionOrConfig)
+	return a.shellAuxPool.Get(key)
+}
+
+func (a *App) ensureShellAuxFor(sessionOrConfig string) {
+	if machine.IsLocalShellID(sessionOrConfig) {
+		return
+	}
+	cfgName := a.remoteConfigName(sessionOrConfig)
+	machineConfig := a.configManager.GetMachine(cfgName)
+	if machineConfig == nil {
+		return
+	}
+	sessionID := strings.TrimSpace(sessionOrConfig)
+	if !a.shellPool.IsConnected(sessionID) {
+		sessionID = a.shellPool.FirstSessionOfConfig(cfgName)
+	}
+	if sessionID == "" {
+		sessionID = cfgName
+	}
+	a.ensureShellAux(sessionID, machineConfig)
 }
 
 func (a *App) ensureShellAux(sessionID string, machineConfig *define.Machine) {

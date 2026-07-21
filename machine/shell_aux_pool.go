@@ -38,7 +38,7 @@ func (p *ShellAuxPool) AttachFromSession(machineName string, ptyClient *SSHClien
 	return nil
 }
 
-// EnsureAttached 优先复用 PTY SSH；PTY 未连时再独立建连。
+// EnsureAttached 优先复用 PTY SSH；PTY 未连或挂载失败时再独立建连。
 func (p *ShellAuxPool) EnsureAttached(machineName string, machine *define.Machine, workVars map[string]string, ptyClient *SSHClient, host string) error {
 	p.mu.RLock()
 	aux, ok := p.clients[machineName]
@@ -47,7 +47,10 @@ func (p *ShellAuxPool) EnsureAttached(machineName string, machine *define.Machin
 		return nil
 	}
 	if ptyClient != nil && ptyClient.IsConnected() {
-		return p.AttachFromSession(machineName, ptyClient, host)
+		if err := p.AttachFromSession(machineName, ptyClient, host); err == nil {
+			return nil
+		}
+		// 复用 PTY 失败时回退独立连接，避免监控/系统信息长期不可用
 	}
 	return p.Connect(machineName, machine, workVars)
 }

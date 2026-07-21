@@ -291,14 +291,25 @@ export default {
       try {
         const data = await App.GetShellSystemInfo(props.activeMachine)
         if (data?.error) {
-          sysinfoError.value = data.error
-          sysinfo.value = data
+          // 辅助通道短暂缺失：不直接刷红，稍后由连接态变化 / 展开时重试
+          if (isAuxMissingError(data.error)) {
+            sysinfoError.value = ''
+            sysinfo.value = null
+          } else {
+            sysinfoError.value = data.error
+            sysinfo.value = data
+          }
         } else {
           sysinfo.value = data
         }
       } catch (e) {
-        sysinfoError.value = String(e)
-        sysinfo.value = null
+        if (isAuxMissingError(e)) {
+          sysinfoError.value = ''
+          sysinfo.value = null
+        } else {
+          sysinfoError.value = String(e)
+          sysinfo.value = null
+        }
       } finally {
         sysinfoLoading.value = false
       }
