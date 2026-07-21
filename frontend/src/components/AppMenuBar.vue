@@ -1,42 +1,79 @@
 <template>
   <div class="app-menu-bar">
-    <div class="menu-icons">
-      <button
-        type="button"
-        class="icon-btn"
-        :title="`新建窗口 ${labelOf('newWindow')}`"
-        @click="newWindow"
-      >
-        <el-icon :size="16"><DocumentAdd /></el-icon>
-      </button>
+    <div class="menu-side menu-left" aria-hidden="true" />
 
-      <button
-        type="button"
-        class="icon-btn"
-        title="系统设置"
-        @click="openSettings"
-      >
-        <el-icon :size="16"><Setting /></el-icon>
-      </button>
+    <div class="menu-center">
+      <ModeSwitcher
+        v-if="showModeSwitcher"
+        :model-value="activeView"
+        :has-projects="hasProjects"
+        :has-machines="hasMachines"
+        :has-task="hasTask"
+        :task-running="taskRunning"
+        :connected-count="connectedCount"
+        @change="$emit('change-view', $event)"
+      />
+    </div>
 
-      <button type="button" class="icon-btn" title="帮助" @click="onHelpCommand('about')">
-        <el-icon :size="16"><QuestionFilled /></el-icon>
-      </button>
+    <div class="menu-side menu-right">
+      <div class="menu-icons">
+        <button
+          type="button"
+          class="icon-btn"
+          :title="`新建窗口 ${labelOf('newWindow')}`"
+          @click="newWindow"
+        >
+          <el-icon :size="16"><DocumentAdd /></el-icon>
+        </button>
+
+        <button
+          type="button"
+          class="icon-btn"
+          title="系统设置"
+          @click="openSettings"
+        >
+          <el-icon :size="16"><Setting /></el-icon>
+        </button>
+
+        <button type="button" class="icon-btn" title="帮助" @click="onHelpCommand('about')">
+          <el-icon :size="16"><QuestionFilled /></el-icon>
+        </button>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { DocumentAdd, Setting, QuestionFilled } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import { mergeShortcuts, formatShortcut } from '../utils/shortcuts'
+import ModeSwitcher from './ModeSwitcher.vue'
 
 export default {
   name: 'AppMenuBar',
-  components: { DocumentAdd, Setting, QuestionFilled },
-  setup() {
+  components: { DocumentAdd, Setting, QuestionFilled, ModeSwitcher },
+  props: {
+    activeView: {
+      type: String,
+      default: 'home',
+      validator: (v) => ['home', 'task', 'shell'].includes(v),
+    },
+    hasProjects: { type: Boolean, default: false },
+    hasMachines: { type: Boolean, default: false },
+    hasTask: { type: Boolean, default: false },
+    taskRunning: { type: Boolean, default: false },
+    connectedCount: { type: Number, default: 0 },
+  },
+  emits: ['change-view'],
+  setup(props) {
+    const showModeSwitcher = computed(() =>
+      props.hasProjects
+      || props.hasMachines
+      || props.activeView === 'task'
+      || props.activeView === 'shell'
+    )
     const shortcuts = ref(mergeShortcuts())
 
     const labelOf = (id) => formatShortcut(shortcuts.value[id])
@@ -73,6 +110,7 @@ export default {
     })
 
     return {
+      showModeSwitcher,
       labelOf,
       newWindow,
       openSettings,
@@ -88,10 +126,33 @@ export default {
   border-bottom: 1px solid var(--app-border);
   background: var(--app-panel-bg);
   color: var(--app-text);
-  height: 36px;
+  height: 40px;
+  display: grid;
+  grid-template-columns: minmax(96px, 1fr) auto minmax(96px, 1fr);
+  align-items: center;
+  padding: 0 10px;
+  gap: 12px;
+}
+
+.menu-side {
   display: flex;
   align-items: center;
-  padding: 0 8px;
+  min-width: 0;
+}
+
+.menu-left {
+  justify-content: flex-start;
+}
+
+.menu-right {
+  justify-content: flex-end;
+}
+
+.menu-center {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
 }
 
 .menu-icons {
@@ -101,7 +162,7 @@ export default {
 }
 
 .icon-btn {
-  width: 32px;
+  width: 30px;
   height: 28px;
   display: inline-flex;
   align-items: center;
@@ -112,6 +173,7 @@ export default {
   color: var(--app-text-secondary, var(--app-text));
   cursor: pointer;
   padding: 0;
+  transition: background 0.15s ease, color 0.15s ease;
 }
 
 .icon-btn:hover {

@@ -1,6 +1,14 @@
 <template>
   <div class="app-container" :class="themeClass">
-    <AppMenuBar />
+    <AppMenuBar
+      :active-view="activeView"
+      :has-projects="projects.length > 0"
+      :has-machines="shellMachines.length > 0"
+      :has-task="!!selectedProject"
+      :task-running="status.isRunning"
+      :connected-count="connectedCount"
+      @change-view="switchActiveView"
+    />
 
     <!-- 全局加载遮罩 -->
     <div v-if="isReloading" class="global-loading">
@@ -522,6 +530,31 @@ export default {
         }
       } catch {
         // 读取设置失败时保持现有 v-show 行为
+      }
+    };
+
+    /** 顶栏模式切换：任务 ↔ Shell 直达，不强制经首页 */
+    const switchActiveView = async (view) => {
+      if (view === activeView.value) return;
+      if (view === 'home') {
+        if (activeView.value === 'shell') {
+          await leaveShellMode();
+        } else {
+          activeView.value = 'home';
+        }
+        return;
+      }
+      if (view === 'task') {
+        if (!selectedProject.value) {
+          ElMessage.info('请先在首页选择项目');
+          activeView.value = 'home';
+          return;
+        }
+        resumeTaskView();
+        return;
+      }
+      if (view === 'shell') {
+        await enterShellMode();
       }
     };
 
@@ -1465,6 +1498,7 @@ export default {
       openSessionCount,
       enterShellMode,
       leaveShellMode,
+      switchActiveView,
       openConnectionManager,
       openShellAndConnect,
       onSettingsConnectMachine,

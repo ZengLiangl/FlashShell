@@ -56,6 +56,7 @@ declare module 'vue' {
     MachineConfigDialog: typeof import('./components/MachineConfigDialog.vue')['default']
     MachineConnectList: typeof import('./components/shell/MachineConnectList.vue')['default']
     MachineContextMenu: typeof import('./components/shell/MachineContextMenu.vue')['default']
+    ModeSwitcher: typeof import('./components/ModeSwitcher.vue')['default']
     ProjectList: typeof import('./components/ProjectList.vue')['default']
     ProxySettingsPanel: typeof import('./components/ProxySettingsPanel.vue')['default']
     SettingsHubDialog: typeof import('./components/SettingsHubDialog.vue')['default']
