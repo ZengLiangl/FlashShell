@@ -110,8 +110,8 @@ export function DisconnectShell(arg1) {
   return window['go']['app']['App']['DisconnectShell'](arg1);
 }
 
-export function DownloadUpdate() {
-  return window['go']['app']['App']['DownloadUpdate']();
+export function DownloadUpdate(arg1) {
+  return window['go']['app']['App']['DownloadUpdate'](arg1);
 }
 
 export function ExecuteCommand(arg1, arg2, arg3) {
@@ -384,6 +384,10 @@ export function OpenWorkPathConfig() {
 
 export function PauseShellTransfer(arg1) {
   return window['go']['app']['App']['PauseShellTransfer'](arg1);
+}
+
+export function PauseUpdateDownload() {
+  return window['go']['app']['App']['PauseUpdateDownload']();
 }
 
 export function PickShellUploadFolder() {

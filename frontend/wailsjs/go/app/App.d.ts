@@ -59,7 +59,7 @@ export function DeleteWorkPathWithEvent(arg1:string):Promise<void>;
 
 export function DisconnectShell(arg1:string):Promise<void>;
 
-export function DownloadUpdate():Promise<app.UpdateDownloadResult>;
+export function DownloadUpdate(arg1:string):Promise<app.UpdateDownloadResult>;
 
 export function ExecuteCommand(arg1:string,arg2:string,arg3:string):Promise<void>;
 
@@ -196,6 +196,8 @@ export function OpenSystemSettings():Promise<void>;
 export function OpenWorkPathConfig():Promise<void>;
 
 export function PauseShellTransfer(arg1:string):Promise<void>;
+
+export function PauseUpdateDownload():Promise<void>;
 
 export function PickShellUploadFolder():Promise<string>;
 

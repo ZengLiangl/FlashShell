@@ -349,16 +349,6 @@
                         >
                             查看 Release
                         </el-button>
-                        <el-button
-                            v-if="updateResult?.hasUpdate"
-                            type="primary"
-                            size="small"
-                            :loading="downloading"
-                            :disabled="!canDownload"
-                            @click="downloadUpdate"
-                        >
-                            {{ downloading ? `下载中 ${downloadPercent}%` : '下载安装包' }}
-                        </el-button>
                     </div>
 
                     <div v-if="updateResult?.hasUpdate" class="update-banner">
@@ -367,13 +357,45 @@
                         <div v-if="updateResult.assetName" class="asset-line">
                             适配安装包：{{ updateResult.assetName }}
                         </div>
+                        <div class="update-actions">
+                            <el-select
+                                v-model="selectedDownloadSource"
+                                size="small"
+                                class="source-select"
+                                :disabled="downloading"
+                                placeholder="下载源"
+                            >
+                                <el-option
+                                    v-for="src in downloadSources"
+                                    :key="src.label"
+                                    :label="src.label"
+                                    :value="src.label"
+                                />
+                            </el-select>
+                            <el-button
+                                type="primary"
+                                size="small"
+                                :loading="downloading"
+                                :disabled="!canDownload"
+                                @click="downloadUpdate"
+                            >
+                                {{ downloadButtonLabel }}
+                            </el-button>
+                            <el-button
+                                v-if="downloading"
+                                size="small"
+                                @click="pauseDownload"
+                            >
+                                暂停
+                            </el-button>
+                        </div>
                         <el-progress
-                            v-if="downloading || downloadPercent > 0"
+                            v-if="downloading || downloadPercent > 0 || downloadPaused"
                             :percentage="downloadPercent"
                             :stroke-width="10"
                             style="margin-top: 10px"
                         />
-                        <div v-if="downloadMessage" class="download-msg" :class="{ err: downloadFailed }">
+                        <div v-if="downloadMessage" class="download-msg" :class="{ err: downloadFailed, paused: downloadPaused }">
                             {{ downloadMessage }}
                         </div>
                     </div>
@@ -452,6 +474,7 @@ import {
     setCachedUpdateCheck,
     isUsableUpdateResult,
 } from '../utils/updateCheckCache'
+import { resolveUpdateDownloadSources } from '../utils/updateDownloadSources'
 import {
     UI_ACCENTS,
     TERMINAL_PRESETS,
@@ -501,9 +524,11 @@ export default {
         const checkingUpdate = ref(false)
         const updateResult = ref(null)
         const downloading = ref(false)
+        const downloadPaused = ref(false)
         const downloadPercent = ref(0)
         const downloadMessage = ref('')
         const downloadFailed = ref(false)
+        const selectedDownloadSource = ref('GitHub')
         const accounts = ref([])
         const accountEditVisible = ref(false)
         const editingAccountIndex = ref(-1)
@@ -580,6 +605,21 @@ export default {
         const canDownload = computed(() =>
             !!(updateResult.value?.hasUpdate && updateResult.value?.downloadURL && !downloading.value)
         )
+
+        const downloadSources = computed(() => resolveUpdateDownloadSources(updateResult.value))
+
+        const downloadButtonLabel = computed(() => {
+            if (downloading.value) return `下载中 ${downloadPercent.value}%`
+            if (downloadPaused.value) return '继续下载'
+            return '下载安装包'
+        })
+
+        watch(downloadSources, (list) => {
+            if (!list.length) return
+            if (!list.some((s) => s.label === selectedDownloadSource.value)) {
+                selectedDownloadSource.value = list[0].label
+            }
+        })
 
         const renderReleaseNotes = (md) => {
             const text = String(md || '').trim()
@@ -717,6 +757,7 @@ theme preview · ${theme.foreground}`
             downloadPercent.value = 0
             downloadMessage.value = ''
             downloadFailed.value = false
+            downloadPaused.value = false
             try {
                 const result = await App.CheckForUpdates()
                 applyUpdateResult(result)
@@ -746,39 +787,64 @@ theme preview · ${theme.foreground}`
             downloadPercent.value = Number(payload.percent) || 0
             if (payload.status === 'start' || payload.status === 'downloading') {
                 downloading.value = true
+                downloadPaused.value = false
                 downloadFailed.value = false
-                downloadMessage.value = payload.status === 'start' ? '开始下载…' : '正在下载…'
+                downloadMessage.value = payload.message || (payload.status === 'start' ? '开始下载…' : '正在下载…')
             } else if (payload.status === 'done') {
                 downloading.value = false
+                downloadPaused.value = false
                 downloadPercent.value = 100
                 downloadFailed.value = false
                 downloadMessage.value = '下载完成，已打开下载目录'
+            } else if (payload.status === 'paused') {
+                downloading.value = false
+                downloadPaused.value = true
+                downloadFailed.value = false
+                downloadMessage.value = payload.message || '已暂停，可更换下载源后继续'
             } else if (payload.status === 'error') {
                 downloading.value = false
+                downloadPaused.value = false
                 downloadFailed.value = true
                 downloadMessage.value = payload.message || '下载失败'
+            }
+        }
+
+        const pauseDownload = async () => {
+            if (!downloading.value) return
+            try {
+                await App.PauseUpdateDownload()
+            } catch (e) {
+                ElMessage.error('暂停失败: ' + e)
             }
         }
 
         const downloadUpdate = async () => {
             if (!canDownload.value) return
             downloading.value = true
+            downloadPaused.value = false
             downloadFailed.value = false
             downloadMessage.value = '准备下载…'
             downloadPercent.value = 0
             try {
-                const result = await App.DownloadUpdate()
+                const result = await App.DownloadUpdate(selectedDownloadSource.value || '')
                 if (result?.success) {
                     ElMessage.success(result.message || '下载完成')
                     downloadMessage.value = result.message || '下载完成，已打开下载目录'
                     downloadPercent.value = 100
+                    downloadPaused.value = false
+                } else if (result?.paused) {
+                    downloadPaused.value = true
+                    downloadFailed.value = false
+                    downloadMessage.value = result.message || '已暂停，可更换下载源后继续'
                 } else {
                     downloadFailed.value = true
+                    downloadPaused.value = false
                     downloadMessage.value = result?.message || '下载失败'
                     ElMessage.error(downloadMessage.value)
                 }
             } catch (e) {
                 downloadFailed.value = true
+                downloadPaused.value = false
                 downloadMessage.value = String(e)
                 ElMessage.error(downloadMessage.value)
             } finally {
@@ -927,14 +993,19 @@ theme preview · ${theme.foreground}`
             updateResult,
             canDownload,
             downloading,
+            downloadPaused,
             downloadPercent,
             downloadMessage,
             downloadFailed,
+            downloadSources,
+            selectedDownloadSource,
+            downloadButtonLabel,
             checkUpdate,
             openRelease,
             renderReleaseNotes,
             onNotesClick,
             downloadUpdate,
+            pauseDownload,
             accountEditVisible,
             editingAccountIndex,
             accountForm,
@@ -1626,6 +1697,18 @@ theme preview · ${theme.foreground}`
     color: var(--app-text-muted);
 }
 
+.update-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+    margin-top: 10px;
+}
+
+.source-select {
+    width: 200px;
+}
+
 .download-msg {
     margin-top: 8px;
     font-size: 12px;
@@ -1636,6 +1719,10 @@ theme preview · ${theme.foreground}`
 
 .download-msg.err {
     color: #f56c6c;
+}
+
+.download-msg.paused {
+    color: #e6a23c;
 }
 
 .release-section {

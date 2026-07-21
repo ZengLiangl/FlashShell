@@ -24,18 +24,24 @@ const updateDownloadProgressEvent = "update:download-progress"
 
 // UpdateCheckResult 检查更新结果
 type UpdateCheckResult struct {
-	CurrentVersion string `json:"currentVersion"`
-	LatestVersion  string `json:"latestVersion"`
-	HasUpdate      bool   `json:"hasUpdate"`
-	ReleaseName    string `json:"releaseName"`
-	ReleaseNotes   string `json:"releaseNotes"`
-	ReleaseURL     string `json:"releaseURL"`
-	PublishedAt    string `json:"publishedAt"`
-	CheckedAt      string `json:"checkedAt"`
-	AssetName      string `json:"assetName,omitempty"`
-	DownloadURL    string `json:"downloadURL,omitempty"`
-	AssetSize      int64  `json:"assetSize,omitempty"`
-	Error          string `json:"error,omitempty"`
+	CurrentVersion   string                     `json:"currentVersion"`
+	LatestVersion    string                     `json:"latestVersion"`
+	HasUpdate        bool                       `json:"hasUpdate"`
+	ReleaseName      string                     `json:"releaseName"`
+	ReleaseNotes     string                     `json:"releaseNotes"`
+	ReleaseURL       string                     `json:"releaseURL"`
+	PublishedAt      string                     `json:"publishedAt"`
+	CheckedAt        string                     `json:"checkedAt"`
+	AssetName        string                     `json:"assetName,omitempty"`
+	DownloadURL      string                     `json:"downloadURL,omitempty"`
+	AssetSize        int64                      `json:"assetSize,omitempty"`
+	DownloadSources  []UpdateDownloadSourceInfo `json:"downloadSources,omitempty"`
+	Error            string                     `json:"error,omitempty"`
+}
+
+// UpdateDownloadSourceInfo 前端可选的下载源
+type UpdateDownloadSourceInfo struct {
+	Label string `json:"label"`
 }
 
 // UpdateDownloadResult 下载结果
@@ -44,6 +50,7 @@ type UpdateDownloadResult struct {
 	Message  string `json:"message"`
 	FilePath string `json:"filePath,omitempty"`
 	DirPath  string `json:"dirPath,omitempty"`
+	Paused   bool   `json:"paused,omitempty"`
 }
 
 type githubRelease struct {
@@ -84,9 +91,10 @@ func (w *updateDownloadProgressWriter) Write(p []byte) (int, error) {
 }
 
 var (
-	updateDownloadMu  sync.Mutex
-	updateDownloading bool
-	lastDownloadedDir string
+	updateDownloadMu     sync.Mutex
+	updateDownloading    bool
+	updateDownloadCancel context.CancelFunc
+	lastDownloadedDir    string
 )
 
 // CheckForUpdates 查询 GitHub Releases 最新正式版并与本地版本对比。
@@ -152,24 +160,40 @@ func (a *App) CheckForUpdates() *UpdateCheckResult {
 		result.AssetName = asset.Name
 		result.DownloadURL = asset.BrowserDownloadURL
 		result.AssetSize = asset.Size
+		result.DownloadSources = listDownloadSourceInfos(asset.BrowserDownloadURL)
 	} else if result.HasUpdate {
 		result.Error = fmt.Sprintf("未找到当前平台安装包（%s/%s）", goruntime.GOOS, goruntime.GOARCH)
 	}
 	return result
 }
 
-// DownloadUpdate 下载当前平台对应的安装包到用户「下载」目录，并打开该目录。
-func (a *App) DownloadUpdate() *UpdateDownloadResult {
+// PauseUpdateDownload 暂停当前安装包下载，便于更换代理源后重新开始。
+func (a *App) PauseUpdateDownload() {
+	updateDownloadMu.Lock()
+	cancel := updateDownloadCancel
+	updateDownloadMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
+// DownloadUpdate 按指定下载源下载当前平台安装包到用户「下载」目录。
+// sourceLabel 为空时使用第一个源（GitHub 直连）；下载中可调用 PauseUpdateDownload 暂停。
+func (a *App) DownloadUpdate(sourceLabel string) *UpdateDownloadResult {
 	updateDownloadMu.Lock()
 	if updateDownloading {
 		updateDownloadMu.Unlock()
 		return &UpdateDownloadResult{Success: false, Message: "已有下载任务进行中"}
 	}
 	updateDownloading = true
+	ctx, cancel := context.WithCancel(context.Background())
+	updateDownloadCancel = cancel
 	updateDownloadMu.Unlock()
 	defer func() {
+		cancel()
 		updateDownloadMu.Lock()
 		updateDownloading = false
+		updateDownloadCancel = nil
 		updateDownloadMu.Unlock()
 	}()
 
@@ -202,7 +226,6 @@ func (a *App) DownloadUpdate() *UpdateDownloadResult {
 	}
 
 	dest := filepath.Join(dir, check.AssetName)
-	// 优先直连 GitHub（与浏览器一致）；镜像仅作失败兜底，避免 TTFB 测速误选慢代理
 	sources := buildDownloadSources(check.DownloadURL)
 	if len(sources) == 0 {
 		msg := "无可用下载源"
@@ -210,33 +233,36 @@ func (a *App) DownloadUpdate() *UpdateDownloadResult {
 		return &UpdateDownloadResult{Success: false, Message: msg}
 	}
 
-	var lastErr error
-	for i, source := range sources {
-		if i == 0 {
-			a.emitUpdateDownloadProgress("start", 0, check.AssetSize, fmt.Sprintf("使用「%s」下载…", source.Label))
-		} else {
-			a.emitUpdateDownloadProgress("start", 0, check.AssetSize, fmt.Sprintf("改用「%s」…", source.Label))
-		}
-		_ = os.Remove(dest)
-		err := downloadFileWithProgress(source.URL, dest, check.AssetSize, source.Direct, func(downloaded, total int64) {
-			a.emitUpdateDownloadProgress("downloading", downloaded, total, "")
-		})
-		if err == nil {
-			lastDownloadedDir = dir
-			a.emitUpdateDownloadProgress("done", check.AssetSize, check.AssetSize, dest)
-			_ = a.OpenDownloadsDirectory()
-			return &UpdateDownloadResult{
-				Success:  true,
-				Message:  fmt.Sprintf("下载完成（%s）: %s", source.Label, dest),
-				FilePath: dest,
-				DirPath:  dir,
-			}
-		}
-		lastErr = err
-		_ = os.Remove(dest)
+	source, ok := pickDownloadSource(sources, sourceLabel)
+	if !ok {
+		msg := fmt.Sprintf("未知下载源：%s", strings.TrimSpace(sourceLabel))
+		a.emitUpdateDownloadProgress("error", 0, check.AssetSize, msg)
+		return &UpdateDownloadResult{Success: false, Message: msg}
 	}
 
-	msg := fmt.Sprintf("下载失败: %v", lastErr)
+	a.emitUpdateDownloadProgress("start", 0, check.AssetSize, fmt.Sprintf("使用「%s」下载…", source.Label))
+	_ = os.Remove(dest)
+	err = downloadFileWithProgress(ctx, source.URL, dest, check.AssetSize, source.Direct, func(downloaded, total int64) {
+		a.emitUpdateDownloadProgress("downloading", downloaded, total, "")
+	})
+	if err == nil {
+		lastDownloadedDir = dir
+		a.emitUpdateDownloadProgress("done", check.AssetSize, check.AssetSize, dest)
+		_ = a.OpenDownloadsDirectory()
+		return &UpdateDownloadResult{
+			Success:  true,
+			Message:  fmt.Sprintf("下载完成（%s）: %s", source.Label, dest),
+			FilePath: dest,
+			DirPath:  dir,
+		}
+	}
+	if ctx.Err() != nil {
+		msg := "已暂停，可更换下载源后继续"
+		a.emitUpdateDownloadProgress("paused", 0, check.AssetSize, msg)
+		return &UpdateDownloadResult{Success: false, Message: msg, Paused: true}
+	}
+
+	msg := fmt.Sprintf("下载失败（%s）: %v", source.Label, err)
 	a.emitUpdateDownloadProgress("error", 0, check.AssetSize, msg)
 	return &UpdateDownloadResult{Success: false, Message: msg}
 }
@@ -451,6 +477,11 @@ func buildDownloadSources(rawURL string) []updateDownloadSource {
 	if isGitHubAssetURL(rawURL) {
 		sources = append(sources,
 			updateDownloadSource{
+				Label:  "ghfast.top",
+				URL:    withGitHubProxyPrefix("https://ghfast.top", rawURL),
+				Direct: false,
+			},
+			updateDownloadSource{
 				Label:  "ghproxy.net",
 				URL:    withGitHubProxyPrefix("https://ghproxy.net", rawURL),
 				Direct: false,
@@ -473,6 +504,34 @@ func buildDownloadSources(rawURL string) []updateDownloadSource {
 		)
 	}
 	return sources
+}
+
+func listDownloadSourceInfos(rawURL string) []UpdateDownloadSourceInfo {
+	sources := buildDownloadSources(rawURL)
+	if len(sources) == 0 {
+		return nil
+	}
+	out := make([]UpdateDownloadSourceInfo, 0, len(sources))
+	for _, s := range sources {
+		out = append(out, UpdateDownloadSourceInfo{Label: s.Label})
+	}
+	return out
+}
+
+func pickDownloadSource(sources []updateDownloadSource, label string) (updateDownloadSource, bool) {
+	if len(sources) == 0 {
+		return updateDownloadSource{}, false
+	}
+	label = strings.TrimSpace(label)
+	if label == "" {
+		return sources[0], true
+	}
+	for _, s := range sources {
+		if strings.EqualFold(s.Label, label) {
+			return s, true
+		}
+	}
+	return updateDownloadSource{}, false
 }
 
 func isGitHubAssetURL(raw string) bool {
@@ -544,8 +603,11 @@ func probeDownloadLatency(ctx context.Context, src updateDownloadSource) (time.D
 	return time.Since(start), nil
 }
 
-func downloadFileWithProgress(url, dest string, knownSize int64, sendGitHubAuth bool, onProgress func(downloaded, total int64)) error {
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+func downloadFileWithProgress(ctx context.Context, url, dest string, knownSize int64, sendGitHubAuth bool, onProgress func(downloaded, total int64)) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
 	}
