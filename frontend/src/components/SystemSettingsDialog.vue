@@ -71,12 +71,49 @@
                     <div class="block-label">高亮配色</div>
                     <div class="log-hl-colors-head">
                         <p class="log-hl-colors-hint">
-                            适用于 tail -f、less -f 等查看日志；可关闭单项关键字高亮
+                            先选方案，再按需微调单项颜色；适用于 tail -f、less -f 等查看日志
                         </p>
                         <el-button size="small" text type="primary" @click="resetLogHighlightConfig">
-                            恢复默认配置
+                            恢复默认
                         </el-button>
                     </div>
+
+                    <div class="log-hl-preset-grid">
+                        <button
+                            v-for="preset in logColorPresets"
+                            :key="preset.id"
+                            type="button"
+                            class="log-hl-preset-card"
+                            :class="{ active: activeLogHighlightPreset === preset.id }"
+                            :title="preset.label"
+                            @click="applyLogHighlightPreset(preset.id)"
+                        >
+                            <span class="log-hl-preset-dots" aria-hidden="true">
+                                <i :style="{ background: preset.colors.error }"></i>
+                                <i :style="{ background: preset.colors.warn }"></i>
+                                <i :style="{ background: preset.colors.info }"></i>
+                                <i :style="{ background: preset.colors.timestamp }"></i>
+                            </span>
+                            <span class="log-hl-preset-name">{{ preset.label }}</span>
+                        </button>
+                        <button
+                            type="button"
+                            class="log-hl-preset-card is-custom"
+                            :class="{ active: activeLogHighlightPreset === 'custom' }"
+                            title="当前为自定义配色"
+                            disabled
+                        >
+                            <span class="log-hl-preset-dots" aria-hidden="true">
+                                <i
+                                    v-for="key in logHlDotKeys"
+                                    :key="key"
+                                    :style="{ background: form.shellLogHighlightColors[key] }"
+                                ></i>
+                            </span>
+                            <span class="log-hl-preset-name">自定义</span>
+                        </button>
+                    </div>
+
                     <div class="log-hl-colors-grid">
                         <div
                             v-for="item in logColorItems"
@@ -429,10 +466,14 @@ import {
 } from '../utils/themePresets'
 import {
     DEFAULT_SHELL_LOG_COLORS,
+    SHELL_LOG_COLOR_PRESETS,
     mergeLogHighlightColors,
     mergeLogHighlightRules,
     rulesToDisabled,
     logHighlightPreviewSegments,
+    getLogHighlightPreset,
+    matchLogHighlightPreset,
+    collectLogHighlightPredefineColors,
 } from '../utils/shellLogHighlight'
 
 const LOG_HIGHLIGHT_SAMPLE =
@@ -504,7 +545,13 @@ export default {
             { key: 'sql', label: 'SQL 关键字' },
             { key: 'label', label: 'SQL 标签' },
         ]
-        const logColorPredefine = Object.values(DEFAULT_SHELL_LOG_COLORS)
+        const logColorPresets = SHELL_LOG_COLOR_PRESETS
+        const logHlDotKeys = ['error', 'warn', 'info', 'timestamp']
+        const logColorPredefine = collectLogHighlightPredefineColors()
+
+        const activeLogHighlightPreset = computed(() =>
+            matchLogHighlightPreset(form.shellLogHighlightColors),
+        )
 
         const logHighlightPreviewParts = computed(() =>
             logHighlightPreviewSegments(
@@ -514,8 +561,13 @@ export default {
             ),
         )
 
+        const applyLogHighlightPreset = (id) => {
+            const preset = getLogHighlightPreset(id)
+            Object.assign(form.shellLogHighlightColors, mergeLogHighlightColors(preset.colors))
+        }
+
         const resetLogHighlightConfig = () => {
-            Object.assign(form.shellLogHighlightColors, DEFAULT_SHELL_LOG_COLORS)
+            applyLogHighlightPreset('windterm')
             Object.assign(form.shellLogHighlightRules, mergeLogHighlightRules([]))
         }
 
@@ -849,8 +901,12 @@ theme preview · ${theme.foreground}`
             settingsTabs,
             form,
             logColorItems,
+            logColorPresets,
+            logHlDotKeys,
             logColorPredefine,
+            activeLogHighlightPreset,
             logHighlightPreviewParts,
+            applyLogHighlightPreset,
             resetLogHighlightConfig,
             uiAccents,
             terminalPresets,
@@ -1248,6 +1304,67 @@ theme preview · ${theme.foreground}`
   flex-shrink: 0;
   padding: 0 4px;
   height: auto;
+}
+
+.log-hl-preset-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.log-hl-preset-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 10px 8px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-md, 8px);
+  background: var(--app-card-bg, var(--app-bg));
+  color: var(--app-text);
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+}
+
+.log-hl-preset-card:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--app-accent-color) 45%, var(--app-border));
+}
+
+.log-hl-preset-card.active {
+  border-color: var(--app-accent-color);
+  background: var(--app-accent-bg);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-accent-color) 35%, transparent);
+}
+
+.log-hl-preset-card.is-custom:disabled {
+  cursor: default;
+  opacity: 1;
+}
+
+.log-hl-preset-card.is-custom:not(.active) {
+  opacity: 0.55;
+}
+
+.log-hl-preset-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.log-hl-preset-dots i {
+  display: block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent);
+}
+
+.log-hl-preset-name {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  color: inherit;
 }
 
 .log-hl-colors-grid {

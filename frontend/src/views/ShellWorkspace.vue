@@ -638,6 +638,15 @@ export default {
       }
     }
 
+    const openCommandPalette = () => {
+      if (!props.workspaceSessions?.length) return
+      commandPaletteVisible.value = true
+    }
+
+    const pasteClipboard = async () => {
+      await tabsRef.value?.pasteClipboard?.()
+    }
+
     return {
       tabsRef,
       filePanelRef,
@@ -689,6 +698,8 @@ export default {
       tunnelLoading,
       tunnelDialogVisible,
       commandPaletteVisible,
+      openCommandPalette,
+      pasteClipboard,
       onCommandPaletteInsert,
       loadTunnels,
     }

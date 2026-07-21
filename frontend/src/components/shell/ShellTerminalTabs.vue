@@ -68,7 +68,7 @@
             </el-icon>
           </el-button>
         </el-tooltip>
-        <el-tooltip content="命令面板 (历史/片段)" placement="bottom">
+        <el-tooltip content="命令面板 (历史/片段，默认 Ctrl/⌘+Shift+P)" placement="bottom">
           <el-button v-if="sessions.length" size="small" text title="命令面板"
             @click="$emit('open-command-palette')">
             <el-icon :size="15"><Memo /></el-icon>
@@ -668,6 +668,7 @@ export default {
     const findNext = () => getActiveTerminal()?.findNext?.() ?? emptyResult()
     const findPrevious = () => getActiveTerminal()?.findPrevious?.() ?? emptyResult()
     const clearSearch = () => getActiveTerminal()?.clearSearch?.()
+    const pasteClipboard = () => getActiveTerminal()?.pasteClipboard?.()
     const fitActive = () => {
       if (splitViewVisible.value) {
         props.splitSessionIds.forEach((id) => terminalRefs.value[id]?.fitAndResize?.())
@@ -677,7 +678,7 @@ export default {
     }
     const getSelection = () => getActiveTerminal()?.getSelection?.() || ''
 
-    expose({ clearActive, findNext, findPrevious, clearSearch, fitActive, getSelection })
+    expose({ clearActive, findNext, findPrevious, clearSearch, fitActive, getSelection, pasteClipboard })
 
     return {
       activeTab,

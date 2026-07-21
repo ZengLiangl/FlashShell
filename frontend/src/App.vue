@@ -898,6 +898,16 @@ export default {
         return;
       }
 
+      // Ctrl+V：终端内交给 xterm 原生粘贴；Shell 其它焦点则写入当前会话
+      if (matchesShortcut(e, sc.paste)) {
+        if (inXterm) return;
+        if (activeView.value === 'shell') {
+          take();
+          shellWorkspaceRef.value?.pasteClipboard?.();
+        }
+        return;
+      }
+
       if (matchesShortcut(e, sc.clearOutput)) {
         take();
         clearOutput();
@@ -937,6 +947,14 @@ export default {
       if (matchesShortcut(e, sc.systemSettings)) {
         take();
         App.OpenSystemSettings();
+        return;
+      }
+
+      if (matchesShortcut(e, sc.commandPalette)) {
+        take();
+        if (activeView.value === 'shell') {
+          shellWorkspaceRef.value?.openCommandPalette?.();
+        }
         return;
       }
     };

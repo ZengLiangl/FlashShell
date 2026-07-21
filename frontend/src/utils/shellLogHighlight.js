@@ -31,6 +31,190 @@ export const DEFAULT_SHELL_LOG_COLORS = {
   label: '#9cdcfe',
 }
 
+/** 日志高亮配色方案（均可再自定义单项颜色） */
+export const SHELL_LOG_COLOR_PRESETS = [
+  {
+    id: 'windterm',
+    label: 'WindTerm',
+    colors: { ...DEFAULT_SHELL_LOG_COLORS },
+  },
+  {
+    id: 'vscode',
+    label: 'VS Code',
+    colors: {
+      timestamp: '#6a9955',
+      threadId: '#c586c0',
+      info: '#569cd6',
+      debug: '#b5cea8',
+      warn: '#dcdcaa',
+      error: '#f44747',
+      logger: '#4ec9b0',
+      sql: '#ce9178',
+      label: '#9cdcfe',
+    },
+  },
+  {
+    id: 'dracula',
+    label: 'Dracula',
+    colors: {
+      timestamp: '#50fa7b',
+      threadId: '#ff79c6',
+      info: '#8be9fd',
+      debug: '#bd93f9',
+      warn: '#f1fa8c',
+      error: '#ff5555',
+      logger: '#ffb86c',
+      sql: '#f1fa8c',
+      label: '#8be9fd',
+    },
+  },
+  {
+    id: 'nord',
+    label: 'Nord',
+    colors: {
+      timestamp: '#a3be8c',
+      threadId: '#b48ead',
+      info: '#81a1c1',
+      debug: '#88c0d0',
+      warn: '#ebcb8b',
+      error: '#bf616a',
+      logger: '#8fbcbb',
+      sql: '#d08770',
+      label: '#88c0d0',
+    },
+  },
+  {
+    id: 'solarized',
+    label: 'Solarized',
+    colors: {
+      timestamp: '#859900',
+      threadId: '#d33682',
+      info: '#268bd2',
+      debug: '#2aa198',
+      warn: '#b58900',
+      error: '#dc322f',
+      logger: '#6c71c4',
+      sql: '#cb4b16',
+      label: '#839496',
+    },
+  },
+  {
+    id: 'monokai',
+    label: 'Monokai',
+    colors: {
+      timestamp: '#a6e22e',
+      threadId: '#f92672',
+      info: '#66d9ef',
+      debug: '#ae81ff',
+      warn: '#e6db74',
+      error: '#f92672',
+      logger: '#fd971f',
+      sql: '#e6db74',
+      label: '#a1efe4',
+    },
+  },
+  {
+    id: 'one-dark',
+    label: 'One Dark',
+    colors: {
+      timestamp: '#98c379',
+      threadId: '#c678dd',
+      info: '#61afef',
+      debug: '#56b6c2',
+      warn: '#e5c07b',
+      error: '#e06c75',
+      logger: '#d19a66',
+      sql: '#e5c07b',
+      label: '#abb2bf',
+    },
+  },
+  {
+    id: 'tokyo-night',
+    label: 'Tokyo Night',
+    colors: {
+      timestamp: '#9ece6a',
+      threadId: '#bb9af7',
+      info: '#7aa2f7',
+      debug: '#7dcfff',
+      warn: '#e0af68',
+      error: '#f7768e',
+      logger: '#ff9e64',
+      sql: '#c0caf5',
+      label: '#73daca',
+    },
+  },
+  {
+    id: 'github',
+    label: 'GitHub',
+    colors: {
+      timestamp: '#3fb950',
+      threadId: '#d2a8ff',
+      info: '#58a6ff',
+      debug: '#79c0ff',
+      warn: '#d29922',
+      error: '#ff7b72',
+      logger: '#ffa657',
+      sql: '#a5d6ff',
+      label: '#8b949e',
+    },
+  },
+  {
+    id: 'soft',
+    label: '柔和',
+    colors: {
+      timestamp: '#8fbc8f',
+      threadId: '#c9a0dc',
+      info: '#7eb6d6',
+      debug: '#a8c5b0',
+      warn: '#d4c07a',
+      error: '#e08a8a',
+      logger: '#7dbdb5',
+      sql: '#d4b896',
+      label: '#9bb8d0',
+    },
+  },
+  {
+    id: 'vivid',
+    label: '高对比',
+    colors: {
+      timestamp: '#00ff88',
+      threadId: '#ff66cc',
+      info: '#33bbff',
+      debug: '#aa88ff',
+      warn: '#ffee00',
+      error: '#ff3333',
+      logger: '#ffaa33',
+      sql: '#ffff66',
+      label: '#66ffff',
+    },
+  },
+]
+
+export function getLogHighlightPreset(id) {
+  return SHELL_LOG_COLOR_PRESETS.find((p) => p.id === id) || SHELL_LOG_COLOR_PRESETS[0]
+}
+
+/** 当前配色匹配的方案 id；无匹配则为 custom */
+export function matchLogHighlightPreset(colors) {
+  const merged = mergeLogHighlightColors(colors)
+  for (const preset of SHELL_LOG_COLOR_PRESETS) {
+    const same = LOG_HIGHLIGHT_KEYS.every(
+      (key) => String(merged[key]).toLowerCase() === String(preset.colors[key]).toLowerCase(),
+    )
+    if (same) return preset.id
+  }
+  return 'custom'
+}
+
+/** 方案中的全部色值，供 color-picker 预置 */
+export function collectLogHighlightPredefineColors() {
+  const set = new Set(Object.values(DEFAULT_SHELL_LOG_COLORS))
+  for (const preset of SHELL_LOG_COLOR_PRESETS) {
+    Object.values(preset.colors).forEach((c) => set.add(c))
+  }
+  return [...set]
+}
+
 const RE_ANSI = /\x1b(?:\[[0-9;?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\))/g
 
 /** less/vim 等全屏或行内重绘用的控制序列（非单纯配色 SGR） */

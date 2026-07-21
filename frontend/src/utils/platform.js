@@ -13,7 +13,7 @@ export function modKeyLabel(isMac = isMacPlatform()) {
 
 /**
  * 将快捷键绑定格式化为展示文案
- * @param {{ key?: string, useMod?: boolean }} binding
+ * @param {{ key?: string, useMod?: boolean, useShift?: boolean }} binding
  * @param {boolean} [isMac]
  */
 export function formatShortcutLabel(binding, isMac = isMacPlatform()) {
@@ -21,6 +21,9 @@ export function formatShortcutLabel(binding, isMac = isMacPlatform()) {
   const key = String(binding.key).length === 1
     ? String(binding.key).toUpperCase()
     : String(binding.key)
-  if (binding.useMod === false) return key
-  return `${modKeyLabel(isMac)}+${key}`
+  const parts = []
+  if (binding.useMod !== false) parts.push(modKeyLabel(isMac))
+  if (binding.useShift) parts.push('Shift')
+  parts.push(key)
+  return parts.join('+')
 }

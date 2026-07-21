@@ -135,17 +135,23 @@ export default {
 
     const onPaste = async () => {
       hideContextMenu()
+      await pasteClipboard()
+    }
+
+    const pasteClipboard = async () => {
       if (!props.connected) {
         ElMessage.info('当前未连接，请先连接')
-        return
+        return false
       }
       try {
         const text = await navigator.clipboard.readText()
-        if (!text) return
+        if (!text) return false
         await App.SendShellInput(props.machineName, text)
         term.value?.focus?.()
+        return true
       } catch (err) {
         ElMessage.error(`粘贴失败: ${err}`)
+        return false
       }
     }
 
@@ -654,7 +660,7 @@ export default {
       destroyTerminal()
     })
 
-    expose({ clear, fitAndResize, findNext, findPrevious, clearSearch, getSelection, wakeTerminal })
+    expose({ clear, fitAndResize, findNext, findPrevious, clearSearch, getSelection, wakeTerminal, pasteClipboard })
 
     return {
       containerRef,

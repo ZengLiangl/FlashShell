@@ -10,7 +10,10 @@ export const DEFAULT_SHORTCUTS = {
   refreshConfig: { key: 'r', useMod: true },
   find: { key: 'f', useMod: true },
   copy: { key: 'c', useMod: true },
+  paste: { key: 'v', useMod: true },
   clearOutput: { key: 'k', useMod: true },
+  // Shift+P，避免与终端 readline Ctrl+P（上一行历史）冲突
+  commandPalette: { key: 'p', useMod: true, useShift: true },
 }
 
 export const SHORTCUT_LABELS = {
@@ -22,8 +25,26 @@ export const SHORTCUT_LABELS = {
   refreshConfig: '刷新配置列表',
   find: '查找',
   copy: '复制',
+  paste: '粘贴',
   clearOutput: '清空输出',
+  commandPalette: '命令面板（历史/片段）',
 }
+
+/** 设置页分组展示（覆盖全部可配置项） */
+export const SHORTCUT_GROUPS = [
+  {
+    title: '应用',
+    ids: ['newWindow', 'systemSettings', 'machineConfig', 'connectionManager', 'envVars'],
+  },
+  {
+    title: '编辑与输出',
+    ids: ['find', 'copy', 'paste', 'clearOutput', 'refreshConfig'],
+  },
+  {
+    title: 'Shell',
+    ids: ['commandPalette'],
+  },
+]
 
 export function mergeShortcuts(partial) {
   const result = {}
@@ -31,7 +52,8 @@ export function mergeShortcuts(partial) {
     const cur = partial?.[id]
     result[id] = {
       key: (cur?.key != null && String(cur.key).length > 0) ? String(cur.key) : def.key,
-      useMod: cur?.useMod !== undefined ? !!cur.useMod : def.useMod,
+      useMod: cur?.useMod !== undefined ? !!cur.useMod : !!def.useMod,
+      useShift: cur?.useShift !== undefined ? !!cur.useShift : !!def.useShift,
     }
   }
   return result
@@ -44,6 +66,9 @@ export function matchesShortcut(e, binding) {
   const hasMod = !!(e.metaKey || e.ctrlKey)
   if (needMod !== hasMod) return false
   if (e.altKey) return false
+
+  const needShift = !!binding.useShift
+  if (needShift !== !!e.shiftKey) return false
 
   const target = String(binding.key)
   if (target === ',') {
@@ -96,5 +121,6 @@ export function bindingFromEvent(e) {
   return {
     key: key === ',' ? ',' : key.toLowerCase(),
     useMod: true,
+    useShift: !!e.shiftKey,
   }
 }

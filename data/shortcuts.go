@@ -9,8 +9,9 @@ import (
 
 // ShortcutBinding 单条快捷键绑定
 type ShortcutBinding struct {
-	Key    string `json:"key"`
-	UseMod bool   `json:"useMod"`
+	Key      string `json:"key"`
+	UseMod   bool   `json:"useMod"`
+	UseShift bool   `json:"useShift,omitempty"`
 }
 
 // ShellSnippet 终端命令片段
@@ -31,7 +32,9 @@ type ShortcutSettings struct {
 	RefreshConfig     ShortcutBinding `json:"refreshConfig"`
 	Find              ShortcutBinding `json:"find"`
 	Copy              ShortcutBinding `json:"copy"`
+	Paste             ShortcutBinding `json:"paste"`
 	ClearOutput       ShortcutBinding `json:"clearOutput"`
+	CommandPalette    ShortcutBinding `json:"commandPalette"`
 	Snippets          []ShellSnippet  `json:"snippets,omitempty"`
 }
 
@@ -46,7 +49,9 @@ func DefaultShortcutSettings() ShortcutSettings {
 		RefreshConfig:     ShortcutBinding{Key: "r", UseMod: true},
 		Find:              ShortcutBinding{Key: "f", UseMod: true},
 		Copy:              ShortcutBinding{Key: "c", UseMod: true},
+		Paste:             ShortcutBinding{Key: "v", UseMod: true},
 		ClearOutput:       ShortcutBinding{Key: "k", UseMod: true},
+		CommandPalette:    ShortcutBinding{Key: "p", UseMod: true, UseShift: true},
 	}
 }
 
@@ -87,8 +92,14 @@ func fillShortcutDefaults(s *ShortcutSettings) {
 	if s.Copy.Key == "" {
 		s.Copy = def.Copy
 	}
+	if s.Paste.Key == "" {
+		s.Paste = def.Paste
+	}
 	if s.ClearOutput.Key == "" {
 		s.ClearOutput = def.ClearOutput
+	}
+	if s.CommandPalette.Key == "" {
+		s.CommandPalette = def.CommandPalette
 	}
 }
 

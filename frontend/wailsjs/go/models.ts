@@ -367,6 +367,7 @@ export namespace data {
 	export class ShortcutBinding {
 	    key: string;
 	    useMod: boolean;
+	    useShift?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ShortcutBinding(source);
@@ -376,6 +377,7 @@ export namespace data {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.key = source["key"];
 	        this.useMod = source["useMod"];
+	        this.useShift = source["useShift"];
 	    }
 	}
 	export class ShortcutSettings {
@@ -387,7 +389,9 @@ export namespace data {
 	    refreshConfig: ShortcutBinding;
 	    find: ShortcutBinding;
 	    copy: ShortcutBinding;
+	    paste: ShortcutBinding;
 	    clearOutput: ShortcutBinding;
+	    commandPalette: ShortcutBinding;
 	    snippets?: ShellSnippet[];
 	
 	    static createFrom(source: any = {}) {
@@ -404,7 +408,9 @@ export namespace data {
 	        this.refreshConfig = this.convertValues(source["refreshConfig"], ShortcutBinding);
 	        this.find = this.convertValues(source["find"], ShortcutBinding);
 	        this.copy = this.convertValues(source["copy"], ShortcutBinding);
+	        this.paste = this.convertValues(source["paste"], ShortcutBinding);
 	        this.clearOutput = this.convertValues(source["clearOutput"], ShortcutBinding);
+	        this.commandPalette = this.convertValues(source["commandPalette"], ShortcutBinding);
 	        this.snippets = this.convertValues(source["snippets"], ShellSnippet);
 	    }
 	

@@ -42,7 +42,7 @@
             <span class="sn-name">{{ s.name }}</span>
             <span class="sn-cmd">{{ s.command }}</span>
           </li>
-          <li v-if="!filteredSnippets.length" class="empty">暂无片段（可在设置 → 快捷键中配置）</li>
+          <li v-if="!filteredSnippets.length" class="empty">暂无片段（可在设置 → 快捷键 → 命令片段中配置）</li>
         </ul>
       </el-tab-pane>
     </el-tabs>
