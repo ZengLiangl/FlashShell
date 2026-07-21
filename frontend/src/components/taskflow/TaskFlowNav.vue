@@ -32,7 +32,11 @@
               <ArrowRight v-else />
             </el-icon>
           </button>
-          <span class="nav-label" :title="project.name || '(未命名项目)'">
+          <span
+            class="nav-label"
+            :title="(project.name || '(未命名项目)') + '（双击展开/收起）'"
+            @dblclick.stop="toggleProject(pIndex)"
+          >
             {{ project.name || '(未命名项目)' }}
           </span>
           <div class="nav-actions icon-actions" @click.stop>
@@ -125,8 +129,8 @@ export default {
       props.projects.forEach((_, i) => {
         if (expanded[i] === undefined) expanded[i] = false
       })
-      // 选中项目或子项目时展开对应项目
-      if (props.selectedP != null) {
+      // 仅当选中子项目时展开，便于看到高亮；仅选中项目不自动展开
+      if (props.selectedP != null && props.selectedS != null) {
         expanded[props.selectedP] = true
       }
     }
@@ -165,7 +169,7 @@ export default {
 
 <style scoped>
 .task-flow-nav {
-  width: 280px;
+  width: 260px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -179,7 +183,7 @@ export default {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 10px 12px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--app-border);
   flex-shrink: 0;
   min-height: 44px;
@@ -278,6 +282,11 @@ export default {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.project-row .nav-label {
+  cursor: pointer;
+  user-select: none;
 }
 
 .cmd-count {

@@ -1,7 +1,7 @@
 <template>
   <div class="task-flow-canvas">
     <div v-if="!subProject" class="canvas-empty">
-      <el-empty description="请在左侧选择子项目以编辑流水线" :image-size="72" />
+      <el-empty :description="emptyDescription" :image-size="72" />
     </div>
     <template v-else>
       <div class="canvas-header">
@@ -108,7 +108,7 @@
           </template>
 
           <div v-if="commands.length === 0" class="flow-empty-hint">
-            点击右上角 + 开始编排流水线
+            点击右上角 + 添加命令，选中后在下方编辑属性
           </div>
 
           <div v-if="commands.length > 0" class="flow-tail">
@@ -138,6 +138,7 @@ export default {
   props: {
     subProject: { type: Object, default: null },
     selectedPath: { type: Object, default: null },
+    emptyDescription: { type: String, default: '请在左侧选择子项目以编辑流水线' },
   },
   emits: [
     'select-command',
@@ -199,26 +200,32 @@ export default {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 16px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--app-border);
   background: var(--app-bg);
   flex-shrink: 0;
+  min-height: 44px;
+  box-sizing: border-box;
 }
 
 .canvas-title {
   display: flex;
-  flex-direction: column;
-  gap: 2px;
+  align-items: baseline;
+  gap: 10px;
   min-width: 0;
 }
 
 .title-text {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--app-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .title-hint {
+  flex-shrink: 0;
   font-size: 12px;
   color: var(--app-text-muted);
 }
@@ -227,7 +234,10 @@ export default {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 24px 20px 32px;
+  padding: 20px 18px 28px;
+  background:
+    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--app-border) 70%, transparent) 1px, transparent 0)
+      0 0 / 18px 18px;
 }
 
 .flow-row {
@@ -314,7 +324,7 @@ export default {
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  border-radius: 999px;
+  border-radius: var(--app-radius-md, 8px);
   border: 1px solid var(--step-border, var(--app-border));
   background: var(--step-bg, var(--app-card-bg));
   cursor: pointer;
@@ -389,7 +399,7 @@ export default {
   width: 100%;
   height: 28px;
   border: 1px dashed var(--app-border);
-  border-radius: 999px;
+  border-radius: var(--app-radius-md, 8px);
   background: transparent;
   color: var(--app-text-muted);
   display: inline-flex;
