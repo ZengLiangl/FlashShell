@@ -76,6 +76,7 @@ func NewApp(sessionID string) *App {
 	app.refreshLogSettings()
 	app.applyProxyFromConfig()
 	app.applySSHHandshakeFromConfig()
+	app.applyShellCommandHistoryMaxFromConfig()
 	go app.outputEventLoop()
 	return app
 }
@@ -1353,6 +1354,9 @@ func (a *App) GetSystemSettings() (*data.GlobalConfig, error) {
 	if cfg != nil {
 		cfg.ShellMonitorIntervalMs = normalizeShellMonitorIntervalMs(cfg.ShellMonitorIntervalMs)
 		cfg.SSHHandshakeTimeoutSec = normalizeSSHHandshakeTimeoutSec(cfg.SSHHandshakeTimeoutSec)
+		cfg.ShellTerminalScrollback = normalizeShellTerminalScrollback(cfg.ShellTerminalScrollback)
+		cfg.TaskOutputMaxLines = normalizeTaskOutputMaxLines(cfg.TaskOutputMaxLines)
+		cfg.ShellCommandHistoryMax = data.NormalizeShellCommandHistoryMax(cfg.ShellCommandHistoryMax)
 		normalizeProxySettings(&cfg.ProxySettings)
 		if cfg.ShellLogHighlight == nil {
 			v := true
@@ -1386,6 +1390,9 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	normalizeProxySettings(&config.ProxySettings)
 	config.ShellMonitorIntervalMs = normalizeShellMonitorIntervalMs(config.ShellMonitorIntervalMs)
 	config.SSHHandshakeTimeoutSec = normalizeSSHHandshakeTimeoutSec(config.SSHHandshakeTimeoutSec)
+	config.ShellTerminalScrollback = normalizeShellTerminalScrollback(config.ShellTerminalScrollback)
+	config.TaskOutputMaxLines = normalizeTaskOutputMaxLines(config.TaskOutputMaxLines)
+	config.ShellCommandHistoryMax = data.NormalizeShellCommandHistoryMax(config.ShellCommandHistoryMax)
 	config.ShellMonitorIntervalSec = 0
 	config.ShellLogHighlightColors = data.NormalizeShellLogHighlightColors(config.ShellLogHighlightColors)
 	config.ShellLogHighlightDisabled = data.NormalizeShellLogHighlightDisabled(config.ShellLogHighlightDisabled)
@@ -1395,6 +1402,7 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	a.refreshLogSettings()
 	a.applyProxySettings(config.ProxySettings)
 	a.applySSHHandshakeTimeout(config.SSHHandshakeTimeoutSec)
+	a.applyShellCommandHistoryMax(config.ShellCommandHistoryMax)
 	if a.sessionManager != nil && config.ThemeSettings.Mode != "" {
 		_ = a.sessionManager.SetTheme(config.ThemeSettings.Mode, config.ThemeSettings.TerminalPreset)
 	}
@@ -1404,6 +1412,9 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 		wailsRuntime.EventsEmit(a.ctx, "system-settings:changed", map[string]any{
 			"shellMonitorIntervalMs":    config.ShellMonitorIntervalMs,
 			"sshHandshakeTimeoutSec":    config.SSHHandshakeTimeoutSec,
+			"shellTerminalScrollback":   config.ShellTerminalScrollback,
+			"taskOutputMaxLines":        config.TaskOutputMaxLines,
+			"shellCommandHistoryMax":    config.ShellCommandHistoryMax,
 			"shellLogHighlight":         data.ShellLogHighlightEnabled(config),
 			"shellLogHighlightColors":   config.ShellLogHighlightColors,
 			"shellLogHighlightDisabled": config.ShellLogHighlightDisabled,
@@ -1436,6 +1447,32 @@ func normalizeSSHHandshakeTimeoutSec(sec int) int {
 	return sec
 }
 
+func normalizeShellTerminalScrollback(n int) int {
+	if n <= 0 {
+		return 2000
+	}
+	if n < 100 {
+		return 100
+	}
+	if n > 100000 {
+		return 100000
+	}
+	return n
+}
+
+func normalizeTaskOutputMaxLines(n int) int {
+	if n <= 0 {
+		return 1000
+	}
+	if n < 100 {
+		return 100
+	}
+	if n > 100000 {
+		return 100000
+	}
+	return n
+}
+
 func (a *App) applySSHHandshakeTimeout(sec int) {
 	define.SetSSHHandshakeTimeout(time.Duration(normalizeSSHHandshakeTimeoutSec(sec)) * time.Second)
 }
@@ -1447,6 +1484,22 @@ func (a *App) applySSHHandshakeFromConfig() {
 		return
 	}
 	a.applySSHHandshakeTimeout(cfg.SSHHandshakeTimeoutSec)
+}
+
+func (a *App) applyShellCommandHistoryMax(max int) {
+	if a.shellCmdHistory == nil {
+		return
+	}
+	a.shellCmdHistory.SetMaxPerScope(max)
+}
+
+func (a *App) applyShellCommandHistoryMaxFromConfig() {
+	cfg, err := a.configManager.GetGlobalConfig()
+	if err != nil || cfg == nil {
+		a.applyShellCommandHistoryMax(200)
+		return
+	}
+	a.applyShellCommandHistoryMax(cfg.ShellCommandHistoryMax)
 }
 
 // GetExecutionLogs 获取执行历史列表

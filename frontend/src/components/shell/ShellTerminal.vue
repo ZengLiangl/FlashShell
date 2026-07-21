@@ -40,7 +40,7 @@ import {
   resetShellWriterReplay,
   setShellOutputSessionActive,
 } from '../../utils/shellOutputBuffer'
-import { SHELL_TERMINAL_SCROLLBACK } from '../../constants/shellMemory'
+import { SHELL_TERMINAL_SCROLLBACK, clampShellTerminalScrollback } from '../../constants/shellMemory'
 import { useTheme } from '../../composables/useTheme'
 import { terminalThemeForPreset, getTerminalFont } from '../../utils/themePresets'
 import {
@@ -94,6 +94,7 @@ export default {
     let logHighlightEnabled = true
     let logHighlightConfig = mergeLogHighlightConfig(null)
     let tuiModeDepth = 0
+    let scrollbackLines = SHELL_TERMINAL_SCROLLBACK
     const textDecoder = new TextDecoder('utf-8')
 
     const SEARCH_DECORATIONS = {
@@ -229,6 +230,10 @@ export default {
         const cfg = await App.GetSystemSettings()
         logHighlightEnabled = cfg?.shellLogHighlight !== false
         logHighlightConfig = mergeLogHighlightConfig(cfg)
+        scrollbackLines = clampShellTerminalScrollback(cfg?.shellTerminalScrollback)
+        if (term.value) {
+          term.value.options.scrollback = scrollbackLines
+        }
       } catch {
         logHighlightEnabled = true
       }
@@ -240,6 +245,12 @@ export default {
       }
       if (payload?.shellLogHighlightColors || payload?.shellLogHighlightDisabled) {
         logHighlightConfig = mergeLogHighlightConfig(payload)
+      }
+      if (payload && Object.prototype.hasOwnProperty.call(payload, 'shellTerminalScrollback')) {
+        scrollbackLines = clampShellTerminalScrollback(payload.shellTerminalScrollback)
+        if (term.value) {
+          term.value.options.scrollback = scrollbackLines
+        }
       }
     }
 
@@ -304,7 +315,7 @@ export default {
       if (initialized || !terminalRef.value || !props.active || !props.viewVisible) return
       const terminal = new Terminal({
         cursorBlink: true,
-        scrollback: SHELL_TERMINAL_SCROLLBACK,
+        scrollback: scrollbackLines,
         fontSize: shellFontSize.value || 13,
         lineHeight: shellLineHeight.value || 1.2,
         fontFamily: getTerminalFont(shellFontFamily.value).value,
@@ -642,8 +653,9 @@ export default {
 
     onMounted(() => {
       setShellOutputSessionActive(props.machineName, props.active)
-      loadLogHighlightSetting()
-      if (props.active && props.viewVisible) wakeTerminal()
+      loadLogHighlightSetting().finally(() => {
+        if (props.active && props.viewVisible) wakeTerminal()
+      })
       offThemeChanged = EventsOn('theme:changed', onThemeChanged)
       offSystemSettingsChanged = EventsOn('system-settings:changed', onSystemSettingsChanged)
       window.addEventListener('click', hideContextMenu)

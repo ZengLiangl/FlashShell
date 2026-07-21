@@ -120,6 +120,7 @@ import { useTheme } from "./composables/useTheme";
 import { mergeShortcuts, matchesShortcut, isFormFieldTarget, isXtermInput } from "./utils/shortcuts";
 import { hasOverlayAboveSettingsHub } from "./utils/dialogOverlay";
 import { setCachedUpdateCheck, isUsableUpdateResult } from "./utils/updateCheckCache";
+import { TASK_OUTPUT_MAX_LINES, clampTaskOutputMaxLines } from "./constants/shellMemory";
 import { copyMachineRecord } from "./utils/machineCopy";
 
 const ShellWorkspace = defineAsyncComponent(() => import("./views/ShellWorkspace.vue"));
@@ -146,13 +147,27 @@ export default {
       completedSteps: 0,
       totalSteps: 0,
     });
-    // 终端输出行数上限，防止内存增长过快
-    const MAX_OUTPUT_LINES = 2000;
+    // 终端输出行数上限，防止内存增长过快（可由系统设置覆盖）
+    const maxOutputLines = ref(TASK_OUTPUT_MAX_LINES);
 
     const enforceOutputLimit = () => {
-      const overflow = outputLines.value.length - MAX_OUTPUT_LINES;
+      const overflow = outputLines.value.length - maxOutputLines.value;
       if (overflow > 0) {
         outputLines.value.splice(0, overflow);
+      }
+    };
+
+    const applyTaskOutputMaxLines = (n) => {
+      maxOutputLines.value = clampTaskOutputMaxLines(n);
+      enforceOutputLimit();
+    };
+
+    const loadTaskOutputLimit = async () => {
+      try {
+        const cfg = await App.GetSystemSettings();
+        applyTaskOutputMaxLines(cfg?.taskOutputMaxLines);
+      } catch {
+        // 保持默认
       }
     };
 
@@ -1082,6 +1097,7 @@ export default {
       loadTheme();
       loadShortcutMap();
       loadShellMachines();
+      loadTaskOutputLimit();
       App.GetSessionInfo().then((info) => { sessionId.value = info.sessionId || ''; }).catch(() => { });
       App.GetAppVersion().then((v) => { appVersion.value = v || ''; }).catch(() => { appVersion.value = ''; });
 
@@ -1090,6 +1106,11 @@ export default {
       EventsOn("output:clear", handleOutputClear);
       EventsOn("execution:status", handleExecutionStatus);
       EventsOn("theme:changed", applyThemeSettings);
+      EventsOn("system-settings:changed", (payload) => {
+        if (payload && Object.prototype.hasOwnProperty.call(payload, 'taskOutputMaxLines')) {
+          applyTaskOutputMaxLines(payload.taskOutputMaxLines);
+        }
+      });
       EventsOn("shortcuts:changed", (data) => {
         shortcutMap.value = mergeShortcuts(data);
       });
@@ -1401,6 +1422,7 @@ export default {
           "open:config-editor",
           "open:system-settings",
           "theme:changed",
+          "system-settings:changed",
           "shortcuts:changed",
           "output:line",
           "output:clear",

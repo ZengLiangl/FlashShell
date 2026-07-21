@@ -163,6 +163,12 @@ type GlobalConfig struct {
 	ShellMonitorIntervalMs int `yaml:"shellMonitorIntervalMs" json:"shellMonitorIntervalMs"`
 	// SSHHandshakeTimeoutSec SSH 握手超时（秒）：TCP 连接 + SSH 协商，Shell 与任务远程执行共用，默认 30
 	SSHHandshakeTimeoutSec int `yaml:"sshHandshakeTimeoutSec" json:"sshHandshakeTimeoutSec"`
+	// ShellTerminalScrollback xterm 滚动缓冲行数上限，默认 2000
+	ShellTerminalScrollback int `yaml:"shellTerminalScrollback" json:"shellTerminalScrollback"`
+	// TaskOutputMaxLines 任务执行终端输出行数上限，默认 1000
+	TaskOutputMaxLines int `yaml:"taskOutputMaxLines" json:"taskOutputMaxLines"`
+	// ShellCommandHistoryMax Shell 命令历史每作用域条数上限，默认 200
+	ShellCommandHistoryMax int `yaml:"shellCommandHistoryMax" json:"shellCommandHistoryMax"`
 	// ShellMonitorIntervalSec 旧字段（秒），仅用于迁移
 	ShellMonitorIntervalSec int `yaml:"shellMonitorIntervalSec,omitempty" json:"-"`
 	// ShellLogHighlight Shell 终端日志关键字高亮；nil 表示默认开启
@@ -426,6 +432,9 @@ func (gcm *GlobalConfigManager) createDefaultGlobalConfig() error {
 		},
 		ShellMonitorIntervalMs:  1000,
 		SSHHandshakeTimeoutSec:  30,
+		ShellTerminalScrollback: 2000,
+		TaskOutputMaxLines:      1000,
+		ShellCommandHistoryMax:  200,
 		ShellLogHighlight:       boolPtr(true),
 		ShellLogHighlightColors: DefaultShellLogHighlightColors(),
 	}

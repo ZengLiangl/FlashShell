@@ -241,6 +241,9 @@ export namespace data {
 	    proxySettings: ProxySettings;
 	    shellMonitorIntervalMs: number;
 	    sshHandshakeTimeoutSec: number;
+	    shellTerminalScrollback: number;
+	    taskOutputMaxLines: number;
+	    shellCommandHistoryMax: number;
 	    shellLogHighlight?: boolean;
 	    shellLogHighlightColors: ShellLogHighlightColors;
 	    shellLogHighlightDisabled: string[];
@@ -264,6 +267,9 @@ export namespace data {
 	        this.proxySettings = this.convertValues(source["proxySettings"], ProxySettings);
 	        this.shellMonitorIntervalMs = source["shellMonitorIntervalMs"];
 	        this.sshHandshakeTimeoutSec = source["sshHandshakeTimeoutSec"];
+	        this.shellTerminalScrollback = source["shellTerminalScrollback"];
+	        this.taskOutputMaxLines = source["taskOutputMaxLines"];
+	        this.shellCommandHistoryMax = source["shellCommandHistoryMax"];
 	        this.shellLogHighlight = source["shellLogHighlight"];
 	        this.shellLogHighlightColors = this.convertValues(source["shellLogHighlightColors"], ShellLogHighlightColors);
 	        this.shellLogHighlightDisabled = source["shellLogHighlightDisabled"];

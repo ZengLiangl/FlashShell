@@ -8,8 +8,7 @@ import (
 	"sync"
 )
 
-const shellCmdHistoryMax = 2000
-const shellCmdHistoryPerScope = 500
+const defaultShellCmdHistoryMax = 200
 
 // ShellCommandRecord 单条 Shell 命令历史
 type ShellCommandRecord struct {
@@ -25,17 +24,74 @@ type shellCmdHistoryFile struct {
 
 // ShellCommandHistoryManager 跨会话命令历史
 type ShellCommandHistoryManager struct {
-	mu   sync.Mutex
-	data shellCmdHistoryFile
+	mu          sync.Mutex
+	data        shellCmdHistoryFile
+	maxPerScope int
 }
 
 // NewShellCommandHistoryManager 创建并加载
 func NewShellCommandHistoryManager() *ShellCommandHistoryManager {
 	m := &ShellCommandHistoryManager{
-		data: shellCmdHistoryFile{ByScope: make(map[string][]string)},
+		data:        shellCmdHistoryFile{ByScope: make(map[string][]string)},
+		maxPerScope: defaultShellCmdHistoryMax,
 	}
 	_ = m.Load()
 	return m
+}
+
+// SetMaxPerScope 设置每个作用域的历史条数上限
+func (m *ShellCommandHistoryManager) SetMaxPerScope(max int) {
+	if m == nil {
+		return
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.maxPerScope = NormalizeShellCommandHistoryMax(max)
+}
+
+// NormalizeShellCommandHistoryMax 校验命令历史上限
+func NormalizeShellCommandHistoryMax(max int) int {
+	if max <= 0 {
+		return defaultShellCmdHistoryMax
+	}
+	if max < 50 {
+		return 50
+	}
+	if max > 20000 {
+		return 20000
+	}
+	return max
+}
+
+const defaultShellTerminalScrollback = 500
+const defaultTaskOutputMaxLines = 2000
+
+// NormalizeShellTerminalScrollback 校验 xterm 滚动缓冲行数
+func NormalizeShellTerminalScrollback(n int) int {
+	if n <= 0 {
+		return defaultShellTerminalScrollback
+	}
+	if n < 100 {
+		return 100
+	}
+	if n > 100000 {
+		return 100000
+	}
+	return n
+}
+
+// NormalizeTaskOutputMaxLines 校验任务输出行数上限
+func NormalizeTaskOutputMaxLines(n int) int {
+	if n <= 0 {
+		return defaultTaskOutputMaxLines
+	}
+	if n < 100 {
+		return 100
+	}
+	if n > 100000 {
+		return 100000
+	}
+	return n
 }
 
 func shellCmdHistoryPath() (string, error) {
@@ -118,7 +174,7 @@ func (m *ShellCommandHistoryManager) Record(scope, command string) error {
 			}
 		}
 		list = append(list, cmd)
-		return trimHistory(list, shellCmdHistoryPerScope)
+		return trimHistory(list, m.maxPerScope)
 	}
 
 	m.data.Global = appendUnique(m.data.Global, command)

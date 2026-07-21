@@ -1,14 +1,8 @@
 <template>
     <div class="general-settings-panel" :class="{ embedded }">
         <div class="settings-subnav">
-            <button
-                v-for="tab in settingsTabs"
-                :key="tab.id"
-                type="button"
-                class="subnav-item"
-                :class="{ active: settingsTab === tab.id }"
-                @click="settingsTab = tab.id"
-            >
+            <button v-for="tab in settingsTabs" :key="tab.id" type="button" class="subnav-item"
+                :class="{ active: settingsTab === tab.id }" @click="settingsTab = tab.id">
                 {{ tab.label }}
             </button>
         </div>
@@ -28,15 +22,8 @@
                         <span class="system-setting-hint">TCP 连接与 SSH 协商总超时，Shell 终端与任务远程执行共用，范围 5–300 秒</span>
                     </div>
                     <div class="system-setting-control">
-                        <el-input-number
-                            v-model="form.sshHandshakeTimeoutSec"
-                            class="system-setting-num"
-                            size="small"
-                            :min="5"
-                            :max="300"
-                            :step="5"
-                            controls-position="right"
-                        />
+                        <el-input-number v-model="form.sshHandshakeTimeoutSec" class="system-setting-num" size="small"
+                            :min="5" :max="300" :step="5" controls-position="right" />
                         <span class="system-setting-unit">秒</span>
                     </div>
                 </div>
@@ -46,103 +33,42 @@
                         <span class="system-setting-hint">侧边监控面板刷新频率，范围 200–60000 毫秒</span>
                     </div>
                     <div class="system-setting-control">
-                        <el-input-number
-                            v-model="form.shellMonitorIntervalMs"
-                            class="system-setting-num"
-                            size="small"
-                            :min="200"
-                            :max="60000"
-                            :step="100"
-                            controls-position="right"
-                        />
+                        <el-input-number v-model="form.shellMonitorIntervalMs" class="system-setting-num" size="small"
+                            :min="200" :max="60000" :step="100" controls-position="right" />
                         <span class="system-setting-unit">毫秒</span>
                     </div>
                 </div>
                 <div class="system-setting-row">
                     <div class="system-setting-text">
-                        <span class="system-setting-label">日志高亮</span>
-                        <span class="system-setting-hint">识别时间戳 / 级别 / SQL 等关键字并着色（已有 ANSI 颜色的输出不受影响）</span>
+                        <span class="system-setting-label">终端滚动缓冲</span>
+                        <span class="system-setting-hint">Shell 终端可回滚行数，范围 100–100000；已打开的终端保存后立即生效</span>
                     </div>
                     <div class="system-setting-control">
-                        <el-switch v-model="form.shellLogHighlight" size="small" />
+                        <el-input-number v-model="form.shellTerminalScrollback" class="system-setting-num" size="small"
+                            :min="100" :max="100000" :step="100" controls-position="right" />
+                        <span class="system-setting-unit">行</span>
                     </div>
                 </div>
-                <div v-if="form.shellLogHighlight" class="log-hl-colors-block">
-                    <div class="block-label">高亮配色</div>
-                    <div class="log-hl-colors-head">
-                        <p class="log-hl-colors-hint">
-                            先选方案，再按需微调单项颜色；适用于 tail -f、less -f 等查看日志
-                        </p>
-                        <el-button size="small" text type="primary" @click="resetLogHighlightConfig">
-                            恢复默认
-                        </el-button>
+                <div class="system-setting-row">
+                    <div class="system-setting-text">
+                        <span class="system-setting-label">任务输出上限</span>
+                        <span class="system-setting-hint">任务执行终端保留的最大行数，范围 100–100000</span>
                     </div>
-
-                    <div class="log-hl-preset-grid">
-                        <button
-                            v-for="preset in logColorPresets"
-                            :key="preset.id"
-                            type="button"
-                            class="log-hl-preset-card"
-                            :class="{ active: activeLogHighlightPreset === preset.id }"
-                            :title="preset.label"
-                            @click="applyLogHighlightPreset(preset.id)"
-                        >
-                            <span class="log-hl-preset-dots" aria-hidden="true">
-                                <i :style="{ background: preset.colors.error }"></i>
-                                <i :style="{ background: preset.colors.warn }"></i>
-                                <i :style="{ background: preset.colors.info }"></i>
-                                <i :style="{ background: preset.colors.timestamp }"></i>
-                            </span>
-                            <span class="log-hl-preset-name">{{ preset.label }}</span>
-                        </button>
-                        <button
-                            type="button"
-                            class="log-hl-preset-card is-custom"
-                            :class="{ active: activeLogHighlightPreset === 'custom' }"
-                            title="当前为自定义配色"
-                            disabled
-                        >
-                            <span class="log-hl-preset-dots" aria-hidden="true">
-                                <i
-                                    v-for="key in logHlDotKeys"
-                                    :key="key"
-                                    :style="{ background: form.shellLogHighlightColors[key] }"
-                                ></i>
-                            </span>
-                            <span class="log-hl-preset-name">自定义</span>
-                        </button>
+                    <div class="system-setting-control">
+                        <el-input-number v-model="form.taskOutputMaxLines" class="system-setting-num" size="small"
+                            :min="100" :max="100000" :step="100" controls-position="right" />
+                        <span class="system-setting-unit">行</span>
                     </div>
-
-                    <div class="log-hl-colors-grid">
-                        <div
-                            v-for="item in logColorItems"
-                            :key="item.key"
-                            class="log-hl-color-row"
-                        >
-                            <span class="log-hl-color-label">{{ item.label }}</span>
-                            <div class="log-hl-color-actions">
-                                <el-switch
-                                    v-model="form.shellLogHighlightRules[item.key]"
-                                    size="small"
-                                />
-                                <el-color-picker
-                                    v-model="form.shellLogHighlightColors[item.key]"
-                                    size="small"
-                                    color-format="hex"
-                                    :predefine="logColorPredefine"
-                                    :disabled="!form.shellLogHighlightRules[item.key]"
-                                />
-                            </div>
-                        </div>
+                </div>
+                <div class="system-setting-row">
+                    <div class="system-setting-text">
+                        <span class="system-setting-label">命令历史上限</span>
+                        <span class="system-setting-hint">每个作用域（全局 / 单机）保留的命令条数，范围 50–20000</span>
                     </div>
-                    <div class="log-hl-preview">
-                        <div class="block-label">预览</div>
-                        <pre class="log-hl-preview-line"><span
-                            v-for="(part, idx) in logHighlightPreviewParts"
-                            :key="idx"
-                            :style="part.color ? { color: part.color } : null"
-                        >{{ part.text }}</span></pre>
+                    <div class="system-setting-control">
+                        <el-input-number v-model="form.shellCommandHistoryMax" class="system-setting-num" size="small"
+                            :min="50" :max="20000" :step="50" controls-position="right" />
+                        <span class="system-setting-unit">条</span>
                     </div>
                 </div>
             </section>
@@ -156,7 +82,9 @@
                     </div>
                     <el-tooltip content="添加帐号" placement="top">
                         <el-button size="small" type="primary" circle @click="addAccount">
-                            <el-icon><Plus /></el-icon>
+                            <el-icon>
+                                <Plus />
+                            </el-icon>
                         </el-button>
                     </el-tooltip>
                 </div>
@@ -173,12 +101,16 @@
                             <div class="icon-actions">
                                 <el-tooltip content="编辑" placement="top">
                                     <el-button size="small" text type="primary" @click="editAccount(scope.$index)">
-                                        <el-icon><Edit /></el-icon>
+                                        <el-icon>
+                                            <Edit />
+                                        </el-icon>
                                     </el-button>
                                 </el-tooltip>
                                 <el-tooltip content="删除" placement="top">
                                     <el-button size="small" text type="danger" @click="removeAccount(scope.$index)">
-                                        <el-icon><Delete /></el-icon>
+                                        <el-icon>
+                                            <Delete />
+                                        </el-icon>
                                     </el-button>
                                 </el-tooltip>
                             </div>
@@ -190,119 +122,164 @@
             <!-- 主题 -->
             <section v-show="settingsTab === 'theme'" class="settings-section appearance-section">
                 <div class="appear-layout">
-                    <div class="appear-controls">
-                        <div class="appear-block">
-                            <div class="block-label">界面</div>
-                            <el-radio-group v-model="form.themeSettings.mode" size="small">
-                                <el-radio-button label="light">浅色</el-radio-button>
-                                <el-radio-button label="dark">深色</el-radio-button>
-                                <el-radio-button label="system">跟随系统</el-radio-button>
-                            </el-radio-group>
-                            <div class="preset-grid accent-grid">
-                                <button
-                                    v-for="accent in uiAccents"
-                                    :key="accent.id"
-                                    type="button"
-                                    class="accent-swatch"
-                                    :class="{ active: form.themeSettings.uiAccent === accent.id }"
-                                    :title="accent.label"
-                                    :style="{ background: accent.light.accent }"
-                                    @click="form.themeSettings.uiAccent = accent.id"
-                                ></button>
-                            </div>
-                            <el-select
-                                v-model="form.themeSettings.uiFontFamily"
-                                size="small"
-                                placeholder="界面字体"
-                                filterable
-                                style="width: 100%"
-                            >
-                                <el-option
-                                    v-for="font in uiFonts"
-                                    :key="font.id"
-                                    :label="font.label"
-                                    :value="font.id"
-                                />
-                            </el-select>
+                    <div class="appear-editor">
+                        <div class="theme-subnav">
+                            <button v-for="tab in themePanels" :key="tab.id" type="button" class="theme-subnav-item"
+                                :class="{ active: themePanel === tab.id }" @click="themePanel = tab.id">
+                                {{ tab.label }}
+                            </button>
                         </div>
 
-                        <div class="appear-block appear-block--terminal">
-                            <div class="block-label">终端</div>
-                            <div class="term-font-row">
-                                <el-select
-                                    v-model="form.themeSettings.shellFontFamily"
-                                    size="small"
-                                    placeholder="终端字体"
-                                    filterable
-                                    class="term-font-select"
-                                >
-                                    <el-option
-                                        v-for="font in terminalFonts"
-                                        :key="font.id"
-                                        :label="font.label"
-                                        :value="font.id"
-                                    />
-                                </el-select>
-                                <el-input-number
-                                    v-model="form.themeSettings.shellFontSize"
-                                    class="term-num"
-                                    size="small"
-                                    :min="10"
-                                    :max="28"
-                                    :step="1"
-                                    controls-position="right"
-                                />
-                                <el-input-number
-                                    v-model="form.themeSettings.shellLineHeight"
-                                    class="term-num"
-                                    size="small"
-                                    :min="1"
-                                    :max="2.5"
-                                    :step="0.1"
-                                    :precision="1"
-                                    controls-position="right"
-                                />
+                        <div class="appear-pane">
+                            <!-- 界面 -->
+                            <div v-show="themePanel === 'ui'" class="appear-pane-body">
+                                <div class="appear-field">
+                                    <span class="appear-field-label">外观模式</span>
+                                    <el-radio-group v-model="form.themeSettings.mode" size="small">
+                                        <el-radio-button label="light">浅色</el-radio-button>
+                                        <el-radio-button label="dark">深色</el-radio-button>
+                                        <el-radio-button label="system">跟随系统</el-radio-button>
+                                    </el-radio-group>
+                                </div>
+                                <div class="appear-field">
+                                    <span class="appear-field-label">强调色</span>
+                                    <div class="preset-grid accent-grid">
+                                        <button v-for="accent in uiAccents" :key="accent.id" type="button"
+                                            class="accent-swatch"
+                                            :class="{ active: form.themeSettings.uiAccent === accent.id }"
+                                            :title="accent.label" :style="{ background: accent.light.accent }"
+                                            @click="form.themeSettings.uiAccent = accent.id"></button>
+                                    </div>
+                                </div>
+                                <div class="appear-field">
+                                    <span class="appear-field-label">界面字体</span>
+                                    <el-select v-model="form.themeSettings.uiFontFamily" size="small" placeholder="界面字体"
+                                        filterable style="width: 100%">
+                                        <el-option v-for="font in uiFonts" :key="font.id" :label="font.label"
+                                            :value="font.id" />
+                                    </el-select>
+                                </div>
                             </div>
-                            <div class="term-font-hints">
-                                <span>字体</span>
-                                <span>字号</span>
-                                <span>行高</span>
+
+                            <!-- 终端 -->
+                            <div v-show="themePanel === 'terminal'" class="appear-pane-body">
+                                <div class="appear-field">
+                                    <span class="appear-field-label">字体 / 字号 / 行高</span>
+                                    <div class="term-font-row">
+                                        <el-select v-model="form.themeSettings.shellFontFamily" size="small"
+                                            placeholder="终端字体" filterable class="term-font-select">
+                                            <el-option v-for="font in terminalFonts" :key="font.id" :label="font.label"
+                                                :value="font.id" />
+                                        </el-select>
+                                        <el-input-number v-model="form.themeSettings.shellFontSize" class="term-num"
+                                            size="small" :min="10" :max="28" :step="1" controls-position="right" />
+                                        <el-input-number v-model="form.themeSettings.shellLineHeight" class="term-num"
+                                            size="small" :min="1" :max="2.5" :step="0.1" :precision="1"
+                                            controls-position="right" />
+                                    </div>
+                                    <div class="term-font-hints">
+                                        <span>字体</span>
+                                        <span>字号</span>
+                                        <span>行高</span>
+                                    </div>
+                                </div>
+                                <div class="appear-field memory-saver-row">
+                                    <span class="memory-saver-label">离开 Shell 时卸载终端界面（省内存，会话保持）</span>
+                                    <el-switch v-model="form.themeSettings.shellMemorySaver" size="small" />
+                                </div>
+                                <div class="appear-field appear-field--fill">
+                                    <span class="appear-field-label">配色方案</span>
+                                    <div class="preset-grid terminal-grid">
+                                        <button v-for="preset in terminalPresets" :key="preset.id" type="button"
+                                            class="term-card"
+                                            :class="{ active: form.themeSettings.terminalPreset === preset.id }"
+                                            :title="preset.label"
+                                            @click="form.themeSettings.terminalPreset = preset.id">
+                                            <span class="term-card-preview"
+                                                :style="{ background: preset.theme.background, color: preset.theme.foreground }">
+                                                <span class="term-card-dots">
+                                                    <i :style="{ background: preset.theme.red }"></i>
+                                                    <i :style="{ background: preset.theme.green }"></i>
+                                                    <i
+                                                        :style="{ background: preset.theme.blue || preset.theme.cursor }"></i>
+                                                </span>
+                                                <span class="term-card-name">{{ preset.label }}</span>
+                                                <code>~/</code>
+                                            </span>
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
-                            <div class="memory-saver-row">
-                                <span class="memory-saver-label">离开 Shell 时卸载终端界面（省内存，会话保持）</span>
-                                <el-switch v-model="form.themeSettings.shellMemorySaver" size="small" />
-                            </div>
-                            <div class="preset-grid terminal-grid">
-                                <button
-                                    v-for="preset in terminalPresets"
-                                    :key="preset.id"
-                                    type="button"
-                                    class="term-card"
-                                    :class="{ active: form.themeSettings.terminalPreset === preset.id }"
-                                    :title="preset.label"
-                                    @click="form.themeSettings.terminalPreset = preset.id"
-                                >
-                                    <span
-                                        class="term-card-preview"
-                                        :style="{ background: preset.theme.background, color: preset.theme.foreground }"
-                                    >
-                                        <span class="term-card-dots">
-                                            <i :style="{ background: preset.theme.red }"></i>
-                                            <i :style="{ background: preset.theme.green }"></i>
-                                            <i :style="{ background: preset.theme.blue || preset.theme.cursor }"></i>
-                                        </span>
-                                        <span class="term-card-name">{{ preset.label }}</span>
-                                        <code>~/</code>
-                                    </span>
-                                </button>
+
+                            <!-- 日志高亮 -->
+                            <div v-show="themePanel === 'log'" class="appear-pane-body">
+                                <div class="appear-field memory-saver-row">
+                                    <div>
+                                        <span class="appear-field-label">启用日志高亮</span>
+                                        <p class="log-hl-colors-hint">
+                                            识别时间戳 / 级别 / SQL 等关键字并着色（已有 ANSI 颜色的输出不受影响）
+                                        </p>
+                                    </div>
+                                    <el-switch v-model="form.shellLogHighlight" size="small" />
+                                </div>
+                                <template v-if="form.shellLogHighlight">
+                                    <div class="appear-field">
+                                        <div class="log-hl-colors-head">
+                                            <span class="appear-field-label">配色方案</span>
+                                            <el-button size="small" text type="primary"
+                                                @click="resetLogHighlightConfig">
+                                                恢复默认
+                                            </el-button>
+                                        </div>
+                                        <div class="log-hl-preset-grid">
+                                            <button v-for="preset in logColorPresets" :key="preset.id" type="button"
+                                                class="log-hl-preset-card"
+                                                :class="{ active: activeLogHighlightPreset === preset.id }"
+                                                :title="preset.label" @click="applyLogHighlightPreset(preset.id)">
+                                                <span class="log-hl-preset-dots" aria-hidden="true">
+                                                    <i :style="{ background: preset.colors.error }"></i>
+                                                    <i :style="{ background: preset.colors.warn }"></i>
+                                                    <i :style="{ background: preset.colors.info }"></i>
+                                                    <i :style="{ background: preset.colors.timestamp }"></i>
+                                                </span>
+                                                <span class="log-hl-preset-name">{{ preset.label }}</span>
+                                            </button>
+                                            <button type="button" class="log-hl-preset-card is-custom"
+                                                :class="{ active: activeLogHighlightPreset === 'custom' }"
+                                                title="当前为自定义配色" disabled>
+                                                <span class="log-hl-preset-dots" aria-hidden="true">
+                                                    <i v-for="key in logHlDotKeys" :key="key"
+                                                        :style="{ background: form.shellLogHighlightColors[key] }"></i>
+                                                </span>
+                                                <span class="log-hl-preset-name">自定义</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="appear-field">
+                                        <span class="appear-field-label">单项颜色</span>
+                                        <div class="log-hl-colors-grid">
+                                            <div v-for="item in logColorItems" :key="item.key" class="log-hl-color-row">
+                                                <span class="log-hl-color-label">{{ item.label }}</span>
+                                                <div class="log-hl-color-actions">
+                                                    <el-switch v-model="form.shellLogHighlightRules[item.key]"
+                                                        size="small" />
+                                                    <el-color-picker v-model="form.shellLogHighlightColors[item.key]"
+                                                        size="small" color-format="hex" :predefine="logColorPredefine"
+                                                        :disabled="!form.shellLogHighlightRules[item.key]" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
                             </div>
                         </div>
                     </div>
 
-                    <div class="appear-preview">
-                        <div class="block-label">预览</div>
+                    <aside class="appear-preview">
+                        <div class="block-label">实时预览</div>
                         <div class="theme-preview" :class="{ dark: previewIsDark }">
-                            <div class="preview-ui" :style="previewUiStyle">
+                            <div v-show="themePanel === 'ui' || themePanel === 'terminal'" class="preview-ui"
+                                :class="{ 'is-compact': themePanel === 'terminal' }" :style="previewUiStyle">
                                 <div class="preview-bar">
                                     <span class="preview-dot"></span>
                                     <span class="preview-title">FlashDock</span>
@@ -313,12 +290,22 @@
                                     <button type="button" class="preview-btn">主按钮</button>
                                 </div>
                             </div>
-                            <div class="preview-term" :style="previewTermStyle">
+                            <div v-show="themePanel === 'ui' || themePanel === 'terminal'" class="preview-term"
+                                :class="{ 'is-emphasis': themePanel === 'terminal' }" :style="previewTermStyle">
                                 <div class="preview-term-title">{{ previewTermLabel }}</div>
                                 <pre>{{ previewTermSample }}</pre>
                             </div>
+                            <div v-show="themePanel === 'log'" class="preview-log" :style="previewTermStyle">
+                                <div class="preview-term-title">
+                                    {{ form.shellLogHighlight ? '日志高亮预览' : '日志高亮已关闭' }}
+                                </div>
+                                <pre v-if="form.shellLogHighlight" class="log-hl-preview-line preview-log-line"><span
+                            v-for="(part, idx) in logHighlightPreviewParts" :key="idx"
+                            :style="part.color ? { color: part.color } : null">{{ part.text }}</span></pre>
+                                <p v-else class="preview-log-off">开启后将在此显示着色效果</p>
+                            </div>
                         </div>
-                    </div>
+                    </aside>
                 </div>
             </section>
 
@@ -342,11 +329,7 @@
                         <el-button size="small" :loading="checkingUpdate" @click="() => checkUpdate(true)">
                             检查更新
                         </el-button>
-                        <el-button
-                            v-if="updateResult?.releaseURL"
-                            size="small"
-                            @click="openRelease"
-                        >
+                        <el-button v-if="updateResult?.releaseURL" size="small" @click="openRelease">
                             查看 Release
                         </el-button>
                     </div>
@@ -358,44 +341,23 @@
                             适配安装包：{{ updateResult.assetName }}
                         </div>
                         <div class="update-actions">
-                            <el-select
-                                v-model="selectedDownloadSource"
-                                size="small"
-                                class="source-select"
-                                :disabled="downloading"
-                                placeholder="下载源"
-                            >
-                                <el-option
-                                    v-for="src in downloadSources"
-                                    :key="src.label"
-                                    :label="src.label"
-                                    :value="src.label"
-                                />
+                            <el-select v-model="selectedDownloadSource" size="small" class="source-select"
+                                :disabled="downloading" placeholder="下载源">
+                                <el-option v-for="src in downloadSources" :key="src.label" :label="src.label"
+                                    :value="src.label" />
                             </el-select>
-                            <el-button
-                                type="primary"
-                                size="small"
-                                :loading="downloading"
-                                :disabled="!canDownload"
-                                @click="downloadUpdate"
-                            >
+                            <el-button type="primary" size="small" :loading="downloading" :disabled="!canDownload"
+                                @click="downloadUpdate">
                                 {{ downloadButtonLabel }}
                             </el-button>
-                            <el-button
-                                v-if="downloading"
-                                size="small"
-                                @click="pauseDownload"
-                            >
+                            <el-button v-if="downloading" size="small" @click="pauseDownload">
                                 暂停
                             </el-button>
                         </div>
-                        <el-progress
-                            v-if="downloading || downloadPercent > 0 || downloadPaused"
-                            :percentage="downloadPercent"
-                            :stroke-width="10"
-                            style="margin-top: 10px"
-                        />
-                        <div v-if="downloadMessage" class="download-msg" :class="{ err: downloadFailed, paused: downloadPaused }">
+                        <el-progress v-if="downloading || downloadPercent > 0 || downloadPaused"
+                            :percentage="downloadPercent" :stroke-width="10" style="margin-top: 10px" />
+                        <div v-if="downloadMessage" class="download-msg"
+                            :class="{ err: downloadFailed, paused: downloadPaused }">
                             {{ downloadMessage }}
                         </div>
                     </div>
@@ -407,11 +369,9 @@
                         <div class="release-section-title">
                             <span>{{ updateResult.hasUpdate ? '更新说明' : '最新 Release' }}</span>
                         </div>
-                        <div
-                            class="update-notes"
-                            v-html="renderReleaseNotes(updateResult.releaseNotes)"
-                            @click="onNotesClick"
-                        ></div>
+                        <div class="update-notes" v-html="renderReleaseNotes(updateResult.releaseNotes)"
+                            @click="onNotesClick">
+                        </div>
                     </div>
                 </div>
             </section>
@@ -420,18 +380,15 @@
         <div class="panel-actions icon-actions">
             <el-tooltip content="保存设置" placement="top">
                 <el-button type="primary" circle :loading="saving" @click="save">
-                    <el-icon v-if="!saving"><Check /></el-icon>
+                    <el-icon v-if="!saving">
+                        <Check />
+                    </el-icon>
                 </el-button>
             </el-tooltip>
         </div>
 
-        <el-dialog
-            v-model="accountEditVisible"
-            :title="editingAccountIndex >= 0 ? '编辑帐号' : '添加帐号'"
-            width="480px"
-            class="settings-sub-dialog"
-            append-to-body
-        >
+        <el-dialog v-model="accountEditVisible" :title="editingAccountIndex >= 0 ? '编辑帐号' : '添加帐号'" width="480px"
+            class="settings-sub-dialog" append-to-body>
             <el-form :model="accountForm" label-width="90px">
                 <el-form-item label="帐号名称">
                     <el-input v-model="accountForm.name" placeholder="例如：生产环境" />
@@ -447,12 +404,16 @@
                 <div class="dialog-footer icon-actions">
                     <el-tooltip content="取消" placement="top">
                         <el-button circle @click="accountEditVisible = false">
-                            <el-icon><Close /></el-icon>
+                            <el-icon>
+                                <Close />
+                            </el-icon>
                         </el-button>
                     </el-tooltip>
                     <el-tooltip content="确定" placement="top">
                         <el-button type="primary" circle :loading="savingAccount" @click="confirmAccount">
-                            <el-icon v-if="!savingAccount"><Check /></el-icon>
+                            <el-icon v-if="!savingAccount">
+                                <Check />
+                            </el-icon>
                         </el-button>
                     </el-tooltip>
                 </div>
@@ -498,6 +459,14 @@ import {
     matchLogHighlightPreset,
     collectLogHighlightPredefineColors,
 } from '../utils/shellLogHighlight'
+import {
+    SHELL_TERMINAL_SCROLLBACK,
+    TASK_OUTPUT_MAX_LINES,
+    SHELL_COMMAND_HISTORY_MAX,
+    clampShellTerminalScrollback,
+    clampTaskOutputMaxLines,
+    clampShellCommandHistoryMax,
+} from '../constants/shellMemory'
 
 const LOG_HIGHLIGHT_SAMPLE =
     '2024-07-16 14:40:35.719 9992000288484 INFO o.g.f.c.d.r.Framework - Preparing: SELECT id FROM t'
@@ -541,6 +510,12 @@ export default {
             { id: 'theme', label: '主题' },
             { id: 'about', label: '关于' },
         ]
+        const themePanel = ref('ui')
+        const themePanels = [
+            { id: 'ui', label: '界面' },
+            { id: 'terminal', label: '终端' },
+            { id: 'log', label: '日志高亮' },
+        ]
         const form = reactive({
             themeSettings: {
                 mode: 'light',
@@ -554,6 +529,9 @@ export default {
             },
             shellMonitorIntervalMs: 1000,
             sshHandshakeTimeoutSec: 30,
+            shellTerminalScrollback: SHELL_TERMINAL_SCROLLBACK,
+            taskOutputMaxLines: TASK_OUTPUT_MAX_LINES,
+            shellCommandHistoryMax: SHELL_COMMAND_HISTORY_MAX,
             shellLogHighlight: true,
             shellLogHighlightColors: { ...DEFAULT_SHELL_LOG_COLORS },
             shellLogHighlightRules: mergeLogHighlightRules([]),
@@ -704,6 +682,9 @@ theme preview · ${theme.foreground}`
             form.sshHandshakeTimeoutSec = Number.isFinite(sshTimeout) && sshTimeout >= 5
                 ? Math.min(300, Math.round(sshTimeout))
                 : 30
+            form.shellTerminalScrollback = clampShellTerminalScrollback(config.shellTerminalScrollback)
+            form.taskOutputMaxLines = clampTaskOutputMaxLines(config.taskOutputMaxLines)
+            form.shellCommandHistoryMax = clampShellCommandHistoryMax(config.shellCommandHistoryMax)
             form.shellLogHighlight = config.shellLogHighlight !== false
             Object.assign(
                 form.shellLogHighlightColors,
@@ -946,6 +927,9 @@ theme preview · ${theme.foreground}`
                 config.themeSettings = { ...form.themeSettings }
                 config.shellMonitorIntervalMs = form.shellMonitorIntervalMs
                 config.sshHandshakeTimeoutSec = form.sshHandshakeTimeoutSec
+                config.shellTerminalScrollback = clampShellTerminalScrollback(form.shellTerminalScrollback)
+                config.taskOutputMaxLines = clampTaskOutputMaxLines(form.taskOutputMaxLines)
+                config.shellCommandHistoryMax = clampShellCommandHistoryMax(form.shellCommandHistoryMax)
                 config.shellLogHighlight = !!form.shellLogHighlight
                 config.shellLogHighlightColors = mergeLogHighlightColors(form.shellLogHighlightColors)
                 config.shellLogHighlightDisabled = rulesToDisabled(form.shellLogHighlightRules)
@@ -965,6 +949,8 @@ theme preview · ${theme.foreground}`
             embedded: computed(() => props.embedded),
             settingsTab,
             settingsTabs,
+            themePanel,
+            themePanels,
             form,
             logColorItems,
             logColorPresets,
@@ -1127,10 +1113,88 @@ theme preview · ${theme.foreground}`
     flex: 1;
     min-height: 0;
     display: grid;
-    grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+    grid-template-columns: minmax(0, 1.15fr) minmax(260px, 0.85fr);
     gap: 16px;
     align-items: stretch;
     overflow: hidden;
+}
+
+.appear-editor {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    border: 1px solid var(--app-border);
+    border-radius: 10px;
+    background: var(--app-bg);
+}
+
+.theme-subnav {
+    flex-shrink: 0;
+    display: flex;
+    gap: 4px;
+    padding: 10px 12px;
+    border-bottom: 1px solid var(--app-border);
+    background: color-mix(in srgb, var(--app-panel-bg) 70%, var(--app-bg));
+}
+
+.theme-subnav-item {
+    border: none;
+    background: transparent;
+    color: var(--app-text-muted);
+    font-size: 13px;
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+}
+
+.theme-subnav-item:hover {
+    color: var(--app-accent-color);
+    background: var(--app-accent-bg);
+}
+
+.theme-subnav-item.active {
+    color: var(--app-accent-color);
+    background: var(--app-accent-bg);
+    font-weight: 650;
+}
+
+.appear-pane {
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+
+.appear-pane-body {
+    flex: 1;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    padding: 14px 14px 16px;
+}
+
+.appear-field {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.appear-field--fill {
+    flex: 1;
+    min-height: 0;
+}
+
+.appear-field-label {
+    font-size: 12px;
+    font-weight: 650;
+    color: var(--app-text-secondary);
 }
 
 .appear-block {
@@ -1191,9 +1255,9 @@ theme preview · ${theme.foreground}`
 
 .terminal-grid {
     flex: 1;
-    min-height: 120px;
+    min-height: 140px;
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(128px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
     gap: 10px;
     overflow-y: auto;
     overflow-x: hidden;
@@ -1300,10 +1364,10 @@ theme preview · ${theme.foreground}`
 
 .memory-saver-row {
     display: flex;
+    flex-direction: row;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
-    margin: 8px 0 4px;
     font-size: 12px;
     color: var(--app-text-muted);
 }
@@ -1346,96 +1410,86 @@ theme preview · ${theme.foreground}`
     border-bottom: 1px solid var(--app-border);
 }
 
-.log-hl-colors-block {
-    margin-top: 4px;
-    padding: 12px 14px;
-    border: 1px solid var(--app-border);
-    border-radius: var(--app-radius-md, 8px);
-    background: var(--app-panel-bg, transparent);
-}
-
-.log-hl-colors-hint {
-  margin: 0;
-  flex: 1;
-  min-width: 0;
-  font-size: 12px;
-  line-height: 1.45;
-  color: var(--app-text-muted);
-}
-
 .log-hl-colors-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
 }
 
 .log-hl-colors-head .el-button {
-  flex-shrink: 0;
-  padding: 0 4px;
-  height: auto;
+    flex-shrink: 0;
+    padding: 0 4px;
+    height: auto;
+}
+
+.log-hl-colors-hint {
+    margin: 4px 0 0;
+    flex: 1;
+    min-width: 0;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--app-text-muted);
 }
 
 .log-hl-preset-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
-  gap: 8px;
-  margin-bottom: 14px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+    gap: 8px;
 }
 
 .log-hl-preset-card {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 8px;
-  padding: 10px 10px 8px;
-  border: 1px solid var(--app-border);
-  border-radius: var(--app-radius-md, 8px);
-  background: var(--app-card-bg, var(--app-bg));
-  color: var(--app-text);
-  cursor: pointer;
-  text-align: left;
-  transition: border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 10px 10px 8px;
+    border: 1px solid var(--app-border);
+    border-radius: var(--app-radius-md, 8px);
+    background: var(--app-card-bg, var(--app-bg));
+    color: var(--app-text);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color 0.12s ease, background 0.12s ease, box-shadow 0.12s ease;
 }
 
 .log-hl-preset-card:hover:not(:disabled) {
-  border-color: color-mix(in srgb, var(--app-accent-color) 45%, var(--app-border));
+    border-color: color-mix(in srgb, var(--app-accent-color) 45%, var(--app-border));
 }
 
 .log-hl-preset-card.active {
-  border-color: var(--app-accent-color);
-  background: var(--app-accent-bg);
-  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-accent-color) 35%, transparent);
+    border-color: var(--app-accent-color);
+    background: var(--app-accent-bg);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-accent-color) 35%, transparent);
 }
 
 .log-hl-preset-card.is-custom:disabled {
-  cursor: default;
-  opacity: 1;
+    cursor: default;
+    opacity: 1;
 }
 
 .log-hl-preset-card.is-custom:not(.active) {
-  opacity: 0.55;
+    opacity: 0.55;
 }
 
 .log-hl-preset-dots {
-  display: flex;
-  gap: 4px;
+    display: flex;
+    gap: 4px;
 }
 
 .log-hl-preset-dots i {
-  display: block;
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  border: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent);
+    display: block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent);
 }
 
 .log-hl-preset-name {
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.2;
-  color: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+    color: inherit;
 }
 
 .log-hl-colors-grid {
@@ -1445,18 +1499,18 @@ theme preview · ${theme.foreground}`
 }
 
 .log-hl-color-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-width: 0;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-width: 0;
 }
 
 .log-hl-color-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
 }
 
 .log-hl-color-label {
@@ -1464,19 +1518,15 @@ theme preview · ${theme.foreground}`
     color: var(--app-text-secondary);
 }
 
-.log-hl-preview {
-    margin-top: 14px;
-}
-
 .log-hl-preview-line {
-    margin: 8px 0 10px;
-    padding: 10px 12px;
-    border-radius: var(--app-radius-md, 8px);
-    background: var(--terminal-bg, #1e1e1e);
-    color: var(--terminal-fg, #d4d4d4);
-    font-family: var(--app-font-family-mono, Consolas, 'Courier New', monospace);
-    font-size: 12px;
-    line-height: 1.45;
+    margin: 0;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    color: inherit;
+    font-family: inherit;
+    font-size: inherit;
+    line-height: inherit;
     white-space: pre-wrap;
     word-break: break-all;
     overflow-x: auto;
@@ -1531,6 +1581,9 @@ theme preview · ${theme.foreground}`
     min-width: 0;
     min-height: 0;
     overflow: hidden;
+    position: sticky;
+    top: 0;
+    align-self: stretch;
 }
 
 .theme-preview {
@@ -1544,17 +1597,52 @@ theme preview · ${theme.foreground}`
 }
 
 .preview-ui,
-.preview-term {
+.preview-term,
+.preview-log {
     border: 1px solid var(--app-border);
     border-radius: 10px;
     overflow: hidden;
     min-height: 0;
-    flex: 1;
 }
 
 .preview-ui {
     display: flex;
     flex-direction: column;
+    flex: 1;
+}
+
+.preview-ui.is-compact {
+    flex: 0 0 auto;
+}
+
+.preview-ui.is-compact .preview-body {
+    display: none;
+}
+
+.preview-term {
+    flex: 1;
+    padding: 10px 12px;
+}
+
+.preview-term.is-emphasis {
+    flex: 1.4;
+}
+
+.preview-log {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding: 10px 12px;
+}
+
+.preview-log-line {
+    flex: 1;
+}
+
+.preview-log-off {
+    margin: 12px 0 0;
+    font-size: 12px;
+    opacity: 0.65;
 }
 
 .preview-bar {
@@ -1611,17 +1699,14 @@ theme preview · ${theme.foreground}`
     cursor: default;
 }
 
-.preview-term {
-    padding: 10px 12px;
-}
-
 .preview-term-title {
     font-size: 11px;
     opacity: 0.7;
     margin-bottom: 8px;
 }
 
-.preview-term pre {
+.preview-term pre,
+.preview-log pre {
     margin: 0;
     white-space: pre-wrap;
     word-break: break-word;
@@ -1809,10 +1894,16 @@ theme preview · ${theme.foreground}`
 @media (max-width: 860px) {
     .appear-layout {
         grid-template-columns: 1fr;
+        overflow-y: auto;
     }
 
     .appear-preview {
         position: static;
+        min-height: 280px;
+    }
+
+    .theme-preview {
+        min-height: 240px;
     }
 }
 </style>
