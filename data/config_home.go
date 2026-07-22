@@ -11,9 +11,20 @@ const (
 	ConfigHomeDirName = ".flashdock"
 	// LegacyConfigHomeDirName 旧版目录，启动时若新目录不存在则自动迁移
 	LegacyConfigHomeDirName = ".cmd-config"
+	// DefaultConfigFileName 默认业务配置文件名
+	DefaultConfigFileName = "config.yaml"
 	// DefaultLogPathTilde 默认日志目录（带 ~）
 	DefaultLogPathTilde = "~/.flashdock/logs"
 )
+
+// DefaultConfigPath 返回 ~/.flashdock/config.yaml（与 global_config.yaml 同目录）
+func DefaultConfigPath() string {
+	configHome, err := ConfigHomeDir()
+	if err != nil {
+		return DefaultConfigFileName
+	}
+	return filepath.Join(configHome, DefaultConfigFileName)
+}
 
 var migrateConfigHomeOnce sync.Once
 

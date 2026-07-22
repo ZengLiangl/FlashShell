@@ -401,13 +401,14 @@ func (gcm *GlobalConfigManager) ReplaceWorkPaths(input string) string {
 
 // createDefaultGlobalConfig 创建默认全局配置
 func (gcm *GlobalConfigManager) createDefaultGlobalConfig() error {
+	defaultCfgPath := DefaultConfigPath()
 	defaultConfig := &GlobalConfig{
 		AppId:       "com.runner",
 		WindowsName: "FlashDock",
 		ConfigFiles: []string{
-			"config.yaml",
+			defaultCfgPath,
 		},
-		LastOpenedFile: "config.yaml",
+		LastOpenedFile: defaultCfgPath,
 		WorkPaths: map[string]string{
 			"HOME": "~",
 		},

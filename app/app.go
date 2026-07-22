@@ -104,9 +104,11 @@ func (a *App) Startup(ctx context.Context) {
 	if _, err := a.configManager.LoadConfig(); err != nil {
 		if os.IsNotExist(err) {
 			println("配置文件不存在，创建默认配置")
-			data.CreateDefaultConfig("config.yaml")
-			if _, loadErr := a.configManager.LoadConfig(); loadErr != nil {
-				println("加载默认配置文件失败:", loadErr.Error())
+			defaultPath := data.DefaultConfigPath()
+			if createErr := data.CreateDefaultConfig(defaultPath); createErr != nil {
+				println("创建默认配置失败:", createErr.Error())
+			} else if switchErr := a.configManager.SwitchConfigFile(defaultPath); switchErr != nil {
+				println("加载默认配置文件失败:", switchErr.Error())
 			} else {
 				println("默认配置文件加载成功")
 			}

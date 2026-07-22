@@ -34,7 +34,7 @@ func NewConfigManager(configPath string, sessionManager *SessionManager) *Config
 			if globalConfig, err := gcm.LoadGlobalConfig(); err == nil && globalConfig.LastOpenedFile != "" {
 				configPath = globalConfig.LastOpenedFile
 			} else {
-				configPath = "config.yaml"
+				configPath = DefaultConfigPath()
 			}
 		}
 	}
@@ -49,7 +49,7 @@ func NewConfigManager(configPath string, sessionManager *SessionManager) *Config
 // LoadConfigForRefresh 专门用于刷新的配置加载，不更新全局配置
 func (cm *ConfigManager) LoadConfigForRefresh() (*define.Root, error) {
 	if cm.configPath == "" {
-		cm.configPath = "config.yaml"
+		cm.configPath = DefaultConfigPath()
 	}
 
 	// 展开路径中的 ~ 符号
@@ -76,7 +76,7 @@ func (cm *ConfigManager) LoadConfigForRefresh() (*define.Root, error) {
 // LoadConfig 加载配置文件
 func (cm *ConfigManager) LoadConfig() (*define.Root, error) {
 	if cm.configPath == "" {
-		cm.configPath = "config.yaml"
+		cm.configPath = DefaultConfigPath()
 	}
 
 	// 展开路径中的 ~ 符号
@@ -416,6 +416,9 @@ func CreateDefaultConfig(path string) error {
 	}
 
 	expandedPath := expandPath(path)
+	if err := os.MkdirAll(filepath.Dir(expandedPath), 0755); err != nil {
+		return fmt.Errorf("创建配置目录失败: %w", err)
+	}
 	if err := os.WriteFile(expandedPath, data, 0644); err != nil {
 		return fmt.Errorf("创建默认配置文件失败: %w", err)
 	}
