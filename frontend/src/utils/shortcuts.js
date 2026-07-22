@@ -1,4 +1,8 @@
 import { formatShortcutLabel, isMacPlatform } from './platform'
+import {
+  expandSendString,
+  matchesKeyMapBinding,
+} from './keymaps'
 
 /** 默认快捷键（useMod=true 表示 Cmd/Ctrl） */
 export const DEFAULT_SHORTCUTS = {
@@ -123,4 +127,49 @@ export function bindingFromEvent(e) {
     useMod: true,
     useShift: !!e.shiftKey,
   }
+}
+
+export function emptySnippetBinding() {
+  return { key: '', useMod: false, useAlt: false, useShift: false }
+}
+
+/** 规范化单条命令片段 */
+export function normalizeSnippet(raw, index = 0) {
+  const binding = raw?.binding
+  return {
+    id: raw?.id || `sn-${Date.now()}-${index}`,
+    name: raw?.name != null ? String(raw.name) : '',
+    command: raw?.command != null ? String(raw.command) : '',
+    scope: raw?.scope ? String(raw.scope) : 'global',
+    execute: raw?.execute !== undefined ? !!raw.execute : true,
+    binding: {
+      key: binding?.key != null ? String(binding.key) : '',
+      useMod: !!binding?.useMod,
+      useAlt: !!binding?.useAlt,
+      useShift: !!binding?.useShift,
+    },
+  }
+}
+
+export function normalizeSnippets(list) {
+  return (Array.isArray(list) ? list : []).map((s, i) => normalizeSnippet(s, i))
+}
+
+/** Shell 终端快捷键：匹配绑定了组合键的片段 */
+export function findMatchingSnippet(e, snippets) {
+  if (!e || !Array.isArray(snippets)) return null
+  for (const s of snippets) {
+    if (!s?.binding?.key) continue
+    if (matchesKeyMapBinding(e, s.binding)) return s
+  }
+  return null
+}
+
+/** 片段发送内容：支持转义；execute 时自动补换行 */
+export function buildSnippetPayload(snippet) {
+  let text = expandSendString(snippet?.command || '')
+  if (snippet?.execute && text && !/[\r\n]$/.test(text)) {
+    text += '\n'
+  }
+  return text
 }

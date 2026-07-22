@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 // ShortcutBinding 单条快捷键绑定
@@ -14,12 +15,15 @@ type ShortcutBinding struct {
 	UseShift bool   `json:"useShift,omitempty"`
 }
 
-// ShellSnippet 终端命令片段
+// ShellSnippet 终端命令片段（可绑定快捷键；可选择是否直接执行）
 type ShellSnippet struct {
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Command string `json:"command"`
-	Scope   string `json:"scope,omitempty"` // global 或机器配置名
+	ID      string         `json:"id"`
+	Name    string         `json:"name"`
+	Command string         `json:"command"`
+	Scope   string         `json:"scope,omitempty"` // global 或机器配置名
+	Binding *KeyMapBinding `json:"binding,omitempty"`
+	// Execute 为 true 时发送到终端后追加换行并执行；false 仅插入文本
+	Execute bool `json:"execute"`
 }
 
 // ShortcutSettings 可自定义系统快捷键（独立 JSON 文件）
@@ -112,7 +116,11 @@ func LoadShortcutSettings() (ShortcutSettings, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return DefaultShortcutSettings(), nil
+			s := DefaultShortcutSettings()
+			if migrateKeyMapsIntoSnippets(&s) {
+				_ = SaveShortcutSettings(s)
+			}
+			return s, nil
 		}
 		return DefaultShortcutSettings(), err
 	}
@@ -121,7 +129,72 @@ func LoadShortcutSettings() (ShortcutSettings, error) {
 		return DefaultShortcutSettings(), fmt.Errorf("解析快捷键配置失败: %w", err)
 	}
 	fillShortcutDefaults(&s)
+	if migrateKeyMapsIntoSnippets(&s) {
+		_ = SaveShortcutSettings(s)
+	}
 	return s, nil
+}
+
+// migrateKeyMapsIntoSnippets 将旧版 keymaps.json 并入命令片段（一次性）
+func migrateKeyMapsIntoSnippets(s *ShortcutSettings) bool {
+	if s == nil {
+		return false
+	}
+	km, err := LoadKeyMapSettings()
+	if err != nil || len(km.Entries) == 0 {
+		return false
+	}
+
+	existingIDs := make(map[string]struct{}, len(s.Snippets))
+	for _, sn := range s.Snippets {
+		if sn.ID != "" {
+			existingIDs[sn.ID] = struct{}{}
+		}
+	}
+
+	changed := false
+	for _, e := range km.Entries {
+		id := e.ID
+		if id == "" {
+			id = fmt.Sprintf("km-migrated-%d", len(s.Snippets)+1)
+		}
+		if _, ok := existingIDs[id]; ok {
+			continue
+		}
+		cmd := e.SendString
+		execute := false
+		if strings.HasSuffix(cmd, `\n`) {
+			cmd = strings.TrimSuffix(cmd, `\n`)
+			execute = true
+		} else if strings.HasSuffix(cmd, "\n") {
+			cmd = strings.TrimSuffix(cmd, "\n")
+			execute = true
+		}
+		name := strings.TrimSpace(e.Name)
+		if name == "" {
+			name = "按键映射"
+		}
+		binding := e.Binding
+		sn := ShellSnippet{
+			ID:      id,
+			Name:    name,
+			Command: cmd,
+			Scope:   "global",
+			Execute: execute,
+		}
+		if binding.Key != "" {
+			b := binding
+			sn.Binding = &b
+		}
+		s.Snippets = append(s.Snippets, sn)
+		existingIDs[id] = struct{}{}
+		changed = true
+	}
+	if !changed {
+		return false
+	}
+	_ = SaveKeyMapSettings(DefaultKeyMapSettings())
+	return true
 }
 
 // SaveShortcutSettings 保存到 ~/.flashdock/shortcuts.json

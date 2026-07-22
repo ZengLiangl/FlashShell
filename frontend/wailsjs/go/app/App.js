@@ -414,6 +414,10 @@ export function ReconnectShell(arg1) {
   return window['go']['app']['App']['ReconnectShell'](arg1);
 }
 
+export function RecordShellCommandHistory(arg1, arg2) {
+  return window['go']['app']['App']['RecordShellCommandHistory'](arg1, arg2);
+}
+
 export function RefreshConfigMenu() {
   return window['go']['app']['App']['RefreshConfigMenu']();
 }

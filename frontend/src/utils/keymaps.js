@@ -126,6 +126,7 @@ function eventKeyToken(e) {
   if (/^F([1-9]|1[0-2])$/.test(code)) return code
   if (/^Key[A-Z]$/i.test(code)) return code.slice(3).toLowerCase()
   if (/^Digit[0-9]$/.test(code)) return code.slice(5)
+  if (/^Numpad[0-9]$/.test(code)) return code.slice(6)
   if (code === 'Comma') return ','
   if (code === 'Period') return '.'
   if (code === 'Slash') return '/'

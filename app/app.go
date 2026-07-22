@@ -1380,8 +1380,13 @@ func (a *App) SaveShortcutSettings(settings data.ShortcutSettings) error {
 	if err := data.SaveShortcutSettings(settings); err != nil {
 		return err
 	}
+	// 以落盘后的配置为准再广播，避免前端缓存未更新
+	loaded, err := data.LoadShortcutSettings()
+	if err != nil {
+		loaded = settings
+	}
 	if a.ctx != nil {
-		wailsRuntime.EventsEmit(a.ctx, "shortcuts:changed", settings)
+		wailsRuntime.EventsEmit(a.ctx, "shortcuts:changed", loaded)
 	}
 	return nil
 }

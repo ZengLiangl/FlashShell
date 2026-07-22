@@ -37,23 +37,48 @@ func (a *App) ClearShellCommandHistory(scope string) error {
 	return a.shellCmdHistory.Clear(scope)
 }
 
-// recordShellCommand 从输入中提取完整命令行并记录
+// RecordShellCommandHistory 显式记录一条命令历史（插入未执行的命令也可记入）
+func (a *App) RecordShellCommandHistory(scope, command string) error {
+	if a.shellCmdHistory == nil {
+		return nil
+	}
+	return a.shellCmdHistory.Record(scope, command)
+}
+
+// recordShellCommand 记录命令历史：
+// - 含换行：按行记录（终端回车提交）
+// - 无换行但为整段文本：记为一次插入（片段「不直接执行」、粘贴等）
 func (a *App) recordShellCommand(sessionID, input string) {
-	if a.shellCmdHistory == nil || !strings.Contains(input, "\n") {
+	if a.shellCmdHistory == nil || input == "" {
 		return
 	}
-	lines := strings.Split(input, "\n")
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line == "" {
-			continue
+	scope := "global"
+	if !machine.IsLocalShellID(sessionID) {
+		if name := a.remoteConfigName(sessionID); name != "" {
+			scope = name
 		}
-		scope := "global"
-		if !machine.IsLocalShellID(sessionID) {
-			scope = a.remoteConfigName(sessionID)
-		}
-		_ = a.shellCmdHistory.Record(scope, line)
 	}
+
+	if strings.Contains(input, "\n") {
+		for _, line := range strings.Split(input, "\n") {
+			line = strings.TrimSpace(line)
+			if line == "" {
+				continue
+			}
+			_ = a.shellCmdHistory.Record(scope, line)
+		}
+		return
+	}
+
+	// 忽略 ANSI / 控制序列与单字符键入
+	if strings.HasPrefix(input, "\x1b") || strings.ContainsRune(input, '\x1b') {
+		return
+	}
+	cmd := strings.TrimSpace(input)
+	if cmd == "" || len([]rune(cmd)) < 2 {
+		return
+	}
+	_ = a.shellCmdHistory.Record(scope, cmd)
 }
 
 // AddShellTemporaryTunnel 添加临时端口转发

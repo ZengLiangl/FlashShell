@@ -193,6 +193,12 @@ import ShellCommandPalette from '../components/shell/ShellCommandPalette.vue'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import { remoteConfigName, buildKnownMachineNames } from '../utils/sessionId'
+import {
+  normalizeSnippets,
+  findMatchingSnippet,
+  buildSnippetPayload,
+  isFormFieldTarget,
+} from '../utils/shortcuts'
 
 export default {
   name: 'ShellWorkspace',
@@ -226,6 +232,8 @@ export default {
     broadcastEnabled: { type: Boolean, default: false },
     broadcastTargets: { type: Array, default: () => [] },
     splitSessionIds: { type: Array, default: () => [] },
+    /** 系统设置等上层弹层打开时，禁用片段快捷键 */
+    blockShortcuts: { type: Boolean, default: false },
   },
   emits: [
     'back', 'connect', 'disconnect', 'close-session', 'close-sessions', 'reconnect', 'test', 'add-machine', 'edit-machine',
@@ -253,7 +261,24 @@ export default {
     const tunnelLoading = ref(false)
     const tunnelDialogVisible = ref(false)
     const commandPaletteVisible = ref(false)
+    const snippetList = ref([])
     let tunnelTimer = null
+
+    const loadSnippetList = async () => {
+      try {
+        const data = await App.GetShortcutSettings()
+        snippetList.value = normalizeSnippets(data?.snippets)
+      } catch {
+        snippetList.value = []
+      }
+    }
+
+    const onShortcutsChanged = (data) => {
+      if (Array.isArray(data?.snippets)) {
+        snippetList.value = normalizeSnippets(data.snippets)
+      }
+      loadSnippetList()
+    }
 
     const knownMachineNames = computed(() => buildKnownMachineNames(props.machines))
 
@@ -433,13 +458,16 @@ export default {
 
     onMounted(() => {
       loadHistory()
+      loadSnippetList()
       EventsOn('shell:cwd', onShellCwd)
+      EventsOn('shortcuts:changed', onShortcutsChanged)
       loadTunnels()
       tunnelTimer = setInterval(loadTunnels, 5000)
     })
 
     onUnmounted(() => {
       EventsOff('shell:cwd')
+      EventsOff('shortcuts:changed')
       if (tunnelTimer) clearInterval(tunnelTimer)
     })
 
@@ -639,10 +667,25 @@ export default {
       }
     }
 
-    /** 按键映射：向当前会话（或广播目标）写入字符串 */
+    const recordInputHistory = async (text) => {
+      const cmd = String(text || '').replace(/\r?\n/g, '').trim()
+      if (!cmd) return
+      const scope = activeConfigName.value || 'global'
+      try {
+        await App.RecordShellCommandHistory(scope, cmd)
+      } catch {
+        // ignore
+      }
+    }
+
+    /** 代码片段快捷键：向当前会话（或广播目标）写入字符串 */
     const sendMappedInput = async (text) => {
       if (!text) return false
       try {
+        // 未换行执行的插入也记入历史
+        if (!String(text).includes('\n')) {
+          await recordInputHistory(text)
+        }
         if (props.broadcastEnabled) {
           const targets = (props.broadcastTargets || []).filter(Boolean)
           if (!targets.length) return false
@@ -657,6 +700,28 @@ export default {
         return false
       }
     }
+
+    /** 片段快捷键：Shell 视图内处理；shortcuts:changed 后立即用最新列表 */
+    const onSnippetHotkey = (e) => {
+      if (!props.active || props.blockShortcuts) return
+      if (commandPaletteVisible.value || tunnelDialogVisible.value || pickerVisible.value) return
+      if (isFormFieldTarget(e.target)) return
+      if (!snippetList.value.length) return
+      const matched = findMatchingSnippet(e, snippetList.value)
+      if (!matched) return
+      const payload = buildSnippetPayload(matched)
+      if (payload == null || payload === '') return
+      e.preventDefault()
+      e.stopImmediatePropagation()
+      void sendMappedInput(payload)
+    }
+
+    onMounted(() => {
+      document.addEventListener('keydown', onSnippetHotkey, true)
+    })
+    onUnmounted(() => {
+      document.removeEventListener('keydown', onSnippetHotkey, true)
+    })
 
     const openCommandPalette = () => {
       if (!props.workspaceSessions?.length) return

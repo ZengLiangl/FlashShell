@@ -211,6 +211,8 @@ export function ReadShellRemoteFile(arg1:string,arg2:string):Promise<string>;
 
 export function ReconnectShell(arg1:string):Promise<string>;
 
+export function RecordShellCommandHistory(arg1:string,arg2:string):Promise<void>;
+
 export function RefreshConfigMenu():Promise<void>;
 
 export function RefreshConfigMenuWithEvent():Promise<void>;

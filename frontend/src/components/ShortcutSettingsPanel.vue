@@ -15,15 +15,7 @@
         :class="{ active: activeTab === 'snippets' }"
         @click="activeTab = 'snippets'"
       >
-        命令片段
-      </button>
-      <button
-        type="button"
-        class="subnav-item"
-        :class="{ active: activeTab === 'keymaps' }"
-        @click="activeTab = 'keymaps'"
-      >
-        按键映射
+        代码片段
       </button>
     </div>
 
@@ -85,7 +77,10 @@
 
     <div v-else-if="activeTab === 'snippets'" class="panel-scroll">
       <div class="tip-bar">
-        <span>在 Shell 命令面板中快速插入。scope 填 <code>global</code> 或机器配置名</span>
+        <span>
+          命令面板可插入；绑定快捷键后可在 Shell 直接触发。
+          「直接执行」开启时自动换行。支持 <code>\n</code> <code>\t</code> <code>\e</code>。
+        </span>
       </div>
 
       <div class="snippet-toolbar">
@@ -94,38 +89,95 @@
       </div>
 
       <div v-if="!snippets.length" class="snippet-empty">
-        <p>暂无命令片段</p>
+        <p>暂无代码片段</p>
         <el-button size="small" type="primary" @click="addSnippet">添加第一条</el-button>
       </div>
 
       <ul v-else class="snippet-list">
-        <li v-for="(s, i) in snippets" :key="s.id || i" class="snippet-card">
-          <div class="snippet-card-top">
-            <el-input v-model="s.name" size="small" placeholder="名称" class="sn-name" />
-            <el-input v-model="s.scope" size="small" placeholder="global" class="sn-scope" />
+        <li
+          v-for="(s, i) in snippets"
+          :key="s.id || i"
+          class="snippet-card"
+          :class="{ recording: recordingId === snippetRecId(s) }"
+        >
+          <div class="snippet-row snippet-row-main">
+            <div class="snippet-col">
+              <span class="snippet-label">名称</span>
+              <el-input v-model="s.name" size="small" placeholder="未命名片段" />
+            </div>
+            <div class="snippet-col snippet-col-scope">
+              <span class="snippet-label">作用域</span>
+              <el-input v-model="s.scope" size="small" placeholder="global" />
+            </div>
             <el-tooltip content="删除" placement="top">
-              <el-button size="small" text type="danger" circle @click="snippets.splice(i, 1)">
+              <el-button
+                class="snippet-del"
+                size="small"
+                text
+                type="danger"
+                circle
+                @click="removeSnippet(i)"
+              >
                 <el-icon><Delete /></el-icon>
               </el-button>
             </el-tooltip>
           </div>
-          <el-input
-            v-model="s.command"
-            type="textarea"
-            :rows="2"
-            resize="vertical"
-            placeholder="要插入的命令内容"
-            class="sn-cmd"
-          />
+
+          <div class="snippet-row">
+            <div class="snippet-col snippet-col-full">
+              <span class="snippet-label">命令</span>
+              <el-input
+                v-model="s.command"
+                type="textarea"
+                :rows="2"
+                resize="vertical"
+                placeholder="例如 ls -la 或 git status"
+                class="sn-cmd"
+              />
+            </div>
+          </div>
+
+          <div class="snippet-footer">
+            <div class="snippet-footer-bind">
+              <span class="snippet-label">快捷键</span>
+              <button
+                type="button"
+                class="bind-capture sn-bind"
+                :class="{ active: recordingId === snippetRecId(s) }"
+                :title="recordingId === snippetRecId(s) ? '按下组合键…' : '点击录制'"
+                @click="(e) => startRecording(snippetRecId(s), e)"
+                @keydown="(e) => onSnippetCapture(s, e)"
+              >
+                <template v-if="recordingId === snippetRecId(s)">
+                  <span class="bind-recording">按下组合键…</span>
+                </template>
+                <template v-else-if="bindingParts(s.binding).length">
+                  <kbd
+                    v-for="(part, pi) in bindingParts(s.binding)"
+                    :key="`${s.id}-b-${pi}`"
+                    class="kbd"
+                  >{{ part }}</kbd>
+                </template>
+                <template v-else>
+                  <span class="bind-empty">点击录制</span>
+                </template>
+              </button>
+              <el-tooltip v-if="s.binding?.key" content="清除快捷键" placement="top">
+                <button type="button" class="bind-reset" @click="clearSnippetBinding(s)">
+                  <el-icon :size="14"><RefreshLeft /></el-icon>
+                </button>
+              </el-tooltip>
+            </div>
+            <div class="snippet-footer-exec">
+              <el-switch v-model="s.execute" size="small" />
+              <span class="sn-execute-label">直接执行</span>
+            </div>
+          </div>
         </li>
       </ul>
     </div>
 
-    <div v-else-if="activeTab === 'keymaps'" class="keymap-tab-body">
-      <KeyMapSettingsPanel :active="active && activeTab === 'keymaps'" />
-    </div>
-
-    <div v-if="activeTab !== 'keymaps'" class="panel-actions icon-actions">
+    <div class="panel-actions icon-actions">
       <el-tooltip v-if="activeTab === 'shortcuts'" content="全部重置" placement="top">
         <el-button circle @click="resetAll">
           <el-icon><RefreshLeft /></el-icon>
@@ -152,13 +204,16 @@ import {
   mergeShortcuts,
   formatShortcut,
   bindingFromEvent,
+  normalizeSnippets,
+  emptySnippetBinding,
+  normalizeSnippet,
 } from '../utils/shortcuts'
+import { formatKeyMapParts, keymapBindingFromEvent } from '../utils/keymaps'
 import { modKeyLabel } from '../utils/platform'
-import KeyMapSettingsPanel from './KeyMapSettingsPanel.vue'
 
 export default {
   name: 'ShortcutSettingsPanel',
-  components: { RefreshLeft, Check, Delete, KeyMapSettingsPanel },
+  components: { RefreshLeft, Check, Delete },
   props: {
     active: { type: Boolean, default: false },
   },
@@ -185,12 +240,16 @@ export default {
       return label ? label.split('+').filter(Boolean) : []
     }
 
+    const bindingParts = (binding) => formatKeyMapParts(binding)
+
+    const snippetRecId = (s) => `sn-bind:${s.id}`
+
     const applyShortcutData = (data) => {
       const merged = mergeShortcuts(data)
       Object.keys(merged).forEach((id) => {
         shortcuts[id] = { ...merged[id] }
       })
-      snippets.value = [...(data?.snippets || [])]
+      snippets.value = normalizeSnippets(data?.snippets)
     }
 
     const load = async () => {
@@ -231,6 +290,24 @@ export default {
       recordingId.value = ''
     }
 
+    const onSnippetCapture = (snippet, e) => {
+      e.preventDefault()
+      e.stopPropagation()
+      if (e.key === 'Escape') {
+        recordingId.value = ''
+        return
+      }
+      const binding = keymapBindingFromEvent(e)
+      if (!binding) return
+      snippet.binding = binding
+      recordingId.value = ''
+    }
+
+    const clearSnippetBinding = (snippet) => {
+      snippet.binding = emptySnippetBinding()
+      recordingId.value = ''
+    }
+
     const resetShortcut = (id) => {
       shortcuts[id] = { ...DEFAULT_SHORTCUTS[id] }
       recordingId.value = ''
@@ -244,19 +321,67 @@ export default {
     }
 
     const addSnippet = () => {
-      snippets.value.push({
-        id: `sn-${Date.now()}`,
-        name: '新片段',
-        command: '',
-        scope: 'global',
-      })
+      snippets.value.push(
+        normalizeSnippet({
+          id: `sn-${Date.now()}`,
+          name: '新片段',
+          command: '',
+          scope: 'global',
+          execute: true,
+        }),
+      )
+    }
+
+    const removeSnippet = (index) => {
+      snippets.value.splice(index, 1)
+      recordingId.value = ''
     }
 
     const save = async () => {
+      if (activeTab.value === 'snippets') {
+        const invalid = snippets.value.find((s) => s.binding?.key && !(s.command || '').trim())
+        if (invalid) {
+          ElMessage.warning('已绑定快捷键的片段请填写命令内容')
+          return
+        }
+      }
       saving.value = true
       try {
-        await App.SaveShortcutSettings({ ...shortcuts, snippets: snippets.value })
-        ElMessage.success(activeTab.value === 'snippets' ? '命令片段已保存' : '快捷键已保存')
+        const payload = {
+          newWindow: { ...shortcuts.newWindow },
+          machineConfig: { ...shortcuts.machineConfig },
+          connectionManager: { ...shortcuts.connectionManager },
+          envVars: { ...shortcuts.envVars },
+          systemSettings: { ...shortcuts.systemSettings },
+          refreshConfig: { ...shortcuts.refreshConfig },
+          find: { ...shortcuts.find },
+          copy: { ...shortcuts.copy },
+          paste: { ...shortcuts.paste },
+          clearOutput: { ...shortcuts.clearOutput },
+          commandPalette: { ...shortcuts.commandPalette },
+          snippets: snippets.value.map((s) => {
+            const out = {
+              id: s.id,
+              name: s.name,
+              command: s.command,
+              scope: s.scope || 'global',
+              execute: !!s.execute,
+            }
+            if (s.binding?.key) {
+              out.binding = {
+                key: String(s.binding.key),
+                useMod: !!s.binding.useMod,
+                useAlt: !!s.binding.useAlt,
+                useShift: !!s.binding.useShift,
+              }
+            }
+            return out
+          }),
+        }
+        await App.SaveShortcutSettings(payload)
+        // 保存后回读，确保面板与运行时一致
+        applyShortcutData(await App.GetShortcutSettings())
+        ElMessage.success(activeTab.value === 'snippets' ? '代码片段已保存' : '快捷键已保存')
       } catch (e) {
         ElMessage.error(`保存失败: ${e}`)
       } finally {
@@ -272,13 +397,18 @@ export default {
       shortcutGroups,
       modLabel,
       shortcutParts,
+      bindingParts,
+      snippetRecId,
       startRecording,
       onShortcutCapture,
+      onSnippetCapture,
+      clearSnippetBinding,
       resetShortcut,
       resetAll,
       save,
       snippets,
       addSnippet,
+      removeSnippet,
     }
   },
 }
@@ -293,7 +423,6 @@ export default {
   overflow: hidden;
 }
 
-/* —— 与系统设置 subnav 一致 —— */
 .settings-subnav {
   flex-shrink: 0;
   display: flex;
@@ -357,7 +486,6 @@ export default {
   color: var(--app-accent-color);
 }
 
-/* —— 快捷键分组 —— */
 .bind-group {
   margin-bottom: 14px;
   border: 1px solid var(--app-border);
@@ -431,6 +559,7 @@ export default {
   align-items: center;
   justify-content: center;
   gap: 4px;
+  flex: 1;
   min-width: 148px;
   min-height: 32px;
   padding: 4px 10px;
@@ -498,7 +627,9 @@ export default {
 }
 
 .bind-row:hover .bind-reset,
-.bind-row.recording .bind-reset {
+.bind-row.recording .bind-reset,
+.snippet-card:hover .bind-reset,
+.snippet-card.recording .bind-reset {
   opacity: 1;
 }
 
@@ -507,7 +638,6 @@ export default {
   background: var(--app-accent-bg);
 }
 
-/* —— 命令片段 —— */
 .snippet-toolbar {
   display: flex;
   align-items: center;
@@ -543,31 +673,72 @@ export default {
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 12px;
 }
 
 .snippet-card {
-  padding: 12px;
+  padding: 12px 14px;
   border: 1px solid var(--app-border);
   border-radius: 10px;
   background: var(--app-card-bg, var(--app-bg));
-}
-
-.snippet-card-top {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color 0.12s ease, background 0.12s ease;
 }
 
-.sn-name {
-  width: 140px;
-  flex-shrink: 0;
+.snippet-card:hover {
+  border-color: color-mix(in srgb, var(--app-accent-color) 45%, var(--app-border));
 }
 
-.sn-scope {
-  width: 110px;
+.snippet-card.recording {
+  border-color: var(--app-accent-color);
+  background: var(--app-accent-bg);
+}
+
+.snippet-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.snippet-row-main {
+  align-items: flex-end;
+}
+
+.snippet-col {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  flex: 1;
+}
+
+.snippet-col-scope {
+  flex: 0 0 140px;
+}
+
+.snippet-col-full {
+  flex: 1;
+}
+
+.snippet-label {
+  font-size: 11px;
+  color: var(--app-text-muted);
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: 0.02em;
+}
+
+.snippet-del {
   flex-shrink: 0;
+  margin-bottom: 1px;
+  opacity: 0.55;
+  transition: opacity 0.12s ease;
+}
+
+.snippet-card:hover .snippet-del {
+  opacity: 1;
 }
 
 .sn-cmd {
@@ -580,12 +751,47 @@ export default {
   line-height: 1.45;
 }
 
-.keymap-tab-body {
-  flex: 1 1 0;
-  min-height: 0;
+.snippet-footer {
   display: flex;
-  flex-direction: column;
-  overflow: hidden;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 2px;
+  padding-top: 10px;
+  border-top: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent);
+}
+
+.snippet-footer-bind {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+
+.snippet-footer-bind .snippet-label {
+  flex-shrink: 0;
+  padding-bottom: 9px;
+}
+
+.sn-bind {
+  flex: 1;
+  min-width: 120px;
+  max-width: 280px;
+}
+
+.snippet-footer-exec {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  padding-bottom: 4px;
+}
+
+.sn-execute-label {
+  font-size: 12px;
+  color: var(--app-text-secondary);
+  white-space: nowrap;
 }
 
 .panel-actions {
