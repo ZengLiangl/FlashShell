@@ -26,6 +26,7 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+          cache-dependency-path: go.sum
 
       - name: Setup Node
         uses: actions/setup-node@v5
@@ -36,14 +37,29 @@ jobs:
           registry-url: https://registry.npmjs.org
 
       - name: Install Linux build deps
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev pkg-config
+        uses: awalsh128/cache-apt-pkgs-action@v1.6.0
+        with:
+          packages: libgtk-3-dev libwebkit2gtk-4.0-dev pkg-config
+          version: webkit40-1
+
+      - name: Resolve Go bin dir
+        id: go-bin
+        shell: bash
+        run: echo "dir=$(go env GOPATH)/bin" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Wails CLI
+        id: cache-wails
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.go-bin.outputs.dir }}/wails
+            ${{ steps.go-bin.outputs.dir }}/wails.exe
+          key: wails-${{ runner.os }}-${{ runner.arch }}-${{ env.WAILS_VERSION }}
 
       - name: Install Wails
+        if: steps.cache-wails.outputs.cache-hit != 'true'
         # 用 ${{ env.* }}：Windows 默认 pwsh 会把 ${WAILS_VERSION} 当成空的 PowerShell 变量
-        run: go install -v github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
 
       - name: Build frontend dist
         shell: bash
@@ -134,6 +150,7 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+          cache-dependency-path: go.sum
 
       - name: Download frontend dist
         uses: actions/download-artifact@v6
@@ -174,21 +191,37 @@ jobs:
           PY
 
       - name: Install Linux dependencies
-        if: matrix.kind == 'linux'
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev pkg-config
-          # Ubuntu 22.04 -> WebKitGTK 4.0；若改用 24.04 则装 4.1 并加 -tags webkit2_41
-          if [ "${{ matrix.linux_webkit }}" = "4.1" ]; then
-            sudo apt-get install -y libwebkit2gtk-4.1-dev libsoup-3.0-dev
-          else
-            sudo apt-get install -y libwebkit2gtk-4.0-dev
-          fi
+        if: matrix.kind == 'linux' && matrix.linux_webkit == '4.1'
+        uses: awalsh128/cache-apt-pkgs-action@v1.6.0
+        with:
+          packages: libgtk-3-dev pkg-config libwebkit2gtk-4.1-dev libsoup-3.0-dev
+          version: webkit41-1
+
+      - name: Install Linux dependencies
+        if: matrix.kind == 'linux' && matrix.linux_webkit != '4.1'
+        uses: awalsh128/cache-apt-pkgs-action@v1.6.0
+        with:
+          packages: libgtk-3-dev pkg-config libwebkit2gtk-4.0-dev
+          version: webkit40-1
+
+      - name: Resolve Go bin dir
+        id: go-bin
+        shell: bash
+        run: echo "dir=$(go env GOPATH)/bin" >> "$GITHUB_OUTPUT"
+
+      - name: Cache Wails CLI
+        id: cache-wails
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.go-bin.outputs.dir }}/wails
+            ${{ steps.go-bin.outputs.dir }}/wails.exe
+          key: wails-${{ runner.os }}-${{ runner.arch }}-${{ env.WAILS_VERSION }}
 
       - name: Install Wails
+        if: steps.cache-wails.outputs.cache-hit != 'true'
         # 用 ${{ env.* }}：Windows 默认 pwsh 会把 ${WAILS_VERSION} 当成空的 PowerShell 变量
-        run: go install -v github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
 
       - name: Build with Wails
         shell: bash
@@ -207,12 +240,48 @@ jobs:
             ${EXTRA_ARGS[@]+"${EXTRA_ARGS[@]}"} \
             -ldflags "-s -w -X FlashDock/app.Version=${APP_VERSION}"
 
+      - name: Resolve Homebrew prefix
+        if: matrix.kind == 'macos'
+        id: brew
+        shell: bash
+        run: echo "prefix=$(brew --prefix)" >> "$GITHUB_OUTPUT"
+
+      - name: Cache create-dmg
+        if: matrix.kind == 'macos'
+        id: cache-create-dmg
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ steps.brew.outputs.prefix }}/Cellar/create-dmg
+            ${{ steps.brew.outputs.prefix }}/bin/create-dmg
+            ~/Library/Caches/Homebrew
+          key: create-dmg-${{ runner.os }}-${{ runner.arch }}-v1
+
+      - name: Install create-dmg
+        if: matrix.kind == 'macos'
+        shell: bash
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: '1'
+          HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: '1'
+        run: |
+          set -euo pipefail
+          if command -v create-dmg >/dev/null 2>&1; then
+            echo "create-dmg cache hit: $(command -v create-dmg)"
+            exit 0
+          fi
+          if [ -d "${{ steps.brew.outputs.prefix }}/Cellar/create-dmg" ]; then
+            brew link --overwrite create-dmg || true
+            if command -v create-dmg >/dev/null 2>&1; then
+              exit 0
+            fi
+          fi
+          brew install create-dmg
+
       - name: Package macOS DMG
         if: matrix.kind == 'macos'
         shell: bash
         run: |
           set -euo pipefail
-          brew install create-dmg
           mkdir -p dist
           APP_PATH=$(find build/bin -maxdepth 2 -name '*.app' | head -n 1)
           if [ -z "$APP_PATH" ]; then
