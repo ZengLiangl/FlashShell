@@ -24,19 +24,21 @@ const updateDownloadProgressEvent = "update:download-progress"
 
 // UpdateCheckResult 检查更新结果
 type UpdateCheckResult struct {
-	CurrentVersion   string                     `json:"currentVersion"`
-	LatestVersion    string                     `json:"latestVersion"`
-	HasUpdate        bool                       `json:"hasUpdate"`
-	ReleaseName      string                     `json:"releaseName"`
-	ReleaseNotes     string                     `json:"releaseNotes"`
-	ReleaseURL       string                     `json:"releaseURL"`
-	PublishedAt      string                     `json:"publishedAt"`
-	CheckedAt        string                     `json:"checkedAt"`
-	AssetName        string                     `json:"assetName,omitempty"`
-	DownloadURL      string                     `json:"downloadURL,omitempty"`
-	AssetSize        int64                      `json:"assetSize,omitempty"`
-	DownloadSources  []UpdateDownloadSourceInfo `json:"downloadSources,omitempty"`
-	Error            string                     `json:"error,omitempty"`
+	CurrentVersion  string                     `json:"currentVersion"`
+	LatestVersion   string                     `json:"latestVersion"`
+	HasUpdate       bool                       `json:"hasUpdate"`
+	ReleaseName     string                     `json:"releaseName"`
+	ReleaseNotes    string                     `json:"releaseNotes"`
+	ReleaseURL      string                     `json:"releaseURL"`
+	PublishedAt     string                     `json:"publishedAt"`
+	CheckedAt       string                     `json:"checkedAt"`
+	AssetName       string                     `json:"assetName,omitempty"`
+	DownloadURL     string                     `json:"downloadURL,omitempty"`
+	AssetSize       int64                      `json:"assetSize,omitempty"`
+	DownloadSources []UpdateDownloadSourceInfo `json:"downloadSources,omitempty"`
+	Downloaded      bool                       `json:"downloaded,omitempty"`
+	DownloadPath    string                     `json:"downloadPath,omitempty"`
+	Error           string                     `json:"error,omitempty"`
 }
 
 // UpdateDownloadSourceInfo 前端可选的下载源
@@ -46,11 +48,14 @@ type UpdateDownloadSourceInfo struct {
 
 // UpdateDownloadResult 下载结果
 type UpdateDownloadResult struct {
-	Success  bool   `json:"success"`
-	Message  string `json:"message"`
-	FilePath string `json:"filePath,omitempty"`
-	DirPath  string `json:"dirPath,omitempty"`
-	Paused   bool   `json:"paused,omitempty"`
+	Success        bool   `json:"success"`
+	Message        string `json:"message"`
+	FilePath       string `json:"filePath,omitempty"`
+	DirPath        string `json:"dirPath,omitempty"`
+	Paused         bool   `json:"paused,omitempty"`
+	ReadyToInstall bool   `json:"readyToInstall,omitempty"`
+	InstallLogPath string `json:"installLogPath,omitempty"`
+	AutoRelaunch   bool   `json:"autoRelaunch,omitempty"`
 }
 
 type githubRelease struct {
@@ -164,6 +169,21 @@ func (a *App) CheckForUpdates() *UpdateCheckResult {
 	} else if result.HasUpdate {
 		result.Error = fmt.Sprintf("未找到当前平台安装包（%s/%s）", goruntime.GOOS, goruntime.GOARCH)
 	}
+
+	var stagedVersion string
+	if result.HasUpdate {
+		if reusable := resolveReusableStagedUpdate(result.LatestVersion, result.AssetName); reusable != nil {
+			setCurrentStaged(reusable)
+			result.Downloaded = true
+			result.DownloadPath = reusable.FilePath
+			stagedVersion = reusable.Version
+		} else {
+			clearCurrentStaged()
+		}
+	} else {
+		clearCurrentStaged()
+	}
+	go pruneUpdateArtifacts(stagedVersion)
 	return result
 }
 
@@ -177,8 +197,9 @@ func (a *App) PauseUpdateDownload() {
 	}
 }
 
-// DownloadUpdate 按指定下载源下载当前平台安装包到用户「下载」目录。
+// DownloadUpdate 按指定下载源下载当前平台安装包到更新暂存目录。
 // sourceLabel 为空时使用第一个源（GitHub 直连）；下载中可调用 PauseUpdateDownload 暂停。
+// 下载完成后可调用 InstallUpdateAndRestart 自动安装并打开新版本。
 func (a *App) DownloadUpdate(sourceLabel string) *UpdateDownloadResult {
 	updateDownloadMu.Lock()
 	if updateDownloading {
@@ -209,23 +230,24 @@ func (a *App) DownloadUpdate(sourceLabel string) *UpdateDownloadResult {
 	}
 	if check.DownloadURL == "" || check.AssetName == "" {
 		msg := "当前平台暂无可用安装包"
-		a.emitUpdateDownloadProgress("error", 0, 0, msg)
-		return &UpdateDownloadResult{Success: false, Message: msg}
-	}
-
-	dir, err := resolveDownloadsDir()
-	if err != nil {
-		msg := "无法定位下载目录: " + err.Error()
-		a.emitUpdateDownloadProgress("error", 0, 0, msg)
-		return &UpdateDownloadResult{Success: false, Message: msg}
-	}
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		msg := "创建下载目录失败: " + err.Error()
 		a.emitUpdateDownloadProgress("error", 0, check.AssetSize, msg)
 		return &UpdateDownloadResult{Success: false, Message: msg}
 	}
 
-	dest := filepath.Join(dir, check.AssetName)
+	workspaceDir := resolveUpdateWorkspaceDir(check.LatestVersion)
+	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
+		msg := "创建更新目录失败: " + err.Error()
+		a.emitUpdateDownloadProgress("error", 0, check.AssetSize, msg)
+		return &UpdateDownloadResult{Success: false, Message: msg}
+	}
+	stagedDir, err := prepareStagedDir(workspaceDir, check.LatestVersion)
+	if err != nil {
+		msg := "创建暂存目录失败: " + err.Error()
+		a.emitUpdateDownloadProgress("error", 0, check.AssetSize, msg)
+		return &UpdateDownloadResult{Success: false, Message: msg}
+	}
+
+	dest := resolveUpdateAssetPath(workspaceDir, stagedDir, check.AssetName)
 	sources := buildDownloadSources(check.DownloadURL)
 	if len(sources) == 0 {
 		msg := "无可用下载源"
@@ -246,16 +268,28 @@ func (a *App) DownloadUpdate(sourceLabel string) *UpdateDownloadResult {
 		a.emitUpdateDownloadProgress("downloading", downloaded, total, "")
 	})
 	if err == nil {
-		lastDownloadedDir = dir
+		staged := &stagedUpdate{
+			Version:        normalizeVersion(check.LatestVersion),
+			AssetName:      check.AssetName,
+			FilePath:       dest,
+			StagedDir:      stagedDir,
+			InstallLogPath: buildUpdateInstallLogPath(workspaceDir),
+		}
+		setCurrentStaged(staged)
+		lastDownloadedDir = filepath.Dir(dest)
+		go pruneUpdateArtifacts(staged.Version)
 		a.emitUpdateDownloadProgress("done", check.AssetSize, check.AssetSize, dest)
-		_ = a.OpenDownloadsDirectory()
 		return &UpdateDownloadResult{
-			Success:  true,
-			Message:  fmt.Sprintf("下载完成（%s）: %s", source.Label, dest),
-			FilePath: dest,
-			DirPath:  dir,
+			Success:        true,
+			Message:        fmt.Sprintf("下载完成（%s），可安装并重启", source.Label),
+			FilePath:       dest,
+			DirPath:        filepath.Dir(dest),
+			ReadyToInstall: true,
+			InstallLogPath: staged.InstallLogPath,
+			AutoRelaunch:   true,
 		}
 	}
+	_ = os.Remove(dest)
 	if ctx.Err() != nil {
 		msg := "已暂停，可更换下载源后继续"
 		a.emitUpdateDownloadProgress("paused", 0, check.AssetSize, msg)

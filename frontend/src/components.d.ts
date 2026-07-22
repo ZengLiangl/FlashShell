@@ -50,7 +50,6 @@ declare module 'vue' {
     ExecutionHistoryDialog: typeof import('./components/ExecutionHistoryDialog.vue')['default']
     HomePage: typeof import('./components/HomePage.vue')['default']
     HostKeyTrustDialog: typeof import('./components/shell/HostKeyTrustDialog.vue')['default']
-    KeyMapSettingsPanel: typeof import('./components/KeyMapSettingsPanel.vue')['default']
     LocalFileTreePanel: typeof import('./components/shell/LocalFileTreePanel.vue')['default']
     MachineConfigDialog: typeof import('./components/MachineConfigDialog.vue')['default']
     MachineConnectList: typeof import('./components/shell/MachineConnectList.vue')['default']

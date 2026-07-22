@@ -79,6 +79,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        # 当前仅发布 Windows / Mac；恢复 Linux 时取消下方注释即可。
         include:
           - os: macos-latest
             platform: darwin/amd64
@@ -108,22 +109,22 @@ jobs:
             kind: windows
             build_name: flashdock-windows-arm64
             wails_tags: ''
-          - os: ubuntu-22.04
-            platform: linux/amd64
-            os_name: Linux
-            arch_name: Amd64
-            kind: linux
-            build_name: flashdock-linux-amd64
-            linux_webkit: '4.0'
-            wails_tags: ''
-          - os: ubuntu-22.04-arm
-            platform: linux/arm64
-            os_name: Linux
-            arch_name: Arm64
-            kind: linux
-            build_name: flashdock-linux-arm64
-            linux_webkit: '4.0'
-            wails_tags: ''
+          # - os: ubuntu-22.04
+          #   platform: linux/amd64
+          #   os_name: Linux
+          #   arch_name: Amd64
+          #   kind: linux
+          #   build_name: flashdock-linux-amd64
+          #   linux_webkit: '4.0'
+          #   wails_tags: ''
+          # - os: ubuntu-22.04-arm
+          #   platform: linux/arm64
+          #   os_name: Linux
+          #   arch_name: Arm64
+          #   kind: linux
+          #   build_name: flashdock-linux-arm64
+          #   linux_webkit: '4.0'
+          #   wails_tags: ''
 
     steps:
       - name: Checkout

@@ -342,13 +342,21 @@
                         </div>
                         <div class="update-actions">
                             <el-select v-model="selectedDownloadSource" size="small" class="source-select"
-                                :disabled="downloading" placeholder="下载源">
+                                :disabled="downloading || installing" placeholder="下载源">
                                 <el-option v-for="src in downloadSources" :key="src.label" :label="src.label"
                                     :value="src.label" />
                             </el-select>
                             <el-button type="primary" size="small" :loading="downloading" :disabled="!canDownload"
                                 @click="downloadUpdate">
                                 {{ downloadButtonLabel }}
+                            </el-button>
+                            <el-button v-if="readyToInstall" type="success" size="small" :loading="installing"
+                                :disabled="downloading" @click="installUpdate">
+                                安装并重启
+                            </el-button>
+                            <el-button v-if="readyToInstall" size="small" :disabled="downloading || installing"
+                                @click="openPackage">
+                                打开安装包
                             </el-button>
                             <el-button v-if="downloading" size="small" @click="pauseDownload">
                                 暂停
@@ -493,6 +501,8 @@ export default {
         const checkingUpdate = ref(false)
         const updateResult = ref(null)
         const downloading = ref(false)
+        const installing = ref(false)
+        const readyToInstall = ref(false)
         const downloadPaused = ref(false)
         const downloadPercent = ref(0)
         const downloadMessage = ref('')
@@ -581,7 +591,7 @@ export default {
         const systemFontsLoaded = ref(false)
 
         const canDownload = computed(() =>
-            !!(updateResult.value?.hasUpdate && updateResult.value?.downloadURL && !downloading.value)
+            !!(updateResult.value?.hasUpdate && updateResult.value?.downloadURL && !downloading.value && !installing.value)
         )
 
         const downloadSources = computed(() => resolveUpdateDownloadSources(updateResult.value))
@@ -589,6 +599,7 @@ export default {
         const downloadButtonLabel = computed(() => {
             if (downloading.value) return `下载中 ${downloadPercent.value}%`
             if (downloadPaused.value) return '继续下载'
+            if (readyToInstall.value) return '重新下载'
             return '下载安装包'
         })
 
@@ -721,8 +732,14 @@ theme preview · ${theme.foreground}`
             if (isUsableUpdateResult(result)) {
                 updateResult.value = result
                 setCachedUpdateCheck(result)
+                readyToInstall.value = !!(result.downloaded && result.downloadPath)
+                if (readyToInstall.value && !downloadMessage.value) {
+                    downloadMessage.value = `安装包已就绪：${result.downloadPath}`
+                    downloadPercent.value = 100
+                }
             } else {
                 updateResult.value = null
+                readyToInstall.value = false
             }
         }
 
@@ -730,7 +747,7 @@ theme preview · ${theme.foreground}`
             if (!force) {
                 const hit = getCachedUpdateCheck()
                 if (hit) {
-                    updateResult.value = hit
+                    applyUpdateResult(hit)
                     return
                 }
             }
@@ -739,11 +756,13 @@ theme preview · ${theme.foreground}`
             downloadMessage.value = ''
             downloadFailed.value = false
             downloadPaused.value = false
+            readyToInstall.value = false
             try {
                 const result = await App.CheckForUpdates()
                 applyUpdateResult(result)
             } catch {
                 updateResult.value = null
+                readyToInstall.value = false
             } finally {
                 checkingUpdate.value = false
             }
@@ -776,7 +795,10 @@ theme preview · ${theme.foreground}`
                 downloadPaused.value = false
                 downloadPercent.value = 100
                 downloadFailed.value = false
-                downloadMessage.value = '下载完成，已打开下载目录'
+                readyToInstall.value = true
+                downloadMessage.value = payload.message
+                    ? `下载完成：${payload.message}`
+                    : '下载完成，可安装并重启'
             } else if (payload.status === 'paused') {
                 downloading.value = false
                 downloadPaused.value = true
@@ -802,17 +824,28 @@ theme preview · ${theme.foreground}`
         const downloadUpdate = async () => {
             if (!canDownload.value) return
             downloading.value = true
+            installing.value = false
             downloadPaused.value = false
             downloadFailed.value = false
+            readyToInstall.value = false
             downloadMessage.value = '准备下载…'
             downloadPercent.value = 0
             try {
                 const result = await App.DownloadUpdate(selectedDownloadSource.value || '')
                 if (result?.success) {
+                    readyToInstall.value = !!(result.readyToInstall || result.filePath)
                     ElMessage.success(result.message || '下载完成')
-                    downloadMessage.value = result.message || '下载完成，已打开下载目录'
+                    downloadMessage.value = result.message || '下载完成，可安装并重启'
                     downloadPercent.value = 100
                     downloadPaused.value = false
+                    if (result.filePath && updateResult.value) {
+                        updateResult.value = {
+                            ...updateResult.value,
+                            downloaded: true,
+                            downloadPath: result.filePath,
+                        }
+                        setCachedUpdateCheck(updateResult.value)
+                    }
                 } else if (result?.paused) {
                     downloadPaused.value = true
                     downloadFailed.value = false
@@ -830,6 +863,36 @@ theme preview · ${theme.foreground}`
                 ElMessage.error(downloadMessage.value)
             } finally {
                 downloading.value = false
+            }
+        }
+
+        const installUpdate = async () => {
+            if (!readyToInstall.value || installing.value || downloading.value) return
+            installing.value = true
+            try {
+                const result = await App.InstallUpdateAndRestart()
+                if (result?.success) {
+                    ElMessage.success(result.message || '正在安装并重启…')
+                    downloadMessage.value = result.message || '正在安装并重启…'
+                } else {
+                    ElMessage.error(result?.message || '安装失败')
+                    downloadMessage.value = result?.message || '安装失败'
+                    downloadFailed.value = true
+                }
+            } catch (e) {
+                downloadFailed.value = true
+                downloadMessage.value = String(e)
+                ElMessage.error(downloadMessage.value)
+            } finally {
+                installing.value = false
+            }
+        }
+
+        const openPackage = async () => {
+            try {
+                await App.OpenDownloadedUpdatePackage()
+            } catch (e) {
+                ElMessage.error('打开安装包失败: ' + e)
             }
         }
 
@@ -979,6 +1042,8 @@ theme preview · ${theme.foreground}`
             updateResult,
             canDownload,
             downloading,
+            installing,
+            readyToInstall,
             downloadPaused,
             downloadPercent,
             downloadMessage,
@@ -991,6 +1056,8 @@ theme preview · ${theme.foreground}`
             renderReleaseNotes,
             onNotesClick,
             downloadUpdate,
+            installUpdate,
+            openPackage,
             pauseDownload,
             accountEditVisible,
             editingAccountIndex,

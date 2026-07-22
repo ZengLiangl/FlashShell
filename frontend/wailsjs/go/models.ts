@@ -39,6 +39,8 @@ export namespace app {
 	    downloadURL?: string;
 	    assetSize?: number;
 	    downloadSources?: UpdateDownloadSourceInfo[];
+	    downloaded?: boolean;
+	    downloadPath?: string;
 	    error?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -59,6 +61,8 @@ export namespace app {
 	        this.downloadURL = source["downloadURL"];
 	        this.assetSize = source["assetSize"];
 	        this.downloadSources = this.convertValues(source["downloadSources"], UpdateDownloadSourceInfo);
+	        this.downloaded = source["downloaded"];
+	        this.downloadPath = source["downloadPath"];
 	        this.error = source["error"];
 	    }
 	
@@ -86,6 +90,9 @@ export namespace app {
 	    filePath?: string;
 	    dirPath?: string;
 	    paused?: boolean;
+	    readyToInstall?: boolean;
+	    installLogPath?: string;
+	    autoRelaunch?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new UpdateDownloadResult(source);
@@ -98,6 +105,26 @@ export namespace app {
 	        this.filePath = source["filePath"];
 	        this.dirPath = source["dirPath"];
 	        this.paused = source["paused"];
+	        this.readyToInstall = source["readyToInstall"];
+	        this.installLogPath = source["installLogPath"];
+	        this.autoRelaunch = source["autoRelaunch"];
+	    }
+	}
+	
+	export class UpdateInstallResult {
+	    success: boolean;
+	    message: string;
+	    logPath?: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateInstallResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.success = source["success"];
+	        this.message = source["message"];
+	        this.logPath = source["logPath"];
 	    }
 	}
 

@@ -310,6 +310,10 @@ export function ImportXshellPick(arg1, arg2) {
   return window['go']['app']['App']['ImportXshellPick'](arg1, arg2);
 }
 
+export function InstallUpdateAndRestart() {
+  return window['go']['app']['App']['InstallUpdateAndRestart']();
+}
+
 export function ListLocalFiles(arg1, arg2) {
   return window['go']['app']['App']['ListLocalFiles'](arg1, arg2);
 }
@@ -344,6 +348,10 @@ export function OpenConnectionManager() {
 
 export function OpenCurrentConfigWithEvent() {
   return window['go']['app']['App']['OpenCurrentConfigWithEvent']();
+}
+
+export function OpenDownloadedUpdatePackage() {
+  return window['go']['app']['App']['OpenDownloadedUpdatePackage']();
 }
 
 export function OpenDownloadsDirectory() {

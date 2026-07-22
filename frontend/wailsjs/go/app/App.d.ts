@@ -159,6 +159,8 @@ export function ImportXshellFromFolder(arg1:string,arg2:string,arg3:string):Prom
 
 export function ImportXshellPick(arg1:string,arg2:string):Promise<data.MachineImportResult>;
 
+export function InstallUpdateAndRestart():Promise<app.UpdateInstallResult>;
+
 export function ListLocalFiles(arg1:string,arg2:boolean):Promise<Array<define.SftpEntry>>;
 
 export function ListShellFiles(arg1:string,arg2:string,arg3:boolean):Promise<Array<define.SftpEntry>>;
@@ -176,6 +178,8 @@ export function OpenConfigEditor():Promise<void>;
 export function OpenConnectionManager():Promise<void>;
 
 export function OpenCurrentConfigWithEvent():Promise<void>;
+
+export function OpenDownloadedUpdatePackage():Promise<void>;
 
 export function OpenDownloadsDirectory():Promise<void>;
 
