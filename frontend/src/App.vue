@@ -118,6 +118,7 @@ import TerminalHeader from "./components/TerminalHeader.vue";
 import AppMenuBar from "./components/AppMenuBar.vue";
 import { useTheme } from "./composables/useTheme";
 import { mergeShortcuts, matchesShortcut, isFormFieldTarget, isXtermInput } from "./utils/shortcuts";
+import { normalizeKeyMapSettings, emptyKeyMapSettings, findMatchingKeyMap, expandSendString } from "./utils/keymaps";
 import { hasOverlayAboveSettingsHub } from "./utils/dialogOverlay";
 import { setCachedUpdateCheck, isUsableUpdateResult } from "./utils/updateCheckCache";
 import { TASK_OUTPUT_MAX_LINES, clampTaskOutputMaxLines } from "./constants/shellMemory";
@@ -252,12 +253,21 @@ export default {
     const sessionId = ref('');
     const appVersion = ref('');
     const shortcutMap = ref(mergeShortcuts());
+    const keyMapEntries = ref([]);
 
     const loadShortcutMap = async () => {
       try {
         shortcutMap.value = mergeShortcuts(await App.GetShortcutSettings());
       } catch {
         shortcutMap.value = mergeShortcuts();
+      }
+    };
+
+    const loadKeyMapSettings = async () => {
+      try {
+        keyMapEntries.value = normalizeKeyMapSettings(await App.GetKeyMapSettings()).entries;
+      } catch {
+        keyMapEntries.value = emptyKeyMapSettings().entries;
       }
     };
     const statusBarInfo = computed(() => {
@@ -930,6 +940,19 @@ export default {
         e.stopPropagation();
       };
 
+      // 按键映射优先于应用快捷键：仅在 Shell 终端聚焦时生效
+      if (activeView.value === 'shell' && inXterm && !settingsHubVisible.value && keyMapEntries.value.length) {
+        const matched = findMatchingKeyMap(e, keyMapEntries.value);
+        if (matched) {
+          const payload = expandSendString(matched.sendString || '');
+          if (payload) {
+            take();
+            shellWorkspaceRef.value?.sendMappedInput?.(payload);
+          }
+          return;
+        }
+      }
+
       // 终端搜索 — 任务模式 / Shell 模式统一在此处理
       if (matchesShortcut(e, sc.find)) {
         take();
@@ -1096,6 +1119,7 @@ export default {
       loadConfig();
       loadTheme();
       loadShortcutMap();
+      loadKeyMapSettings();
       loadShellMachines();
       loadTaskOutputLimit();
       App.GetSessionInfo().then((info) => { sessionId.value = info.sessionId || ''; }).catch(() => { });
@@ -1113,6 +1137,9 @@ export default {
       });
       EventsOn("shortcuts:changed", (data) => {
         shortcutMap.value = mergeShortcuts(data);
+      });
+      EventsOn("keymaps:changed", (data) => {
+        keyMapEntries.value = normalizeKeyMapSettings(data).entries;
       });
 
       // 添加全局键盘事件监听器
@@ -1424,6 +1451,7 @@ export default {
           "theme:changed",
           "system-settings:changed",
           "shortcuts:changed",
+          "keymaps:changed",
           "output:line",
           "output:clear",
           "execution:status",
