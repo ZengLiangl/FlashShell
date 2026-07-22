@@ -249,6 +249,7 @@ export default {
     flex: 1;
     min-height: 0;
     overflow: hidden;
+    background: var(--app-panel-bg);
 }
 
 .progress-section {
@@ -295,6 +296,7 @@ export default {
 .terminal-output {
     flex: 1;
     min-height: 0;
+    margin: 0 12px 12px;
     padding: 16px;
     background: var(--terminal-bg, #1e1e1e);
     color: var(--terminal-fg, #d4d4d4);
@@ -303,6 +305,9 @@ export default {
     line-height: 1.4;
     overflow-y: auto;
     white-space: pre-wrap;
+    border: 1px solid var(--app-border);
+    border-radius: var(--app-radius-lg, 10px);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
 }
 
 .virtual-spacer {
@@ -335,7 +340,7 @@ export default {
 }
 
 .empty-output {
-    color: #909399;
+    color: color-mix(in srgb, var(--terminal-fg, #d4d4d4) 45%, transparent);
     text-align: center;
     margin-top: 50px;
 }

@@ -431,8 +431,9 @@
   border: 1px solid var(--app-card-border);
   border-radius: 10px;
   background: var(--app-card-bg);
+  box-shadow: var(--app-surface-shadow, none);
   box-sizing: border-box;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .ml-stack--cards .ml-item:hover,

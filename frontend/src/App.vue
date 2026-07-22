@@ -1552,7 +1552,8 @@ export default {
   display: flex;
   flex-direction: column;
   position: relative;
-  background: var(--app-bg);
+  /* 顶栏同色，避免与系统标题栏交界露灰缝；内容区各自铺 --app-bg */
+  background: var(--app-panel-bg);
   color: var(--app-text);
 }
 
@@ -1611,7 +1612,7 @@ export default {
 
 .left-panel {
   border-right: 1px solid var(--app-border);
-  background-color: var(--app-panel-bg);
+  background-color: var(--app-inset-bg);
   display: flex;
   flex-direction: column;
   position: relative;

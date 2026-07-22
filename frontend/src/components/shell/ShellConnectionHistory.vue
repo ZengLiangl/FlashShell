@@ -21,7 +21,7 @@
             </el-button>
           </el-tooltip>
           <el-tooltip content="连接" placement="top">
-            <el-button size="small" type="primary" circle @click="$emit('open-picker')">
+            <el-button size="small" circle @click="$emit('open-picker')">
               <el-icon><Monitor /></el-icon>
             </el-button>
           </el-tooltip>
@@ -95,9 +95,19 @@ export default {
   min-height: 0;
   display: flex;
   justify-content: center;
-  align-items: center;
-  padding: 24px 20px;
+  align-items: flex-start;
+  padding: 28px 24px;
   background: var(--app-bg);
   overflow: auto;
+}
+
+.shell-history .app-surface-narrow {
+  margin-top: min(8vh, 56px);
+  padding: 18px 16px 16px;
+  border: 1px solid var(--app-border);
+  border-radius: var(--app-radius-panel, 14px);
+  background: var(--app-panel-bg);
+  box-shadow: var(--app-surface-shadow, none);
+  box-sizing: border-box;
 }
 </style>

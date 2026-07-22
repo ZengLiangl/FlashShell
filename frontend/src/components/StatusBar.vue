@@ -12,7 +12,7 @@
                             <span v-if="status.currentCommand"> - {{ status.currentCommand }}</span>
                         </span>
                     </el-tag>
-                    <el-tag v-else key="ready" type="success" size="small">
+                    <el-tag v-else key="ready" type="primary" effect="plain" size="small">
                         <el-icon>
                             <Check />
                         </el-icon>

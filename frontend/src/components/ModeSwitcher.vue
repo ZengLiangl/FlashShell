@@ -165,19 +165,17 @@ export default {
 
 .mode-btn.active {
   background: var(--app-card-bg, #fff);
-  color: var(--mode-home);
+  color: var(--app-text);
   font-weight: 600;
   box-shadow:
-    0 1px 2px color-mix(in srgb, var(--app-text) 10%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--app-border) 70%, transparent);
+    0 1px 2px color-mix(in srgb, var(--app-text) 8%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--app-border) 75%, transparent);
 }
 
-.mode-btn.mode-task.active {
-  color: var(--mode-task);
-}
-
+.mode-btn.mode-task.active,
 .mode-btn.mode-shell.active {
-  color: var(--mode-shell);
+  color: var(--app-accent-color);
+  background: var(--app-card-bg, #fff);
 }
 
 .mode-btn.active .mode-icon {

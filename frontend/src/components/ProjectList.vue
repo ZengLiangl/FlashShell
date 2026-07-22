@@ -61,7 +61,7 @@ export default {
     border-bottom: 1px solid var(--app-border);
     display: flex;
     flex-direction: column;
-    background: var(--app-panel-bg);
+    background: transparent;
     color: var(--app-text);
     height: 100%;
 }

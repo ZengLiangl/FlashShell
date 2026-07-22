@@ -133,7 +133,7 @@ export default {
     border-bottom: 1px solid var(--app-border);
     display: flex;
     flex-direction: column;
-    background: var(--app-panel-bg);
+    background: transparent;
     color: var(--app-text);
 }
 
@@ -169,8 +169,9 @@ export default {
     padding: 12px;
     margin-bottom: 8px;
     background: var(--app-card-bg);
-    border-radius: 6px;
-    border: 1px solid var(--app-border);
+    border-radius: 10px;
+    border: 1px solid var(--app-card-border);
+    box-shadow: var(--app-surface-shadow, none);
 }
 
 .subproject-info {

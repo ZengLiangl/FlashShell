@@ -1,16 +1,19 @@
 :root {
-  --app-bg: #ffffff;
-  --app-panel-bg: #f5f7fa;
-  --app-text: #303133;
-  --app-text-secondary: #606266;
-  --app-text-muted: #909399;
-  --app-border: #e4e7ed;
+  /* 浅色：灰画布 → 白面板 → 白卡片，用 inset 拉开列表区层次 */
+  --app-bg: #eef1f6;
+  --app-panel-bg: #ffffff;
+  --app-inset-bg: #e8ecf3;
+  --app-text: #1f2937;
+  --app-text-secondary: #4b5563;
+  --app-text-muted: #6b7280;
+  --app-border: #dde3ec;
   --app-card-bg: #ffffff;
-  --app-card-border: #ebeef5;
-  --app-card-active-bg: #f3f9ff;
-  --app-card-hover-shadow: color-mix(in srgb, var(--app-accent-color) 15%, transparent);
-  --app-accent-bg: #ecf5ff;
+  --app-card-border: #e2e8f0;
+  --app-card-active-bg: color-mix(in srgb, var(--app-accent-color, #409eff) 8%, #ffffff);
+  --app-card-hover-shadow: color-mix(in srgb, var(--app-accent-color, #409eff) 14%, transparent);
   --app-accent-color: #409eff;
+  --app-accent-bg: color-mix(in srgb, var(--app-accent-color) 12%, #ffffff);
+  --app-surface-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 1px 3px rgba(15, 23, 42, 0.04);
   --el-color-primary: var(--app-accent-color);
   --el-color-primary-rgb: 64, 158, 255;
   --el-color-primary-light-3: color-mix(in srgb, var(--app-accent-color) 70%, #ffffff);
@@ -26,8 +29,8 @@
   --terminal-progress: #409eff;
   --terminal-search-highlight: #c9b27a;
   --terminal-search-active: #1f6feb;
-  --step-bg: #f8f9fa;
-  --step-border: #e9ecef;
+  --step-bg: #f1f4f9;
+  --step-border: #e2e8f0;
 
   --app-radius-sm: 6px;
   --app-radius-md: 8px;
@@ -46,6 +49,7 @@ html.dark {
   color-scheme: dark;
   --app-bg: #141414;
   --app-panel-bg: #1d1e1f;
+  --app-inset-bg: #18191a;
   --app-text: #e5eaf3;
   --app-text-secondary: #cfd3dc;
   --app-text-muted: #a3a6ad;
@@ -54,8 +58,9 @@ html.dark {
   --app-card-border: #414243;
   --app-card-active-bg: #2a3441;
   --app-card-hover-shadow: color-mix(in srgb, var(--app-accent-color) 25%, transparent);
-  --app-accent-bg: #1a3a5c;
   --app-accent-color: #79bbff;
+  --app-accent-bg: color-mix(in srgb, var(--app-accent-color) 18%, #1d1e1f);
+  --app-surface-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   --terminal-bg: #0d1117;
   --terminal-fg: #c9d1d9;
   --terminal-success: #3fb950;
@@ -171,20 +176,24 @@ body,
 }
 
 .app-container {
-  background: var(--app-bg);
+  background: var(--app-panel-bg);
   color: var(--app-text);
 }
 
 .app-container.theme-dark,
 html.dark .app-container {
-  background: var(--app-bg);
+  background: var(--app-panel-bg);
   color: var(--app-text);
 }
 
-.app-container .left-panel,
+.app-container .left-panel {
+  background: var(--app-inset-bg);
+  border-color: var(--app-border);
+  color: var(--app-text);
+}
+
 .app-container .terminal-header,
 .app-container .status-bar,
-.app-container .section-header,
 .app-container .projectlist-fullscreen,
 .app-container .progress-section {
   background: var(--app-panel-bg);
@@ -294,6 +303,19 @@ html.dark .app-menu-bar .menu-inner {
   width: 28px;
   height: 28px;
   padding: 0;
+}
+
+/* 默认圆形操作钮：透明底，避免浅色下白块突兀 */
+.icon-actions .el-button.is-circle:not(.el-button--primary):not(.el-button--success):not(.el-button--danger):not(.el-button--warning):not(.el-button--info) {
+  --el-button-bg-color: transparent;
+  --el-button-border-color: transparent;
+  --el-button-text-color: var(--app-text-secondary);
+  --el-button-hover-bg-color: color-mix(in srgb, var(--app-accent-color) 12%, transparent);
+  --el-button-hover-border-color: transparent;
+  --el-button-hover-text-color: var(--app-accent-color);
+  --el-button-active-bg-color: color-mix(in srgb, var(--app-accent-color) 18%, transparent);
+  --el-button-active-border-color: transparent;
+  --el-button-active-text-color: var(--app-accent-color);
 }
 
 .icon-actions .el-button.is-text,

@@ -32,6 +32,7 @@ function applyWindowChrome(dark) {
     WindowSetBackgroundColour(20, 20, 20, 255)
   } else {
     WindowSetLightTheme()
+    // 与顶栏 --app-panel-bg 一致，避免标题栏与菜单栏之间露灰缝
     WindowSetBackgroundColour(255, 255, 255, 255)
   }
 }

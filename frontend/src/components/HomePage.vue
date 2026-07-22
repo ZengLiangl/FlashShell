@@ -485,15 +485,16 @@ export default {
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius-panel, 14px);
   background: var(--app-panel-bg);
+  box-shadow: var(--app-surface-shadow, none);
   overflow: hidden;
 }
 
 .zone-task {
-  border-top: 3px solid var(--app-accent-color);
+  border-top: 2px solid color-mix(in srgb, var(--app-accent-color) 45%, var(--app-border));
 }
 
 .zone-shell {
-  border-top: 3px solid var(--app-accent-color);
+  border-top: 2px solid color-mix(in srgb, var(--app-accent-color) 45%, var(--app-border));
 }
 
 .zone.is-minimized {
@@ -563,12 +564,12 @@ export default {
 
 .task-dot {
   background: var(--app-accent-color);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-accent-color) 22%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-accent-color) 16%, transparent);
 }
 
 .shell-dot {
   background: var(--app-accent-color);
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-accent-color) 22%, transparent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-accent-color) 16%, transparent);
 }
 
 .zone-label h3 {
@@ -613,6 +614,7 @@ export default {
   overflow-x: hidden;
   overflow-y: auto;
   padding: var(--app-space-panel-body, 14px 16px 18px);
+  background: var(--app-inset-bg);
   scrollbar-gutter: stable;
 }
 
@@ -655,11 +657,12 @@ export default {
   border: 1px solid var(--app-card-border);
   border-radius: 10px;
   background: var(--app-card-bg);
+  box-shadow: var(--app-surface-shadow, none);
   color: inherit;
   text-align: left;
   cursor: pointer;
   box-sizing: border-box;
-  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
 }
 
 .item-card:hover {
