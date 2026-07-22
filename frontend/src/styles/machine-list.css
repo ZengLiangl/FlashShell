@@ -135,8 +135,8 @@
 }
 
 .ml-item.connected .ml-machine-icon {
-  color: #67c23a;
-  background: color-mix(in srgb, #67c23a 14%, transparent);
+  color: var(--app-accent-color);
+  background: color-mix(in srgb, var(--app-accent-color) 14%, transparent);
 }
 
 .ml-item.connecting .ml-machine-icon {
@@ -146,8 +146,8 @@
 
 .ml-item.connected:hover .ml-machine-icon,
 .ml-item.connected:focus-visible .ml-machine-icon {
-  color: #67c23a;
-  background: color-mix(in srgb, #67c23a 18%, transparent);
+  color: var(--app-accent-color);
+  background: color-mix(in srgb, var(--app-accent-color) 18%, transparent);
 }
 
 /* 兼容旧类名：点样式映射到图标槽 */
@@ -181,8 +181,8 @@
   line-height: 1;
   padding: 3px 6px;
   border-radius: 4px;
-  color: #67c23a;
-  background: color-mix(in srgb, #67c23a 14%, transparent);
+  color: var(--app-accent-color);
+  background: color-mix(in srgb, var(--app-accent-color) 14%, transparent);
 }
 
 .ml-badge.connecting,
@@ -393,6 +393,98 @@
 
 .ml-list--grid .ml-item {
   min-width: 0;
+}
+
+/* 首页等场景：与任务 item-card 对齐的卡片行 */
+.ml-stack--cards {
+  gap: 8px;
+}
+
+.ml-stack--cards .ml-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+}
+
+.ml-stack--cards.is-grid .ml-list,
+.ml-stack--cards .ml-list--grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  padding: 0;
+  border: none;
+  background: transparent;
+}
+
+.ml-stack--cards .ml-item {
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  min-height: 60px;
+  padding: 12px;
+  border: 1px solid var(--app-card-border);
+  border-radius: 10px;
+  background: var(--app-card-bg);
+  box-sizing: border-box;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.ml-stack--cards .ml-item:hover,
+.ml-stack--cards .ml-item:focus-visible {
+  border-color: var(--app-accent-color);
+  background: var(--app-card-active-bg);
+  transform: translateY(-1px);
+}
+
+.ml-stack--cards .ml-item.connecting {
+  background: var(--app-card-active-bg);
+}
+
+.ml-stack--cards .ml-machine-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+}
+
+.ml-stack--cards .ml-name {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ml-stack--cards .ml-addr {
+  margin-top: 2px;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+.ml-stack--cards .ml-side--meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ml-card-badge {
+  font-size: 11px;
+  color: var(--app-text-muted);
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--app-text-muted) 12%, transparent);
+  white-space: nowrap;
+}
+
+.ml-card-badge.is-accent {
+  color: var(--app-accent-color);
+  background: var(--app-accent-bg);
+}
+
+.ml-card-badge.is-muted {
+  opacity: 0.85;
 }
 
 .ml-actions-fade {

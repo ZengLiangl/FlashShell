@@ -2,7 +2,7 @@
   <div v-if="!hasTree" class="app-empty">
     <p class="app-empty-desc">{{ emptyText }}</p>
   </div>
-  <div v-else class="ml-stack" :class="{ 'is-grid': layout === 'grid' }">
+  <div v-else class="ml-stack" :class="{ 'is-grid': layout === 'grid', 'ml-stack--cards': variant === 'cards' }">
     <div
       v-for="group in customGroups"
       :key="group.name"
@@ -42,18 +42,25 @@
           @contextmenu.prevent="onItemContextMenu($event, machine)"
         >
           <div class="ml-machine-icon" aria-hidden="true">
-            <el-icon :size="16"><Monitor /></el-icon>
+            <el-icon :size="variant === 'cards' ? 18 : 16"><Monitor /></el-icon>
           </div>
           <div class="ml-body">
             <div class="ml-line">
               <span class="ml-name">{{ machine.name }}</span>
-              <span v-if="sessionCount(machine.name) > 0" class="ml-badge">{{ sessionCount(machine.name) }} 会话</span>
-              <span v-else-if="machineConnecting(machine.name)" class="ml-badge connecting">连接中</span>
+              <template v-if="variant !== 'cards'">
+                <span v-if="sessionCount(machine.name) > 0" class="ml-badge">{{ sessionCount(machine.name) }} 会话</span>
+                <span v-else-if="machineConnecting(machine.name)" class="ml-badge connecting">连接中</span>
+              </template>
             </div>
             <div class="ml-addr">{{ formatMachineAddr(machine) }}</div>
           </div>
-          <div v-if="showEdit" class="ml-side" @click.stop>
-            <button type="button" class="ml-icon-btn" title="编辑配置" @click="$emit('edit-machine', machine)">
+          <div class="ml-side" :class="{ 'ml-side--meta': variant === 'cards' }" @click.stop>
+            <template v-if="variant === 'cards'">
+              <span v-if="sessionCount(machine.name) > 0" class="ml-card-badge">{{ sessionCount(machine.name) }} 会话</span>
+              <span v-else-if="machineConnecting(machine.name)" class="ml-card-badge is-accent">连接中</span>
+              <span v-else class="ml-card-badge is-muted">未连接</span>
+            </template>
+            <button v-if="showEdit" type="button" class="ml-icon-btn" title="编辑配置" @click="$emit('edit-machine', machine)">
               <el-icon :size="14"><Setting /></el-icon>
             </button>
           </div>
@@ -77,19 +84,26 @@
         @keydown.enter.prevent="onConnect(machine)"
         @contextmenu.prevent="onItemContextMenu($event, machine)"
       >
-          <div class="ml-machine-icon" aria-hidden="true">
-            <el-icon :size="16"><Monitor /></el-icon>
-          </div>
+        <div class="ml-machine-icon" aria-hidden="true">
+          <el-icon :size="variant === 'cards' ? 18 : 16"><Monitor /></el-icon>
+        </div>
         <div class="ml-body">
           <div class="ml-line">
             <span class="ml-name">{{ machine.name }}</span>
-            <span v-if="sessionCount(machine.name) > 0" class="ml-badge">{{ sessionCount(machine.name) }} 会话</span>
-            <span v-else-if="machineConnecting(machine.name)" class="ml-badge connecting">连接中</span>
+            <template v-if="variant !== 'cards'">
+              <span v-if="sessionCount(machine.name) > 0" class="ml-badge">{{ sessionCount(machine.name) }} 会话</span>
+              <span v-else-if="machineConnecting(machine.name)" class="ml-badge connecting">连接中</span>
+            </template>
           </div>
           <div class="ml-addr">{{ formatMachineAddr(machine) }}</div>
         </div>
-        <div v-if="showEdit" class="ml-side" @click.stop>
-          <button type="button" class="ml-icon-btn" title="编辑配置" @click="$emit('edit-machine', machine)">
+        <div class="ml-side" :class="{ 'ml-side--meta': variant === 'cards' }" @click.stop>
+          <template v-if="variant === 'cards'">
+            <span v-if="sessionCount(machine.name) > 0" class="ml-card-badge">{{ sessionCount(machine.name) }} 会话</span>
+            <span v-else-if="machineConnecting(machine.name)" class="ml-card-badge is-accent">连接中</span>
+            <span v-else class="ml-card-badge is-muted">未连接</span>
+          </template>
+          <button v-if="showEdit" type="button" class="ml-icon-btn" title="编辑配置" @click="$emit('edit-machine', machine)">
             <el-icon :size="14"><Setting /></el-icon>
           </button>
         </div>
@@ -136,6 +150,8 @@ export default {
     filterKeyword: { type: String, default: '' },
     /** list：单列；grid：多列紧凑，便于一眼看到更多机器 */
     layout: { type: String, default: 'list' },
+    /** default：紧凑列表；cards：与首页任务卡片同尺寸的卡片行 */
+    variant: { type: String, default: 'default' },
   },
   emits: ['connect', 'edit-machine', 'copy-machine', 'delete-machine'],
   setup(props, { emit }) {

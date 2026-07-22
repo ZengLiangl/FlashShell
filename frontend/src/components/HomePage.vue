@@ -37,58 +37,60 @@
           </div>
           <div class="zone-actions" @click.stop>
             <template v-if="minimizedZone !== 'task'">
-              <el-dropdown
-                trigger="hover"
-                :show-timeout="120"
-                :hide-timeout="160"
-                @command="onConfigCommand"
-              >
-                <el-button size="small" circle title="配置文件">
-                  <el-icon><FolderOpened /></el-icon>
-                </el-button>
-                <template #dropdown>
-                  <el-dropdown-menu>
-                    <template v-if="configFiles.length">
-                      <el-dropdown-item
-                        v-for="file in configFiles"
-                        :key="file"
-                        :command="`switch:${file}`"
-                      >
-                        <span class="config-item">
-                          <el-icon v-if="file === currentConfig" class="config-check"><Check /></el-icon>
-                          <span>{{ basename(file) }}</span>
-                        </span>
-                      </el-dropdown-item>
-                    </template>
-                    <el-dropdown-item v-else disabled>无法加载配置文件</el-dropdown-item>
-                    <el-dropdown-item divided command="edit-pipeline">编辑任务流水线</el-dropdown-item>
-                    <el-dropdown-item command="refresh">
-                      <span>刷新配置列表</span>
-                      <span class="menu-shortcut">{{ labelOf('refreshConfig') }}</span>
-                    </el-dropdown-item>
-                    <el-dropdown-item command="open-global">打开全局配置</el-dropdown-item>
-                    <el-dropdown-item command="open-current">打开当前配置</el-dropdown-item>
-                  </el-dropdown-menu>
-                </template>
-              </el-dropdown>
-              <el-tooltip content="编辑任务流水线" placement="top">
-                <el-button size="small" circle title="编辑任务流水线" @click="openConfigEditor">
-                  <el-icon><Edit /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip :content="minimizedZone === 'shell' ? '恢复双栏' : '收起任务，展开机器列表'" placement="top">
-                <el-button
-                  size="small"
-                  circle
-                  :title="minimizedZone === 'shell' ? '恢复双栏' : '收起任务'"
-                  @click="toggleMinimize('task')"
+              <div class="zone-action-btns icon-actions icon-actions--sm">
+                <el-dropdown
+                  trigger="hover"
+                  :show-timeout="120"
+                  :hide-timeout="160"
+                  @command="onConfigCommand"
                 >
-                  <el-icon>
-                    <ArrowDown v-if="minimizedZone === 'shell'" />
-                    <ArrowUp v-else />
-                  </el-icon>
-                </el-button>
-              </el-tooltip>
+                  <el-button size="small" circle title="配置文件">
+                    <el-icon><FolderOpened /></el-icon>
+                  </el-button>
+                  <template #dropdown>
+                    <el-dropdown-menu>
+                      <template v-if="configFiles.length">
+                        <el-dropdown-item
+                          v-for="file in configFiles"
+                          :key="file"
+                          :command="`switch:${file}`"
+                        >
+                          <span class="config-item">
+                            <el-icon v-if="file === currentConfig" class="config-check"><Check /></el-icon>
+                            <span>{{ basename(file) }}</span>
+                          </span>
+                        </el-dropdown-item>
+                      </template>
+                      <el-dropdown-item v-else disabled>无法加载配置文件</el-dropdown-item>
+                      <el-dropdown-item divided command="edit-pipeline">编辑任务流水线</el-dropdown-item>
+                      <el-dropdown-item command="refresh">
+                        <span>刷新配置列表</span>
+                        <span class="menu-shortcut">{{ labelOf('refreshConfig') }}</span>
+                      </el-dropdown-item>
+                      <el-dropdown-item command="open-global">打开全局配置</el-dropdown-item>
+                      <el-dropdown-item command="open-current">打开当前配置</el-dropdown-item>
+                    </el-dropdown-menu>
+                  </template>
+                </el-dropdown>
+                <el-tooltip content="编辑任务流水线" placement="top">
+                  <el-button size="small" circle title="编辑任务流水线" @click="openConfigEditor">
+                    <el-icon><Edit /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip :content="minimizedZone === 'shell' ? '恢复双栏' : '收起任务，展开机器列表'" placement="top">
+                  <el-button
+                    size="small"
+                    circle
+                    :title="minimizedZone === 'shell' ? '恢复双栏' : '收起任务'"
+                    @click="toggleMinimize('task')"
+                  >
+                    <el-icon>
+                      <ArrowDown v-if="minimizedZone === 'shell'" />
+                      <ArrowUp v-else />
+                    </el-icon>
+                  </el-button>
+                </el-tooltip>
+              </div>
             </template>
             <el-tooltip v-else content="展开任务列表" placement="top">
               <el-button size="small" circle title="展开任务列表" @click="toggleMinimize('task')">
@@ -147,7 +149,7 @@
                 <el-tag
                   v-if="connectedCount > 0"
                   size="small"
-                  type="success"
+                  type="primary"
                   effect="plain"
                   class="session-tag"
                 >
@@ -172,12 +174,12 @@
               </el-input>
               <div class="zone-action-btns icon-actions icon-actions--sm">
                 <el-tooltip content="添加机器" placement="top">
-                  <el-button size="small" type="primary" plain circle @click="$emit('add-machine')">
+                  <el-button size="small" circle @click="$emit('add-machine')">
                     <el-icon><Plus /></el-icon>
                   </el-button>
                 </el-tooltip>
                 <el-tooltip content="进入终端" placement="top">
-                  <el-button size="small" type="success" plain circle @click="$emit('open-shell')">
+                  <el-button size="small" circle @click="$emit('open-shell')">
                     <el-icon><Monitor /></el-icon>
                   </el-button>
                 </el-tooltip>
@@ -221,6 +223,7 @@
               :connecting-name="connectingName"
               :filter-keyword="machineKeyword"
               :layout="minimizedZone === 'task' ? 'grid' : 'list'"
+              variant="cards"
               empty-text="无匹配机器"
               @connect="onConnectMachine"
             />
@@ -490,13 +493,13 @@ export default {
 }
 
 .zone-shell {
-  border-top: 3px solid #67c23a;
+  border-top: 3px solid var(--app-accent-color);
 }
 
 .zone.is-minimized {
   flex: 0 0 auto;
   max-height: none;
-  border-top-width: 2px;
+  border-top: 1px solid var(--app-border);
 }
 
 .zone.is-minimized .zone-head {
@@ -564,8 +567,8 @@ export default {
 }
 
 .shell-dot {
-  background: #67c23a;
-  box-shadow: 0 0 0 3px rgba(103, 194, 58, 0.22);
+  background: var(--app-accent-color);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--app-accent-color) 22%, transparent);
 }
 
 .zone-label h3 {
@@ -647,13 +650,15 @@ export default {
   align-items: center;
   gap: 12px;
   width: 100%;
-  padding: 12px 12px;
+  min-height: 60px;
+  padding: 12px;
   border: 1px solid var(--app-card-border);
   border-radius: 10px;
   background: var(--app-card-bg);
   color: inherit;
   text-align: left;
   cursor: pointer;
+  box-sizing: border-box;
   transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
 }
 

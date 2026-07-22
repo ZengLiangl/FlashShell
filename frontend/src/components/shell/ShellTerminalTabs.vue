@@ -942,7 +942,7 @@ export default {
 }
 
 .session-tab-status.is-connected {
-  background: #6fbf73;
+  background: var(--app-accent-color);
 }
 
 .session-tab-label {

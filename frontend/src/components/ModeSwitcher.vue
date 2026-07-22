@@ -107,7 +107,7 @@ export default {
   --mode-track: color-mix(in srgb, var(--app-text) 6%, var(--app-panel-bg));
   --mode-home: var(--app-text);
   --mode-task: var(--app-accent-color);
-  --mode-shell: var(--terminal-success, #67c23a);
+  --mode-shell: var(--app-accent-color);
 
   display: inline-grid;
   grid-auto-flow: column;
