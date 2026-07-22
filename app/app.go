@@ -1384,6 +1384,22 @@ func (a *App) SaveShortcutSettings(settings data.ShortcutSettings) error {
 	return nil
 }
 
+// GetKeyMapSettings 获取按键映射配置（~/.flashdock/keymaps.json）
+func (a *App) GetKeyMapSettings() (data.KeyMapSettings, error) {
+	return data.LoadKeyMapSettings()
+}
+
+// SaveKeyMapSettings 保存按键映射配置到 JSON，并通知前端刷新
+func (a *App) SaveKeyMapSettings(settings data.KeyMapSettings) error {
+	if err := data.SaveKeyMapSettings(settings); err != nil {
+		return err
+	}
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "keymaps:changed", settings)
+	}
+	return nil
+}
+
 // SaveSystemSettings 保存系统设置
 func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	a.normalizeThemeSettings(&config.ThemeSettings)

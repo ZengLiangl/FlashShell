@@ -91,6 +91,8 @@ export function GetGlobalConfig():Promise<data.GlobalConfig>;
 
 export function GetGlobalConfigForRefresh():Promise<data.GlobalConfig>;
 
+export function GetKeyMapSettings():Promise<data.KeyMapSettings>;
+
 export function GetKnownHosts():Promise<Array<data.KnownHostRecord>>;
 
 export function GetLocalHomeDir():Promise<string>;
@@ -236,6 +238,8 @@ export function SaveGlobalAccounts(arg1:Array<data.GlobalAccount>):Promise<void>
 export function SaveGlobalAccountsFromDTO(arg1:Array<data.GlobalAccountDTO>):Promise<void>;
 
 export function SaveGlobalConfig(arg1:data.GlobalConfig):Promise<void>;
+
+export function SaveKeyMapSettings(arg1:data.KeyMapSettings):Promise<void>;
 
 export function SaveShellRemoteFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 

@@ -639,6 +639,25 @@ export default {
       }
     }
 
+    /** 按键映射：向当前会话（或广播目标）写入字符串 */
+    const sendMappedInput = async (text) => {
+      if (!text) return false
+      try {
+        if (props.broadcastEnabled) {
+          const targets = (props.broadcastTargets || []).filter(Boolean)
+          if (!targets.length) return false
+          await App.BroadcastShellInput(targets, text)
+          return true
+        }
+        if (!props.activeMachine) return false
+        await App.SendShellInput(props.activeMachine, text)
+        return true
+      } catch (e) {
+        ElMessage.error('发送失败: ' + e)
+        return false
+      }
+    }
+
     const openCommandPalette = () => {
       if (!props.workspaceSessions?.length) return
       commandPaletteVisible.value = true
@@ -702,6 +721,7 @@ export default {
       openCommandPalette,
       pasteClipboard,
       onCommandPaletteInsert,
+      sendMappedInput,
       loadTunnels,
     }
   },

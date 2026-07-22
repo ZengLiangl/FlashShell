@@ -174,6 +174,10 @@ export function GetGlobalConfigForRefresh() {
   return window['go']['app']['App']['GetGlobalConfigForRefresh']();
 }
 
+export function GetKeyMapSettings() {
+  return window['go']['app']['App']['GetKeyMapSettings']();
+}
+
 export function GetKnownHosts() {
   return window['go']['app']['App']['GetKnownHosts']();
 }
@@ -464,6 +468,10 @@ export function SaveGlobalAccountsFromDTO(arg1) {
 
 export function SaveGlobalConfig(arg1) {
   return window['go']['app']['App']['SaveGlobalConfig'](arg1);
+}
+
+export function SaveKeyMapSettings(arg1) {
+  return window['go']['app']['App']['SaveKeyMapSettings'](arg1);
 }
 
 export function SaveShellRemoteFile(arg1, arg2, arg3) {

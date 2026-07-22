@@ -17,6 +17,14 @@
       >
         命令片段
       </button>
+      <button
+        type="button"
+        class="subnav-item"
+        :class="{ active: activeTab === 'keymaps' }"
+        @click="activeTab = 'keymaps'"
+      >
+        按键映射
+      </button>
     </div>
 
     <div v-if="activeTab === 'shortcuts'" class="panel-scroll">
@@ -75,7 +83,7 @@
       </section>
     </div>
 
-    <div v-else class="panel-scroll">
+    <div v-else-if="activeTab === 'snippets'" class="panel-scroll">
       <div class="tip-bar">
         <span>在 Shell 命令面板中快速插入。scope 填 <code>global</code> 或机器配置名</span>
       </div>
@@ -113,7 +121,11 @@
       </ul>
     </div>
 
-    <div class="panel-actions icon-actions">
+    <div v-else-if="activeTab === 'keymaps'" class="keymap-tab-body">
+      <KeyMapSettingsPanel :active="active && activeTab === 'keymaps'" />
+    </div>
+
+    <div v-if="activeTab !== 'keymaps'" class="panel-actions icon-actions">
       <el-tooltip v-if="activeTab === 'shortcuts'" content="全部重置" placement="top">
         <el-button circle @click="resetAll">
           <el-icon><RefreshLeft /></el-icon>
@@ -142,10 +154,11 @@ import {
   bindingFromEvent,
 } from '../utils/shortcuts'
 import { modKeyLabel } from '../utils/platform'
+import KeyMapSettingsPanel from './KeyMapSettingsPanel.vue'
 
 export default {
   name: 'ShortcutSettingsPanel',
-  components: { RefreshLeft, Check, Delete },
+  components: { RefreshLeft, Check, Delete, KeyMapSettingsPanel },
   props: {
     active: { type: Boolean, default: false },
   },
@@ -565,6 +578,14 @@ export default {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
   line-height: 1.45;
+}
+
+.keymap-tab-body {
+  flex: 1 1 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .panel-actions {
