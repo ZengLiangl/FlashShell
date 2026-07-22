@@ -159,8 +159,8 @@ export default {
 }
 
 .mode-btn:hover:not(.disabled):not(.active) {
-  color: var(--app-text-secondary, var(--app-text));
-  background: color-mix(in srgb, var(--app-card-bg, #fff) 55%, transparent);
+  color: var(--app-accent-color);
+  background: var(--app-accent-bg);
 }
 
 .mode-btn.active {

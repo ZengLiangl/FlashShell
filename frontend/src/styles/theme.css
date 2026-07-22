@@ -8,9 +8,17 @@
   --app-card-bg: #ffffff;
   --app-card-border: #ebeef5;
   --app-card-active-bg: #f3f9ff;
-  --app-card-hover-shadow: rgba(64, 158, 255, 0.15);
+  --app-card-hover-shadow: color-mix(in srgb, var(--app-accent-color) 15%, transparent);
   --app-accent-bg: #ecf5ff;
   --app-accent-color: #409eff;
+  --el-color-primary: var(--app-accent-color);
+  --el-color-primary-rgb: 64, 158, 255;
+  --el-color-primary-light-3: color-mix(in srgb, var(--app-accent-color) 70%, #ffffff);
+  --el-color-primary-light-5: color-mix(in srgb, var(--app-accent-color) 50%, #ffffff);
+  --el-color-primary-light-7: color-mix(in srgb, var(--app-accent-color) 30%, #ffffff);
+  --el-color-primary-light-8: color-mix(in srgb, var(--app-accent-color) 20%, #ffffff);
+  --el-color-primary-light-9: color-mix(in srgb, var(--app-accent-color) 10%, #ffffff);
+  --el-color-primary-dark-2: color-mix(in srgb, var(--app-accent-color) 80%, #000000);
   --terminal-bg: #1e1e1e;
   --terminal-fg: #d4d4d4;
   --terminal-success: #67c23a;
@@ -45,7 +53,7 @@ html.dark {
   --app-card-bg: #262727;
   --app-card-border: #414243;
   --app-card-active-bg: #2a3441;
-  --app-card-hover-shadow: rgba(64, 158, 255, 0.25);
+  --app-card-hover-shadow: color-mix(in srgb, var(--app-accent-color) 25%, transparent);
   --app-accent-bg: #1a3a5c;
   --app-accent-color: #79bbff;
   --terminal-bg: #0d1117;
@@ -146,6 +154,20 @@ body,
   display: inline-flex;
   align-items: center;
   justify-content: center;
+}
+
+/* 默认/文本按钮悬浮统一走主题强调色（与 --el-color-primary 同步） */
+.el-button:not(.is-disabled):not(.el-button--primary):not(.el-button--success):not(.el-button--warning):not(.el-button--danger):not(.el-button--info):hover,
+.el-button:not(.is-disabled):not(.el-button--primary):not(.el-button--success):not(.el-button--warning):not(.el-button--danger):not(.el-button--info):focus {
+  --el-button-hover-text-color: var(--el-color-primary);
+  --el-button-hover-border-color: var(--el-color-primary-light-7);
+  --el-button-hover-bg-color: var(--el-color-primary-light-9);
+}
+
+.el-button--primary:not(.is-disabled):hover,
+.el-button--primary:not(.is-disabled):focus {
+  --el-button-hover-bg-color: var(--el-color-primary-light-3);
+  --el-button-hover-border-color: var(--el-color-primary-light-3);
 }
 
 .app-container {

@@ -299,8 +299,8 @@ export default {
   font-size: 11px;
   padding: 1px 6px;
   border-radius: 4px;
-  background: rgba(64, 158, 255, 0.12);
-  color: #409eff;
+  background: color-mix(in srgb, var(--app-accent-color, #409eff) 12%, transparent);
+  color: var(--app-accent-color, #409eff);
 }
 
 .dir-tag.upload {
@@ -326,7 +326,7 @@ export default {
 
 .status.running,
 .status.pending {
-  color: #409eff;
+  color: var(--app-accent-color, #409eff);
 }
 
 .status.done {

@@ -278,7 +278,7 @@ export default {
 
 .command-type-icon {
     font-size: 14px;
-    color: #409eff;
+    color: var(--app-accent-color, #409eff);
 }
 
 .command-desc {
@@ -312,7 +312,7 @@ export default {
 }
 
 .step-number {
-    background: #409eff;
+    background: var(--app-accent-color, #409eff);
     color: white;
     border-radius: 50%;
     width: 18px;

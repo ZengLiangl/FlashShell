@@ -1128,7 +1128,7 @@ export default {
 }
 
 .height-handle:hover {
-  background: rgba(64, 158, 255, 0.08);
+  background: color-mix(in srgb, var(--app-accent-color, #409eff) 8%, transparent);
 }
 
 .file-toolbar {
@@ -1265,8 +1265,8 @@ export default {
 }
 
 .split-handle:hover {
-  background: rgba(64, 158, 255, 0.25);
-  border-right-color: rgba(64, 158, 255, 0.35);
+  background: color-mix(in srgb, var(--app-accent-color, #409eff) 25%, transparent);
+  border-right-color: color-mix(in srgb, var(--app-accent-color, #409eff) 35%, transparent);
 }
 
 .list-pane {

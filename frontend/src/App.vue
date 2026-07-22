@@ -1594,7 +1594,7 @@ export default {
 
 .loading-icon {
   font-size: 32px;
-  color: #409eff;
+  color: var(--app-accent-color, #409eff);
   animation: spin 1s linear infinite;
 }
 
@@ -2081,11 +2081,11 @@ export default {
 }
 
 .resize-handle:hover {
-  background: rgba(64, 158, 255, 0.3);
+  background: color-mix(in srgb, var(--app-accent-color, #409eff) 30%, transparent);
 }
 
 .resize-handle:active {
-  background: rgba(64, 158, 255, 0.5);
+  background: color-mix(in srgb, var(--app-accent-color, #409eff) 50%, transparent);
 }
 
 /* 拖拽时的视觉反馈 */
@@ -2094,7 +2094,7 @@ export default {
 }
 
 .left-panel.resizing .resize-handle {
-  background: rgba(64, 158, 255, 0.5);
+  background: color-mix(in srgb, var(--app-accent-color, #409eff) 50%, transparent);
 }
 </style>
 

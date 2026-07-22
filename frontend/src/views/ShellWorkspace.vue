@@ -863,7 +863,7 @@ export default {
 .panel-edge-wrap:hover .resize-handle,
 .panel-edge-wrap .resize-handle:hover,
 .panel-edge-wrap .resize-handle:active {
-  background: rgba(64, 158, 255, 0.08);
+  background: color-mix(in srgb, var(--app-accent-color, #409eff) 8%, transparent);
 }
 
 .panel-edge-btn {
