@@ -52,6 +52,8 @@
               @remove-command="removeCommand"
               @add-step="addStep"
               @remove-step="removeStep"
+              @reorder-command="reorderCommand"
+              @reorder-step="reorderStep"
             />
             <TaskFlowDrawer
               v-if="drawerKind"
@@ -100,7 +102,10 @@ import {
   emptyStep,
   emptySubProject,
   getSubProject,
+  moveArrayItem,
+  moveStep,
   normalizeRoot,
+  remapIndexAfterMove,
   samePath,
   serializeRootForSave,
 } from './taskflow/taskFlowModel'
@@ -197,8 +202,12 @@ export default {
       commitByPath(root.value, editPath.value, editDraft.value)
     }
 
-    const openEditPath = (path) => {
-      commitDraft()
+    /**
+     * 打开路径对应草稿。
+     * skipCommit：数组已重排/删除后旧下标失效时使用，避免把草稿写到错误节点。
+     */
+    const openEditPath = (path, { skipCommit = false } = {}) => {
+      if (!skipCommit) commitDraft()
       if (!path || path.p == null) {
         flowSel.value = null
         editDraft.value = null
@@ -300,6 +309,7 @@ export default {
       } catch {
         return
       }
+      commitDraft()
       const prevSel = flowSel.value ? { ...flowSel.value } : null
       if (prevSel?.c === cIndex) {
         flowSel.value = null
@@ -307,12 +317,15 @@ export default {
       }
       sub.commands.splice(cIndex, 1)
       if (prevSel != null && prevSel.c > cIndex) {
-        openEditPath({
-          p: navP.value,
-          s: navS.value,
-          c: prevSel.c - 1,
-          st: prevSel.st,
-        })
+        openEditPath(
+          {
+            p: navP.value,
+            s: navS.value,
+            c: prevSel.c - 1,
+            st: prevSel.st,
+          },
+          { skipCommit: true },
+        )
       } else if (prevSel?.c === cIndex) {
         flowSel.value = null
         editDraft.value = cloneNodeByPath(root.value, {
@@ -329,29 +342,105 @@ export default {
       if (!Array.isArray(cmd.steps)) cmd.steps = []
       commitDraft()
       cmd.steps.push(emptyStep('shell'))
-      openEditPath({
-        p: navP.value,
-        s: navS.value,
-        c: cIndex,
-        st: cmd.steps.length - 1,
-      })
+      openEditPath(
+        {
+          p: navP.value,
+          s: navS.value,
+          c: cIndex,
+          st: cmd.steps.length - 1,
+        },
+        { skipCommit: true },
+      )
     }
 
     const removeStep = (cIndex, stIndex) => {
       const cmd = ensureSubCommands()?.commands?.[cIndex]
       if (!cmd?.steps) return
+      commitDraft()
       const prevSel = flowSel.value ? { ...flowSel.value } : null
+      if (prevSel?.c === cIndex && prevSel?.st === stIndex) {
+        flowSel.value = { c: cIndex, st: undefined }
+        editDraft.value = null
+      }
       cmd.steps.splice(stIndex, 1)
       if (prevSel?.c === cIndex && prevSel?.st === stIndex) {
-        openEditPath({ p: navP.value, s: navS.value, c: cIndex })
+        openEditPath({ p: navP.value, s: navS.value, c: cIndex }, { skipCommit: true })
       } else if (prevSel?.c === cIndex && prevSel?.st != null && prevSel.st > stIndex) {
-        openEditPath({
+        openEditPath(
+          {
+            p: navP.value,
+            s: navS.value,
+            c: cIndex,
+            st: prevSel.st - 1,
+          },
+          { skipCommit: true },
+        )
+      }
+    }
+
+    const reorderCommand = ({ from, to }) => {
+      const sub = ensureSubCommands()
+      if (!sub) return
+      commitDraft()
+      if (!moveArrayItem(sub.commands, from, to)) return
+      if (!flowSel.value || flowSel.value.c == null) return
+      const nextC = remapIndexAfterMove(flowSel.value.c, from, to)
+      openEditPath(
+        {
           p: navP.value,
           s: navS.value,
-          c: cIndex,
-          st: prevSel.st - 1,
-        })
+          c: nextC,
+          st: flowSel.value.st,
+        },
+        { skipCommit: true },
+      )
+    }
+
+    const reorderStep = ({ fromC, fromSt, toC, toSt }) => {
+      const sub = ensureSubCommands()
+      if (!sub) return
+      commitDraft()
+      const prev = flowSel.value ? { ...flowSel.value } : null
+      const landed = moveStep(sub.commands, fromC, fromSt, toC, toSt)
+      if (!landed) return
+      if (!prev || prev.c == null) return
+
+      let nextPath = null
+      // 选中的是被拖动的步骤 → 跟随到新位置
+      if (prev.c === fromC && prev.st === fromSt) {
+        nextPath = {
+          p: navP.value,
+          s: navS.value,
+          c: landed.c,
+          st: landed.st,
+        }
+      } else if (fromC === toC && prev.c === fromC && prev.st != null) {
+        // 同命令内其它步骤下标重映射
+        nextPath = {
+          p: navP.value,
+          s: navS.value,
+          c: fromC,
+          st: remapIndexAfterMove(prev.st, fromSt, landed.st),
+        }
+      } else if (fromC !== toC && prev.c === fromC && prev.st != null && prev.st > fromSt) {
+        // 跨命令：源命令中位于被移步骤之后的下标前移
+        nextPath = {
+          p: navP.value,
+          s: navS.value,
+          c: fromC,
+          st: prev.st - 1,
+        }
+      } else if (fromC !== toC && prev.c === toC && prev.st != null && prev.st >= landed.st) {
+        // 跨命令：目标命令插入点及之后的下标后移
+        nextPath = {
+          p: navP.value,
+          s: navS.value,
+          c: toC,
+          st: prev.st + 1,
+        }
       }
+
+      if (nextPath) openEditPath(nextPath, { skipCommit: true })
     }
 
     const deleteSelected = async () => {
@@ -534,6 +623,8 @@ export default {
       removeCommand,
       addStep,
       removeStep,
+      reorderCommand,
+      reorderStep,
       deleteSelected,
       addProject,
       removeProject,

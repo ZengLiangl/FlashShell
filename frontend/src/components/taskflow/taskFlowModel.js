@@ -274,3 +274,51 @@ export function parseTargzPaths(command = '') {
 export function buildTargzCommand(src, dest) {
   return `targz ${src || ''} ${dest || ''}`.trim()
 }
+
+/** 将数组元素从 from 移到 to（原地修改） */
+export function moveArrayItem(arr, from, to) {
+  if (!Array.isArray(arr) || from === to) return false
+  if (from < 0 || to < 0 || from >= arr.length || to >= arr.length) return false
+  const [item] = arr.splice(from, 1)
+  arr.splice(to, 0, item)
+  return true
+}
+
+/** 单列表重排后，把选中下标映射到新位置 */
+export function remapIndexAfterMove(index, from, to) {
+  if (index == null || from === to) return index
+  if (index === from) return to
+  if (from < to) {
+    if (index > from && index <= to) return index - 1
+  } else if (index >= to && index < from) {
+    return index + 1
+  }
+  return index
+}
+
+/**
+ * 移动步骤（可跨命令）。返回落点 { c, st }；失败返回 null。
+ * toSt 为插入目标下标（同命令内按 moveArrayItem 语义）。
+ */
+export function moveStep(commands, fromC, fromSt, toC, toSt) {
+  if (!Array.isArray(commands)) return null
+  const fromCmd = commands[fromC]
+  const toCmd = commands[toC]
+  if (!fromCmd || !toCmd) return null
+  if (!Array.isArray(fromCmd.steps)) fromCmd.steps = []
+  if (!Array.isArray(toCmd.steps)) toCmd.steps = []
+  if (fromSt < 0 || fromSt >= fromCmd.steps.length) return null
+
+  if (fromC === toC) {
+    let target = toSt
+    if (target >= fromCmd.steps.length) target = fromCmd.steps.length - 1
+    if (target < 0) return null
+    if (!moveArrayItem(fromCmd.steps, fromSt, target)) return null
+    return { c: toC, st: target }
+  }
+
+  const [item] = fromCmd.steps.splice(fromSt, 1)
+  const insertAt = Math.max(0, Math.min(toSt, toCmd.steps.length))
+  toCmd.steps.splice(insertAt, 0, item)
+  return { c: toC, st: insertAt }
+}
