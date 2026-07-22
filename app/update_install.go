@@ -412,14 +412,19 @@ while kill -0 $PID 2>/dev/null; do
   sleep 1
 done
 log "host process exited"
-hdiutil attach "$DMG" -nobrowse -quiet -mountpoint "$MOUNT_DIR" >>"$LOG_FILE" 2>&1
-APP_SRC=$(ls "$MOUNT_DIR"/*.app 2>/dev/null | head -n 1 || true)
-if [ -z "$APP_SRC" ]; then
-  log "no .app found inside dmg"
+if ! hdiutil attach "$DMG" -nobrowse -quiet -mountpoint "$MOUNT_DIR" >>"$LOG_FILE" 2>&1; then
+  log "hdiutil attach failed: $DMG -> $MOUNT_DIR"
+  exit 1
+fi
+# 注意：不能用 ls *.app（会展开目录内容，得到 Contents 而不是 .app 路径）
+APP_SRC=$(find "$MOUNT_DIR" -maxdepth 1 -type d -name "*.app" 2>/dev/null | head -n 1 || true)
+if [ -z "$APP_SRC" ] || [ ! -d "$APP_SRC/Contents" ]; then
+  log "no .app found inside dmg (mount=$MOUNT_DIR, app_src=$APP_SRC)"
   hdiutil detach "$MOUNT_DIR" -quiet >>"$LOG_FILE" 2>&1 || true
   exit 1
 fi
 
+log "install source: $APP_SRC"
 log "install target: $TARGET_APP"
 if ! replace_app_direct; then
   log "direct replace failed, trying admin replace"
