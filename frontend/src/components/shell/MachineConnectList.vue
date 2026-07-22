@@ -2,7 +2,7 @@
   <div v-if="!hasTree" class="app-empty">
     <p class="app-empty-desc">{{ emptyText }}</p>
   </div>
-  <div v-else class="ml-stack">
+  <div v-else class="ml-stack" :class="{ 'is-grid': layout === 'grid' }">
     <div
       v-for="group in customGroups"
       :key="group.name"
@@ -23,6 +23,7 @@
       <ul
         v-show="isGroupExpanded(group.name)"
         class="ml-list"
+        :class="{ 'ml-list--grid': layout === 'grid' }"
         role="listbox"
       >
         <li
@@ -60,7 +61,7 @@
       </ul>
     </div>
 
-    <ul v-if="defaultMachines.length" class="ml-list" role="listbox">
+    <ul v-if="defaultMachines.length" class="ml-list" :class="{ 'ml-list--grid': layout === 'grid' }" role="listbox">
       <li
         v-for="machine in defaultMachines"
         :key="machine.id || machine.name"
@@ -133,6 +134,8 @@ export default {
     emptyText: { type: String, default: '暂无机器' },
     autoExpandOnFilter: { type: Boolean, default: true },
     filterKeyword: { type: String, default: '' },
+    /** list：单列；grid：多列紧凑，便于一眼看到更多机器 */
+    layout: { type: String, default: 'list' },
   },
   emits: ['connect', 'edit-machine', 'copy-machine', 'delete-machine'],
   setup(props, { emit }) {

@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"FlashDock/data"
+
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -158,26 +160,24 @@ var resolveLegacyUpdateWorkspaceDir = func() string {
 	return filepath.Join(os.TempDir(), "flashdock-updates")
 }
 
-func resolveUpdateWorkspaceDir(version string) string {
-	// macOS：更新包默认放桌面 FlashDock-<version>/，便于用户查看
-	if goruntime.GOOS == "darwin" {
-		homeDir, err := os.UserHomeDir()
-		if err == nil && strings.TrimSpace(homeDir) != "" {
-			desktopDir := filepath.Join(homeDir, "Desktop")
-			if st, statErr := os.Stat(desktopDir); statErr == nil && st.IsDir() {
-				return filepath.Join(desktopDir, fmt.Sprintf("FlashDock-%s", sanitizeVersionForPath(version)))
-			}
-		}
+// resolveUpdateWorkspaceRoot 返回 ~/.flashdock/updates（与全局配置同级）
+var resolveUpdateWorkspaceRoot = func() string {
+	home, err := data.ConfigHomeDir()
+	if err != nil || strings.TrimSpace(home) == "" {
+		return ""
+	}
+	return filepath.Join(home, "updates")
+}
+
+func resolveUpdateWorkspaceDir() string {
+	if root := strings.TrimSpace(resolveUpdateWorkspaceRoot()); root != "" {
+		return root
 	}
 	return resolveLegacyUpdateWorkspaceDir()
 }
 
-func resolveUpdateAssetPath(workspaceDir, stagedDir, assetName string) string {
-	name := strings.TrimSpace(assetName)
-	if goruntime.GOOS == "darwin" {
-		return filepath.Join(workspaceDir, name)
-	}
-	return filepath.Join(stagedDir, name)
+func resolveUpdateAssetPath(stagedDir, assetName string) string {
+	return filepath.Join(stagedDir, strings.TrimSpace(assetName))
 }
 
 func prepareStagedDir(workspaceDir, version string) (string, error) {
@@ -211,10 +211,10 @@ func resolveReusableStagedUpdate(latestVersion, assetName string) *stagedUpdate 
 		}
 	}
 
-	workspaceDir := resolveUpdateWorkspaceDir(version)
+	workspaceDir := resolveUpdateWorkspaceDir()
 	stagedDirName := fmt.Sprintf(".flashdock-update-%s-%s", goruntime.GOOS, sanitizeVersionForPath(version))
 	stagedDir := filepath.Join(workspaceDir, stagedDirName)
-	assetPath := resolveUpdateAssetPath(workspaceDir, stagedDir, assetName)
+	assetPath := resolveUpdateAssetPath(stagedDir, assetName)
 	if !fileExists(assetPath) {
 		legacy := filepath.Join(stagedDir, assetName)
 		if fileExists(legacy) {

@@ -271,6 +271,7 @@ export namespace data {
 	    shellTerminalScrollback: number;
 	    taskOutputMaxLines: number;
 	    shellCommandHistoryMax: number;
+	    homeMinimizedZone: string;
 	    shellLogHighlight?: boolean;
 	    shellLogHighlightColors: ShellLogHighlightColors;
 	    shellLogHighlightDisabled: string[];
@@ -297,6 +298,7 @@ export namespace data {
 	        this.shellTerminalScrollback = source["shellTerminalScrollback"];
 	        this.taskOutputMaxLines = source["taskOutputMaxLines"];
 	        this.shellCommandHistoryMax = source["shellCommandHistoryMax"];
+	        this.homeMinimizedZone = source["homeMinimizedZone"];
 	        this.shellLogHighlight = source["shellLogHighlight"];
 	        this.shellLogHighlightColors = this.convertValues(source["shellLogHighlightColors"], ShellLogHighlightColors);
 	        this.shellLogHighlightDisabled = source["shellLogHighlightDisabled"];

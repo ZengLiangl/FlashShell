@@ -80,25 +80,37 @@ func discoverUpdateArtifactPaths() map[string][]string {
 		result[version] = appendUniquePath(result[version], path)
 	}
 
-	scanUpdateWorkspace(resolveLegacyUpdateWorkspaceDir(), addPath)
+	scanUpdateWorkspace(resolveUpdateWorkspaceDir(), addPath)
+	// 兼容旧版临时目录
+	if legacy := resolveLegacyUpdateWorkspaceDir(); !strings.EqualFold(filepath.Clean(legacy), filepath.Clean(resolveUpdateWorkspaceDir())) {
+		scanUpdateWorkspace(legacy, addPath)
+	}
 
 	if goruntime.GOOS == "darwin" {
-		homeDir, err := os.UserHomeDir()
-		if err != nil || strings.TrimSpace(homeDir) == "" {
-			return result
-		}
-		desktopDir := filepath.Join(homeDir, "Desktop")
-		entries, err := os.ReadDir(desktopDir)
-		if err != nil {
-			return result
-		}
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
+		scanMacFlashDockUpdateDirs := func(parentDir string) {
+			parentDir = strings.TrimSpace(parentDir)
+			if parentDir == "" {
+				return
 			}
-			if version := parseMacDesktopUpdateDirVersion(entry.Name()); version != "" {
-				addPath(version, filepath.Join(desktopDir, entry.Name()))
+			entries, err := os.ReadDir(parentDir)
+			if err != nil {
+				return
 			}
+			for _, entry := range entries {
+				if !entry.IsDir() {
+					continue
+				}
+				if version := parseMacUpdateDirVersion(entry.Name()); version != "" {
+					addPath(version, filepath.Join(parentDir, entry.Name()))
+				}
+			}
+		}
+		// 兼容旧版曾放到「下载 / 桌面」的更新目录，一并纳入清理
+		if downloadsDir, err := resolveDownloadsDir(); err == nil {
+			scanMacFlashDockUpdateDirs(downloadsDir)
+		}
+		if homeDir, err := os.UserHomeDir(); err == nil && strings.TrimSpace(homeDir) != "" {
+			scanMacFlashDockUpdateDirs(filepath.Join(homeDir, "Desktop"))
 		}
 	}
 	return result
@@ -138,7 +150,7 @@ func parseUpdateStagedDirVersion(dirName string) string {
 	return ""
 }
 
-func parseMacDesktopUpdateDirVersion(dirName string) string {
+func parseMacUpdateDirVersion(dirName string) string {
 	const prefix = "FlashDock-"
 	if !strings.HasPrefix(dirName, prefix) {
 		return ""

@@ -172,6 +172,9 @@ func (a *App) CheckForUpdates() *UpdateCheckResult {
 
 	var stagedVersion string
 	if result.HasUpdate {
+		// 有新版本时始终把目标版本纳入保留集，避免异步 prune 与下载建目录竞态：
+		// 若 prune 先删掉 ~/.flashdock/updates 下暂存目录，随后写 .part 会报 no such file。
+		stagedVersion = result.LatestVersion
 		if reusable := resolveReusableStagedUpdate(result.LatestVersion, result.AssetName); reusable != nil {
 			setCurrentStaged(reusable)
 			result.Downloaded = true
@@ -234,7 +237,7 @@ func (a *App) DownloadUpdate(sourceLabel string) *UpdateDownloadResult {
 		return &UpdateDownloadResult{Success: false, Message: msg}
 	}
 
-	workspaceDir := resolveUpdateWorkspaceDir(check.LatestVersion)
+	workspaceDir := resolveUpdateWorkspaceDir()
 	if err := os.MkdirAll(workspaceDir, 0o755); err != nil {
 		msg := "创建更新目录失败: " + err.Error()
 		a.emitUpdateDownloadProgress("error", 0, check.AssetSize, msg)
@@ -247,7 +250,7 @@ func (a *App) DownloadUpdate(sourceLabel string) *UpdateDownloadResult {
 		return &UpdateDownloadResult{Success: false, Message: msg}
 	}
 
-	dest := resolveUpdateAssetPath(workspaceDir, stagedDir, check.AssetName)
+	dest := resolveUpdateAssetPath(stagedDir, check.AssetName)
 	sources := buildDownloadSources(check.DownloadURL)
 	if len(sources) == 0 {
 		msg := "无可用下载源"
@@ -670,6 +673,9 @@ func downloadFileWithProgress(ctx context.Context, url, dest string, knownSize i
 	}
 
 	tmp := dest + ".part"
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return fmt.Errorf("创建下载目录失败: %w", err)
+	}
 	_ = os.Remove(tmp)
 	out, err := os.Create(tmp)
 	if err != nil {

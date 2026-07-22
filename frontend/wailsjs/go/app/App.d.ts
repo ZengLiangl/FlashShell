@@ -91,6 +91,8 @@ export function GetGlobalConfig():Promise<data.GlobalConfig>;
 
 export function GetGlobalConfigForRefresh():Promise<data.GlobalConfig>;
 
+export function GetHomeMinimizedZone():Promise<string>;
+
 export function GetKeyMapSettings():Promise<data.KeyMapSettings>;
 
 export function GetKnownHosts():Promise<Array<data.KnownHostRecord>>;
@@ -266,6 +268,8 @@ export function SelectXshellFolder():Promise<string>;
 export function SendShellInput(arg1:string,arg2:string):Promise<void>;
 
 export function SendShellInterrupt(arg1:string):Promise<void>;
+
+export function SetHomeMinimizedZone(arg1:string):Promise<void>;
 
 export function SetMachineSensitiveData(arg1:string,arg2:define.SensitiveData):Promise<void>;
 

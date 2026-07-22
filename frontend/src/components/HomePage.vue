@@ -9,59 +9,96 @@
       </div>
     </header>
 
-    <div class="home-zones" :class="{ 'shell-only': !hasProjects }">
-      <section class="zone zone-task" aria-labelledby="zone-task-title">
-        <div class="zone-head">
+    <div
+      class="home-zones"
+      :class="{
+        'shell-only': !hasProjects,
+        'task-minimized': minimizedZone === 'task',
+        'shell-minimized': minimizedZone === 'shell',
+        'is-focus': !!minimizedZone,
+      }"
+    >
+      <section
+        class="zone zone-task"
+        :class="{ 'is-minimized': minimizedZone === 'task' }"
+        aria-labelledby="zone-task-title"
+      >
+        <div
+          class="zone-head"
+          :class="{ 'is-clickable': minimizedZone === 'task' }"
+          @click="minimizedZone === 'task' && toggleMinimize('task')"
+        >
           <div class="zone-label">
             <span class="zone-dot task-dot" aria-hidden="true"></span>
             <div>
               <h3 id="zone-task-title">任务模式</h3>
             </div>
+            <span v-if="minimizedZone === 'task'" class="zone-mini-hint">点击展开</span>
           </div>
-          <div class="zone-actions">
-            <el-dropdown
-              trigger="hover"
-              :show-timeout="120"
-              :hide-timeout="160"
-              @command="onConfigCommand"
-            >
-              <el-button size="small" circle title="配置文件">
-                <el-icon><FolderOpened /></el-icon>
-              </el-button>
-              <template #dropdown>
-                <el-dropdown-menu>
-                  <template v-if="configFiles.length">
-                    <el-dropdown-item
-                      v-for="file in configFiles"
-                      :key="file"
-                      :command="`switch:${file}`"
-                    >
-                      <span class="config-item">
-                        <el-icon v-if="file === currentConfig" class="config-check"><Check /></el-icon>
-                        <span>{{ basename(file) }}</span>
-                      </span>
+          <div class="zone-actions" @click.stop>
+            <template v-if="minimizedZone !== 'task'">
+              <el-dropdown
+                trigger="hover"
+                :show-timeout="120"
+                :hide-timeout="160"
+                @command="onConfigCommand"
+              >
+                <el-button size="small" circle title="配置文件">
+                  <el-icon><FolderOpened /></el-icon>
+                </el-button>
+                <template #dropdown>
+                  <el-dropdown-menu>
+                    <template v-if="configFiles.length">
+                      <el-dropdown-item
+                        v-for="file in configFiles"
+                        :key="file"
+                        :command="`switch:${file}`"
+                      >
+                        <span class="config-item">
+                          <el-icon v-if="file === currentConfig" class="config-check"><Check /></el-icon>
+                          <span>{{ basename(file) }}</span>
+                        </span>
+                      </el-dropdown-item>
+                    </template>
+                    <el-dropdown-item v-else disabled>无法加载配置文件</el-dropdown-item>
+                    <el-dropdown-item divided command="edit-pipeline">编辑任务流水线</el-dropdown-item>
+                    <el-dropdown-item command="refresh">
+                      <span>刷新配置列表</span>
+                      <span class="menu-shortcut">{{ labelOf('refreshConfig') }}</span>
                     </el-dropdown-item>
-                  </template>
-                  <el-dropdown-item v-else disabled>无法加载配置文件</el-dropdown-item>
-                  <el-dropdown-item divided command="edit-pipeline">编辑任务流水线</el-dropdown-item>
-                  <el-dropdown-item command="refresh">
-                    <span>刷新配置列表</span>
-                    <span class="menu-shortcut">{{ labelOf('refreshConfig') }}</span>
-                  </el-dropdown-item>
-                  <el-dropdown-item command="open-global">打开全局配置</el-dropdown-item>
-                  <el-dropdown-item command="open-current">打开当前配置</el-dropdown-item>
-                </el-dropdown-menu>
-              </template>
-            </el-dropdown>
-            <el-tooltip content="编辑任务流水线" placement="top">
-              <el-button size="small" circle title="编辑任务流水线" @click="openConfigEditor">
-                <el-icon><Edit /></el-icon>
+                    <el-dropdown-item command="open-global">打开全局配置</el-dropdown-item>
+                    <el-dropdown-item command="open-current">打开当前配置</el-dropdown-item>
+                  </el-dropdown-menu>
+                </template>
+              </el-dropdown>
+              <el-tooltip content="编辑任务流水线" placement="top">
+                <el-button size="small" circle title="编辑任务流水线" @click="openConfigEditor">
+                  <el-icon><Edit /></el-icon>
+                </el-button>
+              </el-tooltip>
+              <el-tooltip :content="minimizedZone === 'shell' ? '恢复双栏' : '收起任务，展开机器列表'" placement="top">
+                <el-button
+                  size="small"
+                  circle
+                  :title="minimizedZone === 'shell' ? '恢复双栏' : '收起任务'"
+                  @click="toggleMinimize('task')"
+                >
+                  <el-icon>
+                    <ArrowDown v-if="minimizedZone === 'shell'" />
+                    <ArrowUp v-else />
+                  </el-icon>
+                </el-button>
+              </el-tooltip>
+            </template>
+            <el-tooltip v-else content="展开任务列表" placement="top">
+              <el-button size="small" circle title="展开任务列表" @click="toggleMinimize('task')">
+                <el-icon><ArrowDown /></el-icon>
               </el-button>
             </el-tooltip>
           </div>
         </div>
 
-        <div class="zone-body">
+        <div v-show="minimizedZone !== 'task'" class="zone-body">
           <div v-if="!hasProjects" class="app-empty">
             <p class="app-empty-title">暂无任务项目</p>
             <p class="app-empty-desc">在任务流水线中添加项目后显示在这里</p>
@@ -71,7 +108,7 @@
               </el-button>
             </el-tooltip>
           </div>
-          <div v-else class="item-grid">
+          <div v-else class="item-grid" :class="{ 'is-dense': minimizedZone === 'shell' }">
             <button
               v-for="project in projects"
               :key="project.name"
@@ -92,47 +129,86 @@
         </div>
       </section>
 
-      <section class="zone zone-shell" aria-labelledby="zone-shell-title">
-        <div class="zone-head">
+      <section
+        class="zone zone-shell"
+        :class="{ 'is-minimized': minimizedZone === 'shell' }"
+        aria-labelledby="zone-shell-title"
+      >
+        <div
+          class="zone-head"
+          :class="{ 'is-clickable': minimizedZone === 'shell' }"
+          @click="minimizedZone === 'shell' && toggleMinimize('shell')"
+        >
           <div class="zone-label">
             <span class="zone-dot shell-dot" aria-hidden="true"></span>
             <div>
               <h3 id="zone-shell-title">
                 Shell 模式
-                <el-tag v-if="connectedCount > 0" size="small" type="success" effect="plain" class="session-tag">
+                <el-tag
+                  v-if="connectedCount > 0"
+                  size="small"
+                  type="success"
+                  effect="plain"
+                  class="session-tag"
+                >
                   {{ connectedCount }} 会话进行中
                 </el-tag>
               </h3>
             </div>
+            <span v-if="minimizedZone === 'shell'" class="zone-mini-hint">点击展开</span>
           </div>
-          <div class="zone-actions">
-            <el-input
-              v-model="machineKeyword"
-              clearable
-              size="small"
-              placeholder="搜索名称 / IP"
-              class="app-toolbar-search compact machine-search"
-            >
-              <template #prefix>
-                <el-icon><Search /></el-icon>
-              </template>
-            </el-input>
-            <div class="zone-action-btns icon-actions icon-actions--sm">
-              <el-tooltip content="添加机器" placement="top">
-                <el-button size="small" type="primary" plain circle @click="$emit('add-machine')">
-                  <el-icon><Plus /></el-icon>
-                </el-button>
-              </el-tooltip>
-              <el-tooltip content="进入终端" placement="top">
-                <el-button size="small" type="success" plain circle @click="$emit('open-shell')">
-                  <el-icon><Monitor /></el-icon>
-                </el-button>
-              </el-tooltip>
-            </div>
+          <div class="zone-actions" @click.stop>
+            <template v-if="minimizedZone !== 'shell'">
+              <el-input
+                v-model="machineKeyword"
+                clearable
+                size="small"
+                placeholder="搜索名称 / IP"
+                class="app-toolbar-search compact machine-search"
+              >
+                <template #prefix>
+                  <el-icon><Search /></el-icon>
+                </template>
+              </el-input>
+              <div class="zone-action-btns icon-actions icon-actions--sm">
+                <el-tooltip content="添加机器" placement="top">
+                  <el-button size="small" type="primary" plain circle @click="$emit('add-machine')">
+                    <el-icon><Plus /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip content="进入终端" placement="top">
+                  <el-button size="small" type="success" plain circle @click="$emit('open-shell')">
+                    <el-icon><Monitor /></el-icon>
+                  </el-button>
+                </el-tooltip>
+                <el-tooltip :content="minimizedZone === 'task' ? '恢复双栏' : '收起 Shell，展开任务列表'" placement="top">
+                  <el-button
+                    size="small"
+                    circle
+                    :title="minimizedZone === 'task' ? '恢复双栏' : '收起 Shell'"
+                    @click="toggleMinimize('shell')"
+                  >
+                    <el-icon>
+                      <ArrowUp v-if="minimizedZone === 'task'" />
+                      <ArrowDown v-else />
+                    </el-icon>
+                  </el-button>
+                </el-tooltip>
+              </div>
+            </template>
+            <el-tooltip v-else content="展开机器列表" placement="top">
+              <el-button size="small" circle title="展开机器列表" @click="toggleMinimize('shell')">
+                <el-icon><ArrowUp /></el-icon>
+              </el-button>
+            </el-tooltip>
           </div>
         </div>
 
-        <div class="zone-body" :class="{ 'zone-body--narrow': !hasProjects }">
+        <div
+          v-show="minimizedZone !== 'shell'"
+          class="zone-body"
+          :class="{ 'zone-body--narrow': !hasProjects && !minimizedZone }"
+        >
           <div v-if="!(machines || []).length" class="app-empty">
             <p class="app-empty-title">暂无机器</p>
             <p class="app-empty-desc">点击右上角 + 添加机器</p>
@@ -144,6 +220,7 @@
               :workspace-sessions="workspaceSessions"
               :connecting-name="connectingName"
               :filter-keyword="machineKeyword"
+              :layout="minimizedZone === 'task' ? 'grid' : 'list'"
               empty-text="无匹配机器"
               @connect="onConnectMachine"
             />
@@ -156,7 +233,7 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { Refresh } from '@element-plus/icons-vue'
+import { Refresh, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import { machineMatchesKeyword, isMachineConnecting } from '../utils/machineGroups'
@@ -170,9 +247,13 @@ function basename(filePath) {
   return idx >= 0 ? normalized.slice(idx + 1) : filePath
 }
 
+function normalizeMinimizedZone(zone) {
+  return zone === 'task' || zone === 'shell' ? zone : ''
+}
+
 export default {
   name: 'HomePage',
-  components: { MachineConnectList },
+  components: { MachineConnectList, ArrowUp, ArrowDown },
   props: {
     projects: { type: Array, required: true },
     machines: { type: Array, default: () => [] },
@@ -198,11 +279,33 @@ export default {
     const configFiles = ref([])
     const currentConfig = ref('')
     const shortcuts = ref(mergeShortcuts())
+    const minimizedZone = ref('')
 
+    const hasProjects = computed(() => (props.projects || []).length > 0)
     const labelOf = (id) => formatShortcut(shortcuts.value[id])
 
     const openConfigEditor = () => {
       emit('open-config-editor')
+    }
+
+    const loadMinimizedZone = async () => {
+      try {
+        minimizedZone.value = normalizeMinimizedZone(await App.GetHomeMinimizedZone())
+      } catch {
+        minimizedZone.value = ''
+      }
+    }
+
+    const toggleMinimize = async (zone) => {
+      const next = minimizedZone.value === zone ? '' : zone
+      const prev = minimizedZone.value
+      minimizedZone.value = next
+      try {
+        await App.SetHomeMinimizedZone(next)
+      } catch (e) {
+        minimizedZone.value = prev
+        console.error('保存首页布局失败:', e)
+      }
     }
 
     const loadConfigMenu = async () => {
@@ -259,49 +362,49 @@ export default {
       return list.filter((m) => machineMatchesKeyword(m, kw))
     })
 
-    const hasProjects = computed(() => (props.projects || []).length > 0)
-
     const onConnectMachine = (name) => {
-      const tabs = props.workspaceSessions.length ? props.workspaceSessions : props.sessions
-      if (isMachineConnecting(name, tabs)) return
+      if (isMachineConnecting(name, props.workspaceSessions.length ? props.workspaceSessions : props.sessions)) {
+        return
+      }
       emit('connect-machine', name)
     }
 
-    const handleRefresh = async () => {
-      await loadConfigMenu()
-      emit('refresh')
+    const handleRefresh = () => emit('refresh')
+
+    const onMinimizedZoneChanged = (zone) => {
+      minimizedZone.value = normalizeMinimizedZone(zone)
     }
 
     onMounted(() => {
       loadConfigMenu()
       loadShortcuts()
-      EventsOn('menu:refresh', loadConfigMenu)
+      loadMinimizedZone()
       EventsOn('config:changed', loadConfigMenu)
-      EventsOn('shortcuts:changed', (data) => {
-        shortcuts.value = mergeShortcuts(data)
-      })
+      EventsOn('shortcuts:changed', loadShortcuts)
+      EventsOn('home:minimized-zone', onMinimizedZoneChanged)
     })
 
     onUnmounted(() => {
-      EventsOff('menu:refresh')
       EventsOff('config:changed')
       EventsOff('shortcuts:changed')
+      EventsOff('home:minimized-zone')
     })
 
     return {
       Refresh,
-      machines: computed(() => props.machines || []),
       machineKeyword,
-      filteredMachines,
-      hasProjects,
       configFiles,
       currentConfig,
+      hasProjects,
+      filteredMachines,
+      minimizedZone,
       basename,
       labelOf,
       onConfigCommand,
       openConfigEditor,
       onConnectMachine,
       handleRefresh,
+      toggleMinimize,
     }
   },
 }
@@ -356,10 +459,26 @@ export default {
   grid-template-columns: 1fr 1fr;
 }
 
+/* 收起后改为上下布局：窄横条 + 全宽内容区 */
+.home-zones.task-minimized,
+.home-zones.shell-minimized {
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.home-zones.task-minimized {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.home-zones.shell-minimized {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
 .zone {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  min-width: 0;
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius-panel, 14px);
   background: var(--app-panel-bg);
@@ -374,6 +493,47 @@ export default {
   border-top: 3px solid #67c23a;
 }
 
+.zone.is-minimized {
+  flex: 0 0 auto;
+  max-height: none;
+  border-top-width: 2px;
+}
+
+.zone.is-minimized .zone-head {
+  padding: 8px 14px;
+  border-bottom: none;
+  min-height: 44px;
+  background: color-mix(in srgb, var(--app-text-muted) 5%, var(--app-panel-bg));
+}
+
+.zone.is-minimized .zone-head.is-clickable {
+  cursor: pointer;
+}
+
+.zone.is-minimized .zone-head.is-clickable:hover {
+  background: color-mix(in srgb, var(--app-accent-color) 8%, var(--app-panel-bg));
+}
+
+.zone.is-minimized .zone-label {
+  align-items: center;
+}
+
+.zone.is-minimized .zone-label h3 {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.zone.is-minimized .zone-dot {
+  margin-top: 0;
+}
+
+.zone-mini-hint {
+  margin-left: 4px;
+  font-size: 12px;
+  color: var(--app-text-muted);
+  white-space: nowrap;
+}
+
 .zone-head {
   display: flex;
   align-items: center;
@@ -386,7 +546,7 @@ export default {
 
 .zone-label {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 10px;
   min-width: 0;
 }
@@ -395,7 +555,6 @@ export default {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  margin-top: 7px;
   flex-shrink: 0;
 }
 
@@ -436,6 +595,9 @@ export default {
 
 .zone-action-btns {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .machine-search {
@@ -470,6 +632,13 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 8px;
+}
+
+.item-grid.is-dense {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  align-content: start;
 }
 
 .item-card {
@@ -575,8 +744,22 @@ export default {
     overflow-y: auto;
   }
 
-  .zone {
-    max-height: min(420px, 48vh);
+  .home-zones.task-minimized,
+  .home-zones.shell-minimized {
+    grid-template-columns: 1fr;
+    grid-auto-rows: auto;
+  }
+
+  .home-zones.task-minimized {
+    grid-template-rows: auto minmax(220px, 1fr);
+  }
+
+  .home-zones.shell-minimized {
+    grid-template-rows: minmax(220px, 1fr) auto;
+  }
+
+  .zone:not(.is-minimized) {
+    max-height: min(520px, 60vh);
   }
 }
 </style>

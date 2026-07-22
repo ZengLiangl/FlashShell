@@ -1416,6 +1416,7 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	config.ShellTerminalScrollback = normalizeShellTerminalScrollback(config.ShellTerminalScrollback)
 	config.TaskOutputMaxLines = normalizeTaskOutputMaxLines(config.TaskOutputMaxLines)
 	config.ShellCommandHistoryMax = data.NormalizeShellCommandHistoryMax(config.ShellCommandHistoryMax)
+	config.HomeMinimizedZone = data.NormalizeHomeMinimizedZone(config.HomeMinimizedZone)
 	config.ShellMonitorIntervalSec = 0
 	config.ShellLogHighlightColors = data.NormalizeShellLogHighlightColors(config.ShellLogHighlightColors)
 	config.ShellLogHighlightDisabled = data.NormalizeShellLogHighlightDisabled(config.ShellLogHighlightDisabled)
@@ -1643,6 +1644,35 @@ func (a *App) SaveThemeSettings(settings data.ThemeSettings) error {
 	a.applyWindowTheme(settings.Mode)
 	if a.ctx != nil {
 		wailsRuntime.EventsEmit(a.ctx, "theme:changed", settings)
+	}
+	return nil
+}
+
+// GetHomeMinimizedZone 获取首页分区最小化状态
+func (a *App) GetHomeMinimizedZone() string {
+	cfg, err := a.configManager.GetGlobalConfig()
+	if err != nil || cfg == nil {
+		return ""
+	}
+	return data.NormalizeHomeMinimizedZone(cfg.HomeMinimizedZone)
+}
+
+// SetHomeMinimizedZone 设置首页分区最小化："" | "task" | "shell"
+func (a *App) SetHomeMinimizedZone(zone string) error {
+	normalized := data.NormalizeHomeMinimizedZone(zone)
+	cfg, err := a.configManager.GetGlobalConfig()
+	if err != nil {
+		return err
+	}
+	if data.NormalizeHomeMinimizedZone(cfg.HomeMinimizedZone) == normalized {
+		return nil
+	}
+	cfg.HomeMinimizedZone = normalized
+	if err := a.configManager.SaveGlobalConfig(cfg); err != nil {
+		return err
+	}
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "home:minimized-zone", normalized)
 	}
 	return nil
 }

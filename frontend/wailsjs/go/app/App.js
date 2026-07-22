@@ -174,6 +174,10 @@ export function GetGlobalConfigForRefresh() {
   return window['go']['app']['App']['GetGlobalConfigForRefresh']();
 }
 
+export function GetHomeMinimizedZone() {
+  return window['go']['app']['App']['GetHomeMinimizedZone']();
+}
+
 export function GetKeyMapSettings() {
   return window['go']['app']['App']['GetKeyMapSettings']();
 }
@@ -524,6 +528,10 @@ export function SendShellInput(arg1, arg2) {
 
 export function SendShellInterrupt(arg1) {
   return window['go']['app']['App']['SendShellInterrupt'](arg1);
+}
+
+export function SetHomeMinimizedZone(arg1) {
+  return window['go']['app']['App']['SetHomeMinimizedZone'](arg1);
 }
 
 export function SetMachineSensitiveData(arg1, arg2) {

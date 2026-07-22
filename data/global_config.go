@@ -169,6 +169,8 @@ type GlobalConfig struct {
 	TaskOutputMaxLines int `yaml:"taskOutputMaxLines" json:"taskOutputMaxLines"`
 	// ShellCommandHistoryMax Shell 命令历史每作用域条数上限，默认 200
 	ShellCommandHistoryMax int `yaml:"shellCommandHistoryMax" json:"shellCommandHistoryMax"`
+	// HomeMinimizedZone 首页分区最小化："" 双栏；"task" 收起任务；"shell" 收起 Shell（另一侧多列展示）
+	HomeMinimizedZone string `yaml:"homeMinimizedZone,omitempty" json:"homeMinimizedZone"`
 	// ShellMonitorIntervalSec 旧字段（秒），仅用于迁移
 	ShellMonitorIntervalSec int `yaml:"shellMonitorIntervalSec,omitempty" json:"-"`
 	// ShellLogHighlight Shell 终端日志关键字高亮；nil 表示默认开启
@@ -177,6 +179,16 @@ type GlobalConfig struct {
 	ShellLogHighlightColors ShellLogHighlightColors `yaml:"shellLogHighlightColors,omitempty" json:"shellLogHighlightColors"`
 	// ShellLogHighlightDisabled 关闭高亮的关键字（缺省或空表示全部开启）
 	ShellLogHighlightDisabled []string `yaml:"shellLogHighlightDisabled,omitempty" json:"shellLogHighlightDisabled"`
+}
+
+// NormalizeHomeMinimizedZone 校验首页最小化分区
+func NormalizeHomeMinimizedZone(zone string) string {
+	switch strings.TrimSpace(zone) {
+	case "task", "shell":
+		return strings.TrimSpace(zone)
+	default:
+		return ""
+	}
 }
 
 // GlobalConfigManager 全局配置管理器
@@ -240,6 +252,11 @@ func (gcm *GlobalConfigManager) LoadGlobalConfig() (*GlobalConfig, error) {
 		dirty = true
 	}
 	if gcm.migrateShellMonitorInterval() {
+		dirty = true
+	}
+	normalizedZone := NormalizeHomeMinimizedZone(gcm.config.HomeMinimizedZone)
+	if gcm.config.HomeMinimizedZone != normalizedZone {
+		gcm.config.HomeMinimizedZone = normalizedZone
 		dirty = true
 	}
 	if dirty {

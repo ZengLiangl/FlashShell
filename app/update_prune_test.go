@@ -40,6 +40,21 @@ func TestResolveUpdateArtifactVersionsToKeepWithStaged(t *testing.T) {
 	}
 }
 
+func TestResolveUpdateArtifactVersionsToKeepTargetLatest(t *testing.T) {
+	// 模拟「已检测到更新、尚未下完」：目标版本目录刚创建，必须保留，否则暂存目录会被 prune 删掉
+	discovered := map[string][]string{
+		"1.1.3": {"~/.flashdock/updates/.flashdock-update-darwin-v1.1.3"},
+		"1.1.5": {"~/.flashdock/updates/.flashdock-update-darwin-v1.1.5"},
+	}
+	keep := resolveUpdateArtifactVersionsToKeep("1.1.3", "1.1.5", discovered)
+	if _, ok := keep["1.1.5"]; !ok {
+		t.Fatalf("should keep target latest 1.1.5: %#v", keep)
+	}
+	if _, ok := keep["1.1.3"]; !ok {
+		t.Fatalf("should keep current 1.1.3: %#v", keep)
+	}
+}
+
 func TestParseUpdateStagedDirVersion(t *testing.T) {
 	if got := parseUpdateStagedDirVersion(".flashdock-update-windows-1.2.3"); got != "1.2.3" {
 		t.Fatalf("got %q", got)
