@@ -149,6 +149,16 @@
                                             :class="{ active: form.themeSettings.uiAccent === accent.id }"
                                             :title="accent.label" :style="{ background: accent.light.accent }"
                                             @click="form.themeSettings.uiAccent = accent.id"></button>
+                                        <div class="accent-custom"
+                                            :class="{ active: isCustomAccentActive }"
+                                            title="自定义">
+                                            <el-color-picker
+                                                :model-value="customAccentColor"
+                                                size="small"
+                                                color-format="hex"
+                                                :predefine="accentPredefine"
+                                                @update:model-value="setCustomAccent" />
+                                        </div>
                                     </div>
                                 </div>
                                 <div class="appear-field">
@@ -455,6 +465,8 @@ import {
     getTerminalPreset,
     mergeUiFontOptions,
     mergeTerminalFontOptions,
+    isCustomUiAccent,
+    collectUiAccentPredefineColors,
 } from '../utils/themePresets'
 import {
     DEFAULT_SHELL_LOG_COLORS,
@@ -585,6 +597,18 @@ export default {
         }
 
         const uiAccents = UI_ACCENTS
+        const accentPredefine = collectUiAccentPredefineColors()
+        const lastCustomAccent = ref('#ff4da6')
+        const isCustomAccentActive = computed(() => isCustomUiAccent(form.themeSettings.uiAccent))
+        const customAccentColor = computed(() =>
+            isCustomAccentActive.value ? form.themeSettings.uiAccent : lastCustomAccent.value,
+        )
+        const setCustomAccent = (color) => {
+            if (!color) return
+            const hex = String(color).trim().toLowerCase()
+            lastCustomAccent.value = hex
+            form.themeSettings.uiAccent = hex
+        }
         const terminalPresets = TERMINAL_PRESETS
         const uiFonts = ref([...UI_FONTS])
         const terminalFonts = ref([...TERMINAL_FONTS])
@@ -684,6 +708,9 @@ theme preview · ${theme.foreground}`
                 shellFontSize: config.themeSettings?.shellFontSize > 0 ? config.themeSettings.shellFontSize : 13,
                 shellLineHeight: config.themeSettings?.shellLineHeight > 0 ? config.themeSettings.shellLineHeight : 1.2,
                 shellMemorySaver: !!config.themeSettings?.shellMemorySaver,
+            }
+            if (isCustomUiAccent(form.themeSettings.uiAccent)) {
+                lastCustomAccent.value = form.themeSettings.uiAccent
             }
             const interval = Number(config.shellMonitorIntervalMs)
             form.shellMonitorIntervalMs = Number.isFinite(interval) && interval >= 200
@@ -1024,6 +1051,10 @@ theme preview · ${theme.foreground}`
             applyLogHighlightPreset,
             resetLogHighlightConfig,
             uiAccents,
+            accentPredefine,
+            isCustomAccentActive,
+            customAccentColor,
+            setCustomAccent,
             terminalPresets,
             uiFonts,
             terminalFonts,
@@ -1318,6 +1349,42 @@ theme preview · ${theme.foreground}`
     box-shadow: 0 0 0 2px var(--app-panel-bg), 0 0 0 4px currentColor;
     outline: none;
     border-color: #fff;
+}
+
+.accent-custom {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.accent-custom.active {
+    box-shadow: 0 0 0 2px var(--app-panel-bg), 0 0 0 4px currentColor;
+}
+
+.accent-custom :deep(.el-color-picker),
+.accent-custom :deep(.el-color-picker__trigger) {
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 50%;
+    overflow: hidden;
+}
+
+.accent-custom :deep(.el-color-picker__color),
+.accent-custom :deep(.el-color-picker__color-inner) {
+    border: none;
+    border-radius: 50%;
+}
+
+.accent-custom:not(.active) :deep(.el-color-picker__color-inner) {
+    background: conic-gradient(#ff4da6, #409eff, #16a34a, #d97706, #c026d3, #ff4da6) !important;
+}
+
+.accent-custom :deep(.el-color-picker__icon),
+.accent-custom :deep(.el-icon) {
+    display: none;
 }
 
 .terminal-grid {

@@ -1,7 +1,7 @@
 import { ref, watch } from 'vue'
 import * as App from '../../wailsjs/go/app/App'
 import { WindowSetDarkTheme, WindowSetLightTheme, WindowSetSystemDefaultTheme, WindowSetBackgroundColour } from '../../wailsjs/runtime/runtime'
-import { getUiAccent, getUiFont, UI_ACCENTS, TERMINAL_PRESETS } from '../utils/themePresets'
+import { getUiAccent, getUiFont, isCustomUiAccent, UI_ACCENTS, TERMINAL_PRESETS } from '../utils/themePresets'
 
 const isDark = ref(false)
 const terminalPreset = ref('classic')
@@ -15,7 +15,7 @@ const shellLineHeight = ref(1.2)
 let systemMediaQuery = null
 let systemListener = null
 
-const ACCENT_CLASSES = UI_ACCENTS.map((a) => `ui-accent-${a.id}`)
+const ACCENT_CLASSES = [...UI_ACCENTS.map((a) => `ui-accent-${a.id}`), 'ui-accent-custom']
 const TERMINAL_CLASSES = TERMINAL_PRESETS.map((p) => `terminal-preset-${p.id}`)
 
 function applyWindowChrome(dark) {
@@ -40,7 +40,8 @@ function applyAccentAndFont(accentId, fontId, dark) {
   const root = document.documentElement
   const body = document.body
   root.classList.remove(...ACCENT_CLASSES)
-  root.classList.add(`ui-accent-${accentId || 'blue'}`)
+  const accentClass = isCustomUiAccent(accentId) ? 'ui-accent-custom' : `ui-accent-${accentId || 'blue'}`
+  root.classList.add(accentClass)
 
   const accent = getUiAccent(accentId)
   const palette = dark ? accent.dark : accent.light

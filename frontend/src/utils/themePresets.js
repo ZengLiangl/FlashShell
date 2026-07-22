@@ -31,6 +31,12 @@ export const UI_ACCENTS = [
     dark: { accent: '#e879f9', accentBg: '#701a75' },
   },
   {
+    id: 'hotpink',
+    label: '亮粉',
+    light: { accent: '#ff4da6', accentBg: '#fff0f7' },
+    dark: { accent: '#ff7abc', accentBg: '#6b1a45' },
+  },
+  {
     id: 'rose',
     label: '玫红',
     light: { accent: '#e11d48', accentBg: '#fff1f2' },
@@ -599,8 +605,70 @@ export function makeSystemTerminalFont(family) {
   }
 }
 
+/** 是否为自定义强调色（直接存 hex） */
+export function isCustomUiAccent(id) {
+  return typeof id === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(id.trim())
+}
+
+function normalizeHex(hex) {
+  let h = String(hex || '').trim()
+  if (!h.startsWith('#')) h = `#${h}`
+  if (/^#[0-9a-fA-F]{3}$/.test(h)) {
+    h = `#${h[1]}${h[1]}${h[2]}${h[2]}${h[3]}${h[3]}`
+  }
+  return h.toLowerCase()
+}
+
+function parseHex(hex) {
+  const h = normalizeHex(hex).slice(1)
+  return {
+    r: parseInt(h.slice(0, 2), 16),
+    g: parseInt(h.slice(2, 4), 16),
+    b: parseInt(h.slice(4, 6), 16),
+  }
+}
+
+function toHex({ r, g, b }) {
+  const c = (n) => Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0')
+  return `#${c(r)}${c(g)}${c(b)}`
+}
+
+/** t=0 取 a，t=1 取 b */
+function mixHex(a, b, t) {
+  const A = parseHex(a)
+  const B = parseHex(b)
+  return toHex({
+    r: A.r + (B.r - A.r) * t,
+    g: A.g + (B.g - A.g) * t,
+    b: A.b + (B.b - A.b) * t,
+  })
+}
+
+/** 由任意 hex 生成浅色/深色强调色板 */
+export function buildAccentFromHex(hex) {
+  const accent = normalizeHex(hex)
+  return {
+    id: 'custom',
+    label: '自定义',
+    light: {
+      accent,
+      accentBg: mixHex(accent, '#ffffff', 0.88),
+    },
+    dark: {
+      accent: mixHex(accent, '#ffffff', 0.28),
+      accentBg: mixHex(accent, '#000000', 0.72),
+    },
+  }
+}
+
 export function getUiAccent(id) {
+  if (isCustomUiAccent(id)) return buildAccentFromHex(id)
   return UI_ACCENTS.find((a) => a.id === id) || UI_ACCENTS[0]
+}
+
+/** 调色盘预定义色：各预设浅色强调色 */
+export function collectUiAccentPredefineColors() {
+  return UI_ACCENTS.map((a) => a.light.accent)
 }
 
 export function getTerminalPreset(id) {

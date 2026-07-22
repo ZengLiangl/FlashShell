@@ -20,7 +20,7 @@ type LogSettings struct {
 // ThemeSettings 主题设置
 type ThemeSettings struct {
 	Mode            string  `yaml:"mode" json:"mode"`                       // light, dark, system
-	UiAccent        string  `yaml:"uiAccent" json:"uiAccent"`               // blue, teal, green, amber, slate
+	UiAccent        string  `yaml:"uiAccent" json:"uiAccent"`               // 预设 id（blue/hotpink/...）或自定义 hex（#rrggbb）
 	TerminalPreset  string  `yaml:"terminalPreset" json:"terminalPreset"`   // classic, monokai, ...
 	UiFontFamily    string  `yaml:"uiFontFamily" json:"uiFontFamily"`       // 界面字体 id
 	ShellFontFamily string  `yaml:"shellFontFamily" json:"shellFontFamily"` // 终端字体 id
