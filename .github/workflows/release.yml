@@ -212,6 +212,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          brew install create-dmg
           mkdir -p dist
           APP_PATH=$(find build/bin -maxdepth 2 -name '*.app' | head -n 1)
           if [ -z "$APP_PATH" ]; then
@@ -219,6 +220,8 @@ jobs:
             ls -laR build/bin
             exit 1
           fi
+          APP_DIR=$(dirname "$APP_PATH")
+          APP_NAME=$(basename "$APP_PATH")
           # Ad-hoc 签名，提升部分 Mac 上的可打开性
           if command -v xattr >/dev/null 2>&1; then
             xattr -cr "$APP_PATH" || true
@@ -226,12 +229,44 @@ jobs:
           codesign --force --deep --sign - "$APP_PATH" || true
 
           OUT_NAME="FlashDock-${APP_VERSION}-${{ matrix.os_name }}-${{ matrix.arch_name }}.dmg"
-          hdiutil create \
-            -volname "FlashDock ${APP_VERSION}" \
-            -srcfolder "$APP_PATH" \
-            -ov \
-            -format UDZO \
-            "dist/${OUT_NAME}"
+          # --app-drop-link 会写入 /Applications 软链，打开 DMG 即可拖拽安装
+          # create-dmg 偶发因 Finder AppleScript 超时非 0 退出，但仍可能已生成 DMG
+          set +e
+          create-dmg \
+            --volname "FlashDock ${APP_VERSION}" \
+            --window-pos 200 120 \
+            --window-size 660 400 \
+            --icon-size 100 \
+            --icon "$APP_NAME" 180 190 \
+            --hide-extension "$APP_NAME" \
+            --app-drop-link 480 185 \
+            "dist/${OUT_NAME}" \
+            "$APP_DIR/$APP_NAME"
+          CREATE_DMG_RC=$?
+          set -e
+          if [ ! -f "dist/${OUT_NAME}" ]; then
+            echo "create-dmg 失败 (exit=${CREATE_DMG_RC})，未生成 DMG"
+            exit 1
+          fi
+          if [ "$CREATE_DMG_RC" -ne 0 ]; then
+            echo "create-dmg 返回 ${CREATE_DMG_RC}，但 DMG 已生成，继续校验"
+          fi
+
+          VERIFY_MOUNT=$(mktemp -d "${TMPDIR:-/tmp}/flashdock-dmg-verify.XXXXXX")
+          hdiutil attach -nobrowse -readonly -mountpoint "$VERIFY_MOUNT" "dist/${OUT_NAME}" >/dev/null
+          if [ ! -L "$VERIFY_MOUNT/Applications" ]; then
+            echo "DMG 内缺少 Applications 软链"
+            ls -la "$VERIFY_MOUNT"
+            hdiutil detach "$VERIFY_MOUNT" -quiet >/dev/null 2>&1 || true
+            exit 1
+          fi
+          PACKAGED_APP=$(find "$VERIFY_MOUNT" -maxdepth 1 -name '*.app' | head -n 1)
+          if [ -z "$PACKAGED_APP" ]; then
+            echo "DMG 内未找到 .app"
+            hdiutil detach "$VERIFY_MOUNT" -quiet >/dev/null 2>&1 || true
+            exit 1
+          fi
+          hdiutil detach "$VERIFY_MOUNT" -quiet >/dev/null 2>&1 || true
           ls -lah "dist/${OUT_NAME}"
           echo "RELEASE_ASSET=${OUT_NAME}" >> "$GITHUB_ENV"
 
