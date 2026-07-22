@@ -612,6 +612,11 @@ func (a *App) UpdateMachineGroup(machineID, group string) error {
 	return a.configManager.UpdateMachineGroup(machineID, group)
 }
 
+// SetMachineShellMonitorOpen 设置 Shell 左侧监控栏是否展开（写入 global_config machines）
+func (a *App) SetMachineShellMonitorOpen(machineKey string, open bool) error {
+	return a.configManager.UpdateMachineShellMonitorOpen(machineKey, open)
+}
+
 // AddMachine 添加机器配置（到全局配置）
 func (a *App) AddMachine(machine define.Machine) error {
 	machine.EnsureID()
@@ -642,6 +647,8 @@ func (a *App) UpdateMachine(machineID string, machine define.Machine) error {
 	if machine.EncryptedData == "" {
 		machine.EncryptedData = existing.EncryptedData
 	}
+	// 监控栏展开状态由 SetMachineShellMonitorOpen 单独维护，避免普通编辑覆盖
+	machine.ShellMonitorOpen = existing.ShellMonitorOpen
 	return a.configManager.AddMachineToGlobal(&machine)
 }
 

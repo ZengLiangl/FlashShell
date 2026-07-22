@@ -66,12 +66,35 @@ type Machine struct {
 	ListHost string `yaml:"list_host,omitempty" json:"list_host,omitempty"`
 	ListPort int    `yaml:"list_port,omitempty" json:"list_port,omitempty"`
 	ListUser string `yaml:"list_user,omitempty" json:"list_user,omitempty"`
+	// ShellMonitorOpen Shell 左侧监控栏是否展开；缺省（空）为展开，false 为收起
+	ShellMonitorOpen *bool `yaml:"shellMonitorOpen,omitempty" json:"shellMonitorOpen,omitempty"`
 	// 列表展示用（API 响应字段，由 List* 或敏感数据填充）
 	Host string `yaml:"-" json:"host,omitempty"`
 	Port int    `yaml:"-" json:"port,omitempty"`
 	User string `yaml:"-" json:"user,omitempty"`
 	// 运行时数据（不序列化）
 	sensitiveData *SensitiveData `yaml:"-"`
+}
+
+// IsShellMonitorOpen 监控栏是否展开：字段为空时默认展开
+func (m *Machine) IsShellMonitorOpen() bool {
+	if m == nil || m.ShellMonitorOpen == nil {
+		return true
+	}
+	return *m.ShellMonitorOpen
+}
+
+// SetShellMonitorOpen 设置监控栏展开状态；展开时清空字段（保持「空=展开」）
+func (m *Machine) SetShellMonitorOpen(open bool) {
+	if m == nil {
+		return
+	}
+	if open {
+		m.ShellMonitorOpen = nil
+		return
+	}
+	f := false
+	m.ShellMonitorOpen = &f
 }
 
 // SSHTunnel 单条隧道配置

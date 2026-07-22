@@ -1,14 +1,8 @@
 <template>
   <div class="app-container" :class="themeClass">
-    <AppMenuBar
-      :active-view="activeView"
-      :has-projects="projects.length > 0"
-      :has-machines="shellMachines.length > 0"
-      :has-task="!!selectedProject"
-      :task-running="status.isRunning"
-      :connected-count="connectedCount"
-      @change-view="switchActiveView"
-    />
+    <AppMenuBar :active-view="activeView" :has-projects="projects.length > 0" :has-machines="shellMachines.length > 0"
+      :has-task="!!selectedProject" :task-running="status.isRunning" :connected-count="connectedCount"
+      @change-view="switchActiveView" />
 
     <!-- 全局加载遮罩 -->
     <div v-if="isReloading" class="global-loading">
@@ -55,33 +49,30 @@
     <!-- Shell 视图：挂载后用 v-show 保留会话，可与任务并行 -->
     <div v-show="activeView === 'shell'" class="shell-view-host">
       <ShellWorkspace ref="shellWorkspaceRef" v-if="shellMounted" :active="activeView === 'shell'"
-        :block-shortcuts="settingsHubVisible"
-        :left-panel-width="Math.min(leftPanelWidth, 320)" :is-resizing="isResizing" :app-info="statusBarInfo"
-        :machines="shellMachines" :sessions="shellSessions" :workspace-sessions="workspaceSessions"
-        :connected-count="connectedCount" :open-session-count="openSessionCount" v-model:active-machine="activeMachine"
-        :connecting-name="connectingName" :testing-name="testingName" :broadcast-enabled="broadcastEnabled"
-        :broadcast-targets="broadcastTargets" :split-session-ids="splitSessionIds" @back="leaveShellMode"
-        @connect="(name) => connectShell(name)" @disconnect="disconnectShell" @close-session="closeShellSession"
-        @close-sessions="closeShellSessions"
+        :block-shortcuts="settingsHubVisible" :left-panel-width="Math.min(leftPanelWidth, 320)"
+        :is-resizing="isResizing" :app-info="statusBarInfo" :machines="shellMachines" :sessions="shellSessions"
+        :workspace-sessions="workspaceSessions" :connected-count="connectedCount" :open-session-count="openSessionCount"
+        v-model:active-machine="activeMachine" :connecting-name="connectingName" :testing-name="testingName"
+        :broadcast-enabled="broadcastEnabled" :broadcast-targets="broadcastTargets" :split-session-ids="splitSessionIds"
+        @back="leaveShellMode" @connect="(name) => connectShell(name)" @disconnect="disconnectShell"
+        @close-session="closeShellSession" @close-sessions="closeShellSessions"
         @reconnect="(name) => connectOrReconnectShell(name)" @add-local="() => connectLocalShell()"
         @test="testShellConnection" @update:broadcast-enabled="(v) => (broadcastEnabled = v)"
         @update:broadcast-targets="(v) => (broadcastTargets = v)"
         @update:split-session-ids="(v) => (splitSessionIds = v)" @reorder-tabs="({ from, to }) => reorderTabs(from, to)"
-        @add-machine="openShellMachineDialog" @edit-machine="openShellMachineEdit"
-        @copy-machine="copyShellMachine" @delete-machine="deleteShellMachine" @start-resize="startResize" />
+        @add-machine="openShellMachineDialog" @edit-machine="openShellMachineEdit" @copy-machine="copyShellMachine"
+        @delete-machine="deleteShellMachine" @start-resize="startResize" @machines-changed="onMachinesChanged" />
     </div>
 
     <!-- 首页：任务模式 + Shell 模式入口 -->
     <template v-if="activeView === 'home'">
       <div class="projectlist-fullscreen">
-        <HomePage ref="homePageRef" :projects="projects" :machines="shellMachines"
-          :connected-count="connectedCount" :has-task="!!selectedProject"
-          :task-running="status.isRunning" :connecting-name="connectingName" :sessions="shellSessions"
-          :workspace-sessions="workspaceSessions"
-          @refresh="refreshConfig" @select-project="selectProject" @resume-task="resumeTaskView"
-          @open-shell="enterShellMode" @connect-machine="openShellAndConnect" @add-machine="openShellMachineDialog"
-          @open-system-settings="openSettingsHub('general')"
-          @open-config-editor="configEditorVisible = true" />
+        <HomePage ref="homePageRef" :projects="projects" :machines="shellMachines" :connected-count="connectedCount"
+          :has-task="!!selectedProject" :task-running="status.isRunning" :connecting-name="connectingName"
+          :sessions="shellSessions" :workspace-sessions="workspaceSessions" @refresh="refreshConfig"
+          @select-project="selectProject" @resume-task="resumeTaskView" @open-shell="enterShellMode"
+          @connect-machine="openShellAndConnect" @add-machine="openShellMachineDialog"
+          @open-system-settings="openSettingsHub('general')" @open-config-editor="configEditorVisible = true" />
       </div>
     </template>
 
@@ -95,11 +86,7 @@
 
     <ConfigEditorDialog v-model="configEditorVisible" @saved="refreshProjectConfig" />
 
-    <HostKeyTrustDialog
-      v-model="hostKeyDialogVisible"
-      :host-key-info="pendingHostKey"
-      @trusted="onHostKeyTrusted"
-    />
+    <HostKeyTrustDialog v-model="hostKeyDialogVisible" :host-key-info="pendingHostKey" @trusted="onHostKeyTrusted" />
   </div>
 </template>
 
@@ -263,9 +250,11 @@ export default {
     };
     const statusBarInfo = computed(() => {
       const ver = appVersion.value || '…';
-      const base = `FlashDock ${ver}`;
-      if (!sessionId.value) return base;
-      return `${base} · 会话 ${sessionId.value.slice(0, 8)}`;
+      const base = ``;
+      // 右下角暂不展示会话 ID
+      // if (!sessionId.value) return base;
+      // return `${base} · 会话 ${sessionId.value.slice(0, 8)}`;
+      return base;
     });
 
     const themeClass = computed(() => ({

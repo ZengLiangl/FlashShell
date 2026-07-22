@@ -748,6 +748,7 @@ export namespace define {
 	    list_host?: string;
 	    list_port?: number;
 	    list_user?: string;
+	    shellMonitorOpen?: boolean;
 	    host?: string;
 	    port?: number;
 	    user?: string;
@@ -767,6 +768,7 @@ export namespace define {
 	        this.list_host = source["list_host"];
 	        this.list_port = source["list_port"];
 	        this.list_user = source["list_user"];
+	        this.shellMonitorOpen = source["shellMonitorOpen"];
 	        this.host = source["host"];
 	        this.port = source["port"];
 	        this.user = source["user"];

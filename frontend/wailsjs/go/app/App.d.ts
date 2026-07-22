@@ -277,6 +277,8 @@ export function SetHomeMinimizedZone(arg1:string):Promise<void>;
 
 export function SetMachineSensitiveData(arg1:string,arg2:define.SensitiveData):Promise<void>;
 
+export function SetMachineShellMonitorOpen(arg1:string,arg2:boolean):Promise<void>;
+
 export function ShellDirExists(arg1:string,arg2:string):Promise<boolean>;
 
 export function SkipUpdateVersion(arg1:string):Promise<void>;

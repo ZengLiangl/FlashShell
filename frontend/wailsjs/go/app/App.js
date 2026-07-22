@@ -546,6 +546,10 @@ export function SetMachineSensitiveData(arg1, arg2) {
   return window['go']['app']['App']['SetMachineSensitiveData'](arg1, arg2);
 }
 
+export function SetMachineShellMonitorOpen(arg1, arg2) {
+  return window['go']['app']['App']['SetMachineShellMonitorOpen'](arg1, arg2);
+}
+
 export function ShellDirExists(arg1, arg2) {
   return window['go']['app']['App']['ShellDirExists'](arg1, arg2);
 }

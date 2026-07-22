@@ -8,16 +8,14 @@
         :class="{ collapsed: leftCollapsed, resizing: isResizing }"
       >
         <ShellMonitorPanel
-          v-if="monitorSession"
-          v-show="!leftCollapsed"
+          v-if="monitorSession && !leftCollapsed"
           :active-machine="monitorMachineName"
           :active-connected="monitorConnected"
           :connecting="monitorConnecting"
           @toggle-connection="onToggleConnection"
         />
         <LocalFileTreePanel
-          v-else-if="localFileSession"
-          v-show="!leftCollapsed"
+          v-else-if="localFileSession && !leftCollapsed"
         />
         <!-- 右边框：拖拽改宽 + 悬停显示收起 -->
         <div
@@ -240,7 +238,7 @@ export default {
     'copy-machine', 'delete-machine',
     'add-local', 'start-resize', 'update:activeMachine', 'history-changed',
     'update:broadcast-enabled', 'update:broadcast-targets', 'update:split-session-ids',
-    'reorder-tabs',
+    'reorder-tabs', 'machines-changed',
   ],
   setup(props, { emit }) {
     const tabsRef = ref(null)
@@ -375,8 +373,39 @@ export default {
       tabsRef.value?.fitActive?.()
     })
 
-    watch(monitorConnecting, (connecting) => {
-      if (connecting) leftCollapsed.value = false
+    const findMonitorMachineRecord = () => {
+      const key = String(monitorMachineName.value || activeConfigName.value || '').trim()
+      if (!key) return null
+      return (props.machines || []).find((m) => m?.name === key || m?.id === key) || null
+    }
+
+    const isMachineMonitorOpen = (m) => m?.shellMonitorOpen !== false
+
+    const syncLeftCollapsedFromMachine = () => {
+      if (!monitorSession.value) return
+      leftCollapsed.value = !isMachineMonitorOpen(findMonitorMachineRecord())
+    }
+
+    watch(
+      [
+        monitorMachineName,
+        activeConfigName,
+        monitorSession,
+        () => {
+          const m = findMonitorMachineRecord()
+          return m ? isMachineMonitorOpen(m) : true
+        },
+      ],
+      () => {
+        syncLeftCollapsedFromMachine()
+      },
+      { immediate: true },
+    )
+
+    watch(localFileSession, (cur, prev) => {
+      if (cur && !prev && !monitorSession.value) {
+        leftCollapsed.value = false
+      }
     })
 
     const formatSearchSummary = (result) => {
@@ -527,6 +556,16 @@ export default {
     const toggleLeftPanel = async () => {
       leftCollapsed.value = !leftCollapsed.value
       edgeHover.value = false
+      const open = !leftCollapsed.value
+      const m = findMonitorMachineRecord()
+      if (m?.id || m?.name) {
+        try {
+          await App.SetMachineShellMonitorOpen(m.id || m.name, open)
+          emit('machines-changed')
+        } catch (e) {
+          console.warn('保存监控栏展开状态失败:', e)
+        }
+      }
       await nextTick()
       tabsRef.value?.fitActive?.()
     }

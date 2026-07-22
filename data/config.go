@@ -194,6 +194,14 @@ func (cm *ConfigManager) UpdateMachineGroup(machineID, group string) error {
 	return cm.globalConfigManager.UpdateMachineGroup(machineID, group)
 }
 
+// UpdateMachineShellMonitorOpen 更新机器的 Shell 监控栏展开状态
+func (cm *ConfigManager) UpdateMachineShellMonitorOpen(machineKey string, open bool) error {
+	if cm.globalConfigManager == nil {
+		return fmt.Errorf("全局配置管理器未初始化")
+	}
+	return cm.globalConfigManager.UpdateMachineShellMonitorOpen(machineKey, open)
+}
+
 // GetAllMachinesFromGlobal 从全局配置获取所有机器配置
 func (cm *ConfigManager) GetAllMachinesFromGlobal() []define.Machine {
 	if cm.globalConfigManager == nil {
