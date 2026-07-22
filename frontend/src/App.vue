@@ -894,7 +894,7 @@ export default {
       terminalActiveMatchIndex.value = (terminalActiveMatchIndex.value - 1 + terminalMatchIndices.value.length) % terminalMatchIndices.value.length;
     };
 
-    // 键盘快捷键处理（可在系统设置中自定义，保存至 shortcuts.json）
+    // 键盘快捷键处理（可在系统设置中自定义，保存至 app_data.json）
     // 使用捕获阶段，确保终端 / xterm 聚焦时也能收到
     const handleKeyDown = (e) => {
       // Escape：只关最上层弹框；有子 Dialog / MessageBox 时不关系统设置

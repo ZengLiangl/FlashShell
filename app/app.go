@@ -1382,7 +1382,7 @@ func (a *App) GetSystemSettings() (*data.GlobalConfig, error) {
 	return cfg, nil
 }
 
-// GetShortcutSettings 获取快捷键配置（~/.flashdock/shortcuts.json）
+// GetShortcutSettings 获取快捷键配置（~/.flashdock/app_data.json → shortcuts）
 func (a *App) GetShortcutSettings() (data.ShortcutSettings, error) {
 	return data.LoadShortcutSettings()
 }

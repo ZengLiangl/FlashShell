@@ -1,9 +1,6 @@
 package data
 
 import (
-	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 )
@@ -94,45 +91,38 @@ func NormalizeTaskOutputMaxLines(n int) int {
 	return n
 }
 
-func shellCmdHistoryPath() (string, error) {
-	home, err := ConfigHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, "shell_command_history.json"), nil
-}
-
 // Load 从磁盘加载
 func (m *ShellCommandHistoryManager) Load() error {
-	path, err := shellCmdHistoryPath()
+	d, err := loadAppDataSection()
 	if err != nil {
-		return err
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
 		return err
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return json.Unmarshal(raw, &m.data)
+	m.data = d.ShellCommandHistory
+	if m.data.ByScope == nil {
+		m.data.ByScope = make(map[string][]string)
+	}
+	return nil
 }
 
 func (m *ShellCommandHistoryManager) saveLocked() error {
-	path, err := shellCmdHistoryPath()
-	if err != nil {
-		return err
+	snapshot := m.data
+	if snapshot.ByScope == nil {
+		snapshot.ByScope = make(map[string][]string)
 	}
-	raw, err := json.MarshalIndent(m.data, "", "  ")
-	if err != nil {
-		return err
+	// 深拷贝 map，避免并发写入污染
+	byScope := make(map[string][]string, len(snapshot.ByScope))
+	for k, v := range snapshot.ByScope {
+		byScope[k] = append([]string(nil), v...)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, raw, 0644)
+	global := append([]string(nil), snapshot.Global...)
+	return updateAppData(func(d *AppDataFile) {
+		d.ShellCommandHistory = shellCmdHistoryFile{
+			Global:  global,
+			ByScope: byScope,
+		}
+	})
 }
 
 func trimHistory(list []string, max int) []string {

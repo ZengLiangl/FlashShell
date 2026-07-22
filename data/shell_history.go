@@ -1,10 +1,7 @@
 package data
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"sort"
 	"sync"
 	"time"
@@ -14,51 +11,33 @@ import (
 
 // ShellHistoryManager 连接历史
 type ShellHistoryManager struct {
-	mu       sync.Mutex
-	filePath string
-	records  []define.ShellHistoryRecord
+	mu      sync.Mutex
+	records []define.ShellHistoryRecord
 }
 
 const maxShellHistoryRecords = 500
 
 // NewShellHistoryManager 创建历史管理器
 func NewShellHistoryManager() *ShellHistoryManager {
-	path := "shell_history.json"
-	if configHome, err := ConfigHomeDir(); err == nil {
-		path = filepath.Join(configHome, "shell_history.json")
-	}
-	m := &ShellHistoryManager{filePath: path}
+	m := &ShellHistoryManager{}
 	_ = m.load()
 	return m
 }
 
 func (m *ShellHistoryManager) load() error {
-	data, err := os.ReadFile(m.filePath)
+	d, err := loadAppDataSection()
 	if err != nil {
-		if os.IsNotExist(err) {
-			m.records = nil
-			return nil
-		}
 		return err
 	}
-	var records []define.ShellHistoryRecord
-	if err := json.Unmarshal(data, &records); err != nil {
-		return err
-	}
-	m.records = records
+	m.records = append([]define.ShellHistoryRecord(nil), d.ShellHistory...)
 	return nil
 }
 
 func (m *ShellHistoryManager) save() error {
-	dir := filepath.Dir(m.filePath)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(m.records, "", "  ")
-	if err != nil {
-		return err
-	}
-	return os.WriteFile(m.filePath, data, 0644)
+	records := append([]define.ShellHistoryRecord(nil), m.records...)
+	return updateAppData(func(d *AppDataFile) {
+		d.ShellHistory = records
+	})
 }
 
 // List 按最近连接时间倒序

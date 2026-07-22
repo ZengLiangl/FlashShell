@@ -1,10 +1,7 @@
 package data
 
 import (
-	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 )
 
@@ -59,14 +56,6 @@ func DefaultShortcutSettings() ShortcutSettings {
 	}
 }
 
-func shortcutSettingsPath() (string, error) {
-	configHome, err := ConfigHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("获取用户主目录失败: %w", err)
-	}
-	return filepath.Join(configHome, "shortcuts.json"), nil
-}
-
 func fillShortcutDefaults(s *ShortcutSettings) {
 	def := DefaultShortcutSettings()
 	if s.NewWindow.Key == "" {
@@ -107,27 +96,13 @@ func fillShortcutDefaults(s *ShortcutSettings) {
 	}
 }
 
-// LoadShortcutSettings 从 ~/.flashdock/shortcuts.json 加载
+// LoadShortcutSettings 从 ~/.flashdock/app_data.json 的 shortcuts 加载
 func LoadShortcutSettings() (ShortcutSettings, error) {
-	path, err := shortcutSettingsPath()
+	d, err := loadAppDataSection()
 	if err != nil {
 		return DefaultShortcutSettings(), err
 	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			s := DefaultShortcutSettings()
-			if migrateKeyMapsIntoSnippets(&s) {
-				_ = SaveShortcutSettings(s)
-			}
-			return s, nil
-		}
-		return DefaultShortcutSettings(), err
-	}
-	var s ShortcutSettings
-	if err := json.Unmarshal(data, &s); err != nil {
-		return DefaultShortcutSettings(), fmt.Errorf("解析快捷键配置失败: %w", err)
-	}
+	s := d.Shortcuts
 	fillShortcutDefaults(&s)
 	if migrateKeyMapsIntoSnippets(&s) {
 		_ = SaveShortcutSettings(s)
@@ -197,22 +172,10 @@ func migrateKeyMapsIntoSnippets(s *ShortcutSettings) bool {
 	return true
 }
 
-// SaveShortcutSettings 保存到 ~/.flashdock/shortcuts.json
+// SaveShortcutSettings 保存到 ~/.flashdock/app_data.json 的 shortcuts
 func SaveShortcutSettings(s ShortcutSettings) error {
 	fillShortcutDefaults(&s)
-	path, err := shortcutSettingsPath()
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return fmt.Errorf("创建配置目录失败: %w", err)
-	}
-	data, err := json.MarshalIndent(s, "", "  ")
-	if err != nil {
-		return fmt.Errorf("序列化快捷键配置失败: %w", err)
-	}
-	if err := os.WriteFile(path, data, 0644); err != nil {
-		return fmt.Errorf("保存快捷键配置失败: %w", err)
-	}
-	return nil
+	return updateAppData(func(d *AppDataFile) {
+		d.Shortcuts = s
+	})
 }

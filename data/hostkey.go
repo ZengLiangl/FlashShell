@@ -7,8 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"os"
-	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -80,7 +78,7 @@ type KnownHostRecord struct {
 	Fingerprint string `json:"fingerprint"`
 }
 
-// HostKeyManager 管理 ~/.flashdock/known_hosts.json
+// HostKeyManager 管理 ~/.flashdock/app_data.json 中的 knownHosts
 type HostKeyManager struct {
 	mu           sync.RWMutex
 	hosts        map[string]string // "host:port" -> SHA256 fingerprint（持久）
@@ -104,14 +102,6 @@ func NewHostKeyManager() *HostKeyManager {
 	return m
 }
 
-func hostKeyPath() (string, error) {
-	home, err := ConfigHomeDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(home, "known_hosts.json"), nil
-}
-
 func hostKeyAddr(host string, port int) string {
 	if port <= 0 {
 		port = 22
@@ -127,24 +117,14 @@ func FingerprintSHA256(key ssh.PublicKey) string {
 
 // Load 从磁盘加载
 func (m *HostKeyManager) Load() error {
-	path, err := hostKeyPath()
+	d, err := loadAppDataSection()
 	if err != nil {
 		return err
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	var list []KnownHostRecord
-	if err := json.Unmarshal(data, &list); err != nil {
-		return fmt.Errorf("解析 known_hosts 失败: %w", err)
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for _, rec := range list {
+	m.hosts = make(map[string]string)
+	for _, rec := range d.KnownHosts {
 		addr := hostKeyAddr(rec.Host, rec.Port)
 		if rec.Fingerprint != "" {
 			m.hosts[addr] = rec.Fingerprint
@@ -154,23 +134,14 @@ func (m *HostKeyManager) Load() error {
 }
 
 func (m *HostKeyManager) saveLocked() error {
-	path, err := hostKeyPath()
-	if err != nil {
-		return err
-	}
 	list := make([]KnownHostRecord, 0, len(m.hosts))
 	for addr, fp := range m.hosts {
 		host, port := splitHostPort(addr)
 		list = append(list, KnownHostRecord{Host: host, Port: port, Fingerprint: fp})
 	}
-	data, err := json.MarshalIndent(list, "", "  ")
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, data, 0644)
+	return updateAppData(func(d *AppDataFile) {
+		d.KnownHosts = list
+	})
 }
 
 func splitHostPort(addr string) (string, int) {
