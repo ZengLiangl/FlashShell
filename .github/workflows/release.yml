@@ -254,8 +254,10 @@ jobs:
           path: |
             ${{ steps.brew.outputs.prefix }}/Cellar/create-dmg
             ${{ steps.brew.outputs.prefix }}/bin/create-dmg
+            ${{ steps.brew.outputs.prefix }}/share/create-dmg
             ~/Library/Caches/Homebrew
-          key: create-dmg-${{ runner.os }}-${{ runner.arch }}-v1
+          # v2：补上 share/create-dmg（脚本运行时需要 support/）
+          key: create-dmg-${{ runner.os }}-${{ runner.arch }}-v2
 
       - name: Install create-dmg
         if: matrix.kind == 'macos'
@@ -265,17 +267,32 @@ jobs:
           HOMEBREW_NO_INSTALLED_DEPENDENTS_CHECK: '1'
         run: |
           set -euo pipefail
-          if command -v create-dmg >/dev/null 2>&1; then
-            echo "create-dmg cache hit: $(command -v create-dmg)"
+          PREFIX="$(brew --prefix)"
+          SUPPORT_DIR="${PREFIX}/share/create-dmg/support"
+          create_dmg_ready() {
+            command -v create-dmg >/dev/null 2>&1 && [ -d "$SUPPORT_DIR" ]
+          }
+          if create_dmg_ready; then
+            echo "create-dmg ready: $(command -v create-dmg)"
+            echo "support: $SUPPORT_DIR"
             exit 0
           fi
-          if [ -d "${{ steps.brew.outputs.prefix }}/Cellar/create-dmg" ]; then
+          if [ -d "${PREFIX}/Cellar/create-dmg" ]; then
             brew link --overwrite create-dmg || true
-            if command -v create-dmg >/dev/null 2>&1; then
+            if create_dmg_ready; then
+              echo "create-dmg linked from Cellar"
               exit 0
             fi
           fi
           brew install create-dmg
+          if ! create_dmg_ready; then
+            echo "create-dmg 安装后仍缺少 support 目录: $SUPPORT_DIR"
+            ls -la "${PREFIX}/bin/create-dmg" || true
+            ls -laR "${PREFIX}/Cellar/create-dmg" || true
+            ls -la "${PREFIX}/share/create-dmg" || true
+            exit 1
+          fi
+          echo "create-dmg installed: $(command -v create-dmg)"
 
       - name: Package macOS DMG
         if: matrix.kind == 'macos'
