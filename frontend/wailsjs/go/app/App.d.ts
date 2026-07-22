@@ -163,6 +163,8 @@ export function ImportXshellPick(arg1:string,arg2:string):Promise<data.MachineIm
 
 export function InstallUpdateAndRestart():Promise<app.UpdateInstallResult>;
 
+export function ListAppIconPresets():Promise<Array<app.AppIconPresetInfo>>;
+
 export function ListLocalFiles(arg1:string,arg2:boolean):Promise<Array<define.SftpEntry>>;
 
 export function ListShellFiles(arg1:string,arg2:string,arg3:boolean):Promise<Array<define.SftpEntry>>;
@@ -206,6 +208,8 @@ export function OpenWorkPathConfig():Promise<void>;
 export function PauseShellTransfer(arg1:string):Promise<void>;
 
 export function PauseUpdateDownload():Promise<void>;
+
+export function PickCustomAppIcon():Promise<string>;
 
 export function PickShellUploadFolder():Promise<string>;
 

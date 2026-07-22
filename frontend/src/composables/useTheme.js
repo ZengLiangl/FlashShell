@@ -8,6 +8,7 @@ const terminalPreset = ref('classic')
 const themeMode = ref('light')
 const uiAccent = ref('blue')
 const uiFontFamily = ref('system')
+const uiFontSize = ref(14)
 const shellFontFamily = ref('consolas')
 const shellFontSize = ref(13)
 const shellLineHeight = ref(1.2)
@@ -17,6 +18,13 @@ let systemListener = null
 
 const ACCENT_CLASSES = [...UI_ACCENTS.map((a) => `ui-accent-${a.id}`), 'ui-accent-custom']
 const TERMINAL_CLASSES = TERMINAL_PRESETS.map((p) => `terminal-preset-${p.id}`)
+const UI_FONT_SIZE_BASE = 14
+
+function clampUiFontSize(size) {
+  const n = Number(size)
+  if (!Number.isFinite(n) || n <= 0) return UI_FONT_SIZE_BASE
+  return Math.min(20, Math.max(12, Math.round(n)))
+}
 
 function applyWindowChrome(dark) {
   if (dark) {
@@ -36,7 +44,7 @@ function clearSystemListener() {
   systemListener = null
 }
 
-function applyAccentAndFont(accentId, fontId, dark) {
+function applyAccentAndFont(accentId, fontId, fontSize, dark) {
   const root = document.documentElement
   const body = document.body
   root.classList.remove(...ACCENT_CLASSES)
@@ -51,9 +59,27 @@ function applyAccentAndFont(accentId, fontId, dark) {
   const font = getUiFont(fontId)
   root.style.setProperty('--app-font-family', font.value)
   if (body) body.style.fontFamily = font.value
+
+  const size = clampUiFontSize(fontSize)
+  root.style.setProperty('--app-font-size', `${size}px`)
+  root.style.setProperty('--app-font-scale', String(size / UI_FONT_SIZE_BASE))
+  root.style.setProperty('--el-font-size-base', `${size}px`)
+  root.style.setProperty('--el-font-size-extra-large', `${Math.round((size * 20) / 14)}px`)
+  root.style.setProperty('--el-font-size-large', `${Math.round((size * 18) / 14)}px`)
+  root.style.setProperty('--el-font-size-medium', `${Math.round((size * 16) / 14)}px`)
+  root.style.setProperty('--el-font-size-small', `${Math.round((size * 13) / 14)}px`)
+  root.style.setProperty('--el-font-size-extra-small', `${Math.round((size * 12) / 14)}px`)
+  root.style.fontSize = `${size}px`
+  if (body) body.style.fontSize = `${size}px`
 }
 
-function applyDomTheme(mode, preset, accentId = uiAccent.value, fontId = uiFontFamily.value) {
+function applyDomTheme(
+  mode,
+  preset,
+  accentId = uiAccent.value,
+  fontId = uiFontFamily.value,
+  fontSize = uiFontSize.value,
+) {
   const root = document.documentElement
   const body = document.body
   root.classList.remove(...TERMINAL_CLASSES)
@@ -66,7 +92,7 @@ function applyDomTheme(mode, preset, accentId = uiAccent.value, fontId = uiFontF
     body?.classList.toggle('dark', dark)
     isDark.value = dark
     applyWindowChrome(dark)
-    applyAccentAndFont(accentId, fontId, dark)
+    applyAccentAndFont(accentId, fontId, fontSize, dark)
   }
 
   if (mode === 'system') {
@@ -87,6 +113,7 @@ function normalizeSettings(settings = {}) {
     uiAccent: settings.uiAccent || 'blue',
     terminalPreset: settings.terminalPreset || 'classic',
     uiFontFamily: settings.uiFontFamily || 'system',
+    uiFontSize: clampUiFontSize(settings.uiFontSize),
     shellFontFamily: settings.shellFontFamily || 'consolas',
     shellFontSize: settings.shellFontSize > 0 ? settings.shellFontSize : 13,
     shellLineHeight: settings.shellLineHeight > 0 ? settings.shellLineHeight : 1.2,
@@ -101,12 +128,13 @@ export function useTheme() {
       uiAccent.value = settings.uiAccent
       terminalPreset.value = settings.terminalPreset
       uiFontFamily.value = settings.uiFontFamily
+      uiFontSize.value = settings.uiFontSize
       shellFontFamily.value = settings.shellFontFamily
       shellFontSize.value = settings.shellFontSize
       shellLineHeight.value = settings.shellLineHeight
-      applyDomTheme(themeMode.value, terminalPreset.value, uiAccent.value, uiFontFamily.value)
+      applyDomTheme(themeMode.value, terminalPreset.value, uiAccent.value, uiFontFamily.value, uiFontSize.value)
     } catch {
-      applyDomTheme('light', 'classic', 'blue', 'system')
+      applyDomTheme('light', 'classic', 'blue', 'system', 14)
     }
   }
 
@@ -116,6 +144,7 @@ export function useTheme() {
       uiAccent: uiAccent.value,
       terminalPreset: terminalPreset.value,
       uiFontFamily: uiFontFamily.value,
+      uiFontSize: uiFontSize.value,
       shellFontFamily: shellFontFamily.value,
       shellFontSize: shellFontSize.value,
       shellLineHeight: shellLineHeight.value,
@@ -125,10 +154,11 @@ export function useTheme() {
     uiAccent.value = next.uiAccent
     terminalPreset.value = next.terminalPreset
     uiFontFamily.value = next.uiFontFamily
+    uiFontSize.value = next.uiFontSize
     shellFontFamily.value = next.shellFontFamily
     shellFontSize.value = next.shellFontSize
     shellLineHeight.value = next.shellLineHeight
-    applyDomTheme(next.mode, next.terminalPreset, next.uiAccent, next.uiFontFamily)
+    applyDomTheme(next.mode, next.terminalPreset, next.uiAccent, next.uiFontFamily, next.uiFontSize)
     await App.SaveThemeSettings(next)
   }
 
@@ -139,6 +169,7 @@ export function useTheme() {
       uiAccent: settings.uiAccent || uiAccent.value,
       terminalPreset: settings.terminalPreset || terminalPreset.value,
       uiFontFamily: settings.uiFontFamily || uiFontFamily.value,
+      uiFontSize: settings.uiFontSize || uiFontSize.value,
       shellFontFamily: settings.shellFontFamily || shellFontFamily.value,
       shellFontSize: settings.shellFontSize || shellFontSize.value,
       shellLineHeight: settings.shellLineHeight || shellLineHeight.value,
@@ -147,13 +178,14 @@ export function useTheme() {
     uiAccent.value = next.uiAccent
     terminalPreset.value = next.terminalPreset
     uiFontFamily.value = next.uiFontFamily
+    uiFontSize.value = next.uiFontSize
     shellFontFamily.value = next.shellFontFamily
     shellFontSize.value = next.shellFontSize
     shellLineHeight.value = next.shellLineHeight
-    applyDomTheme(next.mode, next.terminalPreset, next.uiAccent, next.uiFontFamily)
+    applyDomTheme(next.mode, next.terminalPreset, next.uiAccent, next.uiFontFamily, next.uiFontSize)
   }
 
-  watch(themeMode, (mode) => applyDomTheme(mode, terminalPreset.value, uiAccent.value, uiFontFamily.value))
+  watch(themeMode, (mode) => applyDomTheme(mode, terminalPreset.value, uiAccent.value, uiFontFamily.value, uiFontSize.value))
 
   return {
     isDark,
@@ -161,6 +193,7 @@ export function useTheme() {
     uiAccent,
     terminalPreset,
     uiFontFamily,
+    uiFontSize,
     shellFontFamily,
     shellFontSize,
     shellLineHeight,

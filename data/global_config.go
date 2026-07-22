@@ -23,6 +23,7 @@ type ThemeSettings struct {
 	UiAccent        string  `yaml:"uiAccent" json:"uiAccent"`               // 预设 id（blue/hotpink/...）或自定义 hex（#rrggbb）
 	TerminalPreset  string  `yaml:"terminalPreset" json:"terminalPreset"`   // classic, monokai, ...
 	UiFontFamily    string  `yaml:"uiFontFamily" json:"uiFontFamily"`       // 界面字体 id
+	UiFontSize      int     `yaml:"uiFontSize" json:"uiFontSize"`           // 界面字号，默认 14
 	ShellFontFamily string  `yaml:"shellFontFamily" json:"shellFontFamily"` // 终端字体 id
 	ShellFontSize   int     `yaml:"shellFontSize" json:"shellFontSize"`     // Shell 终端字号，默认 13
 	ShellLineHeight float64 `yaml:"shellLineHeight" json:"shellLineHeight"` // Shell 终端行高倍数，默认 1.2
@@ -169,6 +170,8 @@ type GlobalConfig struct {
 	TaskOutputMaxLines int `yaml:"taskOutputMaxLines" json:"taskOutputMaxLines"`
 	// ShellCommandHistoryMax Shell 命令历史每作用域条数上限，默认 200
 	ShellCommandHistoryMax int `yaml:"shellCommandHistoryMax" json:"shellCommandHistoryMax"`
+	// AppIconPreset Dock/任务栏图标预设：default | helm | pipeline | shell | split | broadcast | sftp | tunnel | yaml | parallel | secure | custom
+	AppIconPreset string `yaml:"appIconPreset" json:"appIconPreset"`
 	// HomeMinimizedZone 首页分区最小化："" 双栏；"task" 收起任务；"shell" 收起 Shell（另一侧多列展示）
 	HomeMinimizedZone string `yaml:"homeMinimizedZone,omitempty" json:"homeMinimizedZone"`
 	// ShellMonitorIntervalSec 旧字段（秒），仅用于迁移
@@ -188,6 +191,29 @@ func NormalizeHomeMinimizedZone(zone string) string {
 		return strings.TrimSpace(zone)
 	default:
 		return ""
+	}
+}
+
+// NormalizeAppIconPreset 校验 Dock 图标预设 id
+func NormalizeAppIconPreset(preset string) string {
+	switch strings.TrimSpace(preset) {
+	case "helm", "pipeline", "shell", "split", "broadcast", "sftp", "tunnel", "yaml", "parallel", "secure", "custom":
+		return strings.TrimSpace(preset)
+	// 兼容旧预设 id → 相近模块
+	case "aurora", "ocean", "midnight", "slate":
+		return "helm"
+	case "emerald", "lime", "teal", "green":
+		return "pipeline"
+	case "frost":
+		return "shell"
+	case "sunset", "gold", "amber":
+		return "sftp"
+	case "nebula", "purple", "rose":
+		return "parallel"
+	case "ember":
+		return "secure"
+	default:
+		return "default"
 	}
 }
 
@@ -438,6 +464,7 @@ func (gcm *GlobalConfigManager) createDefaultGlobalConfig() error {
 			UiAccent:        "blue",
 			TerminalPreset:  "classic",
 			UiFontFamily:    "system",
+			UiFontSize:      14,
 			ShellFontFamily: "consolas",
 			ShellFontSize:   13,
 			ShellLineHeight: 1.2,
@@ -453,6 +480,7 @@ func (gcm *GlobalConfigManager) createDefaultGlobalConfig() error {
 		ShellTerminalScrollback: 2000,
 		TaskOutputMaxLines:      1000,
 		ShellCommandHistoryMax:  200,
+		AppIconPreset:           "default",
 		ShellLogHighlight:       boolPtr(true),
 		ShellLogHighlightColors: DefaultShellLogHighlightColors(),
 	}

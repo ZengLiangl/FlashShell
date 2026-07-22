@@ -3,7 +3,6 @@ package main
 import (
 	"embed"
 	"flag"
-	"fmt"
 	"os"
 	"os/exec"
 	"runtime"
@@ -66,11 +65,8 @@ func main() {
 	// 获取窗口名称
 	globalConfig, err := appInstance.GetGlobalConfig()
 	windowsName := "FlashDock" // 默认窗口名称
-	if err == nil && globalConfig != nil {
-		windowsName = globalConfig.WindowsName
-	}
-	if *sessionID != "" && len(*sessionID) >= 8 {
-		windowsName = fmt.Sprintf("%s [%s]", windowsName, (*sessionID)[:8])
+	if err == nil && globalConfig != nil && strings.TrimSpace(globalConfig.WindowsName) != "" {
+		windowsName = strings.TrimSpace(globalConfig.WindowsName)
 	}
 
 	// 按主题初始化窗口背景，避免标题栏/边缘与主题不一致

@@ -100,6 +100,7 @@ body,
   background: var(--app-bg);
   color: var(--app-text);
   font-family: var(--app-font-family, system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif);
+  font-size: var(--app-font-size, 14px);
 }
 
 /* 圆形按钮 loading 居中，避免与 slot 图标叠位 */

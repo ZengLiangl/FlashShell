@@ -318,6 +318,10 @@ export function InstallUpdateAndRestart() {
   return window['go']['app']['App']['InstallUpdateAndRestart']();
 }
 
+export function ListAppIconPresets() {
+  return window['go']['app']['App']['ListAppIconPresets']();
+}
+
 export function ListLocalFiles(arg1, arg2) {
   return window['go']['app']['App']['ListLocalFiles'](arg1, arg2);
 }
@@ -404,6 +408,10 @@ export function PauseShellTransfer(arg1) {
 
 export function PauseUpdateDownload() {
   return window['go']['app']['App']['PauseUpdateDownload']();
+}
+
+export function PickCustomAppIcon() {
+  return window['go']['app']['App']['PickCustomAppIcon']();
 }
 
 export function PickShellUploadFolder() {

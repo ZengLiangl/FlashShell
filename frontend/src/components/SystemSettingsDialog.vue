@@ -10,6 +10,43 @@
         <div class="panel-scroll">
             <!-- 系统设置 -->
             <section v-show="settingsTab === 'system'" class="settings-section">
+                <!-- <div class="section-head">
+                    <div>
+                        <h4>应用</h4>
+                        <p>窗口名称与 Dock 图标，保存后立即生效</p>
+                    </div>
+                </div> -->
+                <div class="system-setting-row">
+                    <div class="system-setting-text">
+                        <span class="system-setting-label">应用名称</span>
+                        <span class="system-setting-hint">窗口标题栏显示名称，留空则使用 FlashDock</span>
+                    </div>
+                    <div class="system-setting-control system-setting-control--wide">
+                        <el-input v-model="form.windowsName" class="system-setting-text-input" size="small"
+                            maxlength="64" placeholder="FlashDock" clearable />
+                    </div>
+                </div>
+                <div class="system-setting-row system-setting-row--stack">
+                    <div class="system-setting-text">
+                        <span class="system-setting-label">Dock 图标</span>
+                        <span class="system-setting-hint">选择预设或上传自定义图片（PNG / JPG），保存至
+                            ~/.flashdock/icons/；保存后立即更新窗口/任务栏图标</span>
+                    </div>
+                    <div class="dock-icon-presets">
+                        <button v-for="preset in appIconPresets" :key="preset.id" type="button" class="dock-icon-card"
+                            :class="{ active: form.appIconPreset === preset.id }" :title="preset.label"
+                            @click="form.appIconPreset = preset.id">
+                            <img :src="preset.preview" :alt="preset.label" class="dock-icon-img" />
+                            <span class="dock-icon-name">{{ preset.label }}</span>
+                        </button>
+                        <button type="button" class="dock-icon-card dock-icon-card--upload" title="上传自定义图标"
+                            :disabled="uploadingAppIcon" @click="uploadCustomAppIcon">
+                            <span class="dock-icon-upload-plus">+</span>
+                            <span class="dock-icon-name">{{ uploadingAppIcon ? '上传中…' : '上传' }}</span>
+                        </button>
+                    </div>
+                </div>
+
                 <div class="section-head">
                     <div>
                         <h4>Shell</h4>
@@ -149,25 +186,29 @@
                                             :class="{ active: form.themeSettings.uiAccent === accent.id }"
                                             :title="accent.label" :style="{ background: accent.light.accent }"
                                             @click="form.themeSettings.uiAccent = accent.id"></button>
-                                        <div class="accent-custom"
-                                            :class="{ active: isCustomAccentActive }"
+                                        <div class="accent-custom" :class="{ active: isCustomAccentActive }"
                                             title="自定义">
-                                            <el-color-picker
-                                                :model-value="customAccentColor"
-                                                size="small"
-                                                color-format="hex"
-                                                :predefine="accentPredefine"
+                                            <el-color-picker :model-value="customAccentColor" size="small"
+                                                color-format="hex" :predefine="accentPredefine"
                                                 @update:model-value="setCustomAccent" />
                                         </div>
                                     </div>
                                 </div>
                                 <div class="appear-field">
-                                    <span class="appear-field-label">界面字体</span>
-                                    <el-select v-model="form.themeSettings.uiFontFamily" size="small" placeholder="界面字体"
-                                        filterable style="width: 100%">
-                                        <el-option v-for="font in uiFonts" :key="font.id" :label="font.label"
-                                            :value="font.id" />
-                                    </el-select>
+                                    <span class="appear-field-label">界面字体 / 字号</span>
+                                    <div class="term-font-row ui-font-row">
+                                        <el-select v-model="form.themeSettings.uiFontFamily" size="small"
+                                            placeholder="界面字体" filterable class="term-font-select">
+                                            <el-option v-for="font in uiFonts" :key="font.id" :label="font.label"
+                                                :value="font.id" />
+                                        </el-select>
+                                        <el-input-number v-model="form.themeSettings.uiFontSize" class="term-num"
+                                            size="small" :min="12" :max="20" :step="1" controls-position="right" />
+                                    </div>
+                                    <div class="term-font-hints ui-font-hints">
+                                        <span>字体</span>
+                                        <span>字号</span>
+                                    </div>
                                 </div>
                             </div>
 
@@ -288,20 +329,26 @@
                     <aside class="appear-preview">
                         <div class="block-label">实时预览</div>
                         <div class="theme-preview" :class="{ dark: previewIsDark }">
-                            <div v-show="themePanel === 'ui' || themePanel === 'terminal'" class="preview-ui"
-                                :class="{ 'is-compact': themePanel === 'terminal' }" :style="previewUiStyle">
+                            <div v-show="themePanel === 'ui'" class="preview-ui" :style="previewUiStyle">
                                 <div class="preview-bar">
                                     <span class="preview-dot"></span>
                                     <span class="preview-title">FlashDock</span>
                                     <span class="preview-pill">{{ previewUiFontLabel }}</span>
                                 </div>
                                 <div class="preview-body">
-                                    <div class="preview-card">界面卡片预览</div>
+                                    <div class="preview-card">
+                                        <div class="preview-card-title">界面卡片预览</div>
+                                        <p class="preview-card-text">
+                                            任务流水线 · Shell 终端 · 系统设置
+                                        </p>
+                                        <p class="preview-card-sample">
+                                            Aa 字号预览 123
+                                        </p>
+                                    </div>
                                     <button type="button" class="preview-btn">主按钮</button>
                                 </div>
                             </div>
-                            <div v-show="themePanel === 'ui' || themePanel === 'terminal'" class="preview-term"
-                                :class="{ 'is-emphasis': themePanel === 'terminal' }" :style="previewTermStyle">
+                            <div v-show="themePanel === 'terminal'" class="preview-term" :style="previewTermStyle">
                                 <div class="preview-term-title">{{ previewTermLabel }}</div>
                                 <pre>{{ previewTermSample }}</pre>
                             </div>
@@ -539,11 +586,14 @@ export default {
             { id: 'log', label: '日志高亮' },
         ]
         const form = reactive({
+            windowsName: 'FlashDock',
+            appIconPreset: 'default',
             themeSettings: {
                 mode: 'light',
                 uiAccent: 'blue',
                 terminalPreset: 'classic',
                 uiFontFamily: 'system',
+                uiFontSize: 14,
                 shellFontFamily: 'consolas',
                 shellFontSize: 13,
                 shellLineHeight: 1.2,
@@ -558,6 +608,32 @@ export default {
             shellLogHighlightColors: { ...DEFAULT_SHELL_LOG_COLORS },
             shellLogHighlightRules: mergeLogHighlightRules([]),
         })
+
+        const appIconPresets = ref([])
+        const uploadingAppIcon = ref(false)
+
+        const loadAppIconPresets = async () => {
+            try {
+                appIconPresets.value = (await App.ListAppIconPresets()) || []
+            } catch {
+                appIconPresets.value = []
+            }
+        }
+
+        const uploadCustomAppIcon = async () => {
+            uploadingAppIcon.value = true
+            try {
+                const id = await App.PickCustomAppIcon()
+                if (!id) return
+                form.appIconPreset = id
+                await loadAppIconPresets()
+                ElMessage.success('自定义图标已保存到 ~/.flashdock/icons/')
+            } catch (e) {
+                ElMessage.error(`上传失败: ${e}`)
+            } finally {
+                uploadingAppIcon.value = false
+            }
+        }
 
         const logColorItems = [
             { key: 'timestamp', label: '时间戳' },
@@ -659,10 +735,12 @@ export default {
             const accent = getUiAccent(form.themeSettings.uiAccent)
             const palette = previewIsDark.value ? accent.dark : accent.light
             const font = getUiFont(form.themeSettings.uiFontFamily)
+            const size = form.themeSettings.uiFontSize > 0 ? form.themeSettings.uiFontSize : 14
             return {
                 '--preview-accent': palette.accent,
                 '--preview-accent-bg': palette.accentBg,
                 fontFamily: font.value,
+                fontSize: `${size}px`,
                 background: previewIsDark.value ? '#1d1e1f' : '#f5f7fa',
                 color: previewIsDark.value ? '#e5eaf3' : '#303133',
                 borderColor: previewIsDark.value ? '#414243' : '#e4e7ed',
@@ -681,7 +759,11 @@ export default {
             }
         })
 
-        const previewUiFontLabel = computed(() => getUiFont(form.themeSettings.uiFontFamily).label)
+        const previewUiFontLabel = computed(() => {
+            const font = getUiFont(form.themeSettings.uiFontFamily).label
+            const size = form.themeSettings.uiFontSize > 0 ? form.themeSettings.uiFontSize : 14
+            return `${font} · ${size}px`
+        })
         const previewTermLabel = computed(() => getTerminalPreset(form.themeSettings.terminalPreset).label)
         const previewTermSample = computed(() => {
             const theme = getTerminalPreset(form.themeSettings.terminalPreset).theme
@@ -699,11 +781,14 @@ theme preview · ${theme.foreground}`
 
         const load = async () => {
             const config = await App.GetSystemSettings()
+            form.windowsName = (config.windowsName || 'FlashDock').trim() || 'FlashDock'
+            form.appIconPreset = config.appIconPreset || 'default'
             form.themeSettings = {
                 mode: config.themeSettings?.mode || 'light',
                 uiAccent: config.themeSettings?.uiAccent || 'blue',
                 terminalPreset: config.themeSettings?.terminalPreset || 'classic',
                 uiFontFamily: config.themeSettings?.uiFontFamily || 'system',
+                uiFontSize: config.themeSettings?.uiFontSize > 0 ? config.themeSettings.uiFontSize : 14,
                 shellFontFamily: config.themeSettings?.shellFontFamily || 'consolas',
                 shellFontSize: config.themeSettings?.shellFontSize > 0 ? config.themeSettings.shellFontSize : 13,
                 shellLineHeight: config.themeSettings?.shellLineHeight > 0 ? config.themeSettings.shellLineHeight : 1.2,
@@ -740,7 +825,7 @@ theme preview · ${theme.foreground}`
             } catch {
                 appVersion.value = ''
             }
-            await loadSystemFonts()
+            await Promise.all([loadSystemFonts(), loadAppIconPresets()])
         }
 
         const loadSystemFonts = async () => {
@@ -1014,6 +1099,8 @@ theme preview · ${theme.foreground}`
             saving.value = true
             try {
                 const config = await App.GetSystemSettings()
+                config.windowsName = (form.windowsName || '').trim() || 'FlashDock'
+                config.appIconPreset = form.appIconPreset || 'default'
                 config.themeSettings = { ...form.themeSettings }
                 config.shellMonitorIntervalMs = form.shellMonitorIntervalMs
                 config.sshHandshakeTimeoutSec = form.sshHandshakeTimeoutSec
@@ -1024,10 +1111,13 @@ theme preview · ${theme.foreground}`
                 config.shellLogHighlightColors = mergeLogHighlightColors(form.shellLogHighlightColors)
                 config.shellLogHighlightDisabled = rulesToDisabled(form.shellLogHighlightRules)
                 await App.SaveSystemSettings(config)
+                form.windowsName = config.windowsName
+                form.appIconPreset = config.appIconPreset
                 applyThemeSettings(form.themeSettings)
                 ElMessage.success('系统设置已保存')
                 emit('saved')
                 if (!props.embedded) visibleProxy.value = false
+                await loadAppIconPresets()
             } catch (e) {
                 ElMessage.error(`保存失败: ${e}`)
             } finally {
@@ -1042,6 +1132,9 @@ theme preview · ${theme.foreground}`
             themePanel,
             themePanels,
             form,
+            appIconPresets,
+            uploadingAppIcon,
+            uploadCustomAppIcon,
             logColorItems,
             logColorPresets,
             logHlDotKeys,
@@ -1185,6 +1278,13 @@ theme preview · ${theme.foreground}`
     justify-content: space-between;
     gap: 12px;
     margin-bottom: 12px;
+}
+
+.settings-section>.section-head+.section-head,
+.system-setting-row+.section-head {
+    margin-top: 22px;
+    padding-top: 16px;
+    border-top: 1px solid var(--app-border);
 }
 
 .section-head h4 {
@@ -1467,6 +1567,10 @@ theme preview · ${theme.foreground}`
     flex-shrink: 0;
 }
 
+.term-font-row.ui-font-row {
+    grid-template-columns: minmax(0, 1fr) 76px;
+}
+
 .term-font-select {
     width: 100%;
     min-width: 0;
@@ -1494,6 +1598,10 @@ theme preview · ${theme.foreground}`
     font-size: 11px;
     color: var(--app-text-muted);
     flex-shrink: 0;
+}
+
+.term-font-hints.ui-font-hints {
+    grid-template-columns: minmax(0, 1fr) 76px;
 }
 
 .memory-saver-row {
@@ -1693,6 +1801,89 @@ theme preview · ${theme.foreground}`
     flex-shrink: 0;
 }
 
+.system-setting-control--wide {
+    grid-template-columns: minmax(160px, 240px);
+}
+
+.system-setting-text-input {
+    width: 100%;
+}
+
+.system-setting-row--stack {
+    flex-direction: column;
+    align-items: stretch;
+}
+
+.dock-icon-presets {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
+    gap: 10px;
+    width: 100%;
+}
+
+.dock-icon-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 8px 8px;
+    border: 1px solid var(--app-border);
+    border-radius: 10px;
+    background: var(--app-bg);
+    color: var(--app-text);
+    cursor: pointer;
+    transition: border-color 0.12s ease, box-shadow 0.12s ease, background 0.12s ease;
+}
+
+.dock-icon-card:hover:not(:disabled) {
+    border-color: color-mix(in srgb, var(--app-accent-color) 45%, var(--app-border));
+}
+
+.dock-icon-card.active {
+    border-color: var(--app-accent-color);
+    background: var(--app-accent-bg);
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-accent-color) 35%, transparent);
+}
+
+.dock-icon-card:disabled {
+    opacity: 0.7;
+    cursor: wait;
+}
+
+.dock-icon-img {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    object-fit: cover;
+    display: block;
+}
+
+.dock-icon-name {
+    font-size: 11px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: center;
+    color: inherit;
+}
+
+.dock-icon-card--upload {
+    justify-content: center;
+    min-height: 78px;
+}
+
+.dock-icon-upload-plus {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    border: 1px dashed var(--app-border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    line-height: 1;
+    color: var(--app-text-muted);
+}
+
 .system-setting-unit {
     font-size: 12px;
     color: var(--app-text-muted);
@@ -1745,21 +1936,9 @@ theme preview · ${theme.foreground}`
     flex: 1;
 }
 
-.preview-ui.is-compact {
-    flex: 0 0 auto;
-}
-
-.preview-ui.is-compact .preview-body {
-    display: none;
-}
-
 .preview-term {
     flex: 1;
     padding: 10px 12px;
-}
-
-.preview-term.is-emphasis {
-    flex: 1.4;
 }
 
 .preview-log {
@@ -1795,13 +1974,13 @@ theme preview · ${theme.foreground}`
 }
 
 .preview-title {
-    font-size: 13px;
+    font-size: 0.93em;
     font-weight: 650;
 }
 
 .preview-pill {
     margin-left: auto;
-    font-size: 11px;
+    font-size: 0.79em;
     padding: 2px 8px;
     border-radius: 999px;
     background: var(--preview-accent-bg, #ecf5ff);
@@ -1819,7 +1998,28 @@ theme preview · ${theme.foreground}`
     padding: 10px 12px;
     border-radius: 8px;
     border: 1px solid color-mix(in srgb, currentColor 14%, transparent);
-    font-size: 12px;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.preview-card-title {
+    font-size: 0.93em;
+    font-weight: 650;
+}
+
+.preview-card-text {
+    margin: 0;
+    font-size: 0.86em;
+    opacity: 0.78;
+    line-height: 1.45;
+}
+
+.preview-card-sample {
+    margin: 0;
+    font-size: 1.07em;
+    letter-spacing: 0.02em;
+    line-height: 1.5;
 }
 
 .preview-btn {
@@ -1829,7 +2029,7 @@ theme preview · ${theme.foreground}`
     padding: 6px 12px;
     background: var(--preview-accent, #409eff);
     color: #fff;
-    font-size: 12px;
+    font-size: 0.86em;
     cursor: default;
 }
 

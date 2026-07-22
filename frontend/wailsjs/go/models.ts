@@ -1,5 +1,23 @@
 export namespace app {
 	
+	export class AppIconPresetInfo {
+	    id: string;
+	    label: string;
+	    preview: string;
+	    isCustom: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AppIconPresetInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.label = source["label"];
+	        this.preview = source["preview"];
+	        this.isCustom = source["isCustom"];
+	    }
+	}
 	export class SystemFontInfo {
 	    family: string;
 	    mono: boolean;
@@ -219,6 +237,7 @@ export namespace data {
 	    uiAccent: string;
 	    terminalPreset: string;
 	    uiFontFamily: string;
+	    uiFontSize: number;
 	    shellFontFamily: string;
 	    shellFontSize: number;
 	    shellLineHeight: number;
@@ -234,6 +253,7 @@ export namespace data {
 	        this.uiAccent = source["uiAccent"];
 	        this.terminalPreset = source["terminalPreset"];
 	        this.uiFontFamily = source["uiFontFamily"];
+	        this.uiFontSize = source["uiFontSize"];
 	        this.shellFontFamily = source["shellFontFamily"];
 	        this.shellFontSize = source["shellFontSize"];
 	        this.shellLineHeight = source["shellLineHeight"];
@@ -271,6 +291,7 @@ export namespace data {
 	    shellTerminalScrollback: number;
 	    taskOutputMaxLines: number;
 	    shellCommandHistoryMax: number;
+	    appIconPreset: string;
 	    homeMinimizedZone: string;
 	    shellLogHighlight?: boolean;
 	    shellLogHighlightColors: ShellLogHighlightColors;
@@ -298,6 +319,7 @@ export namespace data {
 	        this.shellTerminalScrollback = source["shellTerminalScrollback"];
 	        this.taskOutputMaxLines = source["taskOutputMaxLines"];
 	        this.shellCommandHistoryMax = source["shellCommandHistoryMax"];
+	        this.appIconPreset = source["appIconPreset"];
 	        this.homeMinimizedZone = source["homeMinimizedZone"];
 	        this.shellLogHighlight = source["shellLogHighlight"];
 	        this.shellLogHighlightColors = this.convertValues(source["shellLogHighlightColors"], ShellLogHighlightColors);

@@ -119,6 +119,7 @@ func (a *App) Startup(ctx context.Context) {
 		println("配置文件加载成功")
 	}
 	a.applyWindowTheme(a.GetThemeSettings().Mode)
+	a.applyAppBrandingFromConfig()
 }
 
 // DomReady is called after front-end resources have been loaded
@@ -1359,6 +1360,10 @@ func (a *App) GetSystemSettings() (*data.GlobalConfig, error) {
 		cfg.ShellTerminalScrollback = normalizeShellTerminalScrollback(cfg.ShellTerminalScrollback)
 		cfg.TaskOutputMaxLines = normalizeTaskOutputMaxLines(cfg.TaskOutputMaxLines)
 		cfg.ShellCommandHistoryMax = data.NormalizeShellCommandHistoryMax(cfg.ShellCommandHistoryMax)
+		cfg.AppIconPreset = resolveAppIconPreset(cfg.AppIconPreset)
+		if strings.TrimSpace(cfg.WindowsName) == "" {
+			cfg.WindowsName = "FlashDock"
+		}
 		normalizeProxySettings(&cfg.ProxySettings)
 		if cfg.ShellLogHighlight == nil {
 			v := true
@@ -1417,6 +1422,11 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	config.TaskOutputMaxLines = normalizeTaskOutputMaxLines(config.TaskOutputMaxLines)
 	config.ShellCommandHistoryMax = data.NormalizeShellCommandHistoryMax(config.ShellCommandHistoryMax)
 	config.HomeMinimizedZone = data.NormalizeHomeMinimizedZone(config.HomeMinimizedZone)
+	config.AppIconPreset = resolveAppIconPreset(config.AppIconPreset)
+	config.WindowsName = strings.TrimSpace(config.WindowsName)
+	if config.WindowsName == "" {
+		config.WindowsName = "FlashDock"
+	}
 	config.ShellMonitorIntervalSec = 0
 	config.ShellLogHighlightColors = data.NormalizeShellLogHighlightColors(config.ShellLogHighlightColors)
 	config.ShellLogHighlightDisabled = data.NormalizeShellLogHighlightDisabled(config.ShellLogHighlightDisabled)
@@ -1431,6 +1441,7 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 		_ = a.sessionManager.SetTheme(config.ThemeSettings.Mode, config.ThemeSettings.TerminalPreset)
 	}
 	a.applyWindowTheme(config.ThemeSettings.Mode)
+	a.applyAppBranding(config)
 	if a.ctx != nil {
 		wailsRuntime.EventsEmit(a.ctx, "theme:changed", config.ThemeSettings)
 		wailsRuntime.EventsEmit(a.ctx, "system-settings:changed", map[string]any{
@@ -1443,6 +1454,8 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 			"shellLogHighlightColors":   config.ShellLogHighlightColors,
 			"shellLogHighlightDisabled": config.ShellLogHighlightDisabled,
 			"proxySettings":             config.ProxySettings,
+			"windowsName":               config.WindowsName,
+			"appIconPreset":             config.AppIconPreset,
 		})
 	}
 	return nil
@@ -1613,6 +1626,15 @@ func (a *App) normalizeThemeSettings(settings *data.ThemeSettings) {
 	}
 	if settings.UiFontFamily == "" {
 		settings.UiFontFamily = "system"
+	}
+	if settings.UiFontSize <= 0 {
+		settings.UiFontSize = 14
+	}
+	if settings.UiFontSize < 12 {
+		settings.UiFontSize = 12
+	}
+	if settings.UiFontSize > 20 {
+		settings.UiFontSize = 20
 	}
 	if settings.ShellFontFamily == "" {
 		settings.ShellFontFamily = "consolas"
