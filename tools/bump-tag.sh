@@ -26,6 +26,9 @@
 #   RELEASE_BASE=v1.0.1  等同 --base（历史版本 tag）
 #   SKIP_COMMIT=1  只打 tag（不写版本文件、不提交）
 #   SKIP_BUMP=1    打完 tag 后不写/不提交版本文件
+#
+# 重打同名版本时会删除本地/远程 tag；若已安装 gh，还会删除同名 GitHub Release，
+# 避免 CI 更新旧 Release 时沿用错误 body。
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -220,6 +223,16 @@ fi
 if git ls-remote --tags --exit-code "$REMOTE" "refs/tags/${NEW_TAG}" >/dev/null 2>&1; then
   echo "🗑️  删除远程已有 tag ${NEW_TAG}"
   git push "$REMOTE" ":refs/tags/${NEW_TAG}" >/dev/null 2>&1 || true
+fi
+
+# 重打同名 tag 时，旧 Release 可能残留；先删掉让 CI 重新创建（含正确 body）
+if command -v gh >/dev/null 2>&1; then
+  if gh release view "${NEW_TAG}" >/dev/null 2>&1; then
+    echo "🗑️  删除已有 GitHub Release ${NEW_TAG}（避免沿用旧 body）"
+    gh release delete "${NEW_TAG}" --yes 2>/dev/null || true
+  fi
+else
+  echo "ℹ️  未安装 gh CLI：若远端已有 ${NEW_TAG} Release，请手动删除后再发版"
 fi
 
 MSG="${TAG_PREFIX} ${NEW_TAG}"
