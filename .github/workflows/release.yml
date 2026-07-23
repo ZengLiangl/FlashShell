@@ -439,9 +439,13 @@ jobs:
       # 按 commit 标题归类生成 Release body（含正文要点）
       # 分类看标题前缀 feat/fix/perf/...；写入时去掉前缀，正文里以 -/* 开头的行作为子要点
       # 多条 commit 正文（规范化后）相同则只保留首次出现的一条
+      # 若 annotated tag 含 release-base: vX.Y.Z，则先取该历史 Release body，再追加本次提交
       - name: Generate Changelog
         id: changelog
         shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
           TAG="${{ github.ref_name }}"
@@ -458,7 +462,16 @@ jobs:
             RANGE="${PREV_TAG}..${TAG}"
           fi
 
-          echo "📋 生成更新日志：$RANGE"
+          # 从 annotated tag 正文读取可选的历史版本基线（bump-tag.sh --base）
+          TAG_MSG="$(git tag -l --format='%(contents)' "$TAG" 2>/dev/null || true)"
+          RELEASE_BASE="$(printf '%s\n' "$TAG_MSG" | sed -nE 's/^release-base:[[:space:]]*(v[^[:space:]]+).*$/\1/p' | head -n 1 || true)"
+          if [ -n "$RELEASE_BASE" ]; then
+            echo "📎 检测到 release-base: ${RELEASE_BASE}"
+          else
+            echo "ℹ️  未指定 release-base，Release body 仅含本次提交"
+          fi
+
+          echo "📋 生成本次更新日志：$RANGE"
 
           # 去掉 emoji / conventional commit 前缀，Release 正文只保留描述
           strip_commit_prefix() {
@@ -519,7 +532,7 @@ jobs:
 
           HASHES=$(git log "$RANGE" --no-merges --pretty=format:'%H' 2>/dev/null || true)
           if [ -z "$HASHES" ]; then
-            BODY="暂无提交记录。"
+            NEW_BODY="暂无提交记录。"
           else
             CAT_FEAT=""
             CAT_FIX=""
@@ -564,21 +577,43 @@ jobs:
               esac
             done <<< "$HASHES"
 
-            BODY=""
-            [ -n "$CAT_FEAT" ]     && BODY="${BODY}## ✨ 新功能\n${CAT_FEAT}\n\n"
-            [ -n "$CAT_FIX" ]      && BODY="${BODY}## 🐛 问题修复\n${CAT_FIX}\n\n"
-            [ -n "$CAT_PERF" ]     && BODY="${BODY}## ⚡ 性能优化\n${CAT_PERF}\n\n"
-            [ -n "$CAT_REFACTOR" ] && BODY="${BODY}## ♻️ 重构\n${CAT_REFACTOR}\n\n"
-            [ -n "$CAT_I18N" ]     && BODY="${BODY}## 🌐 国际化\n${CAT_I18N}\n\n"
-            [ -n "$CAT_OTHER" ]    && BODY="${BODY}## 🔧 其他变更\n${CAT_OTHER}\n\n"
+            NEW_BODY=""
+            [ -n "$CAT_FEAT" ]     && NEW_BODY="${NEW_BODY}## ✨ 新功能\n${CAT_FEAT}\n\n"
+            [ -n "$CAT_FIX" ]      && NEW_BODY="${NEW_BODY}## 🐛 问题修复\n${CAT_FIX}\n\n"
+            [ -n "$CAT_PERF" ]     && NEW_BODY="${NEW_BODY}## ⚡ 性能优化\n${CAT_PERF}\n\n"
+            [ -n "$CAT_REFACTOR" ] && NEW_BODY="${NEW_BODY}## ♻️ 重构\n${CAT_REFACTOR}\n\n"
+            [ -n "$CAT_I18N" ]     && NEW_BODY="${NEW_BODY}## 🌐 国际化\n${CAT_I18N}\n\n"
+            [ -n "$CAT_OTHER" ]    && NEW_BODY="${NEW_BODY}## 🔧 其他变更\n${CAT_OTHER}\n\n"
 
             if [ -n "$PREV_TAG" ]; then
               REPO_URL="${{ github.server_url }}/${{ github.repository }}"
-              BODY="${BODY}---\n**完整变更**: [${PREV_TAG}...${TAG}](${REPO_URL}/compare/${PREV_TAG}...${TAG})\n"
+              NEW_BODY="${NEW_BODY}---\n**完整变更**: [${PREV_TAG}...${TAG}](${REPO_URL}/compare/${PREV_TAG}...${TAG})\n"
             fi
           fi
 
-          printf '%b' "$BODY" > /tmp/changelog.md
+          printf '%b' "$NEW_BODY" > /tmp/changelog-new.md
+
+          if [ -n "$RELEASE_BASE" ]; then
+            BASE_JSON="$(gh api "repos/${GH_REPO}/releases/tags/${RELEASE_BASE}" 2>/dev/null || true)"
+            BASE_BODY=""
+            if [ -n "$BASE_JSON" ]; then
+              BASE_BODY="$(printf '%s' "$BASE_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("body") or "")' 2>/dev/null || true)"
+            fi
+            if [ -z "$(printf '%s' "$BASE_BODY" | tr -d '[:space:]')" ]; then
+              echo "⚠️ 未找到可用的 ${RELEASE_BASE} Release body，仅使用本次提交"
+              cp /tmp/changelog-new.md /tmp/changelog.md
+            else
+              echo "✅ 已合并 ${RELEASE_BASE} 的 Release body + 本次提交"
+              {
+                printf '%s\n' "$BASE_BODY"
+                printf '\n---\n\n## 本次更新 (%s)\n\n' "$TAG"
+                cat /tmp/changelog-new.md
+              } > /tmp/changelog.md
+            fi
+          else
+            cp /tmp/changelog-new.md /tmp/changelog.md
+          fi
+
           echo "changelog_file=/tmp/changelog.md" >> "$GITHUB_OUTPUT"
           echo "---- changelog preview ----"
           cat /tmp/changelog.md

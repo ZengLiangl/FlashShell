@@ -2,22 +2,28 @@
 # bump-tag.sh — 打 annotated tag 并推送；版本号提交放在 tag 之后
 #
 # 用法:
-#   ./tools/bump-tag.sh              # 拉取最新 v* tag，patch +1
-#   ./tools/bump-tag.sh v1.0.3       # 直接使用指定版本
+#   ./tools/bump-tag.sh                         # 拉取最新 v* tag，patch +1
+#   ./tools/bump-tag.sh v1.0.3                  # 直接使用指定版本
+#   ./tools/bump-tag.sh --base v1.0.1           # Release = 历史版本说明 + 本次提交
+#   ./tools/bump-tag.sh v1.0.3 --base v1.0.1
+#   RELEASE_BASE=v1.0.1 ./tools/bump-tag.sh
 #
 # 流程（重要）:
-#   1. 解析 NEW_TAG（如 v1.0.4）
+#   1. 解析 NEW_TAG（如 v1.0.4）与可选 RELEASE_BASE
 #   2. 在「当前 HEAD」上打 tag 并先推送 tag
 #      → Release / changelog 不含 "bump version" 提交
+#      → 若指定 --base，tag 注解写入 release-base:，供 CI 拼历史 Release body
 #   3. 再写回 app/version.go、wails.json 并 commit "chore: bump version to …"
 #   4. 推送版本 commit 到当前分支
 #
 # 说明:
 #   CI 发布用 tag + ldflags 注入版本，不依赖 tag 指向的 commit 里是否已改 version.go。
 #   bump commit 仅同步本地/后续开发读到的默认版本号。
+#   Release body：未指定 base 时仅本次提交；指定后为「该历史版本 GitHub Release body + 本次提交」。
 #
 # 环境变量:
 #   REMOTE=origin  TAG_PREFIX=FlashDock
+#   RELEASE_BASE=v1.0.1  等同 --base（历史版本 tag）
 #   SKIP_COMMIT=1  只打 tag（不写版本文件、不提交）
 #   SKIP_BUMP=1    打完 tag 后不写/不提交版本文件
 set -euo pipefail
@@ -27,12 +33,46 @@ cd "$ROOT"
 
 REMOTE="${REMOTE:-origin}"
 TAG_PREFIX="${TAG_PREFIX:-FlashDock}"
-EXPLICIT_TAG="${1:-}"
+RELEASE_BASE="${RELEASE_BASE:-}"
 SKIP_COMMIT="${SKIP_COMMIT:-0}"
 SKIP_BUMP="${SKIP_BUMP:-0}"
 
 VERSION_GO="app/version.go"
 WAILS_JSON="wails.json"
+
+EXPLICIT_TAG=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --base)
+      if [ $# -lt 2 ]; then
+        echo "❌ --base 需要版本参数，例如 --base v1.0.1" >&2
+        exit 1
+      fi
+      RELEASE_BASE="$2"
+      shift 2
+      ;;
+    --base=*)
+      RELEASE_BASE="${1#--base=}"
+      shift
+      ;;
+    -h|--help)
+      sed -n '2,28p' "$0" | sed 's/^# \?//'
+      exit 0
+      ;;
+    -*)
+      echo "❌ 未知参数: $1（支持 --base <tag>）" >&2
+      exit 1
+      ;;
+    *)
+      if [ -n "$EXPLICIT_TAG" ]; then
+        echo "❌ 多余参数: $1" >&2
+        exit 1
+      fi
+      EXPLICIT_TAG="$1"
+      shift
+      ;;
+  esac
+done
 
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "❌ 当前目录不是 git 仓库" >&2
@@ -143,6 +183,16 @@ else
   fi
 fi
 
+if [ -n "$RELEASE_BASE" ]; then
+  RELEASE_BASE="$(normalize_tag "$RELEASE_BASE")"
+  validate_tag "$RELEASE_BASE"
+  if [ "$RELEASE_BASE" = "$NEW_TAG" ]; then
+    echo "❌ --base 不能与新版本相同: ${RELEASE_BASE}" >&2
+    exit 1
+  fi
+  echo "📎 Release body 将基于历史版本: ${RELEASE_BASE} + 本次提交"
+fi
+
 APP_VERSION="${NEW_TAG#v}"
 APP_VERSION="${APP_VERSION%%[-+]*}"
 export APP_VERSION
@@ -173,6 +223,10 @@ if git ls-remote --tags --exit-code "$REMOTE" "refs/tags/${NEW_TAG}" >/dev/null 
 fi
 
 MSG="${TAG_PREFIX} ${NEW_TAG}"
+if [ -n "$RELEASE_BASE" ]; then
+  # CI 从 annotated tag 正文读取 release-base，拉取该版本 GitHub Release body
+  MSG="${MSG}"$'\n\n'"release-base: ${RELEASE_BASE}"
+fi
 echo "🏷️  在当前 HEAD 创建 tag: ${NEW_TAG}"
 echo "   指向: ${HEAD_SHA}"
 echo "   消息: ${MSG}"
@@ -205,5 +259,8 @@ fi
 
 echo "✅ 完成: ${NEW_TAG}"
 echo "   tag 指向发布代码（无 bump commit）"
+if [ -n "$RELEASE_BASE" ]; then
+  echo "   Release body = ${RELEASE_BASE} 说明 + 本次提交"
+fi
 echo "   本地默认版本 = ${APP_VERSION}（app.Version / wails.json）"
 echo "   CI 发布仍会用 tag 经 ldflags 注入同一版本"
