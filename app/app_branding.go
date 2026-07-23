@@ -79,16 +79,22 @@ func (a *App) applyAppBrandingFromConfig() {
 	a.applyAppBranding(cfg)
 }
 
+// applyStartupFullscreen 将「启动时全屏」落实为窗口最大化（保留标题栏），
+// 而非系统独占全屏（macOS Spaces / Windows 无边框全屏）。
 func (a *App) applyStartupFullscreen(enabled bool) {
 	if a.ctx == nil {
 		return
 	}
-	if enabled {
-		wailsRuntime.WindowFullscreen(a.ctx)
-		return
-	}
+	// 旧版本曾用 WindowFullscreen，开启最大化前先退出独占全屏
 	if wailsRuntime.WindowIsFullscreen(a.ctx) {
 		wailsRuntime.WindowUnfullscreen(a.ctx)
+	}
+	if enabled {
+		wailsRuntime.WindowMaximise(a.ctx)
+		return
+	}
+	if wailsRuntime.WindowIsMaximised(a.ctx) {
+		wailsRuntime.WindowUnmaximise(a.ctx)
 	}
 }
 

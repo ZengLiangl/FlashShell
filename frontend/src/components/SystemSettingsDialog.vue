@@ -34,7 +34,7 @@
                             <div class="system-setting-row">
                                 <div class="system-setting-text">
                                     <span class="system-setting-label">启动时全屏</span>
-                                    <span class="system-setting-hint">开启后下次启动进入全屏；保存设置时也会立即切换当前窗口</span>
+                                    <span class="system-setting-hint">开启后下次启动最大化窗口；保存设置时也会立即切换当前窗口</span>
                                 </div>
                                 <div class="system-setting-control">
                                     <el-switch v-model="form.startupFullscreen" size="small" />
