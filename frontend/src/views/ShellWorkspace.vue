@@ -374,7 +374,8 @@ export default {
     })
 
     const findMonitorMachineRecord = () => {
-      const key = String(monitorMachineName.value || activeConfigName.value || '').trim()
+      // 必须用配置名（jz），不能用会话 ID（jz-2），否则二次连接读不到 shellMonitorOpen
+      const key = String(activeConfigName.value || '').trim()
       if (!key) return null
       return (props.machines || []).find((m) => m?.name === key || m?.id === key) || null
     }
@@ -388,7 +389,6 @@ export default {
 
     watch(
       [
-        monitorMachineName,
         activeConfigName,
         monitorSession,
         () => {
