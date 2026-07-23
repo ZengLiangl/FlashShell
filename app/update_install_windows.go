@@ -320,6 +320,7 @@ try {
   Write-UpdateLog 'cooldown finished, starting file replace'
 
   Replace-TargetExecutable -SourceExe $sourceExe -TargetExe $Target
+  # 统一重命名为 FlashDock.exe（不含版本号 / 平台标识）
   $finalPath = Resolve-FinalTargetPath -TargetExe $Target -DesiredName $FinalName
   $launchPath = $Target
   try {

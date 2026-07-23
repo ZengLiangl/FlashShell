@@ -277,7 +277,8 @@ func launchWindowsUpdate(staged *stagedUpdate, targetExe string, pid int) error 
 		return err
 	}
 	cmd := buildWindowsLaunchCommand(scriptPath)
-	cmd.Env = append(os.Environ(), windowsUpdateScriptEnv(staged.FilePath, targetExe, staged.StagedDir, logPath, pid, staged.AssetName)...)
+	// 安装后统一为 FlashDock.exe（去掉版本号与平台标识），便于快捷方式与桌面入口稳定
+	cmd.Env = append(os.Environ(), windowsUpdateScriptEnv(staged.FilePath, targetExe, staged.StagedDir, logPath, pid, "FlashDock.exe")...)
 	if err := cmd.Start(); err != nil {
 		return err
 	}
