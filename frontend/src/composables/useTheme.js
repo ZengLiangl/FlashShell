@@ -62,7 +62,7 @@ function applyAccentAndFont(accentId, fontId, fontSize, dark) {
       ? `color-mix(in srgb, ${palette.accent} 25%, transparent)`
       : `color-mix(in srgb, ${palette.accent} 15%, transparent)`,
   )
-  applyElementPrimaryCssVars(root, palette.accent)
+  applyElementPrimaryCssVars(root, palette.accent, dark)
 
   const font = getUiFont(fontId)
   root.style.setProperty('--app-font-family', font.value)

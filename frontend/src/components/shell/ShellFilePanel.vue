@@ -1255,6 +1255,28 @@ export default {
   box-sizing: border-box;
 }
 
+.tree-pane :deep(.el-tree) {
+  background: transparent;
+  color: var(--app-text);
+  --el-tree-node-hover-bg-color: var(--app-accent-bg);
+  --el-tree-text-color: var(--app-text);
+}
+
+.tree-pane :deep(.el-tree-node__content) {
+  border-radius: 4px;
+  height: 28px;
+}
+
+.tree-pane :deep(.el-tree-node__content:focus),
+.tree-pane :deep(.el-tree-node__content:focus-visible) {
+  outline: none;
+}
+
+.tree-pane :deep(.el-tree--highlight-current .el-tree-node.is-current > .el-tree-node__content) {
+  background: var(--app-accent-bg);
+  color: var(--app-accent-color);
+}
+
 .split-handle {
   flex-shrink: 0;
   width: 5px;

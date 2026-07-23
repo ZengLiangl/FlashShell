@@ -61,6 +61,14 @@ html.dark {
   --app-accent-color: #79bbff;
   --app-accent-bg: color-mix(in srgb, var(--app-accent-color) 18%, #1d1e1f);
   --app-surface-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  /* 暗色：primary light 向深色底混，避免树选中/按钮悬浮变成近白块 */
+  --el-color-primary: var(--app-accent-color);
+  --el-color-primary-light-3: color-mix(in srgb, var(--app-accent-color) 70%, #141414);
+  --el-color-primary-light-5: color-mix(in srgb, var(--app-accent-color) 50%, #141414);
+  --el-color-primary-light-7: color-mix(in srgb, var(--app-accent-color) 30%, #141414);
+  --el-color-primary-light-8: color-mix(in srgb, var(--app-accent-color) 20%, #141414);
+  --el-color-primary-light-9: color-mix(in srgb, var(--app-accent-color) 10%, #141414);
+  --el-color-primary-dark-2: color-mix(in srgb, var(--app-accent-color) 80%, #ffffff);
   --terminal-bg: #0d1117;
   --terminal-fg: #c9d1d9;
   --terminal-success: #3fb950;

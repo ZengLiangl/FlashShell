@@ -23,10 +23,17 @@ var assets embed.FS
 
 // main is the entry point for the application
 func main() {
+	// Windows：--apply-update / 版本号便携名归一，须在启动 UI 前处理并退出
+	if app.HandleEarlyUpdateArgs(os.Args[1:]) {
+		return
+	}
+
 	// parse run mode from command line
 	runMode := flag.String("reg", "desk", "运行模式: desk(前台)/back(后台)")
 	sessionID := flag.String("session", "", "窗口会话 ID")
 	flag.Parse()
+
+	app.ConsumeWindowsUpdateCleanupEnv()
 
 	// daemonize if requested (like nohup), only on non-Windows
 	if *runMode == "back" && os.Getenv("FLASHDOCK_DAEMONIZED") != "1" {

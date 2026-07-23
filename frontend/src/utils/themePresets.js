@@ -644,19 +644,33 @@ function mixHex(a, b, t) {
   })
 }
 
-/** 将强调色同步为 Element Plus primary 色阶（按钮/链接悬浮等依赖这些变量） */
-export function applyElementPrimaryCssVars(root, accentHex) {
+/**
+ * 将强调色同步为 Element Plus primary 色阶（按钮/链接悬浮、树选中等依赖这些变量）。
+ * 暗色模式需向深色底混色，否则 light-9 会变成近白色，SFTP 文件树选中会刺眼。
+ */
+export function applyElementPrimaryCssVars(root, accentHex, dark = false) {
   if (!root?.style) return
   const accent = normalizeHex(accentHex || '#409eff')
   const { r, g, b } = parseHex(accent)
   root.style.setProperty('--el-color-primary', accent)
   root.style.setProperty('--el-color-primary-rgb', `${r}, ${g}, ${b}`)
-  root.style.setProperty('--el-color-primary-light-3', mixHex(accent, '#ffffff', 0.3))
-  root.style.setProperty('--el-color-primary-light-5', mixHex(accent, '#ffffff', 0.5))
-  root.style.setProperty('--el-color-primary-light-7', mixHex(accent, '#ffffff', 0.7))
-  root.style.setProperty('--el-color-primary-light-8', mixHex(accent, '#ffffff', 0.8))
-  root.style.setProperty('--el-color-primary-light-9', mixHex(accent, '#ffffff', 0.9))
-  root.style.setProperty('--el-color-primary-dark-2', mixHex(accent, '#000000', 0.2))
+  if (dark) {
+    // 与 Element Plus html.dark 一致：light-* 向页面底色混，dark-2 向白提亮
+    const base = '#141414'
+    root.style.setProperty('--el-color-primary-light-3', mixHex(accent, base, 0.3))
+    root.style.setProperty('--el-color-primary-light-5', mixHex(accent, base, 0.5))
+    root.style.setProperty('--el-color-primary-light-7', mixHex(accent, base, 0.7))
+    root.style.setProperty('--el-color-primary-light-8', mixHex(accent, base, 0.8))
+    root.style.setProperty('--el-color-primary-light-9', mixHex(accent, base, 0.9))
+    root.style.setProperty('--el-color-primary-dark-2', mixHex(accent, '#ffffff', 0.2))
+  } else {
+    root.style.setProperty('--el-color-primary-light-3', mixHex(accent, '#ffffff', 0.3))
+    root.style.setProperty('--el-color-primary-light-5', mixHex(accent, '#ffffff', 0.5))
+    root.style.setProperty('--el-color-primary-light-7', mixHex(accent, '#ffffff', 0.7))
+    root.style.setProperty('--el-color-primary-light-8', mixHex(accent, '#ffffff', 0.8))
+    root.style.setProperty('--el-color-primary-light-9', mixHex(accent, '#ffffff', 0.9))
+    root.style.setProperty('--el-color-primary-dark-2', mixHex(accent, '#000000', 0.2))
+  }
 }
 
 /** 由任意 hex 生成浅色/深色强调色板 */

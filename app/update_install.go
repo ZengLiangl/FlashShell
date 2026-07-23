@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -266,19 +267,54 @@ func launchUpdateScript(staged *stagedUpdate) error {
 }
 
 func launchWindowsUpdate(staged *stagedUpdate, targetExe string, pid int) error {
-	scriptPath := filepath.Join(staged.StagedDir, "update.ps1")
 	logPath := strings.TrimSpace(staged.InstallLogPath)
 	if logPath == "" {
 		logPath = buildUpdateInstallLogPath(filepath.Dir(staged.FilePath))
 		staged.InstallLogPath = logPath
 	}
+
+	// 优先：由「新版本 exe」执行安装（--apply-update），最终名写死为 FlashDock.exe。
+	// 这样改名规则随新包走，不再依赖当前旧进程内嵌的更新脚本。
+	applyErr := launchWindowsApplyUpdateExe(staged.FilePath, targetExe, staged.StagedDir, logPath, pid)
+	if applyErr == nil {
+		return nil
+	}
+
+	// 回退到旧 PS1 路径（例如新包暂时无法直接拉起时）
+	scriptPath := filepath.Join(staged.StagedDir, "update.ps1")
 	content := buildWindowsPowerShellUpdateScript(pid)
 	if err := os.WriteFile(scriptPath, []byte(content), 0o644); err != nil {
-		return err
+		return fmt.Errorf("启动更新失败: apply-update: %v; 写脚本: %w", applyErr, err)
 	}
 	cmd := buildWindowsLaunchCommand(scriptPath)
-	// 最终文件名 FlashDock.exe 已写死在 update.ps1 内，避免依赖环境变量
 	cmd.Env = append(os.Environ(), windowsUpdateScriptEnv(staged.FilePath, targetExe, staged.StagedDir, logPath, pid)...)
+	if err := cmd.Start(); err != nil {
+		return fmt.Errorf("启动更新失败: apply-update: %v; ps1: %w", applyErr, err)
+	}
+	if cmd.Process != nil {
+		_ = cmd.Process.Release()
+	}
+	return nil
+}
+
+func launchWindowsApplyUpdateExe(sourceExe, targetExe, stagedDir, logPath string, pid int) error {
+	sourceExe = strings.TrimSpace(sourceExe)
+	if sourceExe == "" {
+		return fmt.Errorf("empty update source")
+	}
+	if _, err := os.Stat(sourceExe); err != nil {
+		return err
+	}
+	cmd := exec.Command(
+		sourceExe,
+		applyUpdateFlag,
+		applyUpdateTargetFlag, targetExe,
+		applyUpdatePIDFlag, strconv.Itoa(pid),
+		applyUpdateLogFlag, logPath,
+		applyUpdateStagedFlag, stagedDir,
+	)
+	cmd.Dir = filepath.Dir(sourceExe)
+	configureWindowsUpdateCommand(cmd)
 	if err := cmd.Start(); err != nil {
 		return err
 	}

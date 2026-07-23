@@ -269,6 +269,23 @@ export default {
 
 .tree-wrap :deep(.el-tree) {
   background: transparent;
-  --el-tree-node-hover-bg-color: var(--app-hover-bg);
+  color: var(--app-text);
+  --el-tree-node-hover-bg-color: var(--app-accent-bg);
+  --el-tree-text-color: var(--app-text);
+}
+
+.tree-wrap :deep(.el-tree-node__content) {
+  border-radius: 4px;
+  height: 28px;
+}
+
+.tree-wrap :deep(.el-tree-node__content:focus),
+.tree-wrap :deep(.el-tree-node__content:focus-visible) {
+  outline: none;
+}
+
+.tree-wrap :deep(.el-tree--highlight-current .el-tree-node.is-current > .el-tree-node__content) {
+  background: var(--app-accent-bg);
+  color: var(--app-accent-color);
 }
 </style>
