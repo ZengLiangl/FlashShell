@@ -155,7 +155,8 @@ $Target = $env:FLASHDOCK_UPDATE_TARGET
 $Staged = $env:FLASHDOCK_UPDATE_STAGED
 $LogFile = $env:FLASHDOCK_UPDATE_LOG
 $HostPid = [int]$env:FLASHDOCK_UPDATE_PID
-$FinalName = ($env:FLASHDOCK_UPDATE_FINAL_NAME + '').Trim()
+# 写死最终文件名：不信任旧进程传入的 FINAL_NAME（旧版会传带版本号的资源包名）
+$FinalName = 'FlashDock.exe'
 
 function Write-UpdateLog([string]$Message) {
   $line = '[{0}] {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Message
@@ -344,13 +345,12 @@ try {
 	return strings.ReplaceAll(script, "\n", "\r\n")
 }
 
-func windowsUpdateScriptEnv(source, target, stagedDir, logPath string, pid int, finalName string) []string {
+func windowsUpdateScriptEnv(source, target, stagedDir, logPath string, pid int) []string {
 	return []string{
 		"FLASHDOCK_UPDATE_SOURCE=" + source,
 		"FLASHDOCK_UPDATE_TARGET=" + target,
 		"FLASHDOCK_UPDATE_STAGED=" + stagedDir,
 		"FLASHDOCK_UPDATE_LOG=" + logPath,
 		"FLASHDOCK_UPDATE_PID=" + strconv.Itoa(pid),
-		"FLASHDOCK_UPDATE_FINAL_NAME=" + strings.TrimSpace(finalName),
 	}
 }

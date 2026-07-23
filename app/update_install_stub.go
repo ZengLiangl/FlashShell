@@ -12,6 +12,6 @@ func buildWindowsPowerShellUpdateScript(_ int) string {
 	return ""
 }
 
-func windowsUpdateScriptEnv(_, _, _, _ string, _ int, _ string) []string {
+func windowsUpdateScriptEnv(_, _, _, _ string, _ int) []string {
 	return nil
 }
