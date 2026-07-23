@@ -1,4 +1,5 @@
 name: Release
+run-name: FlashDock ${{ github.ref_name }}
 
 on:
   push:
