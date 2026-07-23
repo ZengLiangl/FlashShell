@@ -479,25 +479,11 @@ jobs:
           if [ -z "$RELEASE_BASE" ]; then
             echo "🔎 本地 tag 注解未含 release-base，改用 GitHub API 读取…"
             REF_JSON="$(gh api "repos/${GH_REPO}/git/ref/tags/${TAG}" 2>&1 || true)"
-            TAG_OBJ_SHA="$(printf '%s' "$REF_JSON" | python3 -c '
-import json,sys
-try:
-    d=json.load(sys.stdin)
-    obj=d.get("object") or {}
-    if obj.get("type")=="tag":
-        print(obj.get("sha") or "")
-except Exception:
-    pass
-' 2>/dev/null || true)"
+            # python -c 必须保持与 shell 同级缩进；顶格多行会打断 YAML 的 run:| 块
+            TAG_OBJ_SHA="$(printf '%s' "$REF_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); o=d.get("object") or {}; print((o.get("sha") or "") if o.get("type")=="tag" else "")' 2>/dev/null || true)"
             if [ -n "$TAG_OBJ_SHA" ]; then
               TAG_OBJ_JSON="$(gh api "repos/${GH_REPO}/git/tags/${TAG_OBJ_SHA}" 2>&1 || true)"
-              TAG_MSG="$(printf '%s' "$TAG_OBJ_JSON" | python3 -c '
-import json,sys
-try:
-    print(json.load(sys.stdin).get("message") or "")
-except Exception:
-    pass
-' 2>/dev/null || true)"
+              TAG_MSG="$(printf '%s' "$TAG_OBJ_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("message") or "")' 2>/dev/null || true)"
               RELEASE_BASE="$(parse_release_base "$TAG_MSG")"
             else
               echo "⚠️ 无法经 API 取得 annotated tag 对象（可能是轻量 tag）"
