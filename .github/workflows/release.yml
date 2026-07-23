@@ -440,23 +440,23 @@ jobs:
       # 按 commit 标题归类生成 Release body（含正文要点）
       # 分类看标题前缀 feat/fix/perf/...；写入时去掉前缀，正文里以 -/* 开头的行作为子要点
       # 多条 commit 正文（规范化后）相同则只保留首次出现的一条
-      # 若 annotated tag 含 release-base: vX.Y.Z，则先取该历史 Release body，再追加本次提交
+      # release-base 优先读仓库文件 .github/release-base（bump-tag.sh --base 写入）；
+      # 其次再尝试 annotated tag 注解 / GitHub API
       - name: Generate Changelog
         id: changelog
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GH_REPO: ${{ github.repository }}
-          # 避免 gh 把升级提示打到 stderr 后污染 JSON（曾导致 release-base 合并静默失败）
           GH_NO_UPDATE_NOTIFIER: "1"
         run: |
           set -euo pipefail
           TAG="${{ github.ref_name }}"
           CHANGELOG_FILE="${GITHUB_WORKSPACE}/changelog.md"
           CHANGELOG_NEW="${GITHUB_WORKSPACE}/changelog-new.md"
+          RELEASE_BASE_FILE="${GITHUB_WORKSPACE}/.github/release-base"
           PREV_TAG=$(git tag --sort=-creatordate | grep -E '^v' | sed -n '2p' || true)
           if [ -z "$PREV_TAG" ]; then
-            # 无历史 tag：仅收录当前 tag 尖端提交，避免把整仓历史写进 Release
             if git rev-parse "${TAG}^" >/dev/null 2>&1; then
               RANGE="${TAG}^..${TAG}"
             else
@@ -467,44 +467,52 @@ jobs:
             RANGE="${PREV_TAG}..${TAG}"
           fi
 
-          # 从 annotated tag 正文读取可选的历史版本基线（bump-tag.sh --base）
-          # 优先用 GitHub API（不依赖 checkout 是否剥掉 annotated tag）；
-          # 用 --jq 只取字段，stderr 不并入 stdout，避免解析失败。
           parse_release_base() {
             printf '%s\n' "$1" | tr -d '\r' | sed -nE 's/^release-base:[[:space:]]*(v[^[:space:]]+).*$/\1/p' | head -n 1 || true
           }
 
-          TAG_MSG=""
           RELEASE_BASE=""
+          RELEASE_BASE_SOURCE=""
 
-          echo "🔎 经 GitHub API 读取 annotated tag 注解: ${TAG}"
-          set +e
-          TAG_OBJ_SHA="$(gh api "repos/${GH_REPO}/git/ref/tags/${TAG}" --jq 'if .object.type=="tag" then .object.sha else empty end' 2>/dev/null)"
-          set -e
-          if [ -n "${TAG_OBJ_SHA:-}" ]; then
-            set +e
-            TAG_MSG="$(gh api "repos/${GH_REPO}/git/tags/${TAG_OBJ_SHA}" --jq .message 2>/dev/null)"
-            set -e
-            RELEASE_BASE="$(parse_release_base "${TAG_MSG:-}")"
-          else
-            echo "⚠️ API 未返回 annotated tag 对象，尝试本地 git…"
-            git fetch --force --no-tags origin "refs/tags/${TAG}:refs/tags/${TAG}" >/dev/null 2>&1 || true
-            TAG_MSG="$(git tag -l --format='%(contents)' "$TAG" 2>/dev/null || true)"
-            RELEASE_BASE="$(parse_release_base "$TAG_MSG")"
+          # 1) 优先：仓库内文件（最可靠，不依赖 tag 注解/checkout 行为）
+          if [ -f "$RELEASE_BASE_FILE" ]; then
+            RELEASE_BASE="$(tr -d '[:space:]\r' < "$RELEASE_BASE_FILE" || true)"
+            if [[ "$RELEASE_BASE" =~ ^v[0-9] ]]; then
+              RELEASE_BASE_SOURCE="file:${RELEASE_BASE_FILE}"
+              echo "📎 从 ${RELEASE_BASE_FILE} 读取 release-base: ${RELEASE_BASE}"
+            else
+              echo "⚠️ ${RELEASE_BASE_FILE} 内容非法: '${RELEASE_BASE}'，忽略"
+              RELEASE_BASE=""
+            fi
+          fi
+
+          # 2) 回退：curl 读 annotated tag 注解（不用 gh，避免 CLI/stderr 坑）
+          if [ -z "$RELEASE_BASE" ]; then
+            echo "🔎 尝试经 GitHub API(curl) 读取 tag 注解: ${TAG}"
+            API="${GITHUB_API_URL:-https://api.github.com}"
+            REF_JSON="$(curl -fsS -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
+              "${API}/repos/${GH_REPO}/git/ref/tags/${TAG}" || true)"
+            TAG_OBJ_SHA="$(printf '%s' "$REF_JSON" | python3 -c 'import json,sys; d=json.load(sys.stdin); o=d.get("object") or {}; print((o.get("sha") or "") if o.get("type")=="tag" else "")' 2>/dev/null || true)"
+            if [ -n "${TAG_OBJ_SHA:-}" ]; then
+              TAG_JSON="$(curl -fsS -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
+                "${API}/repos/${GH_REPO}/git/tags/${TAG_OBJ_SHA}" || true)"
+              TAG_MSG="$(printf '%s' "$TAG_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("message") or "")' 2>/dev/null || true)"
+              RELEASE_BASE="$(parse_release_base "${TAG_MSG:-}")"
+              if [ -n "$RELEASE_BASE" ]; then
+                RELEASE_BASE_SOURCE="api-tag:${TAG}"
+                echo "📎 从 tag 注解读取 release-base: ${RELEASE_BASE}"
+              fi
+            else
+              echo "⚠️ curl 未拿到 annotated tag 对象"
+              echo "   ref: ${REF_JSON:0:400}"
+            fi
           fi
 
           if [ -n "$RELEASE_BASE" ]; then
-            echo "📎 检测到 release-base: ${RELEASE_BASE}"
-            echo "---- tag message ----"
-            printf '%s\n' "$TAG_MSG"
-            echo "---------------------"
+            echo "📎 release-base=${RELEASE_BASE} (source=${RELEASE_BASE_SOURCE})"
           else
             echo "ℹ️  未指定 release-base，Release body 仅含本次提交"
-            if [ -n "$(printf '%s' "${TAG_MSG:-}" | tr -d '[:space:]')" ]; then
-              echo "---- tag message (无 release-base) ----"
-              printf '%s\n' "$TAG_MSG"
-              echo "--------------------------------------"
-            fi
+            echo "   若使用了 bump-tag.sh --base，请确认 tag 指向的 commit 含 .github/release-base"
           fi
 
           echo "📋 生成本次更新日志：$RANGE"
@@ -584,9 +592,13 @@ jobs:
               body="$(git log -1 --pretty=format:'%b' "$hash")"
               [ -z "$subject" ] && continue
 
-              # 版本号提交（如 bump version to 1.2.3）不写入 Release body
+              # 版本号 / release-base 辅助提交不写入 Release body
               if printf '%s' "$subject" | grep -qiE 'bump[[:space:]]+version[[:space:]]+to[[:space:]]+'; then
                 echo "↩️ 跳过版本号提交: ${subject}"
+                continue
+              fi
+              if printf '%s' "$subject" | grep -qiE 'set[[:space:]]+release-base[[:space:]]+to[[:space:]]+'; then
+                echo "↩️ 跳过 release-base 提交: ${subject}"
                 continue
               fi
 
@@ -631,13 +643,20 @@ jobs:
 
           if [ -n "$RELEASE_BASE" ]; then
             echo "📥 拉取历史 Release body: ${RELEASE_BASE}"
+            API="${GITHUB_API_URL:-https://api.github.com}"
             set +e
-            BASE_BODY="$(gh api "repos/${GH_REPO}/releases/tags/${RELEASE_BASE}" --jq .body 2>/dev/null)"
+            BASE_JSON="$(curl -fsS -H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" \
+              "${API}/repos/${GH_REPO}/releases/tags/${RELEASE_BASE}")"
             BASE_API_RC=$?
             set -e
-            if [ "$BASE_API_RC" -ne 0 ] || [ -z "$(printf '%s' "${BASE_BODY:-}" | tr -d '[:space:]')" ]; then
+            BASE_BODY=""
+            if [ "$BASE_API_RC" -eq 0 ] && [ -n "$BASE_JSON" ]; then
+              BASE_BODY="$(printf '%s' "$BASE_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("body") or "")' 2>/dev/null || true)"
+            fi
+            if [ -z "$(printf '%s' "${BASE_BODY:-}" | tr -d '[:space:]')" ]; then
               echo "❌ 指定了 release-base=${RELEASE_BASE}，但未能获取其 Release body (rc=${BASE_API_RC})"
               echo "   请确认该 tag 在 GitHub 上已有 Release 且正文非空"
+              echo "   response: ${BASE_JSON:0:500}"
               exit 1
             fi
             echo "✅ 已合并 ${RELEASE_BASE} 的 Release body + 本次提交"
@@ -650,9 +669,11 @@ jobs:
             cp "$CHANGELOG_NEW" "$CHANGELOG_FILE"
           fi
 
-          echo "changelog_file=${CHANGELOG_FILE}" >> "$GITHUB_OUTPUT"
+          # 固定相对路径，避免 step output / 绝对路径在 softprops 里出问题
+          cp "$CHANGELOG_FILE" "${GITHUB_WORKSPACE}/changelog.md"
+          echo "changelog_file=changelog.md" >> "$GITHUB_OUTPUT"
           echo "---- changelog preview ----"
-          cat "$CHANGELOG_FILE"
+          cat "${GITHUB_WORKSPACE}/changelog.md"
 
       - name: Create Release and upload assets
         uses: softprops/action-gh-release@v2
@@ -661,7 +682,21 @@ jobs:
           name: FlashDock ${{ github.ref_name }}
           draft: false
           make_latest: true
-          body_path: ${{ steps.changelog.outputs.changelog_file }}
+          body_path: changelog.md
           files: upload/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # softprops 偶发不更新已有 Release body；强制再用 gh 写一遍
+      - name: Force update Release notes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_NO_UPDATE_NOTIFIER: "1"
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          test -s changelog.md
+          gh release edit "$TAG" --notes-file changelog.md
+          echo "✅ 已强制写入 Release notes ($(wc -c < changelog.md) bytes)"
+          head -n 30 changelog.md
