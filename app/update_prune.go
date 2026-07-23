@@ -13,12 +13,16 @@ func pruneHistoricalUpdateArtifacts(currentVersion, stagedVersion string) {
 		return
 	}
 	keep := resolveUpdateArtifactVersionsToKeep(currentVersion, stagedVersion, discovered)
+	protected := resolveProtectedSoftwarePaths()
 	for version, paths := range discovered {
 		if _, ok := keep[normalizeVersion(version)]; ok {
 			continue
 		}
 		for _, path := range paths {
 			if strings.TrimSpace(path) == "" {
+				continue
+			}
+			if isProtectedSoftwarePath(path, protected) {
 				continue
 			}
 			_ = os.RemoveAll(path)
@@ -77,6 +81,9 @@ func discoverUpdateArtifactPaths() map[string][]string {
 		if version == "" || path == "" {
 			return
 		}
+		if !looksLikeSemver(version) {
+			return
+		}
 		result[version] = appendUniquePath(result[version], path)
 	}
 
@@ -86,31 +93,18 @@ func discoverUpdateArtifactPaths() map[string][]string {
 		scanUpdateWorkspace(legacy, addPath)
 	}
 
+	// 扫描当前软件安装目录旁的历史版本安装包/目录
+	if installDir := resolveSoftwareInstallDir(); installDir != "" {
+		scanSoftwareInstallArtifacts(installDir, addPath)
+	}
+
 	if goruntime.GOOS == "darwin" {
-		scanMacFlashDockUpdateDirs := func(parentDir string) {
-			parentDir = strings.TrimSpace(parentDir)
-			if parentDir == "" {
-				return
-			}
-			entries, err := os.ReadDir(parentDir)
-			if err != nil {
-				return
-			}
-			for _, entry := range entries {
-				if !entry.IsDir() {
-					continue
-				}
-				if version := parseMacUpdateDirVersion(entry.Name()); version != "" {
-					addPath(version, filepath.Join(parentDir, entry.Name()))
-				}
-			}
-		}
 		// 兼容旧版曾放到「下载 / 桌面」的更新目录，一并纳入清理
 		if downloadsDir, err := resolveDownloadsDir(); err == nil {
-			scanMacFlashDockUpdateDirs(downloadsDir)
+			scanSoftwareInstallArtifacts(downloadsDir, addPath)
 		}
 		if homeDir, err := os.UserHomeDir(); err == nil && strings.TrimSpace(homeDir) != "" {
-			scanMacFlashDockUpdateDirs(filepath.Join(homeDir, "Desktop"))
+			scanSoftwareInstallArtifacts(filepath.Join(homeDir, "Desktop"), addPath)
 		}
 	}
 	return result
@@ -135,6 +129,111 @@ func scanUpdateWorkspace(workspaceDir string, addPath func(version, path string)
 	}
 }
 
+// scanSoftwareInstallArtifacts 扫描安装目录下带版本号的 FlashDock 产物（目录或安装包）。
+func scanSoftwareInstallArtifacts(parentDir string, addPath func(version, path string)) {
+	parentDir = strings.TrimSpace(parentDir)
+	if parentDir == "" {
+		return
+	}
+	entries, err := os.ReadDir(parentDir)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		name := entry.Name()
+		full := filepath.Join(parentDir, name)
+		if version := parseUpdateStagedDirVersion(name); version != "" {
+			if entry.IsDir() {
+				addPath(version, full)
+			}
+			continue
+		}
+		if version := parseFlashDockArtifactVersion(name); version != "" {
+			addPath(version, full)
+		}
+	}
+}
+
+// resolveSoftwareInstallDir 返回当前正在运行的软件所在目录（mac 为 .app 的父目录）。
+var resolveSoftwareInstallDir = func() string {
+	exe := ""
+	if goruntime.GOOS == "windows" {
+		if path, err := resolveWindowsUpdateTarget(); err == nil {
+			exe = path
+		}
+	}
+	if exe == "" {
+		path, err := os.Executable()
+		if err != nil {
+			return ""
+		}
+		exe = path
+	}
+	if resolved, err := filepath.EvalSymlinks(exe); err == nil {
+		exe = resolved
+	}
+	exe = filepath.Clean(exe)
+	if app := detectMacAppPath(exe); app != "" {
+		return filepath.Dir(app)
+	}
+	return filepath.Dir(exe)
+}
+
+func resolveProtectedSoftwarePaths() []string {
+	out := make([]string, 0, 4)
+	add := func(path string) {
+		path = filepath.Clean(strings.TrimSpace(path))
+		if path == "" || path == "." {
+			return
+		}
+		for _, existing := range out {
+			if strings.EqualFold(existing, path) {
+				return
+			}
+		}
+		out = append(out, path)
+	}
+
+	if goruntime.GOOS == "windows" {
+		if path, err := resolveWindowsUpdateTarget(); err == nil {
+			add(path)
+		}
+	}
+	if path, err := os.Executable(); err == nil {
+		if resolved, err := filepath.EvalSymlinks(path); err == nil {
+			path = resolved
+		}
+		add(path)
+		if app := detectMacAppPath(path); app != "" {
+			add(app)
+		}
+	}
+	return out
+}
+
+func isProtectedSoftwarePath(path string, protected []string) bool {
+	clean := filepath.Clean(strings.TrimSpace(path))
+	if clean == "" {
+		return true
+	}
+	cleanLower := strings.ToLower(clean)
+	sep := string(filepath.Separator)
+	for _, p := range protected {
+		pLower := strings.ToLower(filepath.Clean(p))
+		if pLower == "" {
+			continue
+		}
+		if cleanLower == pLower {
+			return true
+		}
+		// 禁止删除包含当前可执行文件 / .app 的目录
+		if strings.HasPrefix(pLower, cleanLower+sep) {
+			return true
+		}
+	}
+	return false
+}
+
 func parseUpdateStagedDirVersion(dirName string) string {
 	const prefix = ".flashdock-update-"
 	if !strings.HasPrefix(dirName, prefix) {
@@ -151,11 +250,55 @@ func parseUpdateStagedDirVersion(dirName string) string {
 }
 
 func parseMacUpdateDirVersion(dirName string) string {
+	return parseFlashDockArtifactVersion(dirName)
+}
+
+// parseFlashDockArtifactVersion 解析 FlashDock-{version}[ -平台后缀][.ext]
+// 例如：FlashDock-1.2.3、FlashDock-1.2.3-Windows-Amd64.exe、FlashDock-1.2.3-MacOS-Arm64.dmg
+func parseFlashDockArtifactVersion(name string) string {
 	const prefix = "FlashDock-"
-	if !strings.HasPrefix(dirName, prefix) {
+	name = strings.TrimSpace(name)
+	if !strings.HasPrefix(name, prefix) {
 		return ""
 	}
-	return normalizeVersion(strings.TrimPrefix(dirName, prefix))
+	rest := strings.TrimPrefix(name, prefix)
+	rest = stripKnownReleaseAssetExt(rest)
+	parts := strings.Split(rest, "-")
+	if len(parts) == 0 {
+		return ""
+	}
+	version := normalizeVersion(parts[0])
+	if !looksLikeSemver(version) {
+		return ""
+	}
+	return version
+}
+
+func stripKnownReleaseAssetExt(name string) string {
+	lower := strings.ToLower(strings.TrimSpace(name))
+	for _, ext := range []string{".tar.gz", ".exe", ".dmg", ".zip", ".appimage"} {
+		if strings.HasSuffix(lower, ext) {
+			return name[:len(name)-len(ext)]
+		}
+	}
+	return name
+}
+
+func looksLikeSemver(version string) bool {
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return false
+	}
+	parts := strings.Split(version, ".")
+	if len(parts) < 2 {
+		return false
+	}
+	for _, part := range parts {
+		if !isAllDigits(part) {
+			return false
+		}
+	}
+	return true
 }
 
 func normalizeUpdateArtifactVersionSuffix(versionPart string) string {
@@ -169,7 +312,11 @@ func normalizeUpdateArtifactVersionSuffix(versionPart string) string {
 			versionPart = versionPart[:idx]
 		}
 	}
-	return normalizeVersion(versionPart)
+	version := normalizeVersion(versionPart)
+	if !looksLikeSemver(version) {
+		return ""
+	}
+	return version
 }
 
 func isAllDigits(value string) bool {

@@ -277,7 +277,7 @@ func launchWindowsUpdate(staged *stagedUpdate, targetExe string, pid int) error 
 		return err
 	}
 	cmd := buildWindowsLaunchCommand(scriptPath)
-	cmd.Env = append(os.Environ(), windowsUpdateScriptEnv(staged.FilePath, targetExe, staged.StagedDir, logPath, pid)...)
+	cmd.Env = append(os.Environ(), windowsUpdateScriptEnv(staged.FilePath, targetExe, staged.StagedDir, logPath, pid, staged.AssetName)...)
 	if err := cmd.Start(); err != nil {
 		return err
 	}

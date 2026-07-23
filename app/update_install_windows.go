@@ -155,6 +155,7 @@ $Target = $env:FLASHDOCK_UPDATE_TARGET
 $Staged = $env:FLASHDOCK_UPDATE_STAGED
 $LogFile = $env:FLASHDOCK_UPDATE_LOG
 $HostPid = [int]$env:FLASHDOCK_UPDATE_PID
+$FinalName = ($env:FLASHDOCK_UPDATE_FINAL_NAME + '').Trim()
 
 function Write-UpdateLog([string]$Message) {
   $line = '[{0}] {1}' -f (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'), $Message
@@ -250,6 +251,39 @@ function Replace-TargetExecutable([string]$SourceExe, [string]$TargetExe) {
   throw 'replace failed after retries (portable mode, no elevation): check directory write permission or file lock'
 }
 
+function Resolve-FinalTargetPath([string]$TargetExe, [string]$DesiredName) {
+  $DesiredName = ($DesiredName + '').Trim()
+  if (-not $DesiredName) {
+    return $TargetExe
+  }
+  if ($DesiredName -notmatch '(?i)\.exe$') {
+    Write-UpdateLog "final name is not exe, skip rename: $DesiredName"
+    return $TargetExe
+  }
+  if ($DesiredName -match '[\\/]') {
+    Write-UpdateLog "final name contains path separator, skip rename: $DesiredName"
+    return $TargetExe
+  }
+  $dir = [System.IO.Path]::GetDirectoryName($TargetExe)
+  return (Join-Path $dir $DesiredName)
+}
+
+function Rename-TargetToFinalName([string]$TargetExe, [string]$FinalPath) {
+  if ($TargetExe -ieq $FinalPath) {
+    return $TargetExe
+  }
+  if (-not (Test-Path -Path $TargetExe)) {
+    throw "target missing before rename: $TargetExe"
+  }
+  if (Test-Path -Path $FinalPath) {
+    Write-UpdateLog "removing existing final path before rename: $FinalPath"
+    Remove-Item -Path $FinalPath -Force
+  }
+  Move-Item -Path $TargetExe -Destination $FinalPath -Force
+  Write-UpdateLog "renamed target: $TargetExe -> $FinalPath"
+  return $FinalPath
+}
+
 function Start-UpdatedApplication([string]$TargetExe) {
   $targetDir = [System.IO.Path]::GetDirectoryName($TargetExe)
   # 必须用 Normal：Hidden 会把 Wails GUI 主窗口藏掉，用户感觉「没有自动打开」
@@ -268,6 +302,7 @@ try {
   Write-UpdateLog 'updater started'
   Write-UpdateLog "source=$Source"
   Write-UpdateLog "target=$Target"
+  Write-UpdateLog "finalName=$FinalName"
 
   if (-not (Test-Path -Path $Source)) {
     throw "source file not found: $Source"
@@ -285,8 +320,15 @@ try {
   Write-UpdateLog 'cooldown finished, starting file replace'
 
   Replace-TargetExecutable -SourceExe $sourceExe -TargetExe $Target
-  # 保持原安装路径/文件名，避免改成带版本号的 Release 名导致快捷方式失效
-  Start-UpdatedApplication -TargetExe $Target
+  $finalPath = Resolve-FinalTargetPath -TargetExe $Target -DesiredName $FinalName
+  $launchPath = $Target
+  try {
+    $launchPath = Rename-TargetToFinalName -TargetExe $Target -FinalPath $finalPath
+  } catch {
+    Write-UpdateLog "rename to final name failed, launch original path: $($_.Exception.Message)"
+    $launchPath = $Target
+  }
+  Start-UpdatedApplication -TargetExe $launchPath
   if (Test-Path -Path $Staged) {
     Remove-Item -Path $Staged -Recurse -Force
   }
@@ -301,12 +343,13 @@ try {
 	return strings.ReplaceAll(script, "\n", "\r\n")
 }
 
-func windowsUpdateScriptEnv(source, target, stagedDir, logPath string, pid int) []string {
+func windowsUpdateScriptEnv(source, target, stagedDir, logPath string, pid int, finalName string) []string {
 	return []string{
 		"FLASHDOCK_UPDATE_SOURCE=" + source,
 		"FLASHDOCK_UPDATE_TARGET=" + target,
 		"FLASHDOCK_UPDATE_STAGED=" + stagedDir,
 		"FLASHDOCK_UPDATE_LOG=" + logPath,
 		"FLASHDOCK_UPDATE_PID=" + strconv.Itoa(pid),
+		"FLASHDOCK_UPDATE_FINAL_NAME=" + strings.TrimSpace(finalName),
 	}
 }
