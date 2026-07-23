@@ -1,0 +1,70 @@
+# 在默认分支预热 Go module / Wails CLI 缓存，供 tag 发版工作流跨版本复用。
+# Actions cache 按分支隔离：仅 tag 工作流写入的缓存，下一个 tag 读不到。
+name: Cache warm
+
+on:
+  push:
+    branches: [master, dev]
+    paths:
+      - go.mod
+      - go.sum
+      - .github/workflows/cache-warm.yml
+      - .github/workflows/release.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  WAILS_VERSION: v2.11.0
+
+jobs:
+  warm:
+    name: Warm ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            label: darwin/arm64
+          - os: windows-latest
+            label: windows/amd64
+          - os: ubuntu-22.04
+            label: linux/amd64
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+          cache-dependency-path: go.sum
+
+      - name: Cache Wails CLI
+        id: cache-wails
+        uses: actions/cache@v4
+        with:
+          path: .wails-bin
+          key: wails-${{ runner.os }}-${{ runner.arch }}-${{ env.WAILS_VERSION }}
+
+      - name: Install Wails
+        if: steps.cache-wails.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .wails-bin
+          GOBIN="${{ github.workspace }}/.wails-bin" go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+
+      - name: Download Go modules
+        shell: bash
+        run: go mod download
+
+      - name: Verify Wails
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="${{ github.workspace }}/.wails-bin:$PATH"
+          wails version

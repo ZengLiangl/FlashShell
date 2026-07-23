@@ -17,17 +17,10 @@ env:
 jobs:
   frontend:
     name: Build frontend
-    # 22.04 提供 WebKitGTK 4.0；ubuntu-latest(24.04) 仅有 4.1
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: go.mod
-          cache-dependency-path: go.sum
 
       - name: Setup Node
         uses: actions/setup-node@v5
@@ -37,31 +30,6 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
           registry-url: https://registry.npmjs.org
 
-      - name: Install Linux build deps
-        uses: awalsh128/cache-apt-pkgs-action@v1.6.0
-        with:
-          packages: libgtk-3-dev libwebkit2gtk-4.0-dev pkg-config
-          version: webkit40-1
-
-      - name: Resolve Go bin dir
-        id: go-bin
-        shell: bash
-        run: echo "dir=$(go env GOPATH)/bin" >> "$GITHUB_OUTPUT"
-
-      - name: Cache Wails CLI
-        id: cache-wails
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ steps.go-bin.outputs.dir }}/wails
-            ${{ steps.go-bin.outputs.dir }}/wails.exe
-          key: wails-${{ runner.os }}-${{ runner.arch }}-${{ env.WAILS_VERSION }}
-
-      - name: Install Wails
-        if: steps.cache-wails.outputs.cache-hit != 'true'
-        # 用 ${{ env.* }}：Windows 默认 pwsh 会把 ${WAILS_VERSION} 当成空的 PowerShell 变量
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
-
       - name: Build frontend dist
         shell: bash
         working-directory: frontend
@@ -69,11 +37,8 @@ jobs:
           npm_config_registry: https://registry.npmjs.org/
         run: |
           set -euo pipefail
+          # 绑定已提交在 frontend/wailsjs；发版只构建 dist，无需 Linux GTK / Wails CLI
           npm ci --registry=https://registry.npmjs.org/
-          # go:embed 需要 dist 存在；generate module 前先放占位，再正式 build 覆盖
-          mkdir -p dist
-          printf '<!doctype html><title>FlashDock</title>\n' > dist/index.html
-          (cd .. && wails generate module)
           npm run build
           test -s dist/index.html
 
@@ -151,6 +116,7 @@ jobs:
         uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
+          cache: true
           cache-dependency-path: go.sum
 
       - name: Download frontend dist
@@ -205,24 +171,26 @@ jobs:
           packages: libgtk-3-dev pkg-config libwebkit2gtk-4.0-dev
           version: webkit40-1
 
-      - name: Resolve Go bin dir
-        id: go-bin
-        shell: bash
-        run: echo "dir=$(go env GOPATH)/bin" >> "$GITHUB_OUTPUT"
-
+      # 固定目录缓存 Wails CLI；tag 工作流可从默认分支（master）预热缓存恢复
       - name: Cache Wails CLI
         id: cache-wails
         uses: actions/cache@v4
         with:
-          path: |
-            ${{ steps.go-bin.outputs.dir }}/wails
-            ${{ steps.go-bin.outputs.dir }}/wails.exe
+          path: .wails-bin
           key: wails-${{ runner.os }}-${{ runner.arch }}-${{ env.WAILS_VERSION }}
 
       - name: Install Wails
         if: steps.cache-wails.outputs.cache-hit != 'true'
-        # 用 ${{ env.* }}：Windows 默认 pwsh 会把 ${WAILS_VERSION} 当成空的 PowerShell 变量
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .wails-bin
+          # 用 ${{ env.* }}：Windows 默认 pwsh 会把 ${WAILS_VERSION} 当成空的 PowerShell 变量
+          GOBIN="${{ github.workspace }}/.wails-bin" go install github.com/wailsapp/wails/v2/cmd/wails@${{ env.WAILS_VERSION }}
+
+      - name: Add Wails to PATH
+        shell: bash
+        run: echo "${{ github.workspace }}/.wails-bin" >> "$GITHUB_PATH"
 
       - name: Build with Wails
         shell: bash
