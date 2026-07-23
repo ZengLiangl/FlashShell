@@ -1,35 +1,81 @@
 <template>
   <div class="mode-switcher" role="tablist" aria-label="工作模式">
-    <button
-      v-for="item in items"
-      :key="item.id"
-      type="button"
-      role="tab"
-      class="mode-btn"
-      :class="[
-        `mode-${item.id}`,
-        { active: modelValue === item.id, disabled: item.disabled },
-      ]"
-      :aria-selected="modelValue === item.id"
-      :disabled="item.disabled"
-      :title="item.title"
-      @click="onSelect(item)"
-    >
-      <el-icon class="mode-icon" :size="13">
-        <component :is="item.icon" />
-      </el-icon>
-      <span class="mode-label">{{ item.label }}</span>
-      <span
-        v-if="item.badge"
-        class="mode-badge"
-        aria-hidden="true"
-      >{{ item.badge }}</span>
-      <span
-        v-else-if="item.dot"
-        class="mode-dot"
-        aria-hidden="true"
-      />
-    </button>
+    <template v-for="item in items" :key="item.id">
+      <el-dropdown
+        v-if="item.showProjectPicker"
+        trigger="hover"
+        placement="bottom"
+        :show-timeout="100"
+        :hide-timeout="180"
+        popper-class="mode-task-project-popper"
+        @command="onPickProject"
+      >
+        <button
+          type="button"
+          role="tab"
+          class="mode-btn mode-task mode-btn--picker"
+          :class="{ active: modelValue === 'task' }"
+          :aria-selected="modelValue === 'task'"
+          :title="item.title"
+          @click="onTaskClick"
+        >
+          <el-icon class="mode-icon" :size="13">
+            <component :is="item.icon" />
+          </el-icon>
+          <span class="mode-label">{{ item.label }}</span>
+          <span
+            v-if="item.dot"
+            class="mode-dot"
+            aria-hidden="true"
+          />
+        </button>
+        <template #dropdown>
+          <el-dropdown-menu>
+            <el-dropdown-item
+              v-for="project in projects"
+              :key="project.name"
+              :command="project.name"
+              :class="{ 'is-current': project.name === selectedProjectName }"
+            >
+              <span class="project-item">
+                <span class="project-name">{{ project.name || '(未命名项目)' }}</span>
+                <span v-if="project.description" class="project-desc">{{ project.description }}</span>
+              </span>
+            </el-dropdown-item>
+          </el-dropdown-menu>
+        </template>
+      </el-dropdown>
+
+      <button
+        v-else
+        type="button"
+        role="tab"
+        class="mode-btn"
+        :class="[
+          `mode-${item.id}`,
+          { active: modelValue === item.id, disabled: item.disabled },
+        ]"
+        :aria-selected="modelValue === item.id"
+        :disabled="item.disabled"
+        :title="item.title"
+        @click="onSelect(item)"
+      >
+        <el-icon class="mode-icon" :size="13">
+          <component :is="item.icon" />
+        </el-icon>
+        <span class="mode-label">{{ item.label }}</span>
+        <span
+          v-if="item.badge"
+          class="mode-badge"
+          aria-hidden="true"
+        >{{ item.badge }}</span>
+        <span
+          v-else-if="item.dot"
+          class="mode-dot"
+          aria-hidden="true"
+        />
+      </button>
+    </template>
   </div>
 </template>
 
@@ -51,8 +97,10 @@ export default {
     hasTask: { type: Boolean, default: false },
     taskRunning: { type: Boolean, default: false },
     connectedCount: { type: Number, default: 0 },
+    projects: { type: Array, default: () => [] },
+    selectedProjectName: { type: String, default: '' },
   },
-  emits: ['update:modelValue', 'change'],
+  emits: ['update:modelValue', 'change', 'select-project'],
   setup(props, { emit }) {
     const items = computed(() => {
       const list = [
@@ -64,15 +112,19 @@ export default {
           disabled: false,
         },
       ]
-      if (props.hasProjects || props.hasTask || props.modelValue === 'task') {
+      const canPickProject = props.projects.length > 0
+      if (props.hasProjects || props.hasTask || props.modelValue === 'task' || canPickProject) {
         list.push({
           id: 'task',
           label: '任务',
           icon: Folder,
           title: props.hasTask
-            ? (props.taskRunning ? '返回任务（运行中）' : '返回任务')
-            : '请先在首页选择项目',
-          disabled: !props.hasTask,
+            ? (props.taskRunning
+              ? '点击返回任务（运行中），悬停可切换项目'
+              : '点击返回任务，悬停可切换项目')
+            : (canPickProject ? '悬停选择项目' : '请先在首页选择项目'),
+          disabled: !props.hasTask && !canPickProject,
+          showProjectPicker: canPickProject,
           dot: props.hasTask && props.taskRunning,
         })
       }
@@ -97,7 +149,20 @@ export default {
       emit('change', item.id)
     }
 
-    return { items, onSelect }
+    const onTaskClick = () => {
+      if (!props.hasTask) return
+      if (props.modelValue === 'task') return
+      emit('update:modelValue', 'task')
+      emit('change', 'task')
+    }
+
+    const onPickProject = (name) => {
+      const project = props.projects.find((p) => p.name === name)
+      if (!project) return
+      emit('select-project', project)
+    }
+
+    return { items, onSelect, onTaskClick, onPickProject }
   },
 }
 </script>
@@ -122,6 +187,11 @@ export default {
   box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 35%, transparent);
 }
 
+.mode-switcher :deep(.el-dropdown) {
+  min-width: 0;
+  width: 100%;
+}
+
 .mode-btn {
   position: relative;
   display: inline-flex;
@@ -129,6 +199,7 @@ export default {
   justify-content: center;
   gap: 5px;
   min-width: 0;
+  width: 100%;
   height: 26px;
   padding: 0 12px;
   border: none;
@@ -211,6 +282,35 @@ export default {
   flex-shrink: 0;
   background: var(--mode-task);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--mode-task) 24%, transparent);
+}
+
+.project-item {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 140px;
+  max-width: 240px;
+}
+
+.project-name {
+  font-size: 13px;
+  color: var(--app-text);
+  line-height: 1.3;
+}
+
+.project-desc {
+  font-size: 11px;
+  color: var(--app-text-muted);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:deep(.el-dropdown-menu__item.is-current) {
+  color: var(--app-accent-color);
+  background: var(--app-accent-bg);
+  font-weight: 600;
 }
 
 html.dark .mode-switcher {

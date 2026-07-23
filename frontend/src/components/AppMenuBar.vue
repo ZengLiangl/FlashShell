@@ -11,7 +11,10 @@
         :has-task="hasTask"
         :task-running="taskRunning"
         :connected-count="connectedCount"
+        :projects="projects"
+        :selected-project-name="selectedProjectName"
         @change="$emit('change-view', $event)"
+        @select-project="$emit('select-project', $event)"
       />
     </div>
 
@@ -65,8 +68,10 @@ export default {
     hasTask: { type: Boolean, default: false },
     taskRunning: { type: Boolean, default: false },
     connectedCount: { type: Number, default: 0 },
+    projects: { type: Array, default: () => [] },
+    selectedProjectName: { type: String, default: '' },
   },
-  emits: ['change-view'],
+  emits: ['change-view', 'select-project'],
   setup(props) {
     const showModeSwitcher = computed(() =>
       props.hasProjects

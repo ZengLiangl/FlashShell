@@ -2,7 +2,8 @@
   <div class="app-container" :class="themeClass">
     <AppMenuBar :active-view="activeView" :has-projects="projects.length > 0" :has-machines="shellMachines.length > 0"
       :has-task="!!selectedProject" :task-running="status.isRunning" :connected-count="connectedCount"
-      @change-view="switchActiveView" />
+      :projects="projects" :selected-project-name="selectedProject?.name || ''"
+      @change-view="switchActiveView" @select-project="selectProject" />
 
     <!-- 全局加载遮罩 -->
     <div v-if="isReloading" class="global-loading">
