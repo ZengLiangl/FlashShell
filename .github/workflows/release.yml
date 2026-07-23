@@ -669,11 +669,10 @@ jobs:
             cp "$CHANGELOG_NEW" "$CHANGELOG_FILE"
           fi
 
-          # 固定相对路径，避免 step output / 绝对路径在 softprops 里出问题
-          cp "$CHANGELOG_FILE" "${GITHUB_WORKSPACE}/changelog.md"
+          # softprops / gh 都读工作区相对路径 changelog.md
           echo "changelog_file=changelog.md" >> "$GITHUB_OUTPUT"
           echo "---- changelog preview ----"
-          cat "${GITHUB_WORKSPACE}/changelog.md"
+          cat "$CHANGELOG_FILE"
 
       - name: Create Release and upload assets
         uses: softprops/action-gh-release@v2
