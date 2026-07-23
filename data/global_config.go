@@ -172,6 +172,8 @@ type GlobalConfig struct {
 	ShellCommandHistoryMax int `yaml:"shellCommandHistoryMax" json:"shellCommandHistoryMax"`
 	// AppIconPreset Dock/任务栏图标预设：default | helm | pipeline | shell | split | broadcast | sftp | tunnel | yaml | parallel | secure | custom
 	AppIconPreset string `yaml:"appIconPreset" json:"appIconPreset"`
+	// StartupFullscreen 启动时进入全屏
+	StartupFullscreen bool `yaml:"startupFullscreen" json:"startupFullscreen"`
 	// HomeMinimizedZone 首页分区最小化："" 双栏；"task" 收起任务；"shell" 收起 Shell（另一侧多列展示）
 	HomeMinimizedZone string `yaml:"homeMinimizedZone,omitempty" json:"homeMinimizedZone"`
 	// ShellMonitorIntervalSec 旧字段（秒），仅用于迁移

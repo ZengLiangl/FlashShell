@@ -292,6 +292,7 @@ export namespace data {
 	    taskOutputMaxLines: number;
 	    shellCommandHistoryMax: number;
 	    appIconPreset: string;
+	    startupFullscreen: boolean;
 	    homeMinimizedZone: string;
 	    shellLogHighlight?: boolean;
 	    shellLogHighlightColors: ShellLogHighlightColors;
@@ -320,6 +321,7 @@ export namespace data {
 	        this.taskOutputMaxLines = source["taskOutputMaxLines"];
 	        this.shellCommandHistoryMax = source["shellCommandHistoryMax"];
 	        this.appIconPreset = source["appIconPreset"];
+	        this.startupFullscreen = source["startupFullscreen"];
 	        this.homeMinimizedZone = source["homeMinimizedZone"];
 	        this.shellLogHighlight = source["shellLogHighlight"];
 	        this.shellLogHighlightColors = this.convertValues(source["shellLogHighlightColors"], ShellLogHighlightColors);

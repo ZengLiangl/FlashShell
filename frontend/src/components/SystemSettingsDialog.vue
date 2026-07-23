@@ -9,103 +9,118 @@
 
         <div class="panel-scroll">
             <!-- 系统设置 -->
-            <section v-show="settingsTab === 'system'" class="settings-section">
-                <!-- <div class="section-head">
-                    <div>
-                        <h4>应用</h4>
-                        <p>窗口名称与 Dock 图标，保存后立即生效</p>
-                    </div>
-                </div> -->
-                <div class="system-setting-row">
-                    <div class="system-setting-text">
-                        <span class="system-setting-label">应用名称</span>
-                        <span class="system-setting-hint">窗口标题栏显示名称，留空则使用 FlashDock</span>
-                    </div>
-                    <div class="system-setting-control system-setting-control--wide">
-                        <el-input v-model="form.windowsName" class="system-setting-text-input" size="small"
-                            maxlength="64" placeholder="FlashDock" clearable />
-                    </div>
-                </div>
-                <div class="system-setting-row system-setting-row--stack">
-                    <div class="system-setting-text">
-                        <span class="system-setting-label">Dock 图标</span>
-                        <span class="system-setting-hint">选择预设或上传自定义图片（PNG / JPG），保存至
-                            ~/.flashdock/icons/；保存后立即更新窗口/任务栏图标</span>
-                    </div>
-                    <div class="dock-icon-presets">
-                        <button v-for="preset in appIconPresets" :key="preset.id" type="button" class="dock-icon-card"
-                            :class="{ active: form.appIconPreset === preset.id }" :title="preset.label"
-                            @click="form.appIconPreset = preset.id">
-                            <img :src="preset.preview" :alt="preset.label" class="dock-icon-img" />
-                            <span class="dock-icon-name">{{ preset.label }}</span>
-                        </button>
-                        <button type="button" class="dock-icon-card dock-icon-card--upload" title="上传自定义图标"
-                            :disabled="uploadingAppIcon" @click="uploadCustomAppIcon">
-                            <span class="dock-icon-upload-plus">+</span>
-                            <span class="dock-icon-name">{{ uploadingAppIcon ? '上传中…' : '上传' }}</span>
+            <section v-show="settingsTab === 'system'" class="settings-section system-section">
+                <div class="system-editor">
+                    <div class="theme-subnav">
+                        <button v-for="tab in systemPanels" :key="tab.id" type="button" class="theme-subnav-item"
+                            :class="{ active: systemPanel === tab.id }" @click="systemPanel = tab.id">
+                            {{ tab.label }}
                         </button>
                     </div>
-                </div>
 
-                <div class="section-head">
-                    <div>
-                        <h4>Shell</h4>
-                        <p>终端工作区相关行为</p>
-                    </div>
-                </div>
-                <div class="system-setting-row">
-                    <div class="system-setting-text">
-                        <span class="system-setting-label">SSH 握手超时</span>
-                        <span class="system-setting-hint">TCP 连接与 SSH 协商总超时，Shell 终端与任务远程执行共用，范围 5–300 秒</span>
-                    </div>
-                    <div class="system-setting-control">
-                        <el-input-number v-model="form.sshHandshakeTimeoutSec" class="system-setting-num" size="small"
-                            :min="5" :max="300" :step="5" controls-position="right" />
-                        <span class="system-setting-unit">秒</span>
-                    </div>
-                </div>
-                <div class="system-setting-row">
-                    <div class="system-setting-text">
-                        <span class="system-setting-label">监控同步间隔</span>
-                        <span class="system-setting-hint">侧边监控面板刷新频率，范围 200–60000 毫秒</span>
-                    </div>
-                    <div class="system-setting-control">
-                        <el-input-number v-model="form.shellMonitorIntervalMs" class="system-setting-num" size="small"
-                            :min="200" :max="60000" :step="100" controls-position="right" />
-                        <span class="system-setting-unit">毫秒</span>
-                    </div>
-                </div>
-                <div class="system-setting-row">
-                    <div class="system-setting-text">
-                        <span class="system-setting-label">终端滚动缓冲</span>
-                        <span class="system-setting-hint">Shell 终端可回滚行数，范围 100–100000；已打开的终端保存后立即生效</span>
-                    </div>
-                    <div class="system-setting-control">
-                        <el-input-number v-model="form.shellTerminalScrollback" class="system-setting-num" size="small"
-                            :min="100" :max="100000" :step="100" controls-position="right" />
-                        <span class="system-setting-unit">行</span>
-                    </div>
-                </div>
-                <div class="system-setting-row">
-                    <div class="system-setting-text">
-                        <span class="system-setting-label">任务输出上限</span>
-                        <span class="system-setting-hint">任务执行终端保留的最大行数，范围 100–100000</span>
-                    </div>
-                    <div class="system-setting-control">
-                        <el-input-number v-model="form.taskOutputMaxLines" class="system-setting-num" size="small"
-                            :min="100" :max="100000" :step="100" controls-position="right" />
-                        <span class="system-setting-unit">行</span>
-                    </div>
-                </div>
-                <div class="system-setting-row">
-                    <div class="system-setting-text">
-                        <span class="system-setting-label">命令历史上限</span>
-                        <span class="system-setting-hint">每个作用域（全局 / 单机）保留的命令条数，范围 50–20000</span>
-                    </div>
-                    <div class="system-setting-control">
-                        <el-input-number v-model="form.shellCommandHistoryMax" class="system-setting-num" size="small"
-                            :min="50" :max="20000" :step="50" controls-position="right" />
-                        <span class="system-setting-unit">条</span>
+                    <div class="appear-pane">
+                        <!-- 应用信息 -->
+                        <div v-show="systemPanel === 'app'" class="appear-pane-body">
+                            <div class="system-setting-row">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">应用名称</span>
+                                    <span class="system-setting-hint">窗口标题栏显示名称，留空则使用 FlashDock</span>
+                                </div>
+                                <div class="system-setting-control system-setting-control--wide">
+                                    <el-input v-model="form.windowsName" class="system-setting-text-input" size="small"
+                                        maxlength="64" placeholder="FlashDock" clearable />
+                                </div>
+                            </div>
+                            <div class="system-setting-row">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">启动时全屏</span>
+                                    <span class="system-setting-hint">开启后下次启动进入全屏；保存设置时也会立即切换当前窗口</span>
+                                </div>
+                                <div class="system-setting-control">
+                                    <el-switch v-model="form.startupFullscreen" size="small" />
+                                </div>
+                            </div>
+                            <div class="system-setting-row system-setting-row--stack">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">Dock 图标</span>
+                                    <span class="system-setting-hint">选择预设或上传自定义图片（PNG / JPG），保存至
+                                        ~/.flashdock/icons/；保存后立即更新窗口/任务栏图标</span>
+                                </div>
+                                <div class="dock-icon-presets">
+                                    <button v-for="preset in appIconPresets" :key="preset.id" type="button"
+                                        class="dock-icon-card"
+                                        :class="{ active: form.appIconPreset === preset.id }" :title="preset.label"
+                                        @click="form.appIconPreset = preset.id">
+                                        <img :src="preset.preview" :alt="preset.label" class="dock-icon-img" />
+                                        <span class="dock-icon-name">{{ preset.label }}</span>
+                                    </button>
+                                    <button type="button" class="dock-icon-card dock-icon-card--upload" title="上传自定义图标"
+                                        :disabled="uploadingAppIcon" @click="uploadCustomAppIcon">
+                                        <span class="dock-icon-upload-plus">+</span>
+                                        <span class="dock-icon-name">{{ uploadingAppIcon ? '上传中…' : '上传' }}</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Shell -->
+                        <div v-show="systemPanel === 'shell'" class="appear-pane-body">
+                            <div class="system-setting-row">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">SSH 握手超时</span>
+                                    <span class="system-setting-hint">TCP 连接与 SSH 协商总超时，Shell 终端与任务远程执行共用，范围 5–300 秒</span>
+                                </div>
+                                <div class="system-setting-control">
+                                    <el-input-number v-model="form.sshHandshakeTimeoutSec" class="system-setting-num"
+                                        size="small" :min="5" :max="300" :step="5" controls-position="right" />
+                                    <span class="system-setting-unit">秒</span>
+                                </div>
+                            </div>
+                            <div class="system-setting-row">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">监控同步间隔</span>
+                                    <span class="system-setting-hint">侧边监控面板刷新频率，范围 200–60000 毫秒</span>
+                                </div>
+                                <div class="system-setting-control">
+                                    <el-input-number v-model="form.shellMonitorIntervalMs" class="system-setting-num"
+                                        size="small" :min="200" :max="60000" :step="100" controls-position="right" />
+                                    <span class="system-setting-unit">毫秒</span>
+                                </div>
+                            </div>
+                            <div class="system-setting-row">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">终端滚动缓冲</span>
+                                    <span class="system-setting-hint">Shell 终端可回滚行数，范围 100–100000；已打开的终端保存后立即生效</span>
+                                </div>
+                                <div class="system-setting-control">
+                                    <el-input-number v-model="form.shellTerminalScrollback" class="system-setting-num"
+                                        size="small" :min="100" :max="100000" :step="100" controls-position="right" />
+                                    <span class="system-setting-unit">行</span>
+                                </div>
+                            </div>
+                            <div class="system-setting-row">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">任务输出上限</span>
+                                    <span class="system-setting-hint">任务执行终端保留的最大行数，范围 100–100000</span>
+                                </div>
+                                <div class="system-setting-control">
+                                    <el-input-number v-model="form.taskOutputMaxLines" class="system-setting-num"
+                                        size="small" :min="100" :max="100000" :step="100" controls-position="right" />
+                                    <span class="system-setting-unit">行</span>
+                                </div>
+                            </div>
+                            <div class="system-setting-row">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">命令历史上限</span>
+                                    <span class="system-setting-hint">每个作用域（全局 / 单机）保留的命令条数，范围 50–20000</span>
+                                </div>
+                                <div class="system-setting-control">
+                                    <el-input-number v-model="form.shellCommandHistoryMax" class="system-setting-num"
+                                        size="small" :min="50" :max="20000" :step="50" controls-position="right" />
+                                    <span class="system-setting-unit">条</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -579,6 +594,11 @@ export default {
             { id: 'theme', label: '主题' },
             { id: 'about', label: '关于' },
         ]
+        const systemPanel = ref('app')
+        const systemPanels = [
+            { id: 'app', label: '应用信息' },
+            { id: 'shell', label: 'Shell' },
+        ]
         const themePanel = ref('ui')
         const themePanels = [
             { id: 'ui', label: '界面' },
@@ -588,6 +608,7 @@ export default {
         const form = reactive({
             windowsName: 'FlashDock',
             appIconPreset: 'default',
+            startupFullscreen: false,
             themeSettings: {
                 mode: 'light',
                 uiAccent: 'blue',
@@ -783,6 +804,7 @@ theme preview · ${theme.foreground}`
             const config = await App.GetSystemSettings()
             form.windowsName = (config.windowsName || 'FlashDock').trim() || 'FlashDock'
             form.appIconPreset = config.appIconPreset || 'default'
+            form.startupFullscreen = !!config.startupFullscreen
             form.themeSettings = {
                 mode: config.themeSettings?.mode || 'light',
                 uiAccent: config.themeSettings?.uiAccent || 'blue',
@@ -1101,6 +1123,7 @@ theme preview · ${theme.foreground}`
                 const config = await App.GetSystemSettings()
                 config.windowsName = (form.windowsName || '').trim() || 'FlashDock'
                 config.appIconPreset = form.appIconPreset || 'default'
+                config.startupFullscreen = !!form.startupFullscreen
                 config.themeSettings = { ...form.themeSettings }
                 config.shellMonitorIntervalMs = form.shellMonitorIntervalMs
                 config.sshHandshakeTimeoutSec = form.sshHandshakeTimeoutSec
@@ -1129,6 +1152,8 @@ theme preview · ${theme.foreground}`
             embedded: computed(() => props.embedded),
             settingsTab,
             settingsTabs,
+            systemPanel,
+            systemPanels,
             themePanel,
             themePanels,
             form,
@@ -1315,6 +1340,24 @@ theme preview · ${theme.foreground}`
     gap: 16px;
     align-items: stretch;
     overflow: hidden;
+}
+
+.system-section {
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow: hidden;
+}
+
+.system-editor {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--app-border);
+    border-radius: 10px;
+    background: var(--app-bg);
 }
 
 .appear-editor {

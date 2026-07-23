@@ -78,3 +78,24 @@ func (a *App) applyAppBrandingFromConfig() {
 	}
 	a.applyAppBranding(cfg)
 }
+
+func (a *App) applyStartupFullscreen(enabled bool) {
+	if a.ctx == nil {
+		return
+	}
+	if enabled {
+		wailsRuntime.WindowFullscreen(a.ctx)
+		return
+	}
+	if wailsRuntime.WindowIsFullscreen(a.ctx) {
+		wailsRuntime.WindowUnfullscreen(a.ctx)
+	}
+}
+
+func (a *App) applyStartupFullscreenFromConfig() {
+	cfg, err := a.configManager.GetGlobalConfig()
+	if err != nil || cfg == nil || !cfg.StartupFullscreen {
+		return
+	}
+	a.applyStartupFullscreen(true)
+}

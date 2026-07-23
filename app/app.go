@@ -120,6 +120,7 @@ func (a *App) Startup(ctx context.Context) {
 	}
 	a.applyWindowTheme(a.GetThemeSettings().Mode)
 	a.applyAppBrandingFromConfig()
+	a.applyStartupFullscreenFromConfig()
 }
 
 // DomReady is called after front-end resources have been loaded
@@ -1449,6 +1450,7 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	}
 	a.applyWindowTheme(config.ThemeSettings.Mode)
 	a.applyAppBranding(config)
+	a.applyStartupFullscreen(config.StartupFullscreen)
 	if a.ctx != nil {
 		wailsRuntime.EventsEmit(a.ctx, "theme:changed", config.ThemeSettings)
 		wailsRuntime.EventsEmit(a.ctx, "system-settings:changed", map[string]any{
@@ -1463,6 +1465,7 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 			"proxySettings":             config.ProxySettings,
 			"windowsName":               config.WindowsName,
 			"appIconPreset":             config.AppIconPreset,
+			"startupFullscreen":         config.StartupFullscreen,
 		})
 	}
 	return nil
