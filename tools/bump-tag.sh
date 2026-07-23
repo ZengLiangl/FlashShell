@@ -20,7 +20,7 @@
 # 说明:
 #   CI 发布用 tag + ldflags 注入版本，不依赖 tag 指向的 commit 里是否已改 version.go。
 #   bump commit 仅同步本地/后续开发读到的默认版本号。
-#   Release body：未指定 base 时仅本次提交；指定后为「该历史版本 GitHub Release body + 本次提交」。
+#   Release body：未指定 base 时仅本次提交；指定后按类型合并「该历史版本 GitHub Release body + 本次提交」（无「本次更新」分段）。
 #   CI 优先读仓库内 .github/release-base（比 annotated tag 注解更可靠）。
 #
 # 环境变量:
