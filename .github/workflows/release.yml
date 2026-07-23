@@ -416,6 +416,7 @@ jobs:
         uses: actions/checkout@v5
         with:
           fetch-depth: 0
+          fetch-tags: true
 
       - name: Download all artifacts
         uses: actions/download-artifact@v6
@@ -463,12 +464,59 @@ jobs:
           fi
 
           # 从 annotated tag 正文读取可选的历史版本基线（bump-tag.sh --base）
+          # 注意：actions/checkout 常把 annotated tag 剥成轻量 tag，%(contents) 会丢；
+          # 先强制拉取 tag 对象，再回退到 GitHub API 读注解。
+          parse_release_base() {
+            printf '%s\n' "$1" | sed -nE 's/^release-base:[[:space:]]*(v[^[:space:]]+).*$/\1/p' | head -n 1 || true
+          }
+
+          echo "🔄 强制拉取 annotated tag: ${TAG}"
+          git fetch --force --no-tags origin "refs/tags/${TAG}:refs/tags/${TAG}" 2>&1 || true
+
           TAG_MSG="$(git tag -l --format='%(contents)' "$TAG" 2>/dev/null || true)"
-          RELEASE_BASE="$(printf '%s\n' "$TAG_MSG" | sed -nE 's/^release-base:[[:space:]]*(v[^[:space:]]+).*$/\1/p' | head -n 1 || true)"
+          RELEASE_BASE="$(parse_release_base "$TAG_MSG")"
+
+          if [ -z "$RELEASE_BASE" ]; then
+            echo "🔎 本地 tag 注解未含 release-base，改用 GitHub API 读取…"
+            REF_JSON="$(gh api "repos/${GH_REPO}/git/ref/tags/${TAG}" 2>&1 || true)"
+            TAG_OBJ_SHA="$(printf '%s' "$REF_JSON" | python3 -c '
+import json,sys
+try:
+    d=json.load(sys.stdin)
+    obj=d.get("object") or {}
+    if obj.get("type")=="tag":
+        print(obj.get("sha") or "")
+except Exception:
+    pass
+' 2>/dev/null || true)"
+            if [ -n "$TAG_OBJ_SHA" ]; then
+              TAG_OBJ_JSON="$(gh api "repos/${GH_REPO}/git/tags/${TAG_OBJ_SHA}" 2>&1 || true)"
+              TAG_MSG="$(printf '%s' "$TAG_OBJ_JSON" | python3 -c '
+import json,sys
+try:
+    print(json.load(sys.stdin).get("message") or "")
+except Exception:
+    pass
+' 2>/dev/null || true)"
+              RELEASE_BASE="$(parse_release_base "$TAG_MSG")"
+            else
+              echo "⚠️ 无法经 API 取得 annotated tag 对象（可能是轻量 tag）"
+              echo "   ref 响应: ${REF_JSON:0:300}"
+            fi
+          fi
+
           if [ -n "$RELEASE_BASE" ]; then
             echo "📎 检测到 release-base: ${RELEASE_BASE}"
+            echo "---- tag message ----"
+            printf '%s\n' "$TAG_MSG"
+            echo "---------------------"
           else
             echo "ℹ️  未指定 release-base，Release body 仅含本次提交"
+            if [ -n "$(printf '%s' "$TAG_MSG" | tr -d '[:space:]')" ]; then
+              echo "---- tag message (无 release-base) ----"
+              printf '%s\n' "$TAG_MSG"
+              echo "--------------------------------------"
+            fi
           fi
 
           echo "📋 生成本次更新日志：$RANGE"
@@ -594,10 +642,17 @@ jobs:
           printf '%b' "$NEW_BODY" > /tmp/changelog-new.md
 
           if [ -n "$RELEASE_BASE" ]; then
-            BASE_JSON="$(gh api "repos/${GH_REPO}/releases/tags/${RELEASE_BASE}" 2>/dev/null || true)"
+            echo "📥 拉取历史 Release body: ${RELEASE_BASE}"
+            set +e
+            BASE_JSON="$(gh api "repos/${GH_REPO}/releases/tags/${RELEASE_BASE}" 2>&1)"
+            BASE_API_RC=$?
+            set -e
             BASE_BODY=""
-            if [ -n "$BASE_JSON" ]; then
+            if [ "$BASE_API_RC" -eq 0 ] && [ -n "$BASE_JSON" ]; then
               BASE_BODY="$(printf '%s' "$BASE_JSON" | python3 -c 'import json,sys; print(json.load(sys.stdin).get("body") or "")' 2>/dev/null || true)"
+            else
+              echo "⚠️ gh api 拉取 ${RELEASE_BASE} 失败 (rc=${BASE_API_RC})"
+              echo "   ${BASE_JSON:0:500}"
             fi
             if [ -z "$(printf '%s' "$BASE_BODY" | tr -d '[:space:]')" ]; then
               echo "⚠️ 未找到可用的 ${RELEASE_BASE} Release body，仅使用本次提交"
