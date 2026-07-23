@@ -157,13 +157,13 @@ def merge_release_notes(
         lines.append("")
         for item in items:
             lines.append(item.rstrip())
-            lines.append("")
+        lines.append("")
     for title, items in merged.items():
         lines.append(title)
         lines.append("")
         for item in items:
             lines.append(item.rstrip())
-            lines.append("")
+        lines.append("")
 
     compare_start = extract_compare_start(base_body) or (prev_tag or "").strip()
     if compare_start and compare_start != tag:
