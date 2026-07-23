@@ -30,8 +30,6 @@ jobs:
             label: darwin/arm64
           - os: windows-latest
             label: windows/amd64
-          - os: ubuntu-22.04
-            label: linux/amd64
     steps:
       - name: Checkout
         uses: actions/checkout@v5
