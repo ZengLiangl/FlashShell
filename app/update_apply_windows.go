@@ -75,7 +75,7 @@ func runWindowsApplyUpdate(cfg applyUpdateArgs) int {
 		return 1
 	}
 	logf("host process exited")
-	time.Sleep(2 * time.Second)
+	time.Sleep(3 * time.Second)
 	logf("cooldown finished, starting file replace")
 
 	if err := replaceWindowsExecutable(source, target, logf); err != nil {
@@ -110,60 +110,14 @@ func waitForWindowsHostExit(pid int, timeout time.Duration, logf func(string, ..
 		return nil
 	}
 	deadline := time.Now().Add(timeout)
-	grace := 12 * time.Second
-	graceDeadline := time.Now().Add(grace)
-	terminated := false
-	lastBeat := time.Time{}
-
 	for time.Now().Before(deadline) {
 		if !windowsProcessExists(pid) {
 			return nil
 		}
-		now := time.Now()
-		if lastBeat.IsZero() || now.Sub(lastBeat) >= 5*time.Second {
-			logf("waiting for host pid=%d to exit...", pid)
-			lastBeat = now
-		}
-		// 旧版可能被退出确认拦住；宽限后强制结束宿主（更新器自身已脱离 Job，不会被连带杀掉）
-		if !terminated && now.After(graceDeadline) {
-			logf("host still running after %s, terminating pid=%d", grace, pid)
-			if err := terminateWindowsProcess(pid); err != nil {
-				logf("terminate pid=%d failed: %v", pid, err)
-			} else {
-				logf("terminate signal sent to pid=%d", pid)
-			}
-			terminated = true
-		}
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(time.Second)
 	}
 	if windowsProcessExists(pid) {
 		return fmt.Errorf("host process still running after %s, aborting update", timeout)
-	}
-	return nil
-}
-
-func terminateWindowsProcess(pid int) error {
-	if pid <= 0 {
-		return nil
-	}
-	handle, _, err := procOpenProcess.Call(
-		uintptr(windowsProcessTerminate|windowsProcessQueryLimitedInformation),
-		0,
-		uintptr(pid),
-	)
-	if handle == 0 {
-		if err != nil {
-			return err
-		}
-		return fmt.Errorf("OpenProcess failed")
-	}
-	defer syscall.CloseHandle(syscall.Handle(handle))
-	r, _, termErr := procTerminateProcess.Call(handle, 1)
-	if r == 0 {
-		if termErr != nil {
-			return termErr
-		}
-		return fmt.Errorf("TerminateProcess failed")
 	}
 	return nil
 }

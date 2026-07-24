@@ -17,14 +17,10 @@ var (
 	procGetModuleFileNameW         = modKernel32.NewProc("GetModuleFileNameW")
 	procGetLongPathNameW           = modKernel32.NewProc("GetLongPathNameW")
 	procOpenProcess                = modKernel32.NewProc("OpenProcess")
-	procTerminateProcess           = modKernel32.NewProc("TerminateProcess")
 	procQueryFullProcessImageNameW = modKernel32.NewProc("QueryFullProcessImageNameW")
 )
 
-const (
-	windowsProcessQueryLimitedInformation = 0x1000
-	windowsProcessTerminate               = 0x0001
-)
+const windowsProcessQueryLimitedInformation = 0x1000
 
 func resolveWindowsUpdateTarget() (string, error) {
 	candidates := make([]string, 0, 4)
@@ -169,20 +165,8 @@ function Write-UpdateLog([string]$Message) {
 
 function Wait-ForHostExit {
   $deadline = (Get-Date).AddSeconds(90)
-  $graceDeadline = (Get-Date).AddSeconds(8)
-  $terminated = $false
   while ((Get-Process -Id $HostPid -ErrorAction SilentlyContinue) -and (Get-Date) -lt $deadline) {
-    if (-not $terminated -and (Get-Date) -ge $graceDeadline) {
-      Write-UpdateLog "host still running after 8s, terminating pid=$HostPid"
-      try {
-        Stop-Process -Id $HostPid -Force -ErrorAction Stop
-        Write-UpdateLog "terminate signal sent to pid=$HostPid"
-      } catch {
-        Write-UpdateLog "terminate pid=$HostPid failed: $($_.Exception.Message)"
-      }
-      $terminated = $true
-    }
-    Start-Sleep -Milliseconds 500
+    Start-Sleep -Seconds 1
   }
   if (Get-Process -Id $HostPid -ErrorAction SilentlyContinue) {
     Write-UpdateLog "host process still running after 90 seconds, aborting update"

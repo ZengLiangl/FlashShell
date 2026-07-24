@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -60,20 +59,18 @@ func (a *App) InstallUpdateAndRestart() *UpdateInstallResult {
 		return &UpdateInstallResult{Success: false, Message: msg, LogPath: staged.InstallLogPath}
 	}
 
-	// 更新器已通过 Start-Process 脱离本进程；再退出宿主。
-	// 先绕过退出确认，再 Quit；若仍卡住则 os.Exit，给更新器留出启动时间。
+	// 与 PinkHunkDB 一致：脚本已脱离启动后，宿主自行退出。
+	// FlashDock 有退出确认框，安装更新时必须放行，否则脚本会一直等到超时。
 	if a != nil {
 		a.quitMu.Lock()
 		a.allowQuit = true
 		a.quitMu.Unlock()
 	}
 	go func() {
-		time.Sleep(500 * time.Millisecond)
+		time.Sleep(300 * time.Millisecond)
 		if a != nil && a.ctx != nil {
 			wailsRuntime.Quit(a.ctx)
 		}
-		time.Sleep(3 * time.Second)
-		os.Exit(0)
 	}()
 
 	msg := "正在安装并重启…"
@@ -272,77 +269,22 @@ func launchWindowsUpdate(staged *stagedUpdate, targetExe string, pid int) error 
 		staged.InstallLogPath = logPath
 	}
 
-	// 优先：由「新版本 exe」执行安装（--apply-update），最终名写死为 FlashDock.exe。
-	// 这样改名规则随新包走，不再依赖当前旧进程内嵌的更新脚本。
-	applyErr := launchWindowsApplyUpdateExe(staged.FilePath, targetExe, staged.StagedDir, logPath, pid)
-	if applyErr == nil {
-		return nil
-	}
-
-	// 回退到旧 PS1 路径（例如新包暂时无法直接拉起时）
+	// 与 PinkHunkDB 一致：用独立 PowerShell 脚本做替换/重启。
+	// 不要直接把新 exe 当子进程跑 --apply-update，宿主退出时容易把更新器一起带走。
 	scriptPath := filepath.Join(staged.StagedDir, "update.ps1")
 	content := buildWindowsPowerShellUpdateScript(pid)
 	if err := os.WriteFile(scriptPath, []byte(content), 0o644); err != nil {
-		return fmt.Errorf("启动更新失败: apply-update: %v; 写脚本: %w", applyErr, err)
+		return err
 	}
 	cmd := buildWindowsLaunchCommand(scriptPath)
 	cmd.Env = append(os.Environ(), windowsUpdateScriptEnv(staged.FilePath, targetExe, staged.StagedDir, logPath, pid)...)
 	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("启动更新失败: apply-update: %v; ps1: %w", applyErr, err)
+		return err
 	}
 	if cmd.Process != nil {
 		_ = cmd.Process.Release()
 	}
 	return nil
-}
-
-func launchWindowsApplyUpdateExe(sourceExe, targetExe, stagedDir, logPath string, pid int) error {
-	sourceExe = strings.TrimSpace(sourceExe)
-	if sourceExe == "" {
-		return fmt.Errorf("empty update source")
-	}
-	if _, err := os.Stat(sourceExe); err != nil {
-		return err
-	}
-	workDir := filepath.Dir(sourceExe)
-	// 通过 PowerShell Start-Process 拉起更新器，确保脱离宿主进程树 / Job。
-	// 若直接作为子进程 Start，宿主 Quit、os.Exit 或强杀时更新器常被一并带走，日志只剩 started 几行。
-	ps := fmt.Sprintf(
-		"Start-Process -FilePath %s -WorkingDirectory %s -WindowStyle Hidden -ArgumentList %s,%s,%s,%s,%s,%s,%s,%s,%s",
-		psSingleQuote(sourceExe),
-		psSingleQuote(workDir),
-		psSingleQuote(applyUpdateFlag),
-		psSingleQuote(applyUpdateTargetFlag),
-		psSingleQuote(targetExe),
-		psSingleQuote(applyUpdatePIDFlag),
-		psSingleQuote(strconv.Itoa(pid)),
-		psSingleQuote(applyUpdateLogFlag),
-		psSingleQuote(logPath),
-		psSingleQuote(applyUpdateStagedFlag),
-		psSingleQuote(stagedDir),
-	)
-	cmd := exec.Command(
-		"powershell.exe",
-		"-NoProfile",
-		"-NoLogo",
-		"-NonInteractive",
-		"-WindowStyle", "Hidden",
-		"-Command", ps,
-	)
-	configureWindowsUpdateCommand(cmd)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		msg := strings.TrimSpace(string(out))
-		if msg == "" {
-			return err
-		}
-		return fmt.Errorf("%w: %s", err, msg)
-	}
-	return nil
-}
-
-func psSingleQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }
 
 func launchMacUpdate(staged *stagedUpdate, targetExe string, pid int) error {
