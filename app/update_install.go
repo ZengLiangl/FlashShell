@@ -60,20 +60,19 @@ func (a *App) InstallUpdateAndRestart() *UpdateInstallResult {
 		return &UpdateInstallResult{Success: false, Message: msg, LogPath: staged.InstallLogPath}
 	}
 
-	// 更新器已启动并在等待本进程退出。
-	// 1) 绕过「退出确认」弹框
-	// 2) 若 Wails Quit 未及时结束，强制 os.Exit，避免更新器一直等到超时
+	// 更新器已通过 Start-Process 脱离本进程；再退出宿主。
+	// 先绕过退出确认，再 Quit；若仍卡住则 os.Exit，给更新器留出启动时间。
 	if a != nil {
 		a.quitMu.Lock()
 		a.allowQuit = true
 		a.quitMu.Unlock()
 	}
 	go func() {
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
 		if a != nil && a.ctx != nil {
 			wailsRuntime.Quit(a.ctx)
 		}
-		time.Sleep(1500 * time.Millisecond)
+		time.Sleep(3 * time.Second)
 		os.Exit(0)
 	}()
 
@@ -305,23 +304,45 @@ func launchWindowsApplyUpdateExe(sourceExe, targetExe, stagedDir, logPath string
 	if _, err := os.Stat(sourceExe); err != nil {
 		return err
 	}
-	cmd := exec.Command(
-		sourceExe,
-		applyUpdateFlag,
-		applyUpdateTargetFlag, targetExe,
-		applyUpdatePIDFlag, strconv.Itoa(pid),
-		applyUpdateLogFlag, logPath,
-		applyUpdateStagedFlag, stagedDir,
+	workDir := filepath.Dir(sourceExe)
+	// 通过 PowerShell Start-Process 拉起更新器，确保脱离宿主进程树 / Job。
+	// 若直接作为子进程 Start，宿主 Quit、os.Exit 或强杀时更新器常被一并带走，日志只剩 started 几行。
+	ps := fmt.Sprintf(
+		"Start-Process -FilePath %s -WorkingDirectory %s -WindowStyle Hidden -ArgumentList %s,%s,%s,%s,%s,%s,%s,%s,%s",
+		psSingleQuote(sourceExe),
+		psSingleQuote(workDir),
+		psSingleQuote(applyUpdateFlag),
+		psSingleQuote(applyUpdateTargetFlag),
+		psSingleQuote(targetExe),
+		psSingleQuote(applyUpdatePIDFlag),
+		psSingleQuote(strconv.Itoa(pid)),
+		psSingleQuote(applyUpdateLogFlag),
+		psSingleQuote(logPath),
+		psSingleQuote(applyUpdateStagedFlag),
+		psSingleQuote(stagedDir),
 	)
-	cmd.Dir = filepath.Dir(sourceExe)
+	cmd := exec.Command(
+		"powershell.exe",
+		"-NoProfile",
+		"-NoLogo",
+		"-NonInteractive",
+		"-WindowStyle", "Hidden",
+		"-Command", ps,
+	)
 	configureWindowsUpdateCommand(cmd)
-	if err := cmd.Start(); err != nil {
-		return err
-	}
-	if cmd.Process != nil {
-		_ = cmd.Process.Release()
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		msg := strings.TrimSpace(string(out))
+		if msg == "" {
+			return err
+		}
+		return fmt.Errorf("%w: %s", err, msg)
 	}
 	return nil
+}
+
+func psSingleQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "''") + "'"
 }
 
 func launchMacUpdate(staged *stagedUpdate, targetExe string, pid int) error {

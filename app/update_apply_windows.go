@@ -110,16 +110,22 @@ func waitForWindowsHostExit(pid int, timeout time.Duration, logf func(string, ..
 		return nil
 	}
 	deadline := time.Now().Add(timeout)
-	grace := 8 * time.Second
+	grace := 12 * time.Second
 	graceDeadline := time.Now().Add(grace)
 	terminated := false
+	lastBeat := time.Time{}
 
 	for time.Now().Before(deadline) {
 		if !windowsProcessExists(pid) {
 			return nil
 		}
-		// 旧版本点「安装并重启」可能被退出确认拦住；宽限后强制结束宿主进程
-		if !terminated && time.Now().After(graceDeadline) {
+		now := time.Now()
+		if lastBeat.IsZero() || now.Sub(lastBeat) >= 5*time.Second {
+			logf("waiting for host pid=%d to exit...", pid)
+			lastBeat = now
+		}
+		// 旧版可能被退出确认拦住；宽限后强制结束宿主（更新器自身已脱离 Job，不会被连带杀掉）
+		if !terminated && now.After(graceDeadline) {
 			logf("host still running after %s, terminating pid=%d", grace, pid)
 			if err := terminateWindowsProcess(pid); err != nil {
 				logf("terminate pid=%d failed: %v", pid, err)
