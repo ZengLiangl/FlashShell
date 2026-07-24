@@ -7,7 +7,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"image"
-	"image/draw"
 	"image/png"
 	"os"
 	"path/filepath"
@@ -15,6 +14,7 @@ import (
 	"syscall"
 	"unsafe"
 
+	xdraw "golang.org/x/image/draw"
 	"golang.org/x/sys/windows"
 )
 
@@ -29,14 +29,16 @@ const (
 )
 
 var (
-	user32              = windows.NewLazySystemDLL("user32.dll")
-	procSendMessageW    = user32.NewProc("SendMessageW")
-	procLoadImageW      = user32.NewProc("LoadImageW")
-	procDestroyIcon     = user32.NewProc("DestroyIcon")
-	procEnumWindows     = user32.NewProc("EnumWindows")
-	procGetWindowThread = user32.NewProc("GetWindowThreadProcessId")
-	procIsWindowVisible = user32.NewProc("IsWindowVisible")
-	procGetWindow       = user32.NewProc("GetWindow")
+	user32               = windows.NewLazySystemDLL("user32.dll")
+	procSendMessageW     = user32.NewProc("SendMessageW")
+	procLoadImageW       = user32.NewProc("LoadImageW")
+	procDestroyIcon      = user32.NewProc("DestroyIcon")
+	procEnumWindows      = user32.NewProc("EnumWindows")
+	procGetWindowThread  = user32.NewProc("GetWindowThreadProcessId")
+	procIsWindowVisible  = user32.NewProc("IsWindowVisible")
+	procGetWindow        = user32.NewProc("GetWindow")
+	procGetDpiForWindow  = user32.NewProc("GetDpiForWindow")
+	procGetSystemMetrics = user32.NewProc("GetSystemMetrics")
 
 	gwOwner = uintptr(4)
 
@@ -58,7 +60,12 @@ func setApplicationDockIconPNG(pngBytes []byte) {
 	if err != nil {
 		return
 	}
-	icoBytes, err := encodeWindowsICO(src, []int{16, 32, 48, 256})
+	smallSize, bigSize := windowsIconPixelSizes(hwnd)
+	// 多尺寸帧：避免高 DPI 任务栏只能放大 16/32 导致发糊
+	icoBytes, err := encodeWindowsICO(src, uniquePositiveInts(
+		16, 20, 24, 32, 40, 48, 64, 128, 256,
+		smallSize, bigSize,
+	))
 	if err != nil || len(icoBytes) == 0 {
 		return
 	}
@@ -71,8 +78,8 @@ func setApplicationDockIconPNG(pngBytes []byte) {
 		return
 	}
 
-	small := loadIconFromFile(icoPath, 16)
-	big := loadIconFromFile(icoPath, 32)
+	small := loadIconFromFile(icoPath, smallSize)
+	big := loadIconFromFile(icoPath, bigSize)
 	if small == 0 && big == 0 {
 		_ = os.Remove(icoPath)
 		return
@@ -151,17 +158,75 @@ func findMainWindowHWND() windows.HWND {
 	return found
 }
 
+func windowsIconPixelSizes(hwnd windows.HWND) (small, big int) {
+	small = systemMetric(49) // SM_CXSMICON
+	big = systemMetric(11)   // SM_CXICON
+	dpi := windowDPI(hwnd)
+	if small <= 0 {
+		small = scaleIconSize(16, dpi)
+	}
+	if big <= 0 {
+		big = scaleIconSize(32, dpi)
+	}
+	// 高 DPI 下 GetSystemMetrics 有时仍偏小，按 DPI 再抬一档，避免任务栏二次放大发糊
+	if want := scaleIconSize(16, dpi); want > small {
+		small = want
+	}
+	if want := scaleIconSize(32, dpi); want > big {
+		big = want
+	}
+	return small, big
+}
+
+func systemMetric(index int) int {
+	r, _, _ := procGetSystemMetrics.Call(uintptr(index))
+	return int(r)
+}
+
+func windowDPI(hwnd windows.HWND) int {
+	if hwnd != 0 && procGetDpiForWindow.Find() == nil {
+		r, _, _ := procGetDpiForWindow.Call(uintptr(hwnd))
+		if r >= 96 {
+			return int(r)
+		}
+	}
+	return 96
+}
+
+func scaleIconSize(base, dpi int) int {
+	if dpi < 96 {
+		dpi = 96
+	}
+	return (base*dpi + 48) / 96
+}
+
+func uniquePositiveInts(vals ...int) []int {
+	seen := make(map[int]struct{}, len(vals))
+	out := make([]int, 0, len(vals))
+	for _, v := range vals {
+		if v <= 0 {
+			continue
+		}
+		if _, ok := seen[v]; ok {
+			continue
+		}
+		seen[v] = struct{}{}
+		out = append(out, v)
+	}
+	return out
+}
+
 func encodeWindowsICO(src image.Image, sizes []int) ([]byte, error) {
 	type entry struct {
-		w, h  int
-		bmp   []byte
+		w, h int
+		bmp  []byte
 	}
 	entries := make([]entry, 0, len(sizes))
 	for _, size := range sizes {
 		if size <= 0 {
 			continue
 		}
-		bmp, err := rgbaToBMPIconData(resizeImageNearest(src, size, size))
+		bmp, err := rgbaToBMPIconData(resizeImageHighQuality(src, size, size))
 		if err != nil {
 			continue
 		}
@@ -201,20 +266,14 @@ func encodeWindowsICO(src image.Image, sizes []int) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func resizeImageNearest(src image.Image, w, h int) *image.RGBA {
+func resizeImageHighQuality(src image.Image, w, h int) *image.RGBA {
 	dst := image.NewRGBA(image.Rect(0, 0, w, h))
 	sb := src.Bounds()
-	sw, sh := sb.Dx(), sb.Dy()
-	if sw <= 0 || sh <= 0 {
+	if sb.Dx() <= 0 || sb.Dy() <= 0 {
 		return dst
 	}
-	for y := 0; y < h; y++ {
-		sy := sb.Min.Y + y*sh/h
-		for x := 0; x < w; x++ {
-			sx := sb.Min.X + x*sw/w
-			dst.Set(x, y, src.At(sx, sy))
-		}
-	}
+	// CatmullRom 缩放到任务栏尺寸；最近邻会把细线图标打成锯齿/发糊块
+	xdraw.CatmullRom.Scale(dst, dst.Bounds(), src, sb, xdraw.Over, nil)
 	return dst
 }
 
@@ -222,8 +281,6 @@ func resizeImageNearest(src image.Image, w, h int) *image.RGBA {
 func rgbaToBMPIconData(img *image.RGBA) ([]byte, error) {
 	b := img.Bounds()
 	w, h := b.Dx(), b.Dy()
-	rgba := image.NewRGBA(image.Rect(0, 0, w, h))
-	draw.Draw(rgba, rgba.Bounds(), img, b.Min, draw.Src)
 
 	// XOR bitmap: 32bpp bottom-up BGRA
 	rowSize := w * 4
@@ -246,14 +303,14 @@ func rgbaToBMPIconData(img *image.RGBA) ([]byte, error) {
 	for y := 0; y < h; y++ {
 		srcY := h - 1 - y
 		dstOff := y * rowSize
-		srcOff := rgba.PixOffset(0, srcY)
+		srcOff := img.PixOffset(0, srcY)
 		for x := 0; x < w; x++ {
 			i := srcOff + x*4
 			j := dstOff + x*4
-			xor[j+0] = rgba.Pix[i+2] // B
-			xor[j+1] = rgba.Pix[i+1] // G
-			xor[j+2] = rgba.Pix[i+0] // R
-			xor[j+3] = rgba.Pix[i+3] // A
+			xor[j+0] = img.Pix[i+2] // B
+			xor[j+1] = img.Pix[i+1] // G
+			xor[j+2] = img.Pix[i+0] // R
+			xor[j+3] = img.Pix[i+3] // A
 		}
 	}
 	// AND mask 全 0：由 alpha 决定透明
