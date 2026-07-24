@@ -240,14 +240,43 @@ export default {
       }
     }
 
+    /** 高亮在写入时注入 ANSI；配置变更后清屏并回放缓冲，无需重连 */
+    const reapplyLogHighlightToTerminal = () => {
+      if (!term.value || !initialized) return
+      tuiModeDepth = 0
+      term.value.clear()
+      resetShellWriterReplay(props.machineName)
+      detachWriter()
+      if (props.connected || props.connecting) {
+        attachWriter(term.value, { replay: true })
+      }
+    }
+
     const onSystemSettingsChanged = (payload) => {
-      if (payload && Object.prototype.hasOwnProperty.call(payload, 'shellLogHighlight')) {
-        logHighlightEnabled = payload.shellLogHighlight !== false
+      if (!payload || typeof payload !== 'object') return
+      let highlightChanged = false
+      if (Object.prototype.hasOwnProperty.call(payload, 'shellLogHighlight')) {
+        const next = payload.shellLogHighlight !== false
+        if (next !== logHighlightEnabled) {
+          logHighlightEnabled = next
+          highlightChanged = true
+        }
       }
-      if (payload?.shellLogHighlightColors || payload?.shellLogHighlightDisabled) {
-        logHighlightConfig = mergeLogHighlightConfig(payload)
+      // disabled 可能为 null/[]，不能用真值判断，否则「全部开启」时配色/规则不更新
+      if (
+        Object.prototype.hasOwnProperty.call(payload, 'shellLogHighlightColors') ||
+        Object.prototype.hasOwnProperty.call(payload, 'shellLogHighlightDisabled')
+      ) {
+        const nextConfig = mergeLogHighlightConfig(payload)
+        if (JSON.stringify(nextConfig) !== JSON.stringify(logHighlightConfig)) {
+          logHighlightConfig = nextConfig
+          highlightChanged = true
+        }
       }
-      if (payload && Object.prototype.hasOwnProperty.call(payload, 'shellTerminalScrollback')) {
+      if (highlightChanged) {
+        reapplyLogHighlightToTerminal()
+      }
+      if (Object.prototype.hasOwnProperty.call(payload, 'shellTerminalScrollback')) {
         scrollbackLines = clampShellTerminalScrollback(payload.shellTerminalScrollback)
         if (term.value) {
           term.value.options.scrollback = scrollbackLines

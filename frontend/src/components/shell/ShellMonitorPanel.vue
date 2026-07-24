@@ -128,7 +128,7 @@
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { Connection, SwitchButton, ArrowDown } from '@element-plus/icons-vue'
-import { EventsOn, EventsOff } from '../../../wailsjs/runtime/runtime'
+import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import * as App from '../../../wailsjs/go/app/App'
 
 const isAuxMissingError = (msg) => /辅助连接(未建立|不存在)/.test(String(msg || ''))
@@ -454,14 +454,17 @@ export default {
         loadSystemInfo()
       }
     })
+    let offSystemSettingsChanged = null
     onMounted(async () => {
       await loadInterval()
-      EventsOn('system-settings:changed', onSettingsChanged)
+      // 用返回的取消函数解绑，避免 EventsOff 清掉其它组件（如 ShellTerminal）的同名监听
+      offSystemSettingsChanged = EventsOn('system-settings:changed', onSettingsChanged)
       startTimer()
     })
     onUnmounted(() => {
       stopTimer()
-      EventsOff('system-settings:changed')
+      offSystemSettingsChanged?.()
+      offSystemSettingsChanged = null
     })
 
     return {
