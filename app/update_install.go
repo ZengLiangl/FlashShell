@@ -182,18 +182,8 @@ func resolveUpdateAssetPath(stagedDir, assetName string) string {
 }
 
 func prepareStagedDir(workspaceDir, version string) (string, error) {
+	// 保留已有暂存目录与 .part，支持断点续传；勿 RemoveAll
 	stagedDir := filepath.Join(workspaceDir, fmt.Sprintf(".flashdock-update-%s-%s", goruntime.GOOS, sanitizeVersionForPath(version)))
-	for retry := 0; retry < 5; retry++ {
-		err := os.RemoveAll(stagedDir)
-		if err == nil {
-			break
-		}
-		if retry < 4 {
-			time.Sleep(time.Duration(retry+1) * 500 * time.Millisecond)
-			continue
-		}
-		stagedDir = filepath.Join(workspaceDir, fmt.Sprintf(".flashdock-update-%s-%s-%d", goruntime.GOOS, sanitizeVersionForPath(version), time.Now().UnixNano()))
-	}
 	if err := os.MkdirAll(stagedDir, 0o755); err != nil {
 		return "", err
 	}

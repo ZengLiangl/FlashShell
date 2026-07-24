@@ -170,7 +170,7 @@
         </div>
 
         <div v-show="minimizedZone !== 'task'" class="zone-body">
-          <div class="item-grid" :class="{ 'is-dense': minimizedZone === 'shell' }">
+          <div class="item-grid">
             <button
               v-for="project in projects"
               :key="project.name"
@@ -286,7 +286,7 @@
               :workspace-sessions="workspaceSessions"
               :connecting-name="connectingName"
               :filter-keyword="machineKeyword"
-              :layout="!hasProjects || minimizedZone === 'task' ? 'grid' : 'list'"
+              layout="grid"
               variant="cards"
               empty-text="无匹配机器"
               @connect="onConnectMachine"
@@ -696,12 +696,6 @@ export default {
 }
 
 .item-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.item-grid.is-dense {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 10px;

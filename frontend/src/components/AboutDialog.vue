@@ -140,7 +140,7 @@ import { ref, watch, computed, onMounted, onUnmounted } from 'vue'
 import { marked } from 'marked'
 import { ElMessage } from 'element-plus'
 import * as App from '../../wailsjs/go/app/App'
-import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
+import { EventsOn } from '../../wailsjs/runtime/runtime'
 import {
     getCachedUpdateCheck,
     setCachedUpdateCheck,
@@ -289,11 +289,19 @@ export default {
 
         const onDownloadProgress = (payload) => {
             if (!payload) return
-            downloadPercent.value = Number(payload.percent) || 0
+            // 丢弃 done 之后迟到的 downloading，避免卡在「下载中 100%」且按钮失灵
+            if (payload.status === 'downloading' && readyToInstall.value && !downloading.value) {
+                return
+            }
+            const pct = Number(payload.percent)
+            if (!Number.isNaN(pct)) {
+                downloadPercent.value = Math.max(0, Math.min(100, pct))
+            }
             if (payload.status === 'start' || payload.status === 'downloading') {
                 downloading.value = true
                 downloadPaused.value = false
                 downloadFailed.value = false
+                readyToInstall.value = false
                 downloadMessage.value = payload.message || (payload.status === 'start' ? '开始下载…' : '正在下载…')
             } else if (payload.status === 'done') {
                 downloading.value = false
@@ -301,9 +309,7 @@ export default {
                 downloadPercent.value = 100
                 downloadFailed.value = false
                 readyToInstall.value = true
-                downloadMessage.value = payload.message
-                    ? `下载完成：${payload.message}`
-                    : '下载完成，可安装并重启'
+                downloadMessage.value = '下载完成，可安装并重启'
             } else if (payload.status === 'paused') {
                 downloading.value = false
                 downloadPaused.value = true
@@ -441,11 +447,13 @@ export default {
             visibleProxy.value = false
         }
 
+        let offDownloadProgress = null
         onMounted(() => {
-            EventsOn('update:download-progress', onDownloadProgress)
+            offDownloadProgress = EventsOn('update:download-progress', onDownloadProgress)
         })
         onUnmounted(() => {
-            EventsOff('update:download-progress')
+            offDownloadProgress?.()
+            offDownloadProgress = null
         })
 
         return {

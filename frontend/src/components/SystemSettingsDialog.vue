@@ -508,7 +508,7 @@ import { marked } from 'marked'
 import { ElMessage } from 'element-plus'
 import { Edit, Delete, Plus, Close, Check } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
-import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
+import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { useTheme } from '../composables/useTheme'
 import {
     getCachedUpdateCheck,
@@ -918,11 +918,19 @@ theme preview · ${theme.foreground}`
 
         const onDownloadProgress = (payload) => {
             if (!payload) return
-            downloadPercent.value = Number(payload.percent) || 0
+            // 丢弃 done 之后迟到的 downloading，避免卡在「下载中 100%」且按钮失灵
+            if (payload.status === 'downloading' && readyToInstall.value && !downloading.value) {
+                return
+            }
+            const pct = Number(payload.percent)
+            if (!Number.isNaN(pct)) {
+                downloadPercent.value = Math.max(0, Math.min(100, pct))
+            }
             if (payload.status === 'start' || payload.status === 'downloading') {
                 downloading.value = true
                 downloadPaused.value = false
                 downloadFailed.value = false
+                readyToInstall.value = false
                 downloadMessage.value = payload.message || (payload.status === 'start' ? '开始下载…' : '正在下载…')
             } else if (payload.status === 'done') {
                 downloading.value = false
@@ -930,9 +938,7 @@ theme preview · ${theme.foreground}`
                 downloadPercent.value = 100
                 downloadFailed.value = false
                 readyToInstall.value = true
-                downloadMessage.value = payload.message
-                    ? `下载完成：${payload.message}`
-                    : '下载完成，可安装并重启'
+                downloadMessage.value = '下载完成，可安装并重启'
             } else if (payload.status === 'paused') {
                 downloading.value = false
                 downloadPaused.value = true
@@ -1042,11 +1048,13 @@ theme preview · ${theme.foreground}`
             }
         })
 
+        let offDownloadProgress = null
         onMounted(() => {
-            EventsOn('update:download-progress', onDownloadProgress)
+            offDownloadProgress = EventsOn('update:download-progress', onDownloadProgress)
         })
         onUnmounted(() => {
-            EventsOff('update:download-progress')
+            offDownloadProgress?.()
+            offDownloadProgress = null
         })
 
         const resetAccountForm = () => {

@@ -10,6 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	goruntime "runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -87,7 +88,8 @@ func (w *updateDownloadProgressWriter) Write(p []byte) (int, error) {
 	w.written += int64(n)
 	if w.onProgress != nil {
 		now := time.Now()
-		if now.Sub(w.lastEmit) >= 400*time.Millisecond || (w.total > 0 && w.written >= w.total) {
+		first := w.lastEmit.IsZero()
+		if first || now.Sub(w.lastEmit) >= 200*time.Millisecond || (w.total > 0 && w.written >= w.total) {
 			w.lastEmit = now
 			w.onProgress(w.written, w.total)
 		}
@@ -100,6 +102,8 @@ var (
 	updateDownloading    bool
 	updateDownloadCancel context.CancelFunc
 	lastDownloadedDir    string
+	updateProgressClosed bool
+	updateProgressGen    uint64
 )
 
 // CheckForUpdates 查询 GitHub Releases 最新正式版并与本地版本对比。
@@ -190,7 +194,7 @@ func (a *App) CheckForUpdates() *UpdateCheckResult {
 	return result
 }
 
-// PauseUpdateDownload 暂停当前安装包下载，便于更换代理源后重新开始。
+// PauseUpdateDownload 暂停当前安装包下载，便于更换代理源后继续（保留 .part）。
 func (a *App) PauseUpdateDownload() {
 	updateDownloadMu.Lock()
 	cancel := updateDownloadCancel
@@ -202,7 +206,7 @@ func (a *App) PauseUpdateDownload() {
 
 // DownloadUpdate 按指定下载源下载当前平台安装包到更新暂存目录。
 // sourceLabel 为空时使用第一个源（GitHub 直连）；下载中可调用 PauseUpdateDownload 暂停。
-// 下载完成后可调用 InstallUpdateAndRestart 自动安装并打开新版本。
+// 本地已有完整包则直接复用；有 .part 则断点续传。
 func (a *App) DownloadUpdate(sourceLabel string) *UpdateDownloadResult {
 	updateDownloadMu.Lock()
 	if updateDownloading {
@@ -265,12 +269,7 @@ func (a *App) DownloadUpdate(sourceLabel string) *UpdateDownloadResult {
 		return &UpdateDownloadResult{Success: false, Message: msg}
 	}
 
-	a.emitUpdateDownloadProgress("start", 0, check.AssetSize, fmt.Sprintf("使用「%s」下载…", source.Label))
-	_ = os.Remove(dest)
-	err = downloadFileWithProgress(ctx, source.URL, dest, check.AssetSize, source.Direct, func(downloaded, total int64) {
-		a.emitUpdateDownloadProgress("downloading", downloaded, total, "")
-	})
-	if err == nil {
+	finishOK := func(msg string) *UpdateDownloadResult {
 		staged := &stagedUpdate{
 			Version:        normalizeVersion(check.LatestVersion),
 			AssetName:      check.AssetName,
@@ -284,7 +283,7 @@ func (a *App) DownloadUpdate(sourceLabel string) *UpdateDownloadResult {
 		a.emitUpdateDownloadProgress("done", check.AssetSize, check.AssetSize, dest)
 		return &UpdateDownloadResult{
 			Success:        true,
-			Message:        fmt.Sprintf("下载完成（%s），可安装并重启", source.Label),
+			Message:        msg,
 			FilePath:       dest,
 			DirPath:        filepath.Dir(dest),
 			ReadyToInstall: true,
@@ -292,15 +291,36 @@ func (a *App) DownloadUpdate(sourceLabel string) *UpdateDownloadResult {
 			AutoRelaunch:   true,
 		}
 	}
-	_ = os.Remove(dest)
+
+	// 本地已有完整安装包：直接复用
+	if complete, size := localUpdateAssetComplete(dest, check.AssetSize); complete {
+		a.emitUpdateDownloadProgress("start", size, size, "本地已有安装包，跳过下载")
+		return finishOK(fmt.Sprintf("已使用本地安装包（%s）", source.Label))
+	}
+
+	resumeFrom, _ := localUpdatePartOffset(dest, check.AssetSize)
+	startMsg := fmt.Sprintf("使用「%s」下载…", source.Label)
+	if resumeFrom > 0 {
+		startMsg = fmt.Sprintf("使用「%s」续传（已有 %s）…", source.Label, formatByteSize(resumeFrom))
+	}
+	a.emitUpdateDownloadProgress("start", resumeFrom, check.AssetSize, startMsg)
+
+	err = downloadFileWithProgress(ctx, source.URL, dest, check.AssetSize, source.Direct, func(downloaded, total int64) {
+		a.emitUpdateDownloadProgress("downloading", downloaded, total, "")
+	})
+	if err == nil {
+		return finishOK(fmt.Sprintf("下载完成（%s），可安装并重启", source.Label))
+	}
 	if ctx.Err() != nil {
 		msg := "已暂停，可更换下载源后继续"
-		a.emitUpdateDownloadProgress("paused", 0, check.AssetSize, msg)
+		partial, _ := localUpdatePartOffset(dest, check.AssetSize)
+		a.emitUpdateDownloadProgress("paused", partial, check.AssetSize, msg)
 		return &UpdateDownloadResult{Success: false, Message: msg, Paused: true}
 	}
 
 	msg := fmt.Sprintf("下载失败（%s）: %v", source.Label, err)
-	a.emitUpdateDownloadProgress("error", 0, check.AssetSize, msg)
+	partial, _ := localUpdatePartOffset(dest, check.AssetSize)
+	a.emitUpdateDownloadProgress("error", partial, check.AssetSize, msg)
 	return &UpdateDownloadResult{Success: false, Message: msg}
 }
 
@@ -378,6 +398,9 @@ func (a *App) emitUpdateDownloadProgress(status string, downloaded, total int64,
 		if percent > 100 {
 			percent = 100
 		}
+		if percent < 0 {
+			percent = 0
+		}
 	}
 	payload := map[string]interface{}{
 		"status":     status,
@@ -386,11 +409,33 @@ func (a *App) emitUpdateDownloadProgress(status string, downloaded, total int64,
 		"percent":    percent,
 		"message":    message,
 	}
-	// 进度事件异步发出，避免阻塞下载读写
-	if status == "downloading" {
-		go wailsRuntime.EventsEmit(a.ctx, updateDownloadProgressEvent, payload)
+
+	updateDownloadMu.Lock()
+	switch status {
+	case "start":
+		updateProgressGen++
+		updateProgressClosed = false
+	case "downloading":
+		if updateProgressClosed {
+			updateDownloadMu.Unlock()
+			return
+		}
+		gen := updateProgressGen
+		updateDownloadMu.Unlock()
+		// 异步发进度，但带代数校验，避免 done 之后迟到的 downloading 把 UI 卡死
+		go func() {
+			updateDownloadMu.Lock()
+			defer updateDownloadMu.Unlock()
+			if updateProgressClosed || gen != updateProgressGen {
+				return
+			}
+			wailsRuntime.EventsEmit(a.ctx, updateDownloadProgressEvent, payload)
+		}()
 		return
+	case "done", "error", "paused":
+		updateProgressClosed = true
 	}
+	updateDownloadMu.Unlock()
 	wailsRuntime.EventsEmit(a.ctx, updateDownloadProgressEvent, payload)
 }
 
@@ -518,26 +563,6 @@ func buildDownloadSources(rawURL string) []updateDownloadSource {
 				URL:    withGitHubProxyPrefix("https://ghfast.top", rawURL),
 				Direct: false,
 			},
-			updateDownloadSource{
-				Label:  "ghproxy.net",
-				URL:    withGitHubProxyPrefix("https://ghproxy.net", rawURL),
-				Direct: false,
-			},
-			updateDownloadSource{
-				Label:  "gitclone.com",
-				URL:    withGitCloneMirror(rawURL),
-				Direct: false,
-			},
-			updateDownloadSource{
-				Label:  "githubproxy.cc",
-				URL:    withGitHubProxyPrefix("https://githubproxy.cc", rawURL),
-				Direct: false,
-			},
-			updateDownloadSource{
-				Label:  "github.abskoop.workers.dev",
-				URL:    withGitHubProxyPrefix("https://github.abskoop.workers.dev", rawURL),
-				Direct: false,
-			},
 		)
 	}
 	return sources
@@ -644,12 +669,41 @@ func downloadFileWithProgress(ctx context.Context, url, dest string, knownSize i
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return fmt.Errorf("创建下载目录失败: %w", err)
+	}
+
+	if complete, size := localUpdateAssetComplete(dest, knownSize); complete {
+		if onProgress != nil {
+			onProgress(size, size)
+		}
+		return nil
+	}
+
+	tmp := dest + ".part"
+	startOffset, err := prepareUpdatePartFile(dest, tmp, knownSize)
+	if err != nil {
+		return err
+	}
+	if knownSize > 0 && startOffset >= knownSize {
+		if err := os.Rename(tmp, dest); err != nil {
+			return err
+		}
+		if onProgress != nil {
+			onProgress(knownSize, knownSize)
+		}
+		return nil
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("User-Agent", "FlashDock-Updater/"+formatVersionDisplay(Version))
 	req.Header.Set("Accept", "application/octet-stream")
+	if startOffset > 0 {
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", startOffset))
+	}
 	// 仅直连 GitHub 时附带 Token；代理域名不应收到 GitHub 凭据
 	if sendGitHubAuth {
 		if token := resolveGitHubToken(); token != "" {
@@ -663,42 +717,51 @@ func downloadFileWithProgress(ctx context.Context, url, dest string, knownSize i
 		return err
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
+
+	switch {
+	case startOffset > 0 && resp.StatusCode == http.StatusOK:
+		// 服务端忽略 Range，从头重下
+		startOffset = 0
+		_ = os.Remove(tmp)
+	case startOffset > 0 && resp.StatusCode == http.StatusPartialContent:
+		// 续传成功
+	case startOffset == 0 && resp.StatusCode == http.StatusOK:
+		// 正常整包下载
+	default:
 		return fmt.Errorf("HTTP %d", resp.StatusCode)
 	}
 
-	total := knownSize
-	if resp.ContentLength > 0 {
-		total = resp.ContentLength
+	total := resolveDownloadTotal(knownSize, startOffset, resp)
+	var out *os.File
+	if startOffset > 0 {
+		out, err = os.OpenFile(tmp, os.O_WRONLY|os.O_APPEND, 0o644)
+	} else {
+		out, err = os.Create(tmp)
 	}
-
-	tmp := dest + ".part"
-	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
-		return fmt.Errorf("创建下载目录失败: %w", err)
-	}
-	_ = os.Remove(tmp)
-	out, err := os.Create(tmp)
 	if err != nil {
 		return err
 	}
 
 	progressWriter := &updateDownloadProgressWriter{
+		written:    startOffset,
 		total:      total,
 		onProgress: onProgress,
 	}
+	if onProgress != nil {
+		onProgress(startOffset, total)
+	}
+
 	_, copyErr := utils.CopyBuffer(io.MultiWriter(out, progressWriter), resp.Body)
 	closeErr := out.Close()
 	if copyErr != nil {
-		_ = os.Remove(tmp)
+		// 暂停/失败均保留 .part，便于下次续传
 		return copyErr
 	}
 	if closeErr != nil {
-		_ = os.Remove(tmp)
 		return closeErr
 	}
 	_ = os.Remove(dest)
 	if err := os.Rename(tmp, dest); err != nil {
-		_ = os.Remove(tmp)
 		return err
 	}
 	if onProgress != nil {
@@ -709,6 +772,123 @@ func downloadFileWithProgress(ctx context.Context, url, dest string, knownSize i
 		onProgress(progressWriter.written, finalTotal)
 	}
 	return nil
+}
+
+func localUpdateAssetComplete(dest string, knownSize int64) (bool, int64) {
+	st, err := os.Stat(dest)
+	if err != nil || st.IsDir() {
+		return false, 0
+	}
+	size := st.Size()
+	if knownSize > 0 {
+		return size == knownSize, size
+	}
+	return size > 0, size
+}
+
+func localUpdatePartOffset(dest string, knownSize int64) (int64, error) {
+	tmp := dest + ".part"
+	if st, err := os.Stat(tmp); err == nil && !st.IsDir() {
+		size := st.Size()
+		if knownSize > 0 && size > knownSize {
+			_ = os.Remove(tmp)
+			return 0, nil
+		}
+		return size, nil
+	}
+	if st, err := os.Stat(dest); err == nil && !st.IsDir() {
+		size := st.Size()
+		if knownSize > 0 && size >= knownSize {
+			return knownSize, nil
+		}
+		return size, nil
+	}
+	return 0, nil
+}
+
+func prepareUpdatePartFile(dest, tmp string, knownSize int64) (int64, error) {
+	if st, err := os.Stat(tmp); err == nil && !st.IsDir() {
+		size := st.Size()
+		if knownSize > 0 && size > knownSize {
+			_ = os.Remove(tmp)
+			return 0, nil
+		}
+		return size, nil
+	}
+	// 不完整的最终文件当作续传起点
+	if st, err := os.Stat(dest); err == nil && !st.IsDir() {
+		size := st.Size()
+		if knownSize > 0 && size == knownSize {
+			return knownSize, nil
+		}
+		if knownSize > 0 && size > knownSize {
+			_ = os.Remove(dest)
+			return 0, nil
+		}
+		if err := os.Rename(dest, tmp); err != nil {
+			return 0, err
+		}
+		return size, nil
+	}
+	return 0, nil
+}
+
+func resolveDownloadTotal(knownSize, startOffset int64, resp *http.Response) int64 {
+	// 优先用 GitHub API 的资源大小；代理常返回错误/偏小的 Content-Length，会导致进度瞬间 100%
+	if knownSize > 0 {
+		return knownSize
+	}
+	if resp == nil {
+		return 0
+	}
+	if total := parseContentRangeTotal(resp.Header.Get("Content-Range")); total > 0 {
+		return total
+	}
+	if resp.ContentLength > 0 {
+		if resp.StatusCode == http.StatusPartialContent {
+			return startOffset + resp.ContentLength
+		}
+		return resp.ContentLength
+	}
+	return 0
+}
+
+func parseContentRangeTotal(h string) int64 {
+	h = strings.TrimSpace(h)
+	if h == "" {
+		return 0
+	}
+	lower := strings.ToLower(h)
+	if !strings.HasPrefix(lower, "bytes ") {
+		return 0
+	}
+	rest := strings.TrimSpace(h[len("bytes "):])
+	parts := strings.Split(rest, "/")
+	if len(parts) != 2 {
+		return 0
+	}
+	totalStr := strings.TrimSpace(parts[1])
+	if totalStr == "*" || totalStr == "" {
+		return 0
+	}
+	n, err := strconv.ParseInt(totalStr, 10, 64)
+	if err != nil || n <= 0 {
+		return 0
+	}
+	return n
+}
+
+func formatByteSize(n int64) string {
+	if n < 1024 {
+		return fmt.Sprintf("%d B", n)
+	}
+	if n < 1024*1024 {
+		return fmt.Sprintf("%.1f KB", float64(n)/1024)
+	}
+	if n < 1024*1024*1024 {
+		return fmt.Sprintf("%.1f MB", float64(n)/(1024*1024))
+	}
+	return fmt.Sprintf("%.2f GB", float64(n)/(1024*1024*1024))
 }
 
 func truncate(s string, n int) string {
