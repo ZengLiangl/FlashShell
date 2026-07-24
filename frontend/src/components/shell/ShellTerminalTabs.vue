@@ -1,7 +1,11 @@
 <template>
   <div class="shell-terminal-tabs">
-    <div class="tabs-bar" :class="{ 'is-drop-unsplit': draggingSplitPane }" @dragover.prevent="onTabsBarDragOver"
-      @drop.prevent="onTabsBarDrop">
+    <div
+      class="tabs-bar"
+      :class="{ 'is-drop-unsplit': draggingSplitPane }"
+      @dragover.prevent="onTabsBarDragOver"
+      @drop.prevent="onTabsBarDrop"
+    >
       <el-button class="home-btn" size="small" text title="返回首页" @click="$emit('back')">
         <el-icon :size="14">
           <ArrowLeft />
@@ -854,6 +858,26 @@ export default {
   gap: 2px;
 }
 
+.tabs-bar-right :deep(.el-tooltip__trigger),
+.tabs-bar-right :deep(.el-badge) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.tabs-bar-right :deep(.el-button) {
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .session-tab.drop-before {
   box-shadow: inset 2px 0 0 var(--app-accent-color);
 }
@@ -938,7 +962,7 @@ export default {
 }
 
 .session-tab-status.is-disconnected {
-  background: var(--app-danger-color, #f56c6c);
+  background: var(--app-danger-color, var(--el-color-danger, #f56c6c));
 }
 
 .session-tab-status.is-connected {
@@ -1021,7 +1045,6 @@ export default {
 .broadcast-toggle {
   flex-shrink: 0;
   color: var(--app-text-secondary);
-  padding: 4px 8px;
 }
 
 .broadcast-toggle:hover,
@@ -1036,12 +1059,7 @@ export default {
 
 .transfer-btn {
   flex-shrink: 0;
-  margin-left: 0;
   color: var(--app-text-secondary);
-  padding: 4px 10px;
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
 }
 
 .transfer-btn:hover {

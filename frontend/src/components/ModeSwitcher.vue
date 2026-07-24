@@ -1,96 +1,134 @@
 <template>
-  <div class="mode-switcher" role="tablist" aria-label="工作模式">
-    <template v-for="item in items" :key="item.id">
-      <el-dropdown
-        v-if="item.showProjectPicker"
-        trigger="hover"
-        placement="bottom"
-        :show-timeout="100"
-        :hide-timeout="180"
-        popper-class="mode-task-project-popper"
-        @command="onPickProject"
-      >
+  <div
+    class="mode-switcher-host"
+    :class="{
+      'is-compact': compact,
+      'is-expanded': showSwitcher,
+      'is-float-end': compact && floatAlign === 'end',
+    }"
+    @mouseenter="onHostEnter"
+    @mouseleave="onHostLeave"
+  >
+    <button
+      v-if="compact"
+      type="button"
+      class="mode-trigger"
+      :title="triggerTitle"
+      :aria-expanded="showSwitcher"
+      aria-label="展开模块切换"
+    >
+      <el-icon class="mode-trigger-icon" :size="12"><Grid /></el-icon>
+    </button>
+
+    <div
+      v-show="showSwitcher"
+      class="mode-switcher"
+      :class="{ 'is-floating': compact }"
+      role="tablist"
+      aria-label="工作模式"
+    >
+      <template v-for="item in displayItems" :key="item.id">
+        <el-dropdown
+          v-if="item.showProjectPicker"
+          trigger="hover"
+          placement="bottom-end"
+          :show-timeout="compact ? 220 : 160"
+          :hide-timeout="compact ? 180 : 160"
+          :popper-options="taskPopperOptions"
+          popper-class="mode-task-project-popper"
+          @visible-change="onTaskMenuVisible"
+          @command="onPickProject"
+        >
+          <button
+            type="button"
+            role="tab"
+            class="mode-btn mode-task mode-btn--picker"
+            :class="{ active: modelValue === 'task' }"
+            :aria-selected="modelValue === 'task'"
+            :title="item.title"
+            @click="onTaskClick"
+          >
+            <el-icon class="mode-icon" :size="13">
+              <component :is="item.icon" />
+            </el-icon>
+            <span class="mode-label">{{ item.label }}</span>
+            <span
+              v-if="item.dot"
+              class="mode-dot"
+              aria-hidden="true"
+            />
+          </button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item
+                v-for="project in projects"
+                :key="project.name"
+                :command="project.name"
+                :class="{ 'is-current': project.name === selectedProjectName }"
+              >
+                <span class="project-item">
+                  <span class="project-name">{{ project.name || '(未命名项目)' }}</span>
+                  <span v-if="project.description" class="project-desc">{{ project.description }}</span>
+                </span>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+
         <button
+          v-else
           type="button"
           role="tab"
-          class="mode-btn mode-task mode-btn--picker"
-          :class="{ active: modelValue === 'task' }"
-          :aria-selected="modelValue === 'task'"
+          class="mode-btn"
+          :class="[
+            `mode-${item.id}`,
+            { active: modelValue === item.id, disabled: item.disabled },
+          ]"
+          :aria-selected="modelValue === item.id"
+          :disabled="item.disabled"
           :title="item.title"
-          @click="onTaskClick"
+          @click="onSelect(item)"
         >
           <el-icon class="mode-icon" :size="13">
             <component :is="item.icon" />
           </el-icon>
           <span class="mode-label">{{ item.label }}</span>
           <span
-            v-if="item.dot"
+            v-if="item.badge"
+            class="mode-badge"
+            aria-hidden="true"
+          >{{ item.badge }}</span>
+          <span
+            v-else-if="item.dot"
             class="mode-dot"
             aria-hidden="true"
           />
         </button>
-        <template #dropdown>
-          <el-dropdown-menu>
-            <el-dropdown-item
-              v-for="project in projects"
-              :key="project.name"
-              :command="project.name"
-              :class="{ 'is-current': project.name === selectedProjectName }"
-            >
-              <span class="project-item">
-                <span class="project-name">{{ project.name || '(未命名项目)' }}</span>
-                <span v-if="project.description" class="project-desc">{{ project.description }}</span>
-              </span>
-            </el-dropdown-item>
-          </el-dropdown-menu>
-        </template>
-      </el-dropdown>
-
-      <button
-        v-else
-        type="button"
-        role="tab"
-        class="mode-btn"
-        :class="[
-          `mode-${item.id}`,
-          { active: modelValue === item.id, disabled: item.disabled },
-        ]"
-        :aria-selected="modelValue === item.id"
-        :disabled="item.disabled"
-        :title="item.title"
-        @click="onSelect(item)"
-      >
-        <el-icon class="mode-icon" :size="13">
-          <component :is="item.icon" />
-        </el-icon>
-        <span class="mode-label">{{ item.label }}</span>
-        <span
-          v-if="item.badge"
-          class="mode-badge"
-          aria-hidden="true"
-        >{{ item.badge }}</span>
-        <span
-          v-else-if="item.dot"
-          class="mode-dot"
-          aria-hidden="true"
-        />
-      </button>
-    </template>
+      </template>
+    </div>
   </div>
 </template>
 
 <script>
-import { computed } from 'vue'
-import { HomeFilled, Folder, Monitor } from '@element-plus/icons-vue'
+import { computed, ref, onUnmounted, watch } from 'vue'
+import { HomeFilled, Folder, Monitor, Grid } from '@element-plus/icons-vue'
 
 export default {
   name: 'ModeSwitcher',
-  components: { HomeFilled, Folder, Monitor },
+  components: { HomeFilled, Folder, Monitor, Grid },
   props: {
     modelValue: {
       type: String,
       default: 'home',
       validator: (v) => ['home', 'task', 'shell'].includes(v),
+    },
+    /** 收起为触发器，悬停展开（任务 / Shell 顶栏） */
+    compact: { type: Boolean, default: false },
+    /** compact 展开时对齐：center | end（靠右，避免冲出窗口） */
+    floatAlign: {
+      type: String,
+      default: 'center',
+      validator: (v) => ['center', 'end'].includes(v),
     },
     hasProjects: { type: Boolean, default: false },
     hasMachines: { type: Boolean, default: false },
@@ -102,6 +140,22 @@ export default {
   },
   emits: ['update:modelValue', 'change', 'select-project'],
   setup(props, { emit }) {
+    const hoverOpen = ref(false)
+    const taskMenuOpen = ref(false)
+    const pointerInside = ref(false)
+    let leaveTimer = null
+
+    const showSwitcher = computed(() => !props.compact || hoverOpen.value)
+
+    const taskPopperOptions = {
+      modifiers: [
+        {
+          name: 'offset',
+          options: { offset: [0, 6] },
+        },
+      ],
+    }
+
     const items = computed(() => {
       const list = [
         {
@@ -143,10 +197,85 @@ export default {
       return list
     })
 
+    const activeItem = computed(() => {
+      const found = items.value.find((i) => i.id === props.modelValue)
+      return found || items.value[0] || { id: 'home', icon: HomeFilled, label: '首页' }
+    })
+
+    /** 悬浮展开时：当前模块居中（如 Shell 在中间） */
+    const displayItems = computed(() => {
+      const list = items.value
+      if (!props.compact || list.length < 3) return list
+      const current = list.find((i) => i.id === props.modelValue)
+      if (!current) return list
+      const others = list.filter((i) => i.id !== props.modelValue)
+      const mid = Math.floor(others.length / 2)
+      return [...others.slice(0, mid), current, ...others.slice(mid)]
+    })
+
+    const triggerTitle = computed(() => {
+      const label = activeItem.value.label || ''
+      return `当前：${label}（悬停切换模块）`
+    })
+
+    const clearLeaveTimer = () => {
+      if (leaveTimer) {
+        clearTimeout(leaveTimer)
+        leaveTimer = null
+      }
+    }
+
+    const scheduleClose = (delay = 160) => {
+      clearLeaveTimer()
+      leaveTimer = setTimeout(() => {
+        if (!taskMenuOpen.value && !pointerInside.value) {
+          hoverOpen.value = false
+        }
+      }, delay)
+    }
+
+    const onHostEnter = () => {
+      pointerInside.value = true
+      clearLeaveTimer()
+      if (props.compact) hoverOpen.value = true
+    }
+
+    const onHostLeave = () => {
+      pointerInside.value = false
+      if (props.compact) scheduleClose(180)
+    }
+
+    const onTaskMenuVisible = (visible) => {
+      taskMenuOpen.value = visible
+      if (visible) {
+        clearLeaveTimer()
+        hoverOpen.value = true
+        return
+      }
+      if (props.compact) scheduleClose(120)
+    }
+
+    watch(() => props.modelValue, () => {
+      hoverOpen.value = false
+      taskMenuOpen.value = false
+      pointerInside.value = false
+      clearLeaveTimer()
+    })
+
+    watch(() => props.compact, () => {
+      hoverOpen.value = false
+      clearLeaveTimer()
+    })
+
+    onUnmounted(() => {
+      clearLeaveTimer()
+    })
+
     const onSelect = (item) => {
       if (item.disabled || item.id === props.modelValue) return
       emit('update:modelValue', item.id)
       emit('change', item.id)
+      hoverOpen.value = false
     }
 
     const onTaskClick = () => {
@@ -154,20 +283,98 @@ export default {
       if (props.modelValue === 'task') return
       emit('update:modelValue', 'task')
       emit('change', 'task')
+      if (props.compact) hoverOpen.value = false
     }
 
     const onPickProject = (name) => {
       const project = props.projects.find((p) => p.name === name)
       if (!project) return
       emit('select-project', project)
+      hoverOpen.value = false
     }
 
-    return { items, onSelect, onTaskClick, onPickProject }
+    return {
+      items,
+      displayItems,
+      activeItem,
+      triggerTitle,
+      showSwitcher,
+      floatAlign: computed(() => props.floatAlign),
+      taskPopperOptions,
+      onHostEnter,
+      onHostLeave,
+      onTaskMenuVisible,
+      onSelect,
+      onTaskClick,
+      onPickProject,
+    }
   },
 }
 </script>
 
 <style scoped>
+.mode-switcher-host {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 22px;
+}
+
+.mode-switcher-host.is-compact.is-expanded {
+  min-width: 336px;
+  z-index: 50;
+}
+
+.mode-switcher-host.is-compact.is-float-end.is-expanded {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.mode-trigger {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--app-border) 65%, transparent);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--app-panel-bg) 82%, transparent);
+  color: var(--app-text-muted);
+  cursor: pointer;
+  opacity: 0.72;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--app-text) 5%, transparent);
+  transition:
+    background 0.16s ease,
+    border-color 0.16s ease,
+    color 0.16s ease,
+    opacity 0.12s ease,
+    box-shadow 0.16s ease;
+}
+
+.mode-trigger:hover,
+.mode-switcher-host.is-expanded .mode-trigger {
+  opacity: 1;
+  color: var(--app-accent-color);
+  background: var(--app-accent-bg);
+  border-color: color-mix(in srgb, var(--app-accent-color) 35%, var(--app-border));
+}
+
+.mode-switcher-host.is-compact.is-expanded .mode-trigger {
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.mode-trigger-icon {
+  flex-shrink: 0;
+}
+
 .mode-switcher {
   --mode-track: color-mix(in srgb, var(--app-text) 6%, var(--app-panel-bg));
   --mode-home: var(--app-text);
@@ -176,15 +383,40 @@ export default {
 
   display: inline-grid;
   grid-auto-flow: column;
-  grid-auto-columns: 1fr;
+  grid-auto-columns: minmax(108px, 1fr);
   align-items: stretch;
   gap: 2px;
-  min-width: min(280px, 42vw);
+  min-width: min(336px, 52vw);
   padding: 3px;
   border-radius: 9px;
   background: var(--mode-track);
   border: 1px solid color-mix(in srgb, var(--app-border) 80%, transparent);
   box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 35%, transparent);
+}
+
+.mode-switcher.is-floating {
+  position: relative;
+  z-index: 1;
+  width: max-content;
+  min-width: 336px;
+  background: var(--app-panel-bg);
+  border: 1px solid var(--app-border);
+  box-shadow:
+    0 8px 24px color-mix(in srgb, var(--app-text) 12%, transparent),
+    0 2px 6px color-mix(in srgb, var(--app-text) 8%, transparent),
+    inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent);
+  animation: mode-float-in 0.14s ease-out;
+}
+
+@keyframes mode-float-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .mode-switcher :deep(.el-dropdown) {
@@ -197,11 +429,11 @@ export default {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 4px;
   min-width: 0;
   width: 100%;
   height: 26px;
-  padding: 0 12px;
+  padding: 0 8px;
   border: none;
   border-radius: 6px;
   background: transparent;
@@ -224,6 +456,7 @@ export default {
 }
 
 .mode-label {
+  flex: 0 1 auto;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -259,6 +492,7 @@ export default {
 }
 
 .mode-badge {
+  flex-shrink: 0;
   min-width: 15px;
   height: 15px;
   padding: 0 4px;
@@ -288,14 +522,17 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  min-width: 140px;
-  max-width: 240px;
+  min-width: 0;
+  max-width: 148px;
 }
 
 .project-name {
-  font-size: 13px;
+  font-size: 12px;
   color: var(--app-text);
   line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .project-desc {
@@ -318,10 +555,43 @@ html.dark .mode-switcher {
   box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 4%, transparent);
 }
 
+html.dark .mode-switcher.is-floating {
+  background: var(--app-panel-bg);
+  box-shadow:
+    0 10px 28px rgba(0, 0, 0, 0.45),
+    0 2px 8px rgba(0, 0, 0, 0.3),
+    inset 0 1px 0 color-mix(in srgb, #fff 5%, transparent);
+}
+
 html.dark .mode-btn.active {
   background: color-mix(in srgb, var(--app-card-bg) 92%, #fff);
   box-shadow:
     0 1px 3px rgba(0, 0, 0, 0.35),
     0 0 0 1px color-mix(in srgb, var(--app-border) 80%, transparent);
+}
+
+html.dark .mode-trigger {
+  background: color-mix(in srgb, var(--app-panel-bg) 70%, transparent);
+  opacity: 0.8;
+}
+</style>
+
+<style>
+/* 下拉挂到 body，需非 scoped；收窄任务项目菜单 */
+.mode-task-project-popper.el-popper,
+.mode-task-project-popper {
+  min-width: 0 !important;
+  width: max-content;
+  max-width: 168px;
+}
+
+.mode-task-project-popper .el-dropdown-menu {
+  min-width: 0 !important;
+  padding: 4px;
+}
+
+.mode-task-project-popper .el-dropdown-menu__item {
+  padding: 6px 10px;
+  line-height: 1.3;
 }
 </style>
