@@ -60,11 +60,21 @@ func (a *App) InstallUpdateAndRestart() *UpdateInstallResult {
 		return &UpdateInstallResult{Success: false, Message: msg, LogPath: staged.InstallLogPath}
 	}
 
+	// 更新器已启动并在等待本进程退出。
+	// 1) 绕过「退出确认」弹框
+	// 2) 若 Wails Quit 未及时结束，强制 os.Exit，避免更新器一直等到超时
+	if a != nil {
+		a.quitMu.Lock()
+		a.allowQuit = true
+		a.quitMu.Unlock()
+	}
 	go func() {
-		time.Sleep(300 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
 		if a != nil && a.ctx != nil {
 			wailsRuntime.Quit(a.ctx)
 		}
+		time.Sleep(1500 * time.Millisecond)
+		os.Exit(0)
 	}()
 
 	msg := "正在安装并重启…"
