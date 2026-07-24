@@ -32,6 +32,7 @@ import { ElMessage } from 'element-plus'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import { SearchAddon } from 'xterm-addon-search'
+import { getTerminalSelectionText } from '../../utils/shellSelection'
 import 'xterm/css/xterm.css'
 import * as App from '../../../wailsjs/go/app/App'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
@@ -113,7 +114,7 @@ export default {
 
     const onContextMenu = (e) => {
       // 右键时先保存选区：点击菜单项可能触发 mousedown 清掉 xterm 选区
-      ctx.selection = term.value?.getSelection?.() || ''
+      ctx.selection = getTerminalSelectionText(term.value)
       ctx.x = e.clientX
       ctx.y = e.clientY
       ctx.visible = true
@@ -121,7 +122,7 @@ export default {
 
     const onCopy = async () => {
       hideContextMenu()
-      const text = term.value?.getSelection?.() || ''
+      const text = ctx.selection || getTerminalSelectionText(term.value)
       if (!text) {
         ElMessage.info('没有选中内容')
         return
@@ -156,7 +157,7 @@ export default {
       }
     }
 
-    const getSelection = () => term.value?.getSelection?.() || ''
+    const getSelection = () => getTerminalSelectionText(term.value)
 
     const onFind = () => {
       const selected = ctx.selection || getSelection()
@@ -330,6 +331,23 @@ export default {
       terminal.loadAddon(search)
       terminal.open(terminalRef.value)
 
+      // 拦截原生复制：Ctrl/Cmd+C、系统菜单复制也会走 xterm 默认选区（含 less 视觉换行）
+      const host = terminal.element || terminalRef.value
+      const onNativeCopy = (e) => {
+        const text = getTerminalSelectionText(terminal)
+        if (!text) return
+        e.preventDefault()
+        e.stopImmediatePropagation()
+        if (e.clipboardData) {
+          e.clipboardData.setData('text/plain', text)
+        } else {
+          navigator.clipboard.writeText(text).catch(() => {})
+        }
+      }
+      host?.addEventListener?.('copy', onNativeCopy, true)
+      terminal._flashdockCopyHandler = onNativeCopy
+      terminal._flashdockCopyHost = host
+
       bindInputHandler(terminal)
 
       searchResultsListener?.dispose?.()
@@ -371,6 +389,9 @@ export default {
       inputListener?.dispose?.()
       inputListener = null
       if (term.value) {
+        const host = term.value._flashdockCopyHost
+        const handler = term.value._flashdockCopyHandler
+        if (host && handler) host.removeEventListener('copy', handler, true)
         term.value.dispose()
         term.value = null
         fitAddon.value = null
