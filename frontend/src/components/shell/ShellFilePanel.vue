@@ -764,9 +764,8 @@ export default {
       if (!path) return
       try {
         await navigator.clipboard.writeText(path)
-        ElMessage.success('已复制路径')
       } catch {
-        ElMessage.error('复制失败')
+        // 静默失败：复制路径不弹轻提示
       }
     }
 
@@ -818,7 +817,6 @@ export default {
       if (!row?.path || !props.machineName) return
       try {
         await App.OpenShellRemoteFileExternal(props.machineName, row.path)
-        ElMessage.success('已用系统应用打开，保存后将自动上传回服务端')
       } catch (e) {
         ElMessage.error(String(e))
       }
@@ -976,10 +974,7 @@ export default {
       offExternalEdit = EventsOn('shell:external-edit', (payload) => {
         if (!payload || payload.machineName !== props.machineName) return
         if (payload.status === 'uploaded') {
-          ElMessage.success(payload.message || '已上传回服务端')
           reload()
-        } else if (payload.status === 'error') {
-          ElMessage.error(payload.message || '回传失败')
         }
       })
     })

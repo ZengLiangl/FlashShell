@@ -126,7 +126,6 @@
 
 <script>
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { ElMessage } from 'element-plus'
 import { Connection, SwitchButton, ArrowDown } from '@element-plus/icons-vue'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import * as App from '../../../wailsjs/go/app/App'
@@ -395,9 +394,8 @@ export default {
       if (!host) return
       try {
         await navigator.clipboard.writeText(host)
-        ElMessage.success('已复制 IP')
       } catch {
-        ElMessage.error('复制失败')
+        // 静默失败：复制 IP 不弹轻提示
       }
     }
 

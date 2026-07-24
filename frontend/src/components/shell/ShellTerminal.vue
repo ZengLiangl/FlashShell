@@ -28,7 +28,6 @@
 
 <script>
 import { ref, reactive, watch, onMounted, onUnmounted, nextTick } from 'vue'
-import { ElMessage } from 'element-plus'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import { SearchAddon } from 'xterm-addon-search'
@@ -123,15 +122,11 @@ export default {
     const onCopy = async () => {
       hideContextMenu()
       const text = ctx.selection || getTerminalSelectionText(term.value)
-      if (!text) {
-        ElMessage.info('没有选中内容')
-        return
-      }
+      if (!text) return
       try {
         await navigator.clipboard.writeText(text)
-        ElMessage.success('已复制')
-      } catch (err) {
-        ElMessage.error(`复制失败: ${err}`)
+      } catch {
+        // 静默失败：终端复制不弹轻提示
       }
     }
 
@@ -141,18 +136,14 @@ export default {
     }
 
     const pasteClipboard = async () => {
-      if (!props.connected) {
-        ElMessage.info('当前未连接，请先连接')
-        return false
-      }
+      if (!props.connected) return false
       try {
         const text = await navigator.clipboard.readText()
         if (!text) return false
         await App.SendShellInput(props.machineName, text)
         term.value?.focus?.()
         return true
-      } catch (err) {
-        ElMessage.error(`粘贴失败: ${err}`)
+      } catch {
         return false
       }
     }
