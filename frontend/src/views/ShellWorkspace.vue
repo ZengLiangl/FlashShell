@@ -111,10 +111,9 @@
               :search-visible="searchVisible"
               v-model:search-query="searchQuery"
               :match-summary="searchMatchSummary"
+              @update:expanded="(v) => { filePanelExpanded = !!v }"
               @layout-change="onFilePanelLayout"
               @cwd-change="(dir) => onPanelCwdChange(am, dir)"
-              @clear="clearTerminal"
-              @toggle-search="toggleSearch"
               @search-next="findNext"
               @search-prev="findPrevious"
               @close-search="closeSearch"
@@ -131,7 +130,12 @@
       :tunnels="tunnelStatuses"
       :tunnel-loading="tunnelLoading"
       :app-info="appInfo"
+      :show-chrome-actions="!!activeMachine && !isLocalSessionName(activeMachine)"
+      :files-expanded="filePanelExpanded"
       @open-tunnels="tunnelDialogVisible = true"
+      @toggle-files="toggleFilePanel"
+      @toggle-search="toggleSearch"
+      @clear="clearTerminal"
     />
 
     <ShellTunnelDialog
@@ -243,6 +247,7 @@ export default {
   setup(props, { emit }) {
     const tabsRef = ref(null)
     const filePanelRef = ref(null)
+    const filePanelExpanded = ref(false)
     const leftCollapsed = ref(false)
     const edgeHover = ref(false)
     const searchVisible = ref(false)
@@ -445,6 +450,10 @@ export default {
       tabsRef.value?.clearActive?.()
     }
 
+    const toggleFilePanel = () => {
+      filePanelRef.value?.toggle?.()
+    }
+
     const onClear = (machineName) => {
       App.ClearShellOutput(machineName).catch(() => {})
     }
@@ -640,11 +649,18 @@ export default {
     }
 
     watch(() => props.activeMachine, async (name) => {
-      if (!name) return
+      if (!name || isLocalSessionName(name)) {
+        filePanelExpanded.value = false
+        return
+      }
       const hint = cwdHints[name] || ptyCwds[name]
       if (!hint) return
       await nextTick()
       filePanelRef.value?.applyCwdHint?.(hint)
+    })
+
+    watch(filePanelRef, (panel) => {
+      if (!panel) filePanelExpanded.value = false
     })
 
     watch(() => props.workspaceSessions, async (sessions) => {
@@ -774,6 +790,7 @@ export default {
     return {
       tabsRef,
       filePanelRef,
+      filePanelExpanded,
       leftCollapsed,
       edgeHover,
       searchVisible,
@@ -796,6 +813,7 @@ export default {
       monitorConnecting,
       isLocalSessionName,
       clearTerminal,
+      toggleFilePanel,
       onClear,
       toggleSearch,
       openSearch,
@@ -859,7 +877,7 @@ export default {
   position: absolute;
   left: 0;
   top: 0;
-  bottom: 28px; /* 避开底部状态栏 */
+  bottom: 28px; /* 避开底部状态栏（与 ShellStatusBar 高度对齐） */
   width: 10px;
   z-index: 20;
   display: flex;

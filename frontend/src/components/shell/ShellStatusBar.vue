@@ -16,14 +16,38 @@
       </template>
       <span v-else-if="tunnelLoading" class="tunnel-loading">隧道…</span>
     </div>
-    <span class="app-info">{{ appInfo }}</span>
+    <div class="status-right">
+      <span class="app-info">{{ appInfo }}</span>
+      <div v-if="showChromeActions" class="chrome-actions">
+        <el-tooltip content="文件" placement="top">
+          <button
+            type="button"
+            class="chrome-icon-btn"
+            :class="{ 'is-active': filesExpanded }"
+            @click="$emit('toggle-files')"
+          >
+            <el-icon :size="14"><FolderOpened /></el-icon>
+          </button>
+        </el-tooltip>
+        <el-tooltip content="搜索" placement="top">
+          <button type="button" class="chrome-icon-btn" @click="$emit('toggle-search')">
+            <el-icon :size="14"><Search /></el-icon>
+          </button>
+        </el-tooltip>
+        <el-tooltip content="清空" placement="top">
+          <button type="button" class="chrome-icon-btn" @click="$emit('clear')">
+            <el-icon :size="14"><Delete /></el-icon>
+          </button>
+        </el-tooltip>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
 export default {
   name: 'ShellStatusBar',
-  emits: ['open-tunnels'],
+  emits: ['open-tunnels', 'toggle-files', 'toggle-search', 'clear'],
   props: {
     connectedCount: { type: Number, default: 0 },
     activeMachine: { type: String, default: '' },
@@ -31,6 +55,8 @@ export default {
     tunnels: { type: Array, default: () => [] },
     tunnelLoading: { type: Boolean, default: false },
     appInfo: { type: String, default: 'FlashDock · Shell' },
+    showChromeActions: { type: Boolean, default: false },
+    filesExpanded: { type: Boolean, default: false },
   },
   setup() {
     const typeLabel = (type) => {
@@ -62,16 +88,19 @@ export default {
 <style scoped>
 .shell-status-bar {
   flex-shrink: 0;
-  height: 40px;
+  height: 28px;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px;
-  border-top: 1px solid var(--app-border);
-  background: var(--app-panel-bg);
+  padding: 0 8px 0 12px;
+  border-top: 1px solid var(--shell-chrome-border, var(--app-border));
+  background: var(--shell-chrome-bg, var(--app-panel-bg));
   color: var(--app-text);
   width: 100%;
   gap: 12px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 0 var(--shell-chrome-highlight, transparent);
 }
 
 .status-info {
@@ -81,16 +110,71 @@ export default {
   min-width: 0;
   flex: 1;
   overflow-x: auto;
+  height: 100%;
+}
+
+.status-info :deep(.el-tag) {
+  --el-tag-bg-color: color-mix(in srgb, var(--app-card-bg) 65%, transparent);
+  --el-tag-border-color: var(--shell-chrome-divider, var(--app-border));
+  --el-tag-text-color: var(--app-text-muted);
+  height: 18px;
+  padding: 0 7px;
+  font-weight: 500;
+  line-height: 16px;
+}
+
+.status-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+  height: 100%;
+}
+
+.chrome-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+  height: 22px;
+}
+
+.chrome-icon-btn {
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--app-text-secondary);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.chrome-icon-btn:hover {
+  color: var(--app-accent-color, #409eff);
+  background: color-mix(in srgb, var(--app-accent-color, #409eff) 12%, transparent);
+}
+
+.chrome-icon-btn.is-active {
+  color: var(--app-accent-color, #409eff);
+  background: color-mix(in srgb, var(--app-accent-color, #409eff) 16%, transparent);
 }
 
 .tunnel-chip {
   flex-shrink: 0;
   font-size: 11px;
-  padding: 2px 8px;
+  padding: 1px 7px;
   border-radius: 999px;
-  border: 1px solid var(--app-border);
+  border: 1px solid var(--shell-chrome-divider, var(--app-border));
   color: var(--app-text-muted);
-  background: var(--app-card-bg);
+  background: color-mix(in srgb, var(--app-card-bg) 70%, transparent);
 }
 
 .tunnel-chip.active {

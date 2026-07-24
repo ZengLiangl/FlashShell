@@ -43,6 +43,12 @@
   --app-space-toolbar-gap: 8px;
   --app-content-narrow: 520px;
   --app-content-dialog: 560px;
+
+  /* Shell 底部 chrome：介于终端与纯白面板之间，减轻硬切 */
+  --shell-chrome-bg: #f3f5f9;
+  --shell-chrome-border: color-mix(in srgb, var(--app-border) 72%, transparent);
+  --shell-chrome-divider: color-mix(in srgb, var(--app-border) 55%, transparent);
+  --shell-chrome-highlight: color-mix(in srgb, #ffffff 55%, transparent);
 }
 
 html.dark {
@@ -78,6 +84,11 @@ html.dark {
   --terminal-search-active: #1f6feb;
   --step-bg: #2b2b2c;
   --step-border: #414243;
+
+  --shell-chrome-bg: #1a1b1c;
+  --shell-chrome-border: color-mix(in srgb, var(--app-border) 48%, transparent);
+  --shell-chrome-divider: color-mix(in srgb, var(--app-border) 36%, transparent);
+  --shell-chrome-highlight: color-mix(in srgb, #ffffff 4%, transparent);
 }
 
 html.dark .terminal-preset-monokai {

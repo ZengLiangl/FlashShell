@@ -1,5 +1,12 @@
 <template>
-  <div class="shell-file-panel" :class="{ collapsed: !expanded }">
+  <div
+    class="shell-file-panel"
+    :class="{
+      collapsed: !expanded,
+      'has-search': searchVisible,
+      'is-bare': !expanded && !searchVisible,
+    }"
+  >
     <div
       class="height-handle"
       :class="{ 'is-collapsed-edge': !expanded }"
@@ -31,83 +38,57 @@
         </button>
       </div>
     </div>
-    <div class="file-toolbar">
+    <div v-if="expanded" class="file-toolbar">
       <div class="toolbar-left">
-        <el-button size="small" :type="expanded ? 'primary' : 'default'" title="文件" @click="toggle">
-          <el-icon><FolderOpened /></el-icon>
+        <el-input
+          v-model="pathDraft"
+          class="cwd-input"
+          size="small"
+          :title="cwd"
+          placeholder="/"
+          @keydown.enter.exact.prevent="submitPathDraft"
+          @blur="syncPathDraftFromCwd"
+        />
+        <el-checkbox v-model="showHidden" size="small" class="hidden-check" @change="reload">
+          显示隐藏文件
+        </el-checkbox>
+        <el-button
+          size="small"
+          text
+          class="tool-icon-btn"
+          title="返回上级目录"
+          :disabled="!canGoUp"
+          @click="goParent"
+        >
+          <el-icon><ArrowUp /></el-icon>
         </el-button>
-        <template v-if="expanded">
-          <el-input
-            v-model="pathDraft"
-            class="cwd-input"
-            size="small"
-            :title="cwd"
-            placeholder="/"
-            @keydown.enter.exact.prevent="submitPathDraft"
-            @blur="syncPathDraftFromCwd"
-          />
-          <el-button
-            size="small"
-            text
-            class="parent-btn"
-            title="返回上级目录"
-            :disabled="!canGoUp"
-            @click="goParent"
-          >
-            <el-icon :size="16"><ArrowUp /></el-icon>
-          </el-button>
-          <el-checkbox v-model="showHidden" size="small" @change="reload">显示隐藏文件</el-checkbox>
-          <el-tooltip content="刷新目录" placement="top">
-            <el-button size="small" text :loading="loading" @click="reload">
-              <el-icon><RefreshRight /></el-icon>
-            </el-button>
-          </el-tooltip>
-          <el-dropdown
-            size="small"
-            trigger="hover"
-            :show-timeout="120"
-            :hide-timeout="160"
-            @command="onUploadCommand"
-          >
-            <el-button size="small" text title="上传">
-              <el-icon><Upload /></el-icon>
-            </el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="files">上传文件</el-dropdown-item>
-                <el-dropdown-item command="folder">上传文件夹</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-          <el-dropdown
-            size="small"
-            trigger="hover"
-            :show-timeout="120"
-            :hide-timeout="160"
-            @command="onSyncCommand"
-          >
-            <el-button size="small" text title="文件夹同步">
-              <el-icon><RefreshRight /></el-icon>
-            </el-button>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item command="upload">上传到远端</el-dropdown-item>
-                <el-dropdown-item command="download">下载到本地</el-dropdown-item>
-                <el-dropdown-item command="both">双向同步</el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-        </template>
-      </div>
-      <div class="toolbar-right icon-actions">
-        <el-tooltip content="搜索" placement="top">
-          <el-button size="small" @click="emit('toggle-search')">
-            <el-icon><Search /></el-icon>
+        <el-tooltip content="刷新目录" placement="top">
+          <el-button size="small" text class="tool-icon-btn" :loading="loading" @click="reload">
+            <el-icon><RefreshRight /></el-icon>
           </el-button>
         </el-tooltip>
-        <el-tooltip content="清空" placement="top">
-          <el-button size="small" @click="emit('clear')">
-            <el-icon><Delete /></el-icon>
+        <el-dropdown
+          size="small"
+          trigger="hover"
+          :show-timeout="120"
+          :hide-timeout="160"
+          @command="onUploadCommand"
+        >
+          <el-button size="small" text class="tool-icon-btn" title="上传">
+            <el-icon><Upload /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item command="files">上传文件</el-dropdown-item>
+              <el-dropdown-item command="folder">上传文件夹</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
+      </div>
+      <div class="toolbar-right">
+        <el-tooltip content="收起 SFTP" placement="top">
+          <el-button size="small" text class="tool-icon-btn" @click="toggle">
+            <el-icon><ArrowDown /></el-icon>
           </el-button>
         </el-tooltip>
       </div>
@@ -240,12 +221,11 @@ export default {
   emits: [
     'layout-change',
     'cwd-change',
-    'clear',
-    'toggle-search',
     'search-next',
     'search-prev',
     'close-search',
     'update:searchQuery',
+    'update:expanded',
     'transfer-started',
   ],
   setup(props, { emit, expose }) {
@@ -294,6 +274,10 @@ export default {
         searchInputRef.value?.focus?.()
       }
       notifyLayout()
+    })
+
+    watch(expanded, (v) => {
+      emit('update:expanded', v)
     })
 
     const treeData = computed(() => treeRoot.value)
@@ -840,22 +824,6 @@ export default {
       }
     }
 
-    const onSyncCommand = async (direction) => {
-      if (!props.machineName || !cwd.value) {
-        ElMessage.warning('请先进入目标目录')
-        return
-      }
-      try {
-        const localDir = await App.PickShellUploadFolder()
-        if (!localDir) return
-        await App.StartShellFolderSync(props.machineName, localDir, cwd.value, direction)
-        ElMessage.success('已开始文件夹同步')
-        emit('transfer-started', { direction: 'sync', name: cwd.value })
-      } catch (e) {
-        ElMessage.error('同步失败: ' + e)
-      }
-    }
-
     const startUploads = async (paths) => {
       if (!props.machineName || !expanded.value || !cwd.value) {
         ElMessage.warning('请先打开文件面板并进入目标目录')
@@ -1025,6 +993,7 @@ export default {
     })
 
     expose({
+      toggle,
       applyCwdHint,
       focusSearch: async () => {
         await nextTick()
@@ -1080,7 +1049,6 @@ export default {
       editEntry,
       saveEditor,
       openExternalEntry,
-      onSyncCommand,
       editorVisible,
       editorContent,
       editorTitle,
@@ -1099,15 +1067,22 @@ export default {
 .shell-file-panel {
   position: relative;
   flex-shrink: 0;
-  border-top: 1px solid var(--app-border);
-  background: var(--app-panel-bg);
+  border-top: 1px solid var(--shell-chrome-border, var(--app-border));
+  background: var(--shell-chrome-bg, var(--app-panel-bg));
   display: flex;
   flex-direction: column;
   max-height: none;
+  box-shadow: inset 0 1px 0 var(--shell-chrome-highlight, transparent);
 }
 
 .shell-file-panel.collapsed {
   overflow: visible;
+}
+
+.shell-file-panel.is-bare {
+  border-top: none;
+  background: transparent;
+  box-shadow: none;
 }
 
 .height-handle {
@@ -1136,15 +1111,15 @@ export default {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 6px 10px;
-  min-height: 36px;
+  padding: 4px 8px 4px 10px;
+  min-height: 32px;
   flex-shrink: 0;
 }
 
 .toolbar-left {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   min-width: 0;
   flex: 1;
 }
@@ -1152,13 +1127,42 @@ export default {
 .toolbar-right {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 2px;
   flex-shrink: 0;
+  margin-left: 4px;
 }
 
-.parent-btn {
-  padding: 4px 6px;
-  min-width: auto;
+.tool-icon-btn {
+  width: 26px;
+  height: 26px;
+  min-height: 26px;
+  min-width: 26px;
+  padding: 0;
+  margin: 0;
+  border-radius: var(--app-radius-sm, 6px);
+  color: var(--app-text-secondary);
+}
+
+.tool-icon-btn :deep(.el-icon) {
+  font-size: 14px;
+}
+
+.tool-icon-btn:hover {
+  color: var(--app-accent-color, #409eff);
+  background: color-mix(in srgb, var(--app-accent-color, #409eff) 12%, transparent);
+}
+
+.hidden-check {
+  margin: 0 4px 0 6px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+}
+
+.hidden-check :deep(.el-checkbox__label) {
+  font-size: 12px;
+  padding-left: 6px;
+  line-height: 26px;
 }
 
 .search-bar {
@@ -1166,7 +1170,7 @@ export default {
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  border-bottom: 1px solid var(--app-border);
+  border-bottom: 1px solid var(--shell-chrome-divider, var(--app-border));
   flex-shrink: 0;
 }
 
@@ -1238,12 +1242,16 @@ export default {
 .cwd-input :deep(.el-input__wrapper) {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   font-size: 12px;
+  min-height: 26px;
+  height: 26px;
+  padding: 0 8px;
 }
 
 .file-body {
   display: flex;
   flex-shrink: 0;
-  border-top: 1px solid var(--app-border);
+  border-top: 1px solid var(--shell-chrome-divider, var(--app-border));
+  background: var(--app-panel-bg);
   overflow: hidden;
   --wails-drop-target: drop;
 }
