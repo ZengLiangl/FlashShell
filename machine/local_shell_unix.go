@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 
 	"FlashDock/define"
@@ -35,16 +36,15 @@ func NewLocalShellSession(id string) *LocalShellSession {
 func (s *LocalShellSession) Start(handler ShellOutputHandler) error {
 	shell, args := defaultUnixShell()
 	cmd := exec.Command(shell, args...)
-	cmd.Env = os.Environ()
+	cmd.Env = buildLocalShellEnv(os.Environ())
 	if dir := localShellStartDir(); dir != "" {
 		cmd.Dir = dir
 	}
 
-	ptmx, err := pty.Start(cmd)
+	ptmx, err := pty.StartWithSize(cmd, &pty.Winsize{Rows: 40, Cols: 120})
 	if err != nil {
 		return fmt.Errorf("启动本地终端失败: %w", err)
 	}
-	_ = pty.Setsize(ptmx, &pty.Winsize{Rows: 40, Cols: 120})
 
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})
@@ -76,6 +76,63 @@ func defaultUnixShell() (string, []string) {
 		return "/bin/bash", []string{"-l"}
 	}
 	return "/bin/sh", nil
+}
+
+func buildLocalShellEnv(base []string) []string {
+	env := make(map[string]string, len(base)+6)
+	order := make([]string, 0, len(base)+6)
+	for _, pair := range base {
+		idx := strings.IndexByte(pair, '=')
+		if idx <= 0 {
+			continue
+		}
+		key := pair[:idx]
+		val := pair[idx+1:]
+		if _, exists := env[key]; !exists {
+			order = append(order, key)
+		}
+		env[key] = val
+	}
+
+	delete(env, "COLUMNS")
+	delete(env, "LINES")
+
+	env["TERM"] = "xterm-256color"
+	env["COLORTERM"] = "truecolor"
+
+	for _, key := range []string{"LANG", "LC_ALL", "LC_CTYPE"} {
+		if !isUTF8Locale(env[key]) {
+			env[key] = "en_US.UTF-8"
+		}
+	}
+
+	out := make([]string, 0, len(env))
+	for _, key := range order {
+		val, ok := env[key]
+		if !ok {
+			continue
+		}
+		out = append(out, key+"="+val)
+		delete(env, key)
+	}
+	for _, key := range []string{"TERM", "COLORTERM", "LANG", "LC_ALL", "LC_CTYPE"} {
+		if val, ok := env[key]; ok {
+			out = append(out, key+"="+val)
+			delete(env, key)
+		}
+	}
+	for key, val := range env {
+		out = append(out, key+"="+val)
+	}
+	return out
+}
+
+func isUTF8Locale(v string) bool {
+	if v == "" {
+		return false
+	}
+	lower := strings.ToLower(v)
+	return strings.Contains(lower, "utf-8") || strings.Contains(lower, "utf8")
 }
 
 func (s *LocalShellSession) readLoop(handler ShellOutputHandler, ctx context.Context, done chan struct{}) {
