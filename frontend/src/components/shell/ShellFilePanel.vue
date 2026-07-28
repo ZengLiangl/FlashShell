@@ -239,6 +239,8 @@ export default {
     const MAX_BODY_RATIO = 0.65
 
     const expanded = ref(false)
+    /** 按机器记住 SFTP 展开状态，切换会话互不影响 */
+    const expandedByMachine = reactive({})
     const showHidden = ref(false)
     const cwd = ref('')
     const pathDraft = ref('')
@@ -278,6 +280,8 @@ export default {
 
     watch(expanded, (v) => {
       emit('update:expanded', v)
+      const name = props.machineName
+      if (name) expandedByMachine[name] = !!v
     })
 
     const treeData = computed(() => treeRoot.value)
@@ -947,7 +951,17 @@ export default {
       treeRoot.value = []
       expandedKeys.value = ['/']
       closeMenu()
-      if (!name || !expanded.value) return
+      stopPwdTimer()
+      const shouldExpand = !!(name && expandedByMachine[name])
+      if (expanded.value !== shouldExpand) {
+        expanded.value = shouldExpand
+      } else if (name) {
+        // 展开态未变时也同步状态栏指示
+        emit('update:expanded', shouldExpand)
+      }
+      await nextTick()
+      notifyLayout()
+      if (!name || !shouldExpand) return
       try {
         let start = ''
         try {
@@ -962,6 +976,7 @@ export default {
             : await ensureHome()
         }
         await setCwd(start)
+        startPwdTimer()
       } catch (e) {
         setPanelError(e)
       }
@@ -1343,7 +1358,7 @@ export default {
 
 .ctx-menu {
   position: fixed;
-  z-index: 4000;
+  z-index: 5000;
   margin: 0;
   padding: 4px 0;
   list-style: none;

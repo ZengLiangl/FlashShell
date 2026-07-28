@@ -266,7 +266,8 @@ func (a *ShellAuxManager) UploadFile(ctx context.Context, localPath, remotePath 
 	return nil
 }
 
-// UploadDirectoryZip 将本地目录打成 zip 上传后在远端解压，保留本地原目录，删除远端压缩包
+// UploadDirectoryZip 将本地目录打成 zip 上传后在远端解压，保留本地原目录，删除远端压缩包。
+// 若远端无 unzip/python，则回退为 SFTP 递归上传。
 func (a *ShellAuxManager) UploadDirectoryZip(ctx context.Context, localDir, remoteParent string, onProgress TransferProgressFunc) error {
 	if err := ctxErr(ctx); err != nil {
 		return err
@@ -283,6 +284,7 @@ func (a *ShellAuxManager) UploadDirectoryZip(ctx context.Context, localDir, remo
 	if remoteParent == "" {
 		remoteParent = "."
 	}
+	targetDir := path.Join(remoteParent, folderName)
 
 	tempZip, err := os.CreateTemp("", "shell_upload_*.zip")
 	if err != nil {
@@ -304,17 +306,189 @@ func (a *ShellAuxManager) UploadDirectoryZip(ctx context.Context, localDir, remo
 		return err
 	}
 
-	targetDir := path.Join(remoteParent, folderName)
-	cmd := fmt.Sprintf("mkdir -p %s && unzip -o %s -d %s && rm -f %s",
-		shellSingleQuote(targetDir),
-		shellSingleQuote(remoteZip),
-		shellSingleQuote(targetDir),
-		shellSingleQuote(remoteZip),
-	)
-	out, err := a.Exec(cmd)
-	if err != nil {
+	if err := a.extractRemoteZip(remoteZip, targetDir); err != nil {
 		_, _ = a.Exec("rm -f " + shellSingleQuote(remoteZip))
-		return fmt.Errorf("远端解压失败: %w (%s)", err, strings.TrimSpace(out))
+		if fallbackErr := a.uploadDirectoryRecursive(ctx, localDir, targetDir, onProgress); fallbackErr != nil {
+			return fmt.Errorf("远端解压失败且递归上传失败: %v / %v", err, fallbackErr)
+		}
+		return nil
+	}
+	return nil
+}
+
+// extractRemoteZip 尝试多种方式在远端解压 zip（unzip / busybox / python3 / python）
+func (a *ShellAuxManager) extractRemoteZip(remoteZip, targetDir string) error {
+	tq := shellSingleQuote(targetDir)
+	zq := shellSingleQuote(remoteZip)
+	candidates := []string{
+		fmt.Sprintf("mkdir -p %s && unzip -o %s -d %s && rm -f %s", tq, zq, tq, zq),
+		fmt.Sprintf("mkdir -p %s && busybox unzip -o %s -d %s && rm -f %s", tq, zq, tq, zq),
+		fmt.Sprintf(
+			"mkdir -p %s && python3 -c %s && rm -f %s",
+			tq,
+			shellSingleQuote(fmt.Sprintf("import zipfile; zipfile.ZipFile(%q).extractall(%q)", remoteZip, targetDir)),
+			zq,
+		),
+		fmt.Sprintf(
+			"mkdir -p %s && python -c %s && rm -f %s",
+			tq,
+			shellSingleQuote(fmt.Sprintf("import zipfile; zipfile.ZipFile(%q).extractall(%q)", remoteZip, targetDir)),
+			zq,
+		),
+	}
+	var lastOut string
+	var lastErr error
+	for _, cmd := range candidates {
+		out, err := a.Exec(cmd)
+		if err == nil {
+			return nil
+		}
+		lastOut = strings.TrimSpace(out)
+		lastErr = err
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("远端无可用解压工具")
+	}
+	if lastOut != "" {
+		return fmt.Errorf("%w (%s)", lastErr, lastOut)
+	}
+	return lastErr
+}
+
+// uploadDirectoryRecursive 通过 SFTP 递归上传本地目录到远端目标路径
+func (a *ShellAuxManager) uploadDirectoryRecursive(ctx context.Context, localDir, remoteDir string, onProgress TransferProgressFunc) error {
+	if err := ctxErr(ctx); err != nil {
+		return err
+	}
+	sftpClient, err := a.sftpClient()
+	if err != nil {
+		return err
+	}
+	total, err := estimateLocalDirSize(localDir)
+	if err != nil {
+		total = 0
+	}
+	var transferred int64
+	var lastReport time.Time
+	var windowStart time.Time
+	var windowBytes int64
+	var speedBPS float64
+	progress := func(n int64) {
+		transferred += n
+		windowBytes += n
+		now := time.Now()
+		if windowStart.IsZero() {
+			windowStart = now
+		}
+		elapsed := now.Sub(windowStart).Seconds()
+		if elapsed >= 0.5 {
+			speedBPS = float64(windowBytes) / elapsed
+			windowStart = now
+			windowBytes = 0
+		}
+		if onProgress == nil {
+			return
+		}
+		done := total > 0 && transferred >= total
+		if now.Sub(lastReport) >= 400*time.Millisecond || done {
+			lastReport = now
+			onProgress(transferred, total, speedBPS)
+		}
+	}
+	if err := sftpClient.MkdirAll(remoteDir); err != nil {
+		return fmt.Errorf("创建远端目录失败: %w", err)
+	}
+	return a.copyLocalDir(ctx, sftpClient, localDir, remoteDir, progress)
+}
+
+func estimateLocalDirSize(dir string) (int64, error) {
+	var total int64
+	err := filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		if info.Mode().IsRegular() {
+			total += info.Size()
+		}
+		return nil
+	})
+	return total, err
+}
+
+func (a *ShellAuxManager) copyLocalDir(ctx context.Context, c *sftp.Client, localDir, remoteDir string, onChunk func(int64)) error {
+	if err := ctxErr(ctx); err != nil {
+		return err
+	}
+	entries, err := os.ReadDir(localDir)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		if err := ctxErr(ctx); err != nil {
+			return err
+		}
+		lpath := filepath.Join(localDir, e.Name())
+		rpath := path.Join(remoteDir, e.Name())
+		info, err := e.Info()
+		if err != nil {
+			return err
+		}
+		if info.IsDir() {
+			if err := c.MkdirAll(rpath); err != nil {
+				return fmt.Errorf("创建远端目录失败: %w", err)
+			}
+			if err := a.copyLocalDir(ctx, c, lpath, rpath, onChunk); err != nil {
+				return err
+			}
+			continue
+		}
+		if !info.Mode().IsRegular() {
+			continue
+		}
+		if err := a.uploadFileWithChunk(ctx, c, lpath, rpath, onChunk); err != nil {
+			return fmt.Errorf("上传 %s 失败: %w", lpath, err)
+		}
+	}
+	return nil
+}
+
+func (a *ShellAuxManager) uploadFileWithChunk(ctx context.Context, c *sftp.Client, localPath, remotePath string, onChunk func(int64)) error {
+	src, err := os.Open(localPath)
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+
+	remoteDir := path.Dir(remotePath)
+	if remoteDir != "" && remoteDir != "." && remoteDir != "/" {
+		_ = c.MkdirAll(remoteDir)
+	}
+	dst, err := c.Create(remotePath)
+	if err != nil {
+		return err
+	}
+	defer dst.Close()
+
+	buf := make([]byte, utils.TransferBufferSize)
+	for {
+		if err := ctxErr(ctx); err != nil {
+			return err
+		}
+		n, readErr := src.Read(buf)
+		if n > 0 {
+			if _, werr := dst.Write(buf[:n]); werr != nil {
+				return werr
+			}
+			if onChunk != nil {
+				onChunk(int64(n))
+			}
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return readErr
+		}
 	}
 	return nil
 }

@@ -6,23 +6,25 @@
     @mousedown="onPaneFocus"
   >
     <div ref="terminalRef" class="terminal-host"></div>
-    <ul
-      v-if="ctx.visible"
-      class="ctx-menu"
-      :style="{ left: ctx.x + 'px', top: ctx.y + 'px' }"
-      @click.stop
-      @mouseleave="hideContextMenu"
-    >
-      <li @click="onCopy">复制</li>
-      <li @click="onPaste">粘贴</li>
-      <li @click="onFind">查找</li>
-      <li class="danger" @click="onClearCache">清空缓存</li>
-      <template v-if="inSplit">
-        <li class="sep" role="separator"></li>
-        <li @click="onRemoveFromSplit">移出分屏</li>
-        <li @click="onExitSplit">取消全部分屏</li>
-      </template>
-    </ul>
+    <Teleport to="body">
+      <ul
+        v-if="ctx.visible"
+        class="ctx-menu"
+        :style="{ left: ctx.x + 'px', top: ctx.y + 'px' }"
+        @click.stop
+        @mouseleave="hideContextMenu"
+      >
+        <li @click="onCopy">复制</li>
+        <li @click="onPaste">粘贴</li>
+        <li @click="onFind">查找</li>
+        <li class="danger" @click="onClearCache">清空缓存</li>
+        <template v-if="inSplit">
+          <li class="sep" role="separator"></li>
+          <li @click="onRemoveFromSplit">移出分屏</li>
+          <li @click="onExitSplit">取消全部分屏</li>
+        </template>
+      </ul>
+    </Teleport>
   </div>
 </template>
 
@@ -748,7 +750,7 @@ export default {
 
 .ctx-menu {
   position: fixed;
-  z-index: 3000;
+  z-index: 5000;
   margin: 0;
   padding: 4px 0;
   min-width: 120px;
