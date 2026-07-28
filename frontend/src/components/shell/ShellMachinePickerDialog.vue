@@ -30,7 +30,7 @@
         </div>
       </div>
 
-      <div class="picker-segment" role="tablist">
+      <div v-if="!isSearching" class="picker-segment" role="tablist">
         <button
           type="button"
           class="picker-segment-btn"
@@ -58,7 +58,60 @@
       </div>
 
       <div class="picker-panel">
-        <div v-show="activeTab === 'history'" class="picker-pane">
+        <!-- 搜索：同时覆盖最近连接 + 全部机器 -->
+        <div v-if="isSearching" class="picker-pane picker-pane--search">
+          <div class="picker-pane-head">
+            <span class="picker-pane-hint">{{ searchPaneHint }}</span>
+          </div>
+
+          <div v-if="!hasSearchHits" class="picker-empty compact">
+            <p class="picker-empty-desc">没有匹配「{{ keyword.trim() }}」的连接或机器</p>
+          </div>
+
+          <div v-else class="picker-search-scroll">
+            <section v-if="historyFiltered.length" class="picker-search-section">
+              <div class="picker-search-section-head">
+                <span class="picker-search-section-title">最近连接</span>
+                <span class="picker-search-section-count">{{ historyFiltered.length }}</span>
+              </div>
+              <ShellHistoryList
+                :records="historyRecords"
+                :sessions="sessions"
+                :workspace-sessions="workspaceSessions"
+                :keyword="keyword"
+                :show-head="false"
+                embedded
+                @connect="onConnect"
+                @remove="(row) => $emit('remove-history', row)"
+              />
+            </section>
+
+            <section v-if="filteredMachines.length" class="picker-search-section">
+              <div class="picker-search-section-head">
+                <span class="picker-search-section-title">全部机器</span>
+                <span class="picker-search-section-count">{{ filteredMachines.length }}</span>
+              </div>
+              <div class="picker-pane-body picker-pane-body--flush">
+                <MachineConnectList
+                  :machines="filteredMachines"
+                  :sessions="sessions"
+                  :workspace-sessions="workspaceSessions"
+                  :connecting-name="connectingName"
+                  :filter-keyword="keyword"
+                  show-edit
+                  show-context-menu
+                  empty-text="没有匹配的机器"
+                  @connect="onConnect"
+                  @edit-machine="(m) => $emit('edit-machine', m)"
+                  @copy-machine="(m) => $emit('copy-machine', m)"
+                  @delete-machine="(m) => $emit('delete-machine', m)"
+                />
+              </div>
+            </section>
+          </div>
+        </div>
+
+        <div v-show="!isSearching && activeTab === 'history'" class="picker-pane">
           <div v-if="historyRecords.length" class="picker-pane-head">
             <span class="picker-pane-hint">{{ historyPaneHint }}</span>
             <button type="button" class="picker-clear-btn" @click="$emit('clear-history')">清空历史</button>
@@ -88,7 +141,7 @@
           </div>
         </div>
 
-        <div v-show="activeTab === 'machines'" class="picker-pane">
+        <div v-show="!isSearching && activeTab === 'machines'" class="picker-pane">
           <div v-if="machines.length" class="picker-pane-head">
             <span class="picker-pane-hint">{{ machinesPaneHint }}</span>
           </div>
@@ -162,6 +215,8 @@ export default {
       set: (v) => emit('update:modelValue', v),
     })
 
+    const isSearching = computed(() => !!String(keyword.value || '').trim())
+
     const filteredMachines = computed(() => {
       const kw = keyword.value
       let list = props.machines || []
@@ -181,20 +236,25 @@ export default {
       })
     })
 
+    const hasSearchHits = computed(
+      () => historyFiltered.value.length > 0 || filteredMachines.value.length > 0,
+    )
+
     const historyPaneHint = computed(() => {
-      const kw = String(keyword.value || '').trim()
       const total = props.historyRecords.length
-      const matched = historyFiltered.value.length
-      if (kw) return `匹配 ${matched} / ${total} 条，Enter 连接首条`
       return `共 ${total} 条，点击或 Enter 快速连接`
     })
 
     const machinesPaneHint = computed(() => {
-      const kw = String(keyword.value || '').trim()
       const total = (props.machines || []).length
-      const matched = filteredMachines.value.length
-      if (kw) return `匹配 ${matched} / ${total} 台，Enter 连接首条`
       return `共 ${total} 台，按分组浏览或搜索`
+    })
+
+    const searchPaneHint = computed(() => {
+      const hist = historyFiltered.value.length
+      const mac = filteredMachines.value.length
+      if (!hist && !mac) return '无匹配结果'
+      return `最近连接 ${hist} · 全部机器 ${mac}，Enter 连接首条`
     })
 
     const resolveDefaultTab = () => {
@@ -223,6 +283,17 @@ export default {
     const onConnect = (name) => emit('connect', name)
 
     const connectFirst = () => {
+      // 搜索时优先最近连接，再全部机器；非搜索按当前 Tab
+      if (isSearching.value) {
+        const hist = historyFiltered.value[0]
+        if (hist) {
+          onConnect(hist.machineName)
+          return
+        }
+        const mac = filteredMachines.value[0]
+        if (mac) onConnect(mac.name)
+        return
+      }
       if (activeTab.value === 'history') {
         const first = historyFiltered.value[0]
         if (first) onConnect(first.machineName)
@@ -243,10 +314,13 @@ export default {
       visibleProxy,
       keyword,
       activeTab,
+      isSearching,
       filteredMachines,
       historyFiltered,
+      hasSearchHits,
       historyPaneHint,
       machinesPaneHint,
+      searchPaneHint,
       onConnect,
       onAddLocal,
       connectFirst,
@@ -378,6 +452,54 @@ export default {
   min-height: 0;
   overflow: auto;
   padding: 8px;
+}
+
+.picker-pane-body--flush {
+  padding: 4px 8px 8px;
+}
+
+.picker-pane--search {
+  min-height: 0;
+}
+
+.picker-search-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-bottom: 8px;
+}
+
+.picker-search-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px 4px;
+}
+
+.picker-search-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--app-text-secondary, #606266);
+}
+
+.picker-search-section-count {
+  min-width: 16px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--app-accent-color, #409eff);
+  background: color-mix(in srgb, var(--app-accent-color, #409eff) 14%, transparent);
+}
+
+.picker-pane--search :deep(.history-list-wrap) {
+  flex: none;
+  overflow: visible;
+  padding: 4px 8px 0;
 }
 
 .picker-pane :deep(.history-list-wrap) {
