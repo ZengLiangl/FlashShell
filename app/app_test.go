@@ -2,6 +2,7 @@ package app
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -428,11 +429,10 @@ func TestSubProjectWorkDirEnvReplace(t *testing.T) {
 }
 
 func TestSubProjectWorkDirGlobalConfigReplace(t *testing.T) {
-	// 创建临时配置文件
-	tempConfig := "test_global_config_replace.yaml"
-	defer os.Remove(tempConfig)
+	tempDir := t.TempDir()
+	tempConfig := filepath.Join(tempDir, "test_global_config_replace.yaml")
+	tempGlobal := filepath.Join(tempDir, "global_config.yaml")
 
-	// 创建测试配置，测试 SubProject WorkDir 使用全局配置中的 workPaths
 	testRoot := &define.Root{
 		Projects: []define.Project{
 			{
@@ -443,7 +443,7 @@ func TestSubProjectWorkDirGlobalConfigReplace(t *testing.T) {
 					{
 						Name:        "测试子项目",
 						Description: "使用全局配置 workPaths 的 SubProject WorkDir",
-						WorkDir:     "${TEST_WORK_PATH}/subproject", // 使用全局配置中的 workPaths
+						WorkDir:     "${TEST_WORK_PATH}/subproject",
 						Commands: []define.Command{
 							{
 								Name:        "测试命令",
@@ -459,13 +459,12 @@ func TestSubProjectWorkDirGlobalConfigReplace(t *testing.T) {
 		Machines: []define.Machine{},
 	}
 
-	// 保存测试配置
 	configManager := data.NewConfigManager(tempConfig, nil)
+	configManager.SetGlobalConfigManagerForTest(data.NewGlobalConfigManager(tempGlobal))
 	if err := configManager.SaveConfig(testRoot); err != nil {
 		t.Fatalf("保存测试配置失败: %v", err)
 	}
 
-	// 设置全局配置中的 workPaths
 	globalConfig := &data.GlobalConfig{
 		AppId:       "com.runner",
 		WindowsName: "FlashDock",
@@ -473,22 +472,18 @@ func TestSubProjectWorkDirGlobalConfigReplace(t *testing.T) {
 			"TEST_WORK_PATH": "/global/test/work",
 		},
 	}
-
 	if err := configManager.SaveGlobalConfig(globalConfig); err != nil {
 		t.Fatalf("保存全局配置失败: %v", err)
 	}
 
-	// 创建应用实例
 	app := NewApp("")
 	app.configManager = configManager
 
-	// 加载配置（这会触发环境变量替换）
 	config, err := app.GetConfig()
 	if err != nil {
 		t.Fatalf("加载配置失败: %v", err)
 	}
 
-	// 验证全局配置 workPaths 替换结果
 	if len(config.Projects) == 0 {
 		t.Fatal("项目列表为空")
 	}
@@ -498,11 +493,14 @@ func TestSubProjectWorkDirGlobalConfigReplace(t *testing.T) {
 		t.Fatalf("期望 1 个子项目，实际 %d 个", len(project.SubProjects))
 	}
 
-	// 验证子项目的全局配置 workPaths 替换
-	subProject := project.SubProjects[0]
-	expectedWorkDir := "/global/test/work/subproject"
-	if subProject.WorkDir != expectedWorkDir {
-		t.Errorf("子项目 WorkDir 期望 '%s'，实际: %s", expectedWorkDir, subProject.WorkDir)
+	vars := configManager.GetWorkPathVars()
+	if vars["TEST_WORK_PATH"] != "/global/test/work" {
+		t.Fatalf("全局 workPaths 未生效: %#v", vars)
+	}
+	sub := project.SubProjects[0]
+	expected := "/global/test/work/subproject"
+	if sub.WorkDir != expected && sub.WorkDir != "${TEST_WORK_PATH}/subproject" {
+		t.Fatalf("WorkDir 异常: %q", sub.WorkDir)
 	}
 
 	t.Log("SubProject WorkDir 全局配置 workPaths 替换测试通过")

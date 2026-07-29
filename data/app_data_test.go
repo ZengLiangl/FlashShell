@@ -10,13 +10,7 @@ import (
 )
 
 func TestAppDataMigratesLegacyJSONFiles(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	// ConfigHomeDir 用 UserHomeDir；强制重置 once 无法轻易做，直接写到 home/.flashdock
-	dir := filepath.Join(home, ConfigHomeDirName)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		t.Fatal(err)
-	}
+	dir := IsolateConfigHome(t)
 
 	known := []KnownHostRecord{{Host: "1.2.3.4", Port: 22, Fingerprint: "SHA256:abc"}}
 	writeJSON(t, filepath.Join(dir, "known_hosts.json"), known)
@@ -29,13 +23,6 @@ func TestAppDataMigratesLegacyJSONFiles(t *testing.T) {
 	})
 	writeJSON(t, filepath.Join(dir, "shortcuts.json"), DefaultShortcutSettings())
 
-	// 重置进程内缓存，模拟首次加载
-	appDataMu.Lock()
-	appDataCache = nil
-	appDataLoaded = false
-	appDataMu.Unlock()
-
-	// ConfigHomeDir 依赖真实 HOME；macOS 上 UserHomeDir 读 HOME
 	d, err := loadAppDataSection()
 	if err != nil {
 		t.Fatalf("loadAppDataSection: %v", err)

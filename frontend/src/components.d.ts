@@ -47,7 +47,6 @@ declare module 'vue' {
     ElTag: typeof import('element-plus/es')['ElTag']
     ElTooltip: typeof import('element-plus/es')['ElTooltip']
     ElTree: typeof import('element-plus/es')['ElTree']
-    ExecutionHistoryDialog: typeof import('./components/ExecutionHistoryDialog.vue')['default']
     HomePage: typeof import('./components/HomePage.vue')['default']
     HostKeyTrustDialog: typeof import('./components/shell/HostKeyTrustDialog.vue')['default']
     LocalFileTreePanel: typeof import('./components/shell/LocalFileTreePanel.vue')['default']

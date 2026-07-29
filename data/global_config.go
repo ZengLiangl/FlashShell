@@ -11,12 +11,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// LogSettings 执行日志落盘设置
-type LogSettings struct {
-	Enabled bool   `yaml:"enabled" json:"enabled"`
-	Path    string `yaml:"path" json:"path"`
-}
-
 // ThemeSettings 主题设置
 type ThemeSettings struct {
 	Mode            string  `yaml:"mode" json:"mode"`                       // light, dark, system
@@ -158,9 +152,8 @@ type GlobalConfig struct {
 	WorkPaths      map[string]string `yaml:"workPaths" json:"workPaths"`
 	Machines       []define.Machine  `yaml:"machines,omitempty" json:"machines,omitempty"`
 	MachineGroups  []string          `yaml:"machineGroups,omitempty" json:"machineGroups,omitempty"`
-	GlobalAccounts []GlobalAccount   `yaml:"globalAccounts,omitempty" json:"globalAccounts,omitempty"`
-	LogSettings    LogSettings       `yaml:"logSettings" json:"logSettings"`
-	ThemeSettings  ThemeSettings     `yaml:"themeSettings" json:"themeSettings"`
+	GlobalAccounts []GlobalAccount `yaml:"globalAccounts,omitempty" json:"globalAccounts,omitempty"`
+	ThemeSettings  ThemeSettings   `yaml:"themeSettings" json:"themeSettings"`
 	ProxySettings  ProxySettings     `yaml:"proxySettings" json:"proxySettings"`
 	// ShellMonitorIntervalMs Shell 监控面板刷新间隔（毫秒），默认 1000
 	ShellMonitorIntervalMs int `yaml:"shellMonitorIntervalMs" json:"shellMonitorIntervalMs"`
@@ -278,9 +271,6 @@ func (gcm *GlobalConfigManager) LoadGlobalConfig() (*GlobalConfig, error) {
 
 	gcm.config = &config
 	dirty := gcm.ensureMachineIDs() || gcm.ensureGlobalAccountIDs()
-	if gcm.migrateLegacyLogPath() {
-		dirty = true
-	}
 	if gcm.migrateShellMonitorInterval() {
 		dirty = true
 	}
@@ -317,18 +307,7 @@ func (gcm *GlobalConfigManager) migrateShellMonitorInterval() bool {
 	return false
 }
 
-// migrateLegacyLogPath 将默认日志路径从 ~/.cmd-config/logs 迁到 ~/.flashdock/logs
-func (gcm *GlobalConfigManager) migrateLegacyLogPath() bool {
-	if gcm.config == nil {
-		return false
-	}
-	oldDefault := "~/.cmd-config/logs"
-	if gcm.config.LogSettings.Path == oldDefault {
-		gcm.config.LogSettings.Path = DefaultLogPathTilde
-		return true
-	}
-	return false
-}
+// migrateLegacyLogPath 已废弃（执行日志功能已移除）
 
 // SaveGlobalConfig 保存全局配置文件
 func (gcm *GlobalConfigManager) SaveGlobalConfig(config *GlobalConfig) error {
@@ -458,10 +437,6 @@ func (gcm *GlobalConfigManager) createDefaultGlobalConfig() error {
 		LastOpenedFile: defaultCfgPath,
 		WorkPaths: map[string]string{
 			"HOME": "~",
-		},
-		LogSettings: LogSettings{
-			Enabled: false,
-			Path:    DefaultLogPathTilde,
 		},
 		ThemeSettings: ThemeSettings{
 			Mode:            "light",

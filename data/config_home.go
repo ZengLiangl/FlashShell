@@ -3,6 +3,7 @@ package data
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -13,8 +14,9 @@ const (
 	LegacyConfigHomeDirName = ".cmd-config"
 	// DefaultConfigFileName 默认业务配置文件名
 	DefaultConfigFileName = "config.yaml"
-	// DefaultLogPathTilde 默认日志目录（带 ~）
-	DefaultLogPathTilde = "~/.flashdock/logs"
+	// ConfigHomeEnv 测试或特殊部署可设置此环境变量，覆盖默认 ~/.flashdock。
+	// 设置后不会读写真实用户目录，也不会触发旧目录迁移。
+	ConfigHomeEnv = "FLASHDOCK_CONFIG_HOME"
 )
 
 // DefaultConfigPath 返回 ~/.flashdock/config.yaml（与 global_config.yaml 同目录）
@@ -28,8 +30,16 @@ func DefaultConfigPath() string {
 
 var migrateConfigHomeOnce sync.Once
 
-// ConfigHomeDir 返回 ~/.flashdock，并在需要时从 ~/.cmd-config 一次性迁移。
+// ConfigHomeDir 返回配置数据目录。
+// 优先使用 FLASHDOCK_CONFIG_HOME；否则为 ~/.flashdock，并在需要时从 ~/.cmd-config 一次性迁移。
 func ConfigHomeDir() (string, error) {
+	if override := strings.TrimSpace(os.Getenv(ConfigHomeEnv)); override != "" {
+		if err := os.MkdirAll(override, 0755); err != nil {
+			return "", err
+		}
+		return override, nil
+	}
+
 	homeDir, err := os.UserHomeDir()
 	if err != nil {
 		return "", err
