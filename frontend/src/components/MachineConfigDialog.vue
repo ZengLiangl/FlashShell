@@ -279,6 +279,10 @@
                     <el-input v-model="machineForm.password" type="password" placeholder="请输入密码（可选）" show-password />
                 </el-form-item>
 
+                <el-form-item label="跳板机">
+                    <el-input v-model="machineForm.proxyJump" placeholder="机器名称，或 host[:port] / user@host[:port]" clearable />
+                </el-form-item>
+
                 <el-divider content-position="left">SSH 隧道</el-divider>
                 <div class="tunnel-head">
                     <span class="tunnel-hint">连接成功后自动建立；本地转发：本机端口 → 远端地址</span>
@@ -521,6 +525,7 @@ export default {
             port: 22,
             user: '',
             password: '',
+            proxyJump: '',
             tunnels: [],
         })
 
@@ -600,6 +605,7 @@ export default {
             machineForm.name = machine.name
             machineForm.group = machine.group || ''
             machineForm.key_file = machine.key_file || ''
+            machineForm.proxyJump = machine.proxyJump || ''
             machineForm.tunnels = (machine.tunnels || []).map((t) => ({
                 enabled: t.enabled !== false,
                 name: t.name || '',
@@ -656,6 +662,7 @@ export default {
             machineForm.port = 22
             machineForm.user = ''
             machineForm.password = ''
+            machineForm.proxyJump = ''
             machineForm.tunnels = []
         }
 
@@ -731,6 +738,7 @@ export default {
                     name: machineForm.name,
                     group: normalizeGroup(machineForm.group),
                     key_file: machineForm.key_file,
+                    proxyJump: machineForm.proxyJump?.trim() || '',
                     tunnels: (machineForm.tunnels || []).filter((t) => t.localPort > 0),
                 }
                 const sensitiveData = {
@@ -843,6 +851,7 @@ export default {
                         name: machineForm.name || 'draft-test',
                         group: normalizeGroup(machineForm.group),
                         key_file: machineForm.key_file,
+                        proxyJump: machineForm.proxyJump?.trim() || '',
                     },
                     {
                         host: machineForm.host,

@@ -701,6 +701,9 @@ export function useShell() {
   let offShellData = null
   let offShellLine = null
   let offShellClear = null
+  let offShellReconnecting = null
+  let offShellReconnected = null
+  let offShellReconnectFailed = null
 
   const setupShellEvents = () => {
     if (shellEventsActive) return
@@ -730,6 +733,39 @@ export function useShell() {
     offShellClear = EventsOn('shell:clear', (payload) => {
       if (payload?.machineName) clearShellOutput(payload.machineName)
     })
+    offShellReconnecting = EventsOn('shell:reconnecting', (payload) => {
+      const name = payload?.machineName
+      if (!name) return
+      const tab = openTabs.value.find((t) => t.machineName === name)
+      if (tab) {
+        tab.connecting = true
+        tab.reconnecting = true
+      }
+      pushShellOutput(name, 'line', `正在重连…（${payload.attempt || 1}/${payload.maxAttempts || 3}）`)
+    })
+    offShellReconnected = EventsOn('shell:reconnected', (payload) => {
+      const name = payload?.machineName
+      if (!name) return
+      const tab = openTabs.value.find((t) => t.machineName === name)
+      if (tab) {
+        tab.connecting = false
+        tab.reconnecting = false
+        tab.connected = true
+      }
+      pushShellOutput(name, 'line', '重连成功')
+      syncSessions()
+    })
+    offShellReconnectFailed = EventsOn('shell:reconnect-failed', (payload) => {
+      const name = payload?.machineName
+      if (!name) return
+      const tab = openTabs.value.find((t) => t.machineName === name)
+      if (tab) {
+        tab.connecting = false
+        tab.reconnecting = false
+        tab.connected = false
+      }
+      pushShellOutput(name, 'line', '自动重连失败，按 Enter 手动重连')
+    })
     shellEventsActive = true
     syncSessions()
   }
@@ -739,10 +775,16 @@ export function useShell() {
     offShellData?.()
     offShellLine?.()
     offShellClear?.()
+    offShellReconnecting?.()
+    offShellReconnected?.()
+    offShellReconnectFailed?.()
     offShellStatus = null
     offShellData = null
     offShellLine = null
     offShellClear = null
+    offShellReconnecting = null
+    offShellReconnected = null
+    offShellReconnectFailed = null
     shellEventsActive = false
   }
 

@@ -253,6 +253,10 @@
                                     <span class="memory-saver-label">离开 Shell 时卸载终端界面（省内存，会话保持）</span>
                                     <el-switch v-model="form.themeSettings.shellMemorySaver" size="small" />
                                 </div>
+                                <div class="appear-field memory-saver-row">
+                                    <span class="memory-saver-label">Shell 意外断开时自动重连</span>
+                                    <el-switch v-model="form.themeSettings.shellAutoReconnect" size="small" />
+                                </div>
                                 <div class="appear-field appear-field--fill">
                                     <span class="appear-field-label">配色方案</span>
                                     <div class="preset-grid terminal-grid">
@@ -619,6 +623,7 @@ export default {
                 shellFontSize: 13,
                 shellLineHeight: 1.2,
                 shellMemorySaver: false,
+                shellAutoReconnect: false,
             },
             shellMonitorIntervalMs: 1000,
             sshHandshakeTimeoutSec: 30,
@@ -815,6 +820,7 @@ theme preview · ${theme.foreground}`
                 shellFontSize: config.themeSettings?.shellFontSize > 0 ? config.themeSettings.shellFontSize : 13,
                 shellLineHeight: config.themeSettings?.shellLineHeight > 0 ? config.themeSettings.shellLineHeight : 1.2,
                 shellMemorySaver: !!config.themeSettings?.shellMemorySaver,
+                shellAutoReconnect: !!config.themeSettings?.shellAutoReconnect,
             }
             if (isCustomUiAccent(form.themeSettings.uiAccent)) {
                 lastCustomAccent.value = form.themeSettings.uiAccent

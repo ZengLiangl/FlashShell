@@ -14,3 +14,8 @@ func SetHostKeyCallback(cb ssh.HostKeyCallback) {
 func currentHostKeyCallback() ssh.HostKeyCallback {
 	return hostKeyCallback
 }
+
+// HostKeyCallback 返回当前 SSH 主机密钥校验回调
+func HostKeyCallback() ssh.HostKeyCallback {
+	return hostKeyCallback
+}

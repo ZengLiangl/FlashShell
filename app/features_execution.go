@@ -3,6 +3,7 @@ package app
 import (
 	"time"
 
+	"FlashDock/define"
 	"FlashDock/machine"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -15,6 +16,14 @@ var shellReconnectDelays = []time.Duration{
 }
 
 func (a *App) initExecutionFeatures() {
+	a.executionBootstrapOnce.Do(func() {
+		machine.SetMachineResolver(func(name string) *define.Machine {
+			if a.configManager == nil {
+				return nil
+			}
+			return a.configManager.GetMachine(name)
+		})
+	})
 	a.rebuildSubProjectRunner()
 }
 
@@ -38,8 +47,7 @@ func (a *App) emitRemoteFailureOpenShell(info machine.RemoteFailureInfo) {
 }
 
 func (a *App) shellAutoReconnectEnabled() bool {
-	// 自动重连开关在后续提交接入 ThemeSettings
-	return false
+	return a.GetThemeSettings().ShellAutoReconnect
 }
 
 func (a *App) markShellUserDisconnect(sessionID string) {

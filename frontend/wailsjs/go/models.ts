@@ -242,6 +242,7 @@ export namespace data {
 	    shellFontSize: number;
 	    shellLineHeight: number;
 	    shellMemorySaver: boolean;
+	    shellAutoReconnect: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ThemeSettings(source);
@@ -258,20 +259,7 @@ export namespace data {
 	        this.shellFontSize = source["shellFontSize"];
 	        this.shellLineHeight = source["shellLineHeight"];
 	        this.shellMemorySaver = source["shellMemorySaver"];
-	    }
-	}
-	export class LogSettings {
-	    enabled: boolean;
-	    path: string;
-	
-	    static createFrom(source: any = {}) {
-	        return new LogSettings(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.enabled = source["enabled"];
-	        this.path = source["path"];
+	        this.shellAutoReconnect = source["shellAutoReconnect"];
 	    }
 	}
 	export class GlobalConfig {
@@ -283,7 +271,6 @@ export namespace data {
 	    machines?: define.Machine[];
 	    machineGroups?: string[];
 	    globalAccounts?: GlobalAccount[];
-	    logSettings: LogSettings;
 	    themeSettings: ThemeSettings;
 	    proxySettings: ProxySettings;
 	    shellMonitorIntervalMs: number;
@@ -312,7 +299,6 @@ export namespace data {
 	        this.machines = this.convertValues(source["machines"], define.Machine);
 	        this.machineGroups = source["machineGroups"];
 	        this.globalAccounts = this.convertValues(source["globalAccounts"], GlobalAccount);
-	        this.logSettings = this.convertValues(source["logSettings"], LogSettings);
 	        this.themeSettings = this.convertValues(source["themeSettings"], ThemeSettings);
 	        this.proxySettings = this.convertValues(source["proxySettings"], ProxySettings);
 	        this.shellMonitorIntervalMs = source["shellMonitorIntervalMs"];
@@ -466,7 +452,6 @@ export namespace data {
 	        this.fingerprint = source["fingerprint"];
 	    }
 	}
-	
 	export class MachineImportResult {
 	    imported: number;
 	    skipped: number;
@@ -724,6 +709,7 @@ export namespace define {
 	    name: string;
 	    group?: string;
 	    key_file?: string;
+	    proxyJump?: string;
 	    tunnels?: SSHTunnel[];
 	    list_host?: string;
 	    list_port?: number;
@@ -744,6 +730,7 @@ export namespace define {
 	        this.name = source["name"];
 	        this.group = source["group"];
 	        this.key_file = source["key_file"];
+	        this.proxyJump = source["proxyJump"];
 	        this.tunnels = this.convertValues(source["tunnels"], SSHTunnel);
 	        this.list_host = source["list_host"];
 	        this.list_port = source["list_port"];

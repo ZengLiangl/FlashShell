@@ -61,6 +61,8 @@ type Machine struct {
 	Name          string `yaml:"name" json:"name"`
 	Group         string `yaml:"group,omitempty" json:"group,omitempty"`
 	KeyFile       string `yaml:"key_file,omitempty" json:"key_file,omitempty"`
+	// ProxyJump 跳板机：引用另一台 Machine 名称，或 host[:port] / user@host[:port]
+	ProxyJump     string `yaml:"proxyJump,omitempty" json:"proxyJump,omitempty"`
 	// Tunnels SSH 隧道（本地/远程/动态），连接后自动建立
 	Tunnels []SSHTunnel `yaml:"tunnels,omitempty" json:"tunnels,omitempty"`
 	// ListHost/ListPort/ListUser 列表展示与搜索用（明文；密码等仍在 encrypted_data）

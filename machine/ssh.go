@@ -42,7 +42,7 @@ func (sc *SSHClient) SharedRemoteMachine() *define.RemoteMachine {
 
 // Connect 连接到远程机器
 func (sc *SSHClient) Connect(machine *define.Machine, withSFTP bool) error {
-	return sc.remoteMachine.Connect(machine, withSFTP)
+	return ConnectRemote(sc.remoteMachine, machine, withSFTP)
 }
 
 // AttachRemote 复用已有 RemoteMachine 连接（不取得所有权）
