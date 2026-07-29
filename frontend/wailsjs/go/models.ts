@@ -219,6 +219,8 @@ export namespace data {
 	    type: string;
 	    host: string;
 	    port: number;
+	    user: string;
+	    password: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ProxySettings(source);
@@ -230,6 +232,8 @@ export namespace data {
 	        this.type = source["type"];
 	        this.host = source["host"];
 	        this.port = source["port"];
+	        this.user = source["user"];
+	        this.password = source["password"];
 	    }
 	}
 	export class ThemeSettings {

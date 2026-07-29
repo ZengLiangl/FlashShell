@@ -33,6 +33,12 @@ type ProxySettings struct {
 	Type string `yaml:"type" json:"type"` // http | socks
 	Host string `yaml:"host" json:"host"`
 	Port int    `yaml:"port" json:"port"`
+	// User 可选代理认证用户名
+	User string `yaml:"user,omitempty" json:"user"`
+	// EncryptedPassword 加密后的代理密码（落盘）；不回传前端
+	EncryptedPassword string `yaml:"encryptedPassword,omitempty" json:"-"`
+	// Password 明文密码，仅运行时 / 前端表单；不落盘
+	Password string `yaml:"-" json:"password"`
 }
 
 // ShellLogHighlightColors Shell 日志高亮配色（hex，如 #92d050）

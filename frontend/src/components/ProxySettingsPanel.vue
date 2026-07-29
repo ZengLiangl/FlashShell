@@ -60,6 +60,41 @@
             />
           </div>
         </div>
+
+        <div class="system-setting-row">
+          <div class="system-setting-text">
+            <span class="system-setting-label">用户名</span>
+            <span class="system-setting-hint">可选，代理需要认证时填写</span>
+          </div>
+          <div class="system-setting-control">
+            <el-input
+              v-model="form.user"
+              size="small"
+              clearable
+              placeholder="可选"
+              class="proxy-host"
+              autocomplete="off"
+            />
+          </div>
+        </div>
+
+        <div class="system-setting-row">
+          <div class="system-setting-text">
+            <span class="system-setting-label">密码</span>
+            <span class="system-setting-hint">可选，与用户名一起用于代理认证</span>
+          </div>
+          <div class="system-setting-control">
+            <el-input
+              v-model="form.password"
+              size="small"
+              clearable
+              show-password
+              placeholder="可选"
+              class="proxy-host"
+              autocomplete="new-password"
+            />
+          </div>
+        </div>
       </div>
 
       <div class="proxy-block">
@@ -118,6 +153,8 @@ const defaultForm = () => ({
   type: 'http',
   host: '',
   port: 7890,
+  user: '',
+  password: '',
 })
 
 export default {
@@ -139,6 +176,8 @@ export default {
       form.type = p.type === 'socks' ? 'socks' : 'http'
       form.host = p.host || ''
       form.port = p.port > 0 ? p.port : 7890
+      form.user = p.user || ''
+      form.password = p.password || ''
     }
 
     const load = async () => {
@@ -149,6 +188,15 @@ export default {
         ElMessage.error(`加载代理设置失败: ${e}`)
       }
     }
+
+    const proxyPayload = () => ({
+      mode: form.mode,
+      type: form.type,
+      host: String(form.host || '').trim(),
+      port: form.port || 7890,
+      user: String(form.user || '').trim(),
+      password: form.password || '',
+    })
 
     const save = async () => {
       if (form.mode === 'manual') {
@@ -164,12 +212,7 @@ export default {
       saving.value = true
       try {
         const cfg = await App.GetSystemSettings()
-        cfg.proxySettings = {
-          mode: form.mode,
-          type: form.type,
-          host: String(form.host || '').trim(),
-          port: form.port || 7890,
-        }
+        cfg.proxySettings = proxyPayload()
         await App.SaveSystemSettings(cfg)
         ElMessage.success('代理设置已保存')
       } catch (e) {
@@ -186,15 +229,7 @@ export default {
     const runTest = async () => {
       testing.value = true
       try {
-        const msg = await App.TestProxyConnection(
-          {
-            mode: form.mode,
-            type: form.type,
-            host: String(form.host || '').trim(),
-            port: form.port || 0,
-          },
-          testURL.value,
-        )
+        const msg = await App.TestProxyConnection(proxyPayload(), testURL.value)
         ElMessage.success(msg || '连接成功')
       } catch (e) {
         ElMessage.error(String(e?.message || e || '连接失败'))

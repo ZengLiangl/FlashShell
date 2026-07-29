@@ -3,6 +3,7 @@ package netproxy
 import (
 	"bufio"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net"
@@ -26,10 +27,12 @@ const (
 
 // Settings 运行时代理配置（与 data.ProxySettings 对应）
 type Settings struct {
-	Mode string
-	Type string
-	Host string
-	Port int
+	Mode     string
+	Type     string
+	Host     string
+	Port     int
+	User     string
+	Password string
 }
 
 var (
@@ -53,10 +56,20 @@ func Normalize(s Settings) Settings {
 	if port < 0 || port > 65535 {
 		port = 0
 	}
+	user := strings.TrimSpace(s.User)
+	// 密码保留原样（可能含首尾空格）；仅去掉纯空白
+	password := s.Password
+	if strings.TrimSpace(password) == "" {
+		password = ""
+	}
 	if mode == ModeManual && (host == "" || port == 0) {
 		mode = ModeNone
 	}
-	return Settings{Mode: mode, Type: typ, Host: host, Port: port}
+	if mode != ModeManual {
+		user = ""
+		password = ""
+	}
+	return Settings{Mode: mode, Type: typ, Host: host, Port: port, User: user, Password: password}
 }
 
 // Apply 应用代理到全局 HTTP Transport 与返回的 DialContext
@@ -136,6 +149,13 @@ func Test(ctx context.Context, s Settings, testURL string) error {
 	return nil
 }
 
+func proxyAuth(s Settings) *proxy.Auth {
+	if s.User == "" && s.Password == "" {
+		return nil
+	}
+	return &proxy.Auth{User: s.User, Password: s.Password}
+}
+
 func dialWith(ctx context.Context, s Settings, network, address string) (net.Conn, error) {
 	if network == "" {
 		network = "tcp"
@@ -147,7 +167,7 @@ func dialWith(ctx context.Context, s Settings, network, address string) (net.Con
 	proxyAddr := net.JoinHostPort(s.Host, strconv.Itoa(s.Port))
 	switch s.Type {
 	case TypeSOCKS:
-		socksDialer, err := proxy.SOCKS5("tcp", proxyAddr, nil, direct)
+		socksDialer, err := proxy.SOCKS5("tcp", proxyAddr, proxyAuth(s), direct)
 		if err != nil {
 			return nil, fmt.Errorf("初始化 SOCKS 代理失败: %w", err)
 		}
@@ -170,11 +190,11 @@ func dialWith(ctx context.Context, s Settings, network, address string) (net.Con
 			return r.conn, r.err
 		}
 	default:
-		return dialHTTPConnect(ctx, direct, proxyAddr, address)
+		return dialHTTPConnect(ctx, direct, proxyAddr, address, s.User, s.Password)
 	}
 }
 
-func dialHTTPConnect(ctx context.Context, direct *net.Dialer, proxyAddr, target string) (net.Conn, error) {
+func dialHTTPConnect(ctx context.Context, direct *net.Dialer, proxyAddr, target, user, password string) (net.Conn, error) {
 	conn, err := direct.DialContext(ctx, "tcp", proxyAddr)
 	if err != nil {
 		return nil, fmt.Errorf("连接 HTTP 代理失败: %w", err)
@@ -191,8 +211,14 @@ func dialHTTPConnect(ctx context.Context, direct *net.Dialer, proxyAddr, target 
 		_ = conn.SetDeadline(deadline)
 	}
 
-	req := fmt.Sprintf("CONNECT %s HTTP/1.1\r\nHost: %s\r\nProxy-Connection: Keep-Alive\r\n\r\n", target, target)
-	if _, err := io.WriteString(conn, req); err != nil {
+	var b strings.Builder
+	fmt.Fprintf(&b, "CONNECT %s HTTP/1.1\r\nHost: %s\r\n", target, target)
+	if user != "" || password != "" {
+		token := base64.StdEncoding.EncodeToString([]byte(user + ":" + password))
+		fmt.Fprintf(&b, "Proxy-Authorization: Basic %s\r\n", token)
+	}
+	b.WriteString("Proxy-Connection: Keep-Alive\r\n\r\n")
+	if _, err := io.WriteString(conn, b.String()); err != nil {
 		return nil, fmt.Errorf("代理 CONNECT 请求失败: %w", err)
 	}
 
@@ -265,6 +291,9 @@ func buildTransport(s Settings) *http.Transport {
 		u := &url.URL{
 			Scheme: "http",
 			Host:   proxyAddr,
+		}
+		if s.User != "" || s.Password != "" {
+			u.User = url.UserPassword(s.User, s.Password)
 		}
 		tr.Proxy = http.ProxyURL(u)
 		tr.DialContext = (&net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}).DialContext

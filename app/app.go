@@ -1361,6 +1361,7 @@ func (a *App) GetSystemSettings() (*data.GlobalConfig, error) {
 			cfg.WindowsName = "FlashDock"
 		}
 		normalizeProxySettings(&cfg.ProxySettings)
+		cfg.ProxySettings.HydrateProxyPassword()
 		if cfg.ShellLogHighlight == nil {
 			v := true
 			cfg.ShellLogHighlight = &v
@@ -1415,7 +1416,9 @@ func (a *App) SaveKeyMapSettings(settings data.KeyMapSettings) error {
 // SaveSystemSettings 保存系统设置
 func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	a.normalizeThemeSettings(&config.ThemeSettings)
-	normalizeProxySettings(&config.ProxySettings)
+	if err := prepareProxySettingsForSave(&config.ProxySettings); err != nil {
+		return fmt.Errorf("保存代理密码失败: %w", err)
+	}
 	config.ShellMonitorIntervalMs = normalizeShellMonitorIntervalMs(config.ShellMonitorIntervalMs)
 	config.SSHHandshakeTimeoutSec = normalizeSSHHandshakeTimeoutSec(config.SSHHandshakeTimeoutSec)
 	config.ShellTerminalScrollback = normalizeShellTerminalScrollback(config.ShellTerminalScrollback)
