@@ -51,6 +51,7 @@ type Command struct {
 	Steps       StepList `yaml:"steps" json:"steps"`
 	Machine     string   `yaml:"machine,omitempty" json:"machine,omitempty"`
 	WorkDir     string   `yaml:"workdir,omitempty" json:"workdir,omitempty"`
+	Parallel    bool     `yaml:"parallel,omitempty" json:"parallel,omitempty"`
 }
 
 // Machine 远程机器配置

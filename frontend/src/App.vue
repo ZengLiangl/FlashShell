@@ -26,7 +26,8 @@
             :expanded-sub-projects="expandedSubProjects" :expanded-commands="expandedCommands" :status="status"
             :get-command-tag-type="getCommandTagType" :get-command-type-text="getCommandTypeText"
             :is-sub-project-running="isSubProjectRunning" @toggle-sub="toggleSubProject" @toggle-cmd="toggleCommand"
-            @execute-sub="executeSubProject" @stop-sub="stopSubProject" @back="backToProjectList" />
+            @execute-sub="executeSubProject" @execute-cmd="executeCommand" @stop-sub="stopSubProject"
+            @dry-run-sub="dryRunSubProject" @back="backToProjectList" />
         </el-aside>
 
         <!-- 右侧终端输出 -->
@@ -38,13 +39,15 @@
           <TerminalOutput ref="terminalOutputRef" :status="status" :output-lines="outputLines"
             :progress-percentage="progressPercentage" :progress-status="progressStatus"
             :search-query="terminalSearchQuery" :active-match-index="terminalActiveMatchIndex"
-            @search-matches="handleSearchMatches" />
+            :remote-failure="lastRemoteFailure"
+            @search-matches="handleSearchMatches" @open-failure-shell="openFailureShell" />
         </el-main>
       </el-container>
 
       <!-- 状态栏（仅详情视图显示） -->
       <StatusBar :status="status" :selected-project="selectedProject" :app-info="statusBarInfo"
-        @stop-all="stopAllCommands" />
+        :remote-failure="lastRemoteFailure"
+        @stop-all="stopAllCommands" @open-failure-shell="openFailureShell" />
     </template>
 
     <!-- Shell 视图：挂载后用 v-show 保留会话，可与任务并行 -->
@@ -126,6 +129,7 @@ export default {
     const projects = ref([]);
     const subProjects = ref([]);
     const outputLines = ref([]);
+    const lastRemoteFailure = ref(null);
     const selectedProject = ref(null);
     const selectedSubProject = ref(null);
     const isReloading = ref(false);
@@ -668,6 +672,7 @@ export default {
 
       try {
         outputLines.value = [];
+        lastRemoteFailure.value = null;
         await App.ExecuteSubProject(
           subProject.projectName,
           subProject.name
@@ -693,16 +698,61 @@ export default {
       }
     };
 
-    // 执行命令 (保持向后兼容)
-    const executeCommand = async (cmd) => {
-      // 为了向后兼容，如果有人调用这个方法，我们执行对应的 SubProject
-      if (cmd.subprojectName && cmd.projectName) {
-        const subProject = { name: cmd.subprojectName, projectName: cmd.projectName };
-        return executeSubProject(subProject);
+    const dryRunSubProject = async (subProject) => {
+      if (!selectedProject.value) return;
+      try {
+        outputLines.value = [];
+        lastRemoteFailure.value = null;
+        await App.DryRunSubProject(subProject.projectName, subProject.name);
+      } catch (error) {
+        console.error('干跑失败:', error);
+        ElMessage.error('干跑失败: ' + (error.message || error));
       }
     };
 
-    // 停止命令 (保持向后兼容)
+    const openFailureShell = async () => {
+      const failure = lastRemoteFailure.value;
+      if (!failure?.machineName) return;
+      enterShellMode();
+      await nextTick();
+      try {
+        const existing = workspaceSessions.value.find(
+          (s) => s.configName === failure.machineName && s.connected,
+        );
+        if (existing) {
+          activeMachine.value = existing.machineName;
+        } else {
+          await connectShell(failure.machineName);
+          await nextTick();
+        }
+        const sessionId = activeMachine.value
+          || workspaceSessions.value.find((s) => s.configName === failure.machineName)?.machineName;
+        if (failure.workdir && sessionId) {
+          await App.SendShellInput(sessionId, `cd ${failure.workdir}\n`);
+        }
+      } catch (error) {
+        console.error('打开失败 Shell 失败:', error);
+        ElMessage.error('连接 Shell 失败: ' + (error.message || error));
+      }
+    };
+
+    // 执行单个 Command
+    const executeCommand = async (payload) => {
+      const projectName = payload?.projectName || payload?.subProject?.projectName
+      const subProjectName = payload?.subProjectName || payload?.subProject?.name
+      const commandName = payload?.commandName || payload?.command?.name
+      if (!projectName || !subProjectName || !commandName) return
+      try {
+        outputLines.value = []
+        lastRemoteFailure.value = null
+        await App.ExecuteCommand(projectName, subProjectName, commandName)
+      } catch (error) {
+        console.error('执行命令失败:', error)
+        ElMessage.error('执行命令失败: ' + (error.message || error))
+      }
+    };
+
+    // 停止命令
     const stopCommand = async (cmd) => {
       if (cmd.subprojectName && cmd.projectName) {
         const subProject = { name: cmd.subprojectName, projectName: cmd.projectName };
@@ -799,7 +849,13 @@ export default {
       if (!currentStatus) {
         return;
       }
-      Object.assign(status, currentStatus);
+      const running = !!(currentStatus.isRunning ?? currentStatus.IsRunning);
+      Object.assign(status, currentStatus, { isRunning: running });
+    };
+
+    const handleExecutionOpenShell = (payload) => {
+      if (!payload?.machineName) return;
+      lastRemoteFailure.value = payload;
     };
 
     // 手动刷新输出（保留一次性拉取，不再轮询）
@@ -1096,6 +1152,7 @@ export default {
       EventsOn("output:line", handleOutputLine);
       EventsOn("output:clear", handleOutputClear);
       EventsOn("execution:status", handleExecutionStatus);
+      EventsOn("execution:open-shell", handleExecutionOpenShell);
       EventsOn("theme:changed", applyThemeSettings);
       EventsOn("system-settings:changed", (payload) => {
         if (payload && Object.prototype.hasOwnProperty.call(payload, 'taskOutputMaxLines')) {
@@ -1434,6 +1491,7 @@ export default {
       projects,
       subProjects,
       outputLines,
+      lastRemoteFailure,
       selectedProject,
       selectedSubProject,
       isReloading,
@@ -1451,6 +1509,8 @@ export default {
       getCommandTagType,
       getCommandTypeText,
       executeSubProject,
+      dryRunSubProject,
+      openFailureShell,
       stopSubProject,
       executeCommand,
       stopCommand,

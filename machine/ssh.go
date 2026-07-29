@@ -22,6 +22,7 @@ type SSHClient struct {
 	workVars      map[string]string
 	sessionMu     sync.Mutex
 	activeSession *ssh.Session
+	borrowed      bool // 复用外部连接时不关闭底层 SSH
 }
 
 // NewSSHClient 创建SSH客户端
@@ -34,9 +35,30 @@ func NewSSHClient(machine *define.Machine, workVars map[string]string) *SSHClien
 	}
 }
 
+// SharedRemoteMachine 返回底层 RemoteMachine（供任务复用）
+func (sc *SSHClient) SharedRemoteMachine() *define.RemoteMachine {
+	return sc.remoteMachine
+}
+
 // Connect 连接到远程机器
 func (sc *SSHClient) Connect(machine *define.Machine, withSFTP bool) error {
 	return sc.remoteMachine.Connect(machine, withSFTP)
+}
+
+// AttachRemote 复用已有 RemoteMachine 连接（不取得所有权）
+func (sc *SSHClient) AttachRemote(rm *define.RemoteMachine, machine *define.Machine, workVars map[string]string) {
+	if rm == nil {
+		return
+	}
+	sc.remoteMachine = rm
+	sc.config = machine
+	sc.workVars = workVars
+	sc.borrowed = true
+}
+
+// IsBorrowed 是否为借用连接
+func (sc *SSHClient) IsBorrowed() bool {
+	return sc.borrowed
 }
 
 // ConnectAutoTrustOnce 连接远程；遇未知主机密钥则会话级信任一次并自动重试（不弹框）
@@ -57,7 +79,7 @@ func (sc *SSHClient) Execute(cmd define.Command, output chan<- string, onStepSta
 		return fmt.Errorf("SSH客户端未连接")
 	}
 
-	return executeSteps(cmd.Steps, output, onStepStart, onStepComplete, shouldStop, func(command string, out chan<- string) error {
+	return executeSteps(cmd.Steps, sc.workVars, output, onStepStart, onStepComplete, shouldStop, func(command string, out chan<- string) error {
 		return sc.executeStep(command, out)
 	})
 }
@@ -178,6 +200,16 @@ func (sc *SSHClient) Stop() error {
 
 // Close 关闭连接
 func (sc *SSHClient) Close() error {
+	if sc.borrowed {
+		sc.sessionMu.Lock()
+		session := sc.activeSession
+		sc.activeSession = nil
+		sc.sessionMu.Unlock()
+		if session != nil {
+			_ = session.Close()
+		}
+		return nil
+	}
 	if sc.remoteMachine != nil {
 		return sc.remoteMachine.Close()
 	}

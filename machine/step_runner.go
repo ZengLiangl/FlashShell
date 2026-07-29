@@ -9,12 +9,23 @@ import (
 
 type stepExecutor func(command string, output chan<- string) error
 
-// executeSteps 按顺序执行步骤，支持重试与失败策略；shouldStop 返回 true 时中断执行
-func executeSteps(steps define.StepList, output chan<- string, onStepStart func(string), onStepComplete func(), shouldStop func() bool, exec stepExecutor) error {
+// executeSteps 按顺序执行步骤，支持 when、重试与失败策略；shouldStop 返回 true 时中断执行
+func executeSteps(steps define.StepList, workVars map[string]string, output chan<- string, onStepStart func(string), onStepComplete func(), shouldStop func() bool, exec stepExecutor) error {
 	for i, step := range steps {
 		if shouldStop != nil && shouldStop() {
 			utils.SendOutput(output, "执行已被用户停止")
 			return fmt.Errorf("执行被用户停止")
+		}
+		run, err := EvaluateWhen(step.When, workVars)
+		if err != nil {
+			return fmt.Errorf("步骤 %d when 表达式无效: %w", i+1, err)
+		}
+		if !run {
+			utils.SendOutput(output, fmt.Sprintf("跳过步骤 %d（when 不满足）: %s", i+1, step.Command))
+			if onStepComplete != nil {
+				onStepComplete()
+			}
+			continue
 		}
 		if onStepStart != nil {
 			onStepStart(step.Command)

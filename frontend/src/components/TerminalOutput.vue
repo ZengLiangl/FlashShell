@@ -1,6 +1,15 @@
 <template>
     <div class="terminal-wrapper">
         <transition name="progress-slide" appear>
+            <div v-if="remoteFailure && !status.isRunning" class="failure-banner">
+                <span class="failure-text">远程任务失败：{{ remoteFailure.machineName }}</span>
+                <el-button size="small" type="warning" @click="$emit('open-failure-shell')">
+                    进入 Shell
+                </el-button>
+            </div>
+        </transition>
+
+        <transition name="progress-slide" appear>
             <div v-if="status.isRunning" class="progress-section">
                 <div class="progress-info">
                     <div class="progress-text">
@@ -55,10 +64,11 @@ export default {
         outputLines: { type: Array, required: true },
         progressPercentage: { type: Number, required: true },
         progressStatus: { type: String, required: true },
+        remoteFailure: { type: Object, default: null },
         searchQuery: { type: String, default: '' },
         activeMatchIndex: { type: Number, default: -1 }
     },
-    emits: ['search-matches'],
+    emits: ['search-matches', 'open-failure-shell'],
     setup(props, { expose, emit }) {
         const terminalOutputRef = ref(null)
         const bottomMarker = ref(null)
@@ -250,6 +260,23 @@ export default {
     min-height: 0;
     overflow: hidden;
     background: var(--app-panel-bg);
+}
+
+.failure-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 8px 12px;
+    margin-bottom: 8px;
+    border: 1px solid color-mix(in srgb, var(--el-color-warning) 45%, transparent);
+    border-radius: 6px;
+    background: color-mix(in srgb, var(--el-color-warning) 12%, transparent);
+}
+
+.failure-text {
+    font-size: 13px;
+    color: var(--app-text);
 }
 
 .progress-section {

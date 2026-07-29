@@ -34,6 +34,16 @@
                         </div>
                     </div>
                     <div class="subproject-actions icon-actions">
+                        <el-tooltip content="干跑" placement="top">
+                            <el-button
+                                size="small"
+                                circle
+                                :disabled="status.isRunning"
+                                @click="$emit('dry-run-sub', subProject)"
+                            >
+                                <el-icon><Document /></el-icon>
+                            </el-button>
+                        </el-tooltip>
                         <el-tooltip :content="isSubProjectRunning(subProject) ? '运行中' : '执行'" placement="top">
                             <el-button
                                 size="small"
@@ -69,13 +79,30 @@
                                 <div class="command-info">
                                     <div class="command-name">{{ command.name }}</div>
                                 </div>
+                                <div class="command-actions icon-actions">
+                                    <el-tooltip content="仅执行此命令" placement="top">
+                                        <el-button
+                                            size="small"
+                                            type="primary"
+                                            circle
+                                            class="run-btn"
+                                            :disabled="status.isRunning"
+                                            @click="$emit('execute-cmd', { subProject, command })"
+                                        >
+                                            <el-icon><VideoPlay /></el-icon>
+                                        </el-button>
+                                    </el-tooltip>
+                                </div>
                             </div>
                             <div class="command-meta">
                                 <el-tag size="small" :type="getCommandTagType(command.type)" effect="light">
                                     {{ getCommandTypeText(command.type) }}
                                 </el-tag>
+                                <el-tag v-if="command.parallel" size="small" type="warning" effect="plain">
+                                    并行
+                                </el-tag>
                                 <el-tag size="small" type="info" effect="plain">
-                                    {{ command.steps?.length || 0 }} 命令
+                                    {{ command.steps?.length || 0 }} 步骤
                                 </el-tag>
                             </div>
                         </div>
@@ -110,7 +137,7 @@ export default {
         getCommandTypeText: { type: Function, required: true },
         isSubProjectRunning: { type: Function, required: true }
     },
-    emits: ['toggle-sub', 'toggle-cmd', 'execute-sub', 'stop-sub', 'back'],
+    emits: ['toggle-sub', 'toggle-cmd', 'execute-sub', 'execute-cmd', 'stop-sub', 'dry-run-sub', 'back'],
     methods: {
         stepDisplay(step) {
             if (typeof step === 'string') return step
@@ -119,6 +146,7 @@ export default {
         stepMeta(step) {
             if (typeof step === 'string') return ''
             const parts = []
+            if (step?.when) parts.push(`when: ${step.when}`)
             if (step?.onFail && step.onFail !== 'abort') parts.push(`on_fail: ${step.onFail}`)
             if (step?.retry > 0) parts.push(`retry: ${step.retry}`)
             return parts.join(' · ')
@@ -265,6 +293,10 @@ export default {
 
 .command-info {
     flex: 1;
+}
+
+.command-actions {
+    flex-shrink: 0;
 }
 
 .command-name {

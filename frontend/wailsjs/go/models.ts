@@ -466,30 +466,6 @@ export namespace data {
 	        this.fingerprint = source["fingerprint"];
 	    }
 	}
-	export class LogEntry {
-	    fileName: string;
-	    fullPath: string;
-	    project: string;
-	    subProject: string;
-	    startedAt: string;
-	    size: number;
-	    success: boolean;
-	
-	    static createFrom(source: any = {}) {
-	        return new LogEntry(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.fileName = source["fileName"];
-	        this.fullPath = source["fullPath"];
-	        this.project = source["project"];
-	        this.subProject = source["subProject"];
-	        this.startedAt = source["startedAt"];
-	        this.size = source["size"];
-	        this.success = source["success"];
-	    }
-	}
 	
 	export class MachineImportResult {
 	    imported: number;
@@ -665,6 +641,7 @@ export namespace define {
 	    steps: Step[];
 	    machine?: string;
 	    workdir?: string;
+	    parallel?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new Command(source);
@@ -678,6 +655,7 @@ export namespace define {
 	        this.steps = this.convertValues(source["steps"], Step);
 	        this.machine = source["machine"];
 	        this.workdir = source["workdir"];
+	        this.parallel = source["parallel"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1255,6 +1233,41 @@ export namespace keys {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.Key = source["Key"];
 	        this.Modifiers = source["Modifiers"];
+	    }
+	}
+
+}
+
+export namespace machine {
+	
+	export class DryRunLine {
+	    commandName: string;
+	    commandType: string;
+	    machine?: string;
+	    workdir?: string;
+	    stepIndex: number;
+	    stepCommand: string;
+	    whenExpr?: string;
+	    whenResult?: string;
+	    skipped: boolean;
+	    parallel?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new DryRunLine(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.commandName = source["commandName"];
+	        this.commandType = source["commandType"];
+	        this.machine = source["machine"];
+	        this.workdir = source["workdir"];
+	        this.stepIndex = source["stepIndex"];
+	        this.stepCommand = source["stepCommand"];
+	        this.whenExpr = source["whenExpr"];
+	        this.whenResult = source["whenResult"];
+	        this.skipped = source["skipped"];
+	        this.parallel = source["parallel"];
 	    }
 	}
 

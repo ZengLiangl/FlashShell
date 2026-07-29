@@ -30,6 +30,14 @@
 
         <div class="status-actions">
             <transition name="button-slide">
+                <el-tooltip v-if="remoteFailure && !status.isRunning" content="进入失败机器 Shell" placement="top">
+                    <el-button size="small" type="warning" circle @click="$emit('open-failure-shell')">
+                        <el-icon><Monitor /></el-icon>
+                    </el-button>
+                </el-tooltip>
+            </transition>
+
+            <transition name="button-slide">
                 <el-tooltip content="停止执行" placement="top">
                     <el-button v-if="status.isRunning" size="small" type="danger" circle @click="$emit('stop-all')">
                         <el-icon><VideoPause /></el-icon>
@@ -48,9 +56,10 @@ export default {
     props: {
         status: { type: Object, required: true },
         selectedProject: { type: Object, default: null },
+        remoteFailure: { type: Object, default: null },
         appInfo: { type: String, default: 'FlashDock' }
     },
-    emits: ['stop-all']
+    emits: ['stop-all', 'open-failure-shell']
 }
 </script>
 

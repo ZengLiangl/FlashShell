@@ -3,6 +3,7 @@
 import {define} from '../models';
 import {app} from '../models';
 import {menu} from '../models';
+import {machine} from '../models';
 import {data} from '../models';
 
 export function AddMachine(arg1:define.Machine):Promise<void>;
@@ -61,6 +62,8 @@ export function DisconnectShell(arg1:string):Promise<void>;
 
 export function DownloadUpdate(arg1:string):Promise<app.UpdateDownloadResult>;
 
+export function DryRunSubProject(arg1:string,arg2:string):Promise<Array<machine.DryRunLine>>;
+
 export function ExecuteCommand(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function ExecuteShellCommand(arg1:string,arg2:string):Promise<void>;
@@ -82,8 +85,6 @@ export function GetConfigFiles():Promise<Array<string>>;
 export function GetConfigForRefresh():Promise<define.Root>;
 
 export function GetCurrentConfigPath():Promise<string>;
-
-export function GetExecutionLogs(arg1:number):Promise<Array<data.LogEntry>>;
 
 export function GetGlobalAccounts():Promise<Array<data.GlobalAccountDTO>>;
 
@@ -187,10 +188,6 @@ export function OpenDownloadedUpdatePackage():Promise<void>;
 
 export function OpenDownloadsDirectory():Promise<void>;
 
-export function OpenExecutionHistory():Promise<void>;
-
-export function OpenExecutionLog(arg1:string):Promise<void>;
-
 export function OpenGlobalConfigWithEvent():Promise<void>;
 
 export function OpenMachineConfig():Promise<void>;
@@ -214,8 +211,6 @@ export function PickCustomAppIcon():Promise<string>;
 export function PickShellUploadFolder():Promise<string>;
 
 export function PickShellUploadPaths():Promise<Array<string>>;
-
-export function ReadExecutionLog(arg1:string):Promise<string>;
 
 export function ReadShellRemoteFile(arg1:string,arg2:string):Promise<string>;
 

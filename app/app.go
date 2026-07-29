@@ -24,27 +24,30 @@ import (
 
 // App struct
 type App struct {
-	ctx              context.Context
-	configManager    *data.ConfigManager
-	sessionManager   *data.SessionManager
-	logManager       *data.LogManager
-	shellHistory     *data.ShellHistoryManager
-	shellCmdHistory  *data.ShellCommandHistoryManager
-	subProjectRunner *machine.SubProjectRunner
-	shellPool        *machine.ShellSessionPool
-	localShellPool   *machine.LocalShellPool
-	shellAuxPool     *machine.ShellAuxPool
-	tunnelMgr        *machine.TunnelManager
-	transfers        *shellTransferStore
-	externalEdits    *externalEditStore
-	outputChannel    chan string
-	outputIngress    chan string
-	executionMutex   sync.RWMutex
-	shellCwdMu       sync.RWMutex
-	shellCwds        map[string]string
-	logEnabled       bool
-	quitMu           sync.Mutex
-	allowQuit        bool
+	ctx                    context.Context
+	configManager          *data.ConfigManager
+	sessionManager         *data.SessionManager
+	shellHistory           *data.ShellHistoryManager
+	shellCmdHistory        *data.ShellCommandHistoryManager
+	subProjectRunner       *machine.SubProjectRunner
+	shellPool              *machine.ShellSessionPool
+	localShellPool         *machine.LocalShellPool
+	shellAuxPool           *machine.ShellAuxPool
+	tunnelMgr              *machine.TunnelManager
+	transfers              *shellTransferStore
+	externalEdits          *externalEditStore
+	outputChannel          chan string
+	outputIngress          chan string
+	executionMutex         sync.RWMutex
+	shellCwdMu             sync.RWMutex
+	shellCwds              map[string]string
+	shellDisconnectMu      sync.Mutex
+	shellUserDisconnect    map[string]bool
+	shellReconnectMu       sync.Mutex
+	shellReconnecting      map[string]bool
+	executionBootstrapOnce sync.Once
+	quitMu                 sync.Mutex
+	allowQuit              bool
 }
 
 // NewApp creates a new App application struct
@@ -56,14 +59,12 @@ func NewApp(sessionID string) *App {
 	}
 
 	configManager := data.NewConfigManager("", sessionManager)
-	logManager := data.NewLogManager(data.DefaultLogPathTilde)
 
 	app := &App{
 		outputChannel:   make(chan string, 1000),
 		outputIngress:   make(chan string, 1000),
 		configManager:   configManager,
 		sessionManager:  sessionManager,
-		logManager:      logManager,
 		shellHistory:    data.NewShellHistoryManager(),
 		shellCmdHistory: data.NewShellCommandHistoryManager(),
 		shellPool:       machine.NewShellSessionPool(),
@@ -73,7 +74,6 @@ func NewApp(sessionID string) *App {
 		externalEdits:   newExternalEditStore(),
 		shellCwds:       make(map[string]string),
 	}
-	app.refreshLogSettings()
 	app.applyProxyFromConfig()
 	app.applySSHHandshakeFromConfig()
 	app.applyShellCommandHistoryMaxFromConfig()
@@ -81,24 +81,12 @@ func NewApp(sessionID string) *App {
 	return app
 }
 
-func (a *App) refreshLogSettings() {
-	globalConfig, err := a.configManager.GetGlobalConfig()
-	if err != nil || globalConfig == nil {
-		a.logEnabled = false
-		return
-	}
-	a.logEnabled = globalConfig.LogSettings.Enabled
-	if globalConfig.LogSettings.Path != "" {
-		a.logManager.SetBasePath(globalConfig.LogSettings.Path)
-	}
-}
-
 // Startup is called when the app starts up
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
 	define.SetHostKeyCallback(data.GlobalHostKeyManager().Callback())
 	cmds.SetTransferReporter(a.reportTaskTransfer)
-	a.setupSubProjectRunner()
+	a.initExecutionFeatures()
 
 	// 将更新后的机器配置重新保存到全局配置文件中
 	if _, err := a.configManager.LoadConfig(); err != nil {
@@ -192,8 +180,7 @@ func (a *App) Shutdown(ctx context.Context) {
 }
 
 func (a *App) setupSubProjectRunner() {
-	a.subProjectRunner = machine.NewSubProjectRunner(a.configManager)
-	a.subProjectRunner.SetStatusChangeHandler(a.emitExecutionStatus)
+	a.rebuildSubProjectRunner()
 }
 
 func (a *App) outputEventLoop() {
@@ -201,9 +188,6 @@ func (a *App) outputEventLoop() {
 		select {
 		case a.outputChannel <- msg:
 		default:
-		}
-		if a.logEnabled {
-			a.logManager.WriteLine(msg)
 		}
 		if a.ctx != nil {
 			wailsRuntime.EventsEmit(a.ctx, "output:line", msg)
@@ -250,6 +234,7 @@ func (a *App) shellHandlerFor(machineName string) machine.ShellOutputHandler {
 		},
 		OnClose: func() {
 			if machineName != "" {
+				userInitiated := a.consumeShellUserDisconnect(machineName)
 				if machine.IsLocalShellID(machineName) {
 					if a.localShellPool != nil {
 						a.localShellPool.RemoveSession(machineName)
@@ -263,6 +248,9 @@ func (a *App) shellHandlerFor(machineName string) machine.ShellOutputHandler {
 					}
 				}
 				a.clearShellCwd(machineName)
+				if !userInitiated {
+					a.scheduleShellAutoReconnect(machineName)
+				}
 			}
 			go a.emitShellSessions()
 		},
@@ -409,32 +397,30 @@ func (a *App) ExecuteSubProject(projectName, subProjectName string) error {
 
 	// 异步执行 SubProject
 	go func() {
-		success := true
-		summary := "执行完成"
-		if a.logEnabled {
-			if _, err := a.logManager.StartSession(projectName, subProjectName); err != nil {
-				a.pushOutput(fmt.Sprintf("日志落盘启动失败: %s", err.Error()))
-			}
-		}
-
 		if err := a.subProjectRunner.ExecuteSubProject(projectName, subProjectName, a.outputWriter()); err != nil {
 			a.pushOutput(fmt.Sprintf("执行失败: %s", err.Error()))
-			success = false
-			summary = err.Error()
-		}
-
-		if a.logEnabled {
-			a.logManager.FinishSession(success, summary)
 		}
 	}()
 
 	return nil
 }
 
-// ExecuteCommand 执行命令 (保持向后兼容，但现在不推荐使用)
+// ExecuteCommand 仅执行 SubProject 中的单个 Command
 func (a *App) ExecuteCommand(projectName, subProjectName, commandName string) error {
-	// 异步执行 SubProject
-	return a.ExecuteSubProject(projectName, subProjectName)
+	a.executionMutex.Lock()
+	defer a.executionMutex.Unlock()
+
+	if _, err := a.configManager.LoadConfigForRefresh(); err != nil {
+		return err
+	}
+	a.ClearOutput()
+
+	go func() {
+		if err := a.subProjectRunner.ExecuteCommand(projectName, subProjectName, commandName, a.outputWriter()); err != nil {
+			a.pushOutput(fmt.Sprintf("执行失败: %s", err.Error()))
+		}
+	}()
+	return nil
 }
 
 // StopSubProject 停止 SubProject
@@ -735,7 +721,7 @@ func (a *App) SwitchConfigFileWithEvent(configPath string) error {
 	}
 
 	// 重新创建 SubProjectRunner
-	a.setupSubProjectRunner()
+	a.rebuildSubProjectRunner()
 
 	// 发送事件到前端打开工作路径配置对话框
 	if a.ctx != nil {
@@ -942,7 +928,7 @@ func (a *App) RefreshConfigMenu() error {
 	a.ClearOutput()
 
 	a.configManager = data.NewConfigManager("", a.sessionManager)
-	a.setupSubProjectRunner()
+	a.rebuildSubProjectRunner()
 	if a.ctx != nil {
 		err := a.UpdateApplicationMenu()
 		if err != nil {
@@ -962,7 +948,7 @@ func (a *App) RefreshConfigMenuWithEvent() error {
 	a.ClearOutput()
 
 	a.configManager = data.NewConfigManager("", a.sessionManager)
-	a.setupSubProjectRunner()
+	a.rebuildSubProjectRunner()
 	if a.ctx != nil {
 		err := a.UpdateApplicationMenu()
 		if err != nil {
@@ -1441,7 +1427,6 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	if err := a.configManager.SaveGlobalConfig(config); err != nil {
 		return err
 	}
-	a.refreshLogSettings()
 	a.applyProxySettings(config.ProxySettings)
 	a.applySSHHandshakeTimeout(config.SSHHandshakeTimeoutSec)
 	a.applyShellCommandHistoryMax(config.ShellCommandHistoryMax)
@@ -1549,30 +1534,6 @@ func (a *App) applyShellCommandHistoryMaxFromConfig() {
 	a.applyShellCommandHistoryMax(cfg.ShellCommandHistoryMax)
 }
 
-// GetExecutionLogs 获取执行历史列表
-func (a *App) GetExecutionLogs(limit int) ([]data.LogEntry, error) {
-	return a.logManager.ListLogs(limit)
-}
-
-// ReadExecutionLog 读取执行日志内容
-func (a *App) ReadExecutionLog(fileName string) (string, error) {
-	return a.logManager.ReadLog(fileName)
-}
-
-// OpenExecutionLog 用系统默认程序打开日志文件
-func (a *App) OpenExecutionLog(fileName string) error {
-	logs, err := a.logManager.ListLogs(200)
-	if err != nil {
-		return err
-	}
-	for _, entry := range logs {
-		if entry.FileName == fileName {
-			return openWithSystemApp(entry.FullPath)
-		}
-	}
-	return fmt.Errorf("未找到日志文件: %s", fileName)
-}
-
 // OpenConfigEditor 打开业务配置编辑器
 func (a *App) OpenConfigEditor() {
 	if a.ctx != nil {
@@ -1586,15 +1547,6 @@ func (a *App) OpenConfigEditor() {
 func (a *App) OpenSystemSettings() {
 	if a.ctx != nil {
 		wailsRuntime.EventsEmit(a.ctx, "open:system-settings", map[string]interface{}{
-			"timestamp": time.Now().Unix(),
-		})
-	}
-}
-
-// OpenExecutionHistory 打开执行历史
-func (a *App) OpenExecutionHistory() {
-	if a.ctx != nil {
-		wailsRuntime.EventsEmit(a.ctx, "open:execution-history", map[string]interface{}{
 			"timestamp": time.Now().Unix(),
 		})
 	}
@@ -1893,6 +1845,7 @@ func (a *App) seedShellCwdIfEmpty(machineName string) {
 
 // DisconnectShell 断开指定机器的 Shell
 func (a *App) DisconnectShell(machineName string) error {
+	a.markShellUserDisconnect(machineName)
 	a.executionMutex.Lock()
 	defer a.executionMutex.Unlock()
 	var err error

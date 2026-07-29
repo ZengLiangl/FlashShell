@@ -225,6 +225,24 @@ func (p *ShellSessionPool) FirstSessionOfConfig(configName string) string {
 	return ""
 }
 
+// SharedClientForConfig 返回该机器配置下任一已连接 Shell 的 SSH 客户端（供任务复用）
+func (p *ShellSessionPool) SharedClientForConfig(configName string) *SSHClient {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	for _, sm := range p.sessions {
+		if !sm.IsConnected() {
+			continue
+		}
+		st := sm.GetStatus()
+		if st != nil && st.ConfigName == configName {
+			if client := sm.SharedSSHClient(); client != nil && client.IsConnected() {
+				return client
+			}
+		}
+	}
+	return nil
+}
+
 // ListSessions 列出所有活动或连接中的会话状态
 func (p *ShellSessionPool) ListSessions() []define.ShellStatus {
 	p.mu.RLock()

@@ -105,6 +105,15 @@
             @input="emitChange"
           />
         </label>
+        <div class="field field-span-2">
+          <span class="field-label">并行执行</span>
+          <el-switch
+            v-model="localDraft.parallel"
+            size="small"
+            active-text="与后续 parallel 命令同组并发"
+            @change="emitChange"
+          />
+        </div>
       </div>
 
       <!-- 步骤 -->
@@ -136,6 +145,15 @@
             @change="emitChange"
           />
         </div>
+        <label class="field field-span-2">
+          <span class="field-label">条件 when</span>
+          <el-input
+            v-model="localDraft.when"
+            size="small"
+            placeholder="可选，如 ${ENV} == prod"
+            @input="emitChange"
+          />
+        </label>
 
         <template v-if="localDraft.kind === 'upload'">
           <label class="field field-span-2">

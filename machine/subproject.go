@@ -1,23 +1,39 @@
-package machine
+﻿package machine
 
 import (
 	"fmt"
+	"strings"
 	"sync"
-	"time"
 
 	"FlashDock/define"
 	"FlashDock/utils"
 )
 
+// ShellClientProvider 任务执行时复用 Shell 已连接 SSH
+type ShellClientProvider interface {
+	SharedClientForConfig(configName string) *SSHClient
+}
+
+// RemoteFailureInfo 远程命令失败上下文
+type RemoteFailureInfo struct {
+	MachineName string
+	WorkDir     string
+	CommandName string
+	Error       string
+}
+
 // SubProjectRunner SubProject 执行器实现
 type SubProjectRunner struct {
-	configManager  ConfigManagerInterface
-	runners        map[string]define.Runner
-	runnerMutex    sync.RWMutex
-	currentStatus  *define.SubProjectStatus
-	statusMutex    sync.RWMutex
-	stopChannel    chan bool
-	onStatusChange func(*define.SubProjectStatus)
+	configManager   ConfigManagerInterface
+	shellPool       ShellClientProvider
+	runners         map[string]define.Runner
+	runnerMutex     sync.RWMutex
+	currentStatus   *define.SubProjectStatus
+	statusMutex     sync.RWMutex
+	runID           uint64
+	stopChannel     chan bool
+	onStatusChange  func(*define.SubProjectStatus)
+	onRemoteFailure func(RemoteFailureInfo)
 }
 
 // ConfigManagerInterface 配置管理器接口
@@ -37,186 +53,353 @@ func NewSubProjectRunner(configManager ConfigManagerInterface) *SubProjectRunner
 	}
 }
 
+// SetShellClientProvider 注入 Shell 会话池以复用 SSH
+func (spr *SubProjectRunner) SetShellClientProvider(provider ShellClientProvider) {
+	spr.shellPool = provider
+}
+
 // SetStatusChangeHandler 设置状态变更回调（用于事件推送）
 func (spr *SubProjectRunner) SetStatusChangeHandler(handler func(*define.SubProjectStatus)) {
 	spr.onStatusChange = handler
 }
 
+// SetRemoteFailureHandler 远程命令失败回调（用于一键进 Shell）
+func (spr *SubProjectRunner) SetRemoteFailureHandler(handler func(RemoteFailureInfo)) {
+	spr.onRemoteFailure = handler
+}
+
+func (spr *SubProjectRunner) clearStopSignal() {
+	for {
+		select {
+		case <-spr.stopChannel:
+		default:
+			return
+		}
+	}
+}
+
+// beginRun 开始一次执行，返回本次 runID；defer finishRun(runID)。
+func (spr *SubProjectRunner) beginRun(status *define.SubProjectStatus) uint64 {
+	spr.statusMutex.Lock()
+	spr.runID++
+	runID := spr.runID
+	spr.currentStatus = status
+	handler := spr.onStatusChange
+	spr.statusMutex.Unlock()
+	if handler != nil {
+		handler(spr.GetExecutionStatus())
+	}
+	return runID
+}
+
+func (spr *SubProjectRunner) finishRun(runID uint64) {
+	spr.statusMutex.Lock()
+	if spr.runID != runID {
+		spr.statusMutex.Unlock()
+		return
+	}
+	spr.currentStatus.IsRunning = false
+	spr.currentStatus.CurrentCommand = ""
+	spr.currentStatus.CurrentStep = ""
+	handler := spr.onStatusChange
+	spr.statusMutex.Unlock()
+	if handler != nil {
+		handler(spr.GetExecutionStatus())
+	}
+}
+
+func (spr *SubProjectRunner) stopCurrentIfRunning() {
+	spr.statusMutex.RLock()
+	running := spr.currentStatus != nil && spr.currentStatus.IsRunning
+	projectName := ""
+	subName := ""
+	if spr.currentStatus != nil {
+		projectName = spr.currentStatus.ProjectName
+		subName = spr.currentStatus.SubProjectName
+	}
+	spr.statusMutex.RUnlock()
+	if running {
+		_ = spr.StopSubProject(projectName, subName)
+	}
+}
+
 // ExecuteSubProject 执行 SubProject
 func (spr *SubProjectRunner) ExecuteSubProject(projectName, subProjectName string, output chan<- string) error {
-	// 检查是否已经有任务在运行，如果有则先停止
-	spr.statusMutex.RLock()
-	if spr.currentStatus.IsRunning {
-		spr.statusMutex.RUnlock()
-		// 先停止当前运行的任务
-		if err := spr.StopSubProject(spr.currentStatus.ProjectName, spr.currentStatus.SubProjectName); err != nil {
-			fmt.Printf("停止当前任务时出错: %v\n", err)
-		}
-		// 等待一下确保停止完成
-		time.Sleep(100 * time.Millisecond)
-	} else {
-		spr.statusMutex.RUnlock()
-	}
+	spr.stopCurrentIfRunning()
+	spr.clearStopSignal()
 
-	// 获取配置
 	root := spr.configManager.GetRoot()
 	if root == nil {
 		return fmt.Errorf("配置未加载")
 	}
 
-	// 查找 SubProject
 	var subProject *define.SubProject
 	var project *define.Project
-
-	for _, p := range root.Projects {
-		if p.Name == projectName {
-			project = &p
-			for _, sp := range p.SubProjects {
-				if sp.Name == subProjectName {
-					subProject = &sp
-					break
-				}
-			}
-			break
+	for i := range root.Projects {
+		if root.Projects[i].Name != projectName {
+			continue
 		}
+		project = &root.Projects[i]
+		for j := range project.SubProjects {
+			if project.SubProjects[j].Name == subProjectName {
+				subProject = &project.SubProjects[j]
+				break
+			}
+		}
+		break
 	}
-
 	if subProject == nil {
 		return fmt.Errorf("未找到 SubProject: %s/%s", projectName, subProjectName)
 	}
 
-	// 清空停止通道，确保没有残留的停止信号
-	select {
-	case <-spr.stopChannel:
-	default:
-	}
-
-	// 计算总步骤数
 	totalSteps := 0
 	for _, cmd := range subProject.Commands {
 		totalSteps += len(cmd.Steps)
 	}
 
-	// 初始化执行状态
-	spr.statusMutex.Lock()
-	spr.currentStatus = &define.SubProjectStatus{
-		ProjectName:       projectName,
-		SubProjectName:    subProjectName,
-		IsRunning:         true,
-		CurrentCommand:    "",
-		CurrentStep:       "",
-		CompletedCommands: 0,
-		CompletedSteps:    0,
-		TotalCommands:     len(subProject.Commands),
-		TotalSteps:        totalSteps,
-	}
-	handler := spr.onStatusChange
-	spr.statusMutex.Unlock()
-
-	if handler != nil {
-		handler(spr.GetExecutionStatus())
-	}
+	runID := spr.beginRun(&define.SubProjectStatus{
+		ProjectName:    projectName,
+		SubProjectName: subProjectName,
+		IsRunning:      true,
+		TotalCommands:  len(subProject.Commands),
+		TotalSteps:     totalSteps,
+	})
+	defer spr.finishRun(runID)
 
 	utils.SendOutput(output, fmt.Sprintf("开始执行 SubProject: %s/%s", projectName, subProjectName))
 	utils.SendOutput(output, fmt.Sprintf("总共 %d 个命令需要执行", len(subProject.Commands)))
 
-	// 创建执行上下文
 	ctx := &define.ExecutionContext{
 		ProjectName:       projectName,
 		SubProjectName:    subProjectName,
 		Commands:          subProject.Commands,
-		CurrentIndex:      0,
-		OutputChannel:     output,
 		ProjectWorkDir:    project.WorkDir,
 		SubProjectWorkDir: subProject.WorkDir,
 		WorkPathVars:      spr.configManager.GetWorkPathVars(),
 	}
 
-	// 按顺序执行所有 Commands
-	for i, command := range subProject.Commands {
-		// 检查是否需要停止
+	completedCommands := 0
+	for _, group := range GroupParallelCommands(subProject.Commands) {
 		select {
 		case <-spr.stopChannel:
 			utils.SendOutput(output, "执行已被用户停止")
-			spr.updateStatus("", "", len(subProject.Commands), totalSteps, false)
+			spr.updateStatusForRun(runID, "", "", completedCommands, spr.completedSteps(), false)
 			return fmt.Errorf("执行被用户停止")
 		default:
 		}
-
-		// 更新当前执行状态 - 开始执行新命令
-		spr.updateStatus(command.Name, "", i, spr.currentStatus.CompletedSteps, true)
-
-		utils.SendOutput(output, fmt.Sprintf("执行命令 %d/%d: %s", i+1, len(subProject.Commands), command.Name))
-		// utils.SendOutput(output, fmt.Sprintf("命令描述: %s", command.Description))
-		utils.SendOutput(output, fmt.Sprintf("命令类型: %s", command.Type))
-
-		// 执行当前命令
-		if err := spr.executeCommand(command, ctx, output); err != nil {
-			spr.updateStatus(command.Name, "", i, spr.currentStatus.CompletedSteps, false)
-			return fmt.Errorf("命令 '%s' 执行失败: %w", command.Name, err)
+		if len(group) == 1 {
+			command := group[0]
+			spr.updateStatusForRun(runID, command.Name, "", completedCommands, spr.completedSteps(), true)
+			utils.SendOutput(output, fmt.Sprintf("执行命令 %d/%d: %s", completedCommands+1, len(subProject.Commands), command.Name))
+			utils.SendOutput(output, fmt.Sprintf("命令类型: %s", command.Type))
+			if err := spr.executeCommand(runID, command, ctx, output); err != nil {
+				spr.updateStatusForRun(runID, command.Name, "", completedCommands, spr.completedSteps(), false)
+				return fmt.Errorf("命令 '%s' 执行失败: %w", command.Name, err)
+			}
+			utils.SendOutput(output, fmt.Sprintf("命令 '%s' 执行完成", command.Name))
+			completedCommands++
+			spr.updateStatusForRun(runID, command.Name, "", completedCommands, spr.completedSteps(), true)
+			continue
 		}
 
-		utils.SendOutput(output, fmt.Sprintf("命令 '%s' 执行完成", command.Name))
-
-		// 更新完成状态 - 命令完成，CompletedSteps 已经在步骤完成时实时更新了
-		spr.updateStatus(command.Name, "", i+1, spr.currentStatus.CompletedSteps, true)
+		names := make([]string, len(group))
+		for i, cmd := range group {
+			names[i] = cmd.Name
+		}
+		utils.SendOutput(output, fmt.Sprintf("并行执行命令组: %s", strings.Join(names, ", ")))
+		if err := spr.executeParallelGroup(runID, group, ctx, output); err != nil {
+			spr.updateStatusForRun(runID, "", "", completedCommands, spr.completedSteps(), false)
+			return err
+		}
+		completedCommands += len(group)
+		spr.updateStatusForRun(runID, "", "", completedCommands, spr.completedSteps(), true)
 	}
 
-	// 所有命令执行完成
 	utils.SendOutput(output, fmt.Sprintf("'%s' 执行完成！", subProjectName))
-	spr.updateStatus("", "", len(subProject.Commands), totalSteps, false)
-
+	spr.updateStatusForRun(runID, "", "", len(subProject.Commands), totalSteps, false)
 	return nil
 }
 
-// executeCommand 执行单个命令
-func (spr *SubProjectRunner) executeCommand(command define.Command, ctx *define.ExecutionContext, output chan<- string) error {
+// ExecuteCommand 仅执行指定 Command
+func (spr *SubProjectRunner) ExecuteCommand(projectName, subProjectName, commandName string, output chan<- string) error {
+	spr.stopCurrentIfRunning()
+	spr.clearStopSignal()
+
+	root := spr.configManager.GetRoot()
+	if root == nil {
+		return fmt.Errorf("配置未加载")
+	}
+
+	var subProject *define.SubProject
+	var project *define.Project
+	var command *define.Command
+	for i := range root.Projects {
+		if root.Projects[i].Name != projectName {
+			continue
+		}
+		project = &root.Projects[i]
+		for j := range project.SubProjects {
+			if project.SubProjects[j].Name != subProjectName {
+				continue
+			}
+			subProject = &project.SubProjects[j]
+			for k := range subProject.Commands {
+				if subProject.Commands[k].Name == commandName {
+					command = &subProject.Commands[k]
+					break
+				}
+			}
+			break
+		}
+		break
+	}
+	if subProject == nil {
+		return fmt.Errorf("未找到 SubProject: %s/%s", projectName, subProjectName)
+	}
+	if command == nil {
+		return fmt.Errorf("未找到命令: %s/%s/%s", projectName, subProjectName, commandName)
+	}
+
+	totalSteps := len(command.Steps)
+	runID := spr.beginRun(&define.SubProjectStatus{
+		ProjectName:    projectName,
+		SubProjectName: subProjectName,
+		IsRunning:      true,
+		TotalCommands:  1,
+		TotalSteps:     totalSteps,
+	})
+	defer spr.finishRun(runID)
+
+	utils.SendOutput(output, fmt.Sprintf("开始执行命令: %s/%s/%s", projectName, subProjectName, commandName))
+	utils.SendOutput(output, fmt.Sprintf("命令类型: %s", command.Type))
+
+	ctx := &define.ExecutionContext{
+		ProjectName:       projectName,
+		SubProjectName:    subProjectName,
+		Commands:          []define.Command{*command},
+		ProjectWorkDir:    project.WorkDir,
+		SubProjectWorkDir: subProject.WorkDir,
+		WorkPathVars:      spr.configManager.GetWorkPathVars(),
+	}
+
+	spr.updateStatusForRun(runID, command.Name, "", 0, 0, true)
+	if err := spr.executeCommand(runID, *command, ctx, output); err != nil {
+		spr.updateStatusForRun(runID, command.Name, "", 0, spr.completedSteps(), false)
+		return fmt.Errorf("命令 '%s' 执行失败: %w", command.Name, err)
+	}
+
+	utils.SendOutput(output, fmt.Sprintf("命令 '%s' 执行完成", command.Name))
+	spr.updateStatusForRun(runID, "", "", 1, totalSteps, false)
+	return nil
+}
+
+func (spr *SubProjectRunner) completedSteps() int {
+	spr.statusMutex.RLock()
+	defer spr.statusMutex.RUnlock()
+	if spr.currentStatus == nil {
+		return 0
+	}
+	return spr.currentStatus.CompletedSteps
+}
+
+func (spr *SubProjectRunner) completedCommands() int {
+	spr.statusMutex.RLock()
+	defer spr.statusMutex.RUnlock()
+	if spr.currentStatus == nil {
+		return 0
+	}
+	return spr.currentStatus.CompletedCommands
+}
+
+func (spr *SubProjectRunner) executeParallelGroup(runID uint64, group []define.Command, ctx *define.ExecutionContext, output chan<- string) error {
+	type result struct {
+		command define.Command
+		err     error
+	}
+	results := make(chan result, len(group))
+	var wg sync.WaitGroup
+
+	for _, command := range group {
+		cmd := command
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			utils.SendOutput(output, fmt.Sprintf("并行命令开始: %s (%s)", cmd.Name, cmd.Type))
+			err := spr.executeCommand(runID, cmd, ctx, output)
+			if err == nil {
+				utils.SendOutput(output, fmt.Sprintf("并行命令完成: %s", cmd.Name))
+			}
+			results <- result{command: cmd, err: err}
+		}()
+	}
+
+	wg.Wait()
+	close(results)
+
+	var firstErr error
+	var failedCmd define.Command
+	for res := range results {
+		if res.err != nil && firstErr == nil {
+			firstErr = res.err
+			failedCmd = res.command
+		}
+	}
+	if firstErr != nil {
+		return fmt.Errorf("并行命令 '%s' 执行失败: %w", failedCmd.Name, firstErr)
+	}
+	return nil
+}
+
+func (spr *SubProjectRunner) executeCommand(runID uint64, command define.Command, ctx *define.ExecutionContext, output chan<- string) error {
 	var runner define.Runner
-	var err error
+	workDir := resolveCommandWorkDir(command, ctx)
 
 	switch command.Type {
 	case "batch":
-		// 本地执行
-		// WorkDir 优先级：Command.WorkDir > SubProject.WorkDir > Project.WorkDir
-		workDir := ctx.ProjectWorkDir
-		if ctx.SubProjectWorkDir != "" {
-			workDir = ctx.SubProjectWorkDir
-		}
-		if command.WorkDir != "" {
-			workDir = command.WorkDir
-		}
 		runner = NewLocalRunner(workDir, ctx.WorkPathVars)
-
 	case "remote":
-		// 远程执行
 		if command.Machine == "" {
 			return fmt.Errorf("远程命令未指定机器")
 		}
-
 		machineConfig := spr.configManager.GetMachine(command.Machine)
 		if machineConfig == nil {
 			return fmt.Errorf("未找到机器配置: %s", command.Machine)
 		}
 
-		sshClient := NewSSHClient(machineConfig, ctx.WorkPathVars)
-		// 任务模式：未知主机密钥默认只信任本次，不弹框
-		if err := sshClient.ConnectAutoTrustOnce(machineConfig, CommandNeedsSFTP(command)); err != nil {
-			return fmt.Errorf("连接远程机器失败: %w", err)
+		var sshClient *SSHClient
+		var ownsClient bool
+		if spr.shellPool != nil {
+			if shared := spr.shellPool.SharedClientForConfig(command.Machine); shared != nil && shared.IsConnected() {
+				sshClient = NewSSHClient(machineConfig, ctx.WorkPathVars)
+				sshClient.AttachRemote(shared.SharedRemoteMachine(), machineConfig, ctx.WorkPathVars)
+				utils.SendOutput(output, fmt.Sprintf("复用 Shell 已连接 SSH: %s", command.Machine))
+			}
 		}
-		defer sshClient.Close()
+		if sshClient == nil {
+			sshClient = NewSSHClient(machineConfig, ctx.WorkPathVars)
+			if err := sshClient.ConnectAutoTrustOnce(machineConfig, CommandNeedsSFTP(command)); err != nil {
+				spr.notifyRemoteFailure(command, workDir, err)
+				return fmt.Errorf("连接远程机器失败: %w", err)
+			}
+			ownsClient = true
+		}
+		if ownsClient {
+			defer sshClient.Close()
+		} else {
+			defer func() {
+				_ = sshClient.Stop()
+			}()
+		}
 		runner = sshClient
-
 	default:
 		return fmt.Errorf("不支持的命令类型: %s", command.Type)
 	}
 
-	// 存储执行器以便停止
 	runnerKey := fmt.Sprintf("%s/%s/%s", ctx.ProjectName, ctx.SubProjectName, command.Name)
 	spr.runnerMutex.Lock()
 	spr.runners[runnerKey] = runner
 	spr.runnerMutex.Unlock()
 
-	// 执行命令
 	shouldStop := func() bool {
 		select {
 		case <-spr.stopChannel:
@@ -225,58 +408,72 @@ func (spr *SubProjectRunner) executeCommand(command define.Command, ctx *define.
 			return false
 		}
 	}
-	err = runner.Execute(command, output,
+	err := runner.Execute(command, output,
 		func(step string) {
-			// 步骤开始执行时更新当前步骤
-			spr.updateStatus(command.Name, step, spr.currentStatus.CompletedCommands, spr.currentStatus.CompletedSteps, true)
+			spr.updateStatusForRun(runID, command.Name, step, spr.completedCommands(), spr.completedSteps(), true)
 		},
 		func() {
-			// 步骤完成时更新已完成步骤数，清空当前步骤
-			spr.updateStatus(command.Name, "", spr.currentStatus.CompletedCommands, spr.currentStatus.CompletedSteps+1, true)
+			spr.updateStatusForRun(runID, command.Name, "", spr.completedCommands(), spr.completedSteps()+1, true)
 		},
 		shouldStop)
 
-	// 清理执行器
 	spr.runnerMutex.Lock()
 	delete(spr.runners, runnerKey)
 	spr.runnerMutex.Unlock()
 
+	if err != nil && command.Type == "remote" {
+		spr.notifyRemoteFailure(command, workDir, err)
+	}
 	return err
+}
+
+func (spr *SubProjectRunner) notifyRemoteFailure(command define.Command, workDir string, err error) {
+	if spr.onRemoteFailure == nil || command.Type != "remote" {
+		return
+	}
+	spr.onRemoteFailure(RemoteFailureInfo{
+		MachineName: command.Machine,
+		WorkDir:     workDir,
+		CommandName: command.Name,
+		Error:       err.Error(),
+	})
 }
 
 // StopSubProject 停止 SubProject 执行
 func (spr *SubProjectRunner) StopSubProject(projectName, subProjectName string) error {
-	// 发送停止信号
 	select {
 	case spr.stopChannel <- true:
 	default:
-		// 通道已满，说明已经有停止信号
 	}
 
-	// 停止所有正在运行的命令
+	prefix := fmt.Sprintf("%s/%s", projectName, subProjectName)
 	spr.runnerMutex.RLock()
 	runners := make([]define.Runner, 0, len(spr.runners))
 	for key, runner := range spr.runners {
-		// 只停止当前 SubProject 的命令
-		if fmt.Sprintf("%s/%s", projectName, subProjectName) == key[:len(fmt.Sprintf("%s/%s", projectName, subProjectName))] {
+		if len(key) >= len(prefix) && key[:len(prefix)] == prefix {
 			runners = append(runners, runner)
 		}
 	}
 	spr.runnerMutex.RUnlock()
 
-	// 停止所有相关的执行器
 	for _, runner := range runners {
 		if err := runner.Stop(); err != nil {
-			// 记录错误但继续停止其他执行器
 			fmt.Printf("停止执行器时出错: %v\n", err)
 		}
 	}
 
-	// 强制重置执行状态，确保下次可以正常执行
 	spr.statusMutex.Lock()
-	spr.currentStatus.IsRunning = false
-	spr.currentStatus.CurrentCommand = ""
+	spr.runID++ // 使进行中的 run 状态回调失效
+	if spr.currentStatus != nil {
+		spr.currentStatus.IsRunning = false
+		spr.currentStatus.CurrentCommand = ""
+		spr.currentStatus.CurrentStep = ""
+	}
+	handler := spr.onStatusChange
 	spr.statusMutex.Unlock()
+	if handler != nil {
+		handler(spr.GetExecutionStatus())
+	}
 
 	return nil
 }
@@ -286,14 +483,16 @@ func (spr *SubProjectRunner) GetExecutionStatus() *define.SubProjectStatus {
 	spr.statusMutex.RLock()
 	defer spr.statusMutex.RUnlock()
 
-	// 返回状态的副本
 	status := *spr.currentStatus
 	return &status
 }
 
-// updateStatus 更新执行状态
-func (spr *SubProjectRunner) updateStatus(currentCommand string, currentStep string, completedCommands int, completedSteps int, isRunning bool) {
+func (spr *SubProjectRunner) updateStatusForRun(runID uint64, currentCommand string, currentStep string, completedCommands int, completedSteps int, isRunning bool) {
 	spr.statusMutex.Lock()
+	if spr.runID != runID {
+		spr.statusMutex.Unlock()
+		return
+	}
 	spr.currentStatus.CurrentCommand = currentCommand
 	spr.currentStatus.CurrentStep = currentStep
 	spr.currentStatus.CompletedCommands = completedCommands

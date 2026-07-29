@@ -37,7 +37,7 @@ func (lr *LocalRunner) Execute(cmd define.Command, output chan<- string, onStepS
 		workDir = cmd.WorkDir
 	}
 
-	return executeSteps(cmd.Steps, output, onStepStart, onStepComplete, shouldStop, func(command string, out chan<- string) error {
+	return executeSteps(cmd.Steps, lr.workVars, output, onStepStart, onStepComplete, shouldStop, func(command string, out chan<- string) error {
 		return lr.executeStep(command, workDir, out)
 	})
 }

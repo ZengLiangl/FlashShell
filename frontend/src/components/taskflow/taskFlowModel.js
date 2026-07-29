@@ -16,6 +16,7 @@ export function emptyCommand(template = 'batch') {
       type: 'remote',
       machine: '',
       workdir: '',
+      parallel: false,
       steps: [],
     }
   }
@@ -25,12 +26,13 @@ export function emptyCommand(template = 'batch') {
     type: 'batch',
     machine: '',
     workdir: '',
+    parallel: false,
     steps: [],
   }
 }
 
 export function emptyStep(kind = 'shell') {
-  const base = { command: '', onFail: 'abort', retry: 0, kind }
+  const base = { command: '', onFail: 'abort', retry: 0, when: '', kind }
   switch (kind) {
     case 'upload':
       return { ...base, command: 'upload ', kind: 'upload' }
@@ -53,6 +55,7 @@ export function normalizeStep(s) {
       command: s,
       onFail: 'abort',
       retry: 0,
+      when: '',
       kind: detectStepKind(s),
     }
   }
@@ -61,6 +64,7 @@ export function normalizeStep(s) {
     command,
     onFail: s.onFail || s.on_fail || 'abort',
     retry: s.retry || 0,
+    when: s.when || '',
     kind: s.kind || detectStepKind(command),
   }
 }
@@ -80,6 +84,7 @@ export function normalizeCommand(cmd) {
     type: cmd.type === 'remote' ? 'remote' : 'batch',
     machine: cmd.machine || '',
     workdir: cmd.workdir || '',
+    parallel: !!cmd.parallel,
     steps: (cmd.steps || []).map(normalizeStep),
   }
   return next
@@ -100,7 +105,7 @@ export function normalizeRoot(config) {
 }
 
 /**
- * 保存给 Wails/Go：steps 使用 json tag（command/onFail/retry）。
+ * 保存给 Wails/Go：steps 使用 json tag（command/onFail/retry/when）。
  * YAML 简写由后端 StepList.MarshalYAML 在落盘时处理。
  */
 export function serializeStepsForSave(steps) {
@@ -108,9 +113,11 @@ export function serializeStepsForSave(steps) {
     const command = (s.command || '').trim()
     const onFail = s.onFail || 'abort'
     const retry = Number(s.retry) || 0
+    const when = (s.when || '').trim()
     const out = { command }
     if (onFail && onFail !== 'abort') out.onFail = onFail
     if (retry > 0) out.retry = retry
+    if (when) out.when = when
     return out
   })
 }
@@ -121,6 +128,7 @@ export function serializeRootForSave(root) {
     p.subprojects?.forEach((sp) => {
       sp.commands?.forEach((cmd) => {
         cmd.steps = serializeStepsForSave(cmd.steps)
+        if (!cmd.parallel) delete cmd.parallel
       })
     })
   })
@@ -202,6 +210,7 @@ export function commitByPath(root, path, draft) {
     target.command = draft.command ?? ''
     target.onFail = draft.onFail || 'abort'
     target.retry = draft.retry || 0
+    target.when = draft.when || ''
     target.kind = draft.kind || detectStepKind(target.command)
     return true
   }
@@ -213,6 +222,7 @@ export function commitByPath(root, path, draft) {
     cmd.type = draft.type === 'remote' ? 'remote' : 'batch'
     cmd.machine = draft.machine ?? ''
     cmd.workdir = draft.workdir ?? ''
+    cmd.parallel = !!draft.parallel
     return true
   }
   if (path.s != null) {
