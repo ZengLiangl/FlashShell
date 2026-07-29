@@ -9,6 +9,7 @@
     <div class="picker-shell">
       <div class="app-toolbar picker-toolbar">
         <el-input
+          ref="searchInputRef"
           v-model="keyword"
           clearable
           placeholder="搜索机器名 / 地址"
@@ -176,7 +177,7 @@
 </template>
 
 <script>
-import { computed, ref, watch } from 'vue'
+import { computed, ref, watch, nextTick } from 'vue'
 import { Monitor, Plus, Search, Clock, List } from '@element-plus/icons-vue'
 import { machineMatchesKeyword } from '../../utils/machineGroups'
 import MachineConnectList from './MachineConnectList.vue'
@@ -209,6 +210,7 @@ export default {
   setup(props, { emit }) {
     const keyword = ref('')
     const activeTab = ref('history')
+    const searchInputRef = ref(null)
 
     const visibleProxy = computed({
       get: () => props.modelValue,
@@ -264,9 +266,18 @@ export default {
       return (props.historyRecords || []).length ? 'history' : 'machines'
     }
 
+    const focusSearch = async () => {
+      await nextTick()
+      // 等对话框过渡后再 focus，避免被遮罩抢焦点
+      requestAnimationFrame(() => {
+        searchInputRef.value?.focus?.()
+      })
+    }
+
     const onDialogOpen = () => {
       activeTab.value = resolveDefaultTab()
       emit('open')
+      focusSearch()
     }
 
     watch(
@@ -311,6 +322,7 @@ export default {
     return {
       Monitor,
       Plus,
+      searchInputRef,
       visibleProxy,
       keyword,
       activeTab,

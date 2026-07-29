@@ -9,6 +9,7 @@
     <Teleport to="body">
       <ul
         v-if="ctx.visible"
+        ref="ctxMenuRef"
         class="ctx-menu"
         :style="{ left: ctx.x + 'px', top: ctx.y + 'px' }"
         @click.stop
@@ -79,6 +80,7 @@ export default {
   setup(props, { expose, emit }) {
     const containerRef = ref(null)
     const terminalRef = ref(null)
+    const ctxMenuRef = ref(null)
     const term = ref(null)
     const fitAddon = ref(null)
     const searchAddon = ref(null)
@@ -113,12 +115,35 @@ export default {
       ctx.visible = false
     }
 
+    const adjustContextMenuPosition = async () => {
+      await nextTick()
+      const el = ctxMenuRef.value
+      if (!el) return
+      const rect = el.getBoundingClientRect()
+      const pad = 8
+      const vw = window.innerWidth
+      const vh = window.innerHeight
+      let { x, y } = ctx
+      if (x + rect.width > vw - pad) {
+        x = Math.max(pad, vw - rect.width - pad)
+      }
+      if (y + rect.height > vh - pad) {
+        y = Math.max(pad, y - rect.height)
+      }
+      if (y + rect.height > vh - pad) {
+        y = Math.max(pad, vh - rect.height - pad)
+      }
+      ctx.x = x
+      ctx.y = y
+    }
+
     const onContextMenu = (e) => {
       // 右键时先保存选区：点击菜单项可能触发 mousedown 清掉 xterm 选区
       ctx.selection = getTerminalSelectionText(term.value)
       ctx.x = e.clientX
       ctx.y = e.clientY
       ctx.visible = true
+      adjustContextMenuPosition()
     }
 
     const onCopy = async () => {
@@ -720,6 +745,7 @@ export default {
     return {
       containerRef,
       terminalRef,
+      ctxMenuRef,
       ctx,
       hideContextMenu,
       onContextMenu,
