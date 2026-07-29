@@ -179,6 +179,8 @@ type GlobalConfig struct {
 	ShellLogHighlightColors ShellLogHighlightColors `yaml:"shellLogHighlightColors,omitempty" json:"shellLogHighlightColors"`
 	// ShellLogHighlightDisabled 关闭高亮的关键字（缺省或空表示全部开启）
 	ShellLogHighlightDisabled []string `yaml:"shellLogHighlightDisabled,omitempty" json:"shellLogHighlightDisabled"`
+	// ShellAsciiInput Shell 终端获得焦点时临时关闭中文组词（失焦/离开 Shell 后恢复）；nil 表示默认开启
+	ShellAsciiInput *bool `yaml:"shellAsciiInput,omitempty" json:"shellAsciiInput"`
 }
 
 // NormalizeHomeMinimizedZone 校验首页最小化分区
@@ -462,6 +464,7 @@ func (gcm *GlobalConfigManager) createDefaultGlobalConfig() error {
 		AppIconPreset:           "default",
 		ShellLogHighlight:       boolPtr(true),
 		ShellLogHighlightColors: DefaultShellLogHighlightColors(),
+		ShellAsciiInput:         boolPtr(true),
 	}
 
 	return gcm.SaveGlobalConfig(defaultConfig)
@@ -475,6 +478,14 @@ func ShellLogHighlightEnabled(cfg *GlobalConfig) bool {
 		return true
 	}
 	return *cfg.ShellLogHighlight
+}
+
+// ShellAsciiInputEnabled Shell 终端临时英文输入是否开启（缺省 true）
+func ShellAsciiInputEnabled(cfg *GlobalConfig) bool {
+	if cfg == nil || cfg.ShellAsciiInput == nil {
+		return true
+	}
+	return *cfg.ShellAsciiInput
 }
 
 // AddMachine 添加或更新机器配置（按 ID）

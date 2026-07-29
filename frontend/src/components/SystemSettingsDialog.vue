@@ -120,6 +120,15 @@
                                     <span class="system-setting-unit">条</span>
                                 </div>
                             </div>
+                            <div class="system-setting-row">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">终端英文输入</span>
+                                    <span class="system-setting-hint">Shell 终端获得焦点时临时关闭中文组词，失焦、切走窗口或离开 Shell 后自动恢复；仅影响终端，设置面板等中文输入不受影响</span>
+                                </div>
+                                <div class="system-setting-control">
+                                    <el-switch v-model="form.shellAsciiInput" size="small" />
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -631,6 +640,7 @@ export default {
             taskOutputMaxLines: TASK_OUTPUT_MAX_LINES,
             shellCommandHistoryMax: SHELL_COMMAND_HISTORY_MAX,
             shellLogHighlight: true,
+            shellAsciiInput: true,
             shellLogHighlightColors: { ...DEFAULT_SHELL_LOG_COLORS },
             shellLogHighlightRules: mergeLogHighlightRules([]),
         })
@@ -837,6 +847,7 @@ theme preview · ${theme.foreground}`
             form.taskOutputMaxLines = clampTaskOutputMaxLines(config.taskOutputMaxLines)
             form.shellCommandHistoryMax = clampShellCommandHistoryMax(config.shellCommandHistoryMax)
             form.shellLogHighlight = config.shellLogHighlight !== false
+            form.shellAsciiInput = config.shellAsciiInput !== false
             Object.assign(
                 form.shellLogHighlightColors,
                 mergeLogHighlightColors(config.shellLogHighlightColors),
@@ -1145,6 +1156,7 @@ theme preview · ${theme.foreground}`
                 config.taskOutputMaxLines = clampTaskOutputMaxLines(form.taskOutputMaxLines)
                 config.shellCommandHistoryMax = clampShellCommandHistoryMax(form.shellCommandHistoryMax)
                 config.shellLogHighlight = !!form.shellLogHighlight
+                config.shellAsciiInput = !!form.shellAsciiInput
                 config.shellLogHighlightColors = mergeLogHighlightColors(form.shellLogHighlightColors)
                 config.shellLogHighlightDisabled = rulesToDisabled(form.shellLogHighlightRules)
                 await App.SaveSystemSettings(config)

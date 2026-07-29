@@ -538,6 +538,14 @@ export function SetMachineShellMonitorOpen(arg1, arg2) {
   return window['go']['app']['App']['SetMachineShellMonitorOpen'](arg1, arg2);
 }
 
+export function ShellAsciiInputEnter() {
+  return window['go']['app']['App']['ShellAsciiInputEnter']();
+}
+
+export function ShellAsciiInputLeave() {
+  return window['go']['app']['App']['ShellAsciiInputLeave']();
+}
+
 export function ShellDirExists(arg1, arg2) {
   return window['go']['app']['App']['ShellDirExists'](arg1, arg2);
 }

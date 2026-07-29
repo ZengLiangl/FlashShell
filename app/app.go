@@ -15,6 +15,7 @@ import (
 	"FlashDock/cmds"
 	"FlashDock/data"
 	"FlashDock/define"
+	"FlashDock/inputmethod"
 	"FlashDock/machine"
 
 	"github.com/wailsapp/wails/v2/pkg/menu"
@@ -151,6 +152,7 @@ func (a *App) remoteConfigName(sessionID string) string {
 }
 
 func (a *App) cleanupBeforeQuit() {
+	inputmethod.Leave()
 	a.StopAllSubProjects()
 	for _, session := range a.shellPool.ListSessions() {
 		_ = a.shellPool.Disconnect(session.MachineName, a.shellHandlerFor(session.MachineName))
@@ -1365,6 +1367,10 @@ func (a *App) GetSystemSettings() (*data.GlobalConfig, error) {
 		}
 		cfg.ShellLogHighlightColors = data.NormalizeShellLogHighlightColors(cfg.ShellLogHighlightColors)
 		cfg.ShellLogHighlightDisabled = data.NormalizeShellLogHighlightDisabled(cfg.ShellLogHighlightDisabled)
+		if cfg.ShellAsciiInput == nil {
+			v := true
+			cfg.ShellAsciiInput = &v
+		}
 	}
 	return cfg, nil
 }
@@ -1436,6 +1442,9 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	a.applyWindowTheme(config.ThemeSettings.Mode)
 	a.applyAppBranding(config)
 	a.applyStartupFullscreen(config.StartupFullscreen)
+	if !data.ShellAsciiInputEnabled(config) {
+		inputmethod.Leave()
+	}
 	if a.ctx != nil {
 		wailsRuntime.EventsEmit(a.ctx, "theme:changed", config.ThemeSettings)
 		wailsRuntime.EventsEmit(a.ctx, "system-settings:changed", map[string]any{
@@ -1447,6 +1456,7 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 			"shellLogHighlight":         data.ShellLogHighlightEnabled(config),
 			"shellLogHighlightColors":   config.ShellLogHighlightColors,
 			"shellLogHighlightDisabled": config.ShellLogHighlightDisabled,
+			"shellAsciiInput":           data.ShellAsciiInputEnabled(config),
 			"proxySettings":             config.ProxySettings,
 			"windowsName":               config.WindowsName,
 			"appIconPreset":             config.AppIconPreset,

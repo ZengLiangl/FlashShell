@@ -57,6 +57,12 @@ import {
   updateTuiModeDepth,
   DEFAULT_SHELL_LOG_COLORS,
 } from '../../utils/shellLogHighlight'
+import {
+  ensureShellAsciiInputListeners,
+  notifyShellTerminalBlur,
+  notifyShellTerminalFocus,
+  setShellAsciiInputEnabled,
+} from '../../utils/shellAsciiInput'
 
 export default {
   name: 'ShellTerminal',
@@ -204,6 +210,42 @@ export default {
       emit('focus-session', props.machineName)
     }
 
+    const onTermAsciiFocus = () => {
+      if (!props.active || !props.viewVisible) return
+      notifyShellTerminalFocus()
+    }
+
+    const onTermAsciiBlur = () => {
+      notifyShellTerminalBlur()
+    }
+
+    const bindAsciiInputListeners = (terminal) => {
+      unbindAsciiInputListeners(terminal)
+      const el = terminal?.textarea
+      if (!el) return
+      el.addEventListener('focus', onTermAsciiFocus)
+      el.addEventListener('blur', onTermAsciiBlur)
+      terminal._flashdockAsciiFocus = onTermAsciiFocus
+      terminal._flashdockAsciiBlur = onTermAsciiBlur
+      terminal._flashdockAsciiEl = el
+      if (document.activeElement === el && props.active && props.viewVisible) {
+        notifyShellTerminalFocus()
+      }
+    }
+
+    const unbindAsciiInputListeners = (terminal) => {
+      const el = terminal?._flashdockAsciiEl
+      const onFocus = terminal?._flashdockAsciiFocus
+      const onBlur = terminal?._flashdockAsciiBlur
+      if (el && onFocus) el.removeEventListener('focus', onFocus)
+      if (el && onBlur) el.removeEventListener('blur', onBlur)
+      if (terminal) {
+        terminal._flashdockAsciiEl = null
+        terminal._flashdockAsciiFocus = null
+        terminal._flashdockAsciiBlur = null
+      }
+    }
+
     const decodeBase64 = (b64) => {
       if (b64 instanceof Uint8Array) return b64
       const binary = atob(b64)
@@ -250,11 +292,13 @@ export default {
         logHighlightEnabled = cfg?.shellLogHighlight !== false
         logHighlightConfig = mergeLogHighlightConfig(cfg)
         scrollbackLines = clampShellTerminalScrollback(cfg?.shellTerminalScrollback)
+        setShellAsciiInputEnabled(cfg?.shellAsciiInput !== false)
         if (term.value) {
           term.value.options.scrollback = scrollbackLines
         }
       } catch {
         logHighlightEnabled = true
+        setShellAsciiInputEnabled(true)
       }
     }
 
@@ -299,6 +343,9 @@ export default {
         if (term.value) {
           term.value.options.scrollback = scrollbackLines
         }
+      }
+      if (Object.prototype.hasOwnProperty.call(payload, 'shellAsciiInput')) {
+        setShellAsciiInputEnabled(payload.shellAsciiInput !== false)
       }
     }
 
@@ -395,6 +442,7 @@ export default {
       terminal._flashdockCopyHandler = onNativeCopy
       terminal._flashdockCopyHost = host
 
+      bindAsciiInputListeners(terminal)
       bindInputHandler(terminal)
 
       searchResultsListener?.dispose?.()
@@ -436,6 +484,8 @@ export default {
       inputListener?.dispose?.()
       inputListener = null
       if (term.value) {
+        unbindAsciiInputListeners(term.value)
+        notifyShellTerminalBlur()
         const host = term.value._flashdockCopyHost
         const handler = term.value._flashdockCopyHandler
         if (host && handler) host.removeEventListener('copy', handler, true)
@@ -720,6 +770,7 @@ export default {
     let offSystemSettingsChanged = null
 
     onMounted(() => {
+      ensureShellAsciiInputListeners()
       setShellOutputSessionActive(props.machineName, props.active)
       loadLogHighlightSetting().finally(() => {
         if (props.active && props.viewVisible) wakeTerminal()
@@ -732,6 +783,7 @@ export default {
 
     onUnmounted(() => {
       setShellOutputSessionActive(props.machineName, false)
+      notifyShellTerminalBlur()
       offThemeChanged?.()
       offSystemSettingsChanged?.()
       window.removeEventListener('click', hideContextMenu)

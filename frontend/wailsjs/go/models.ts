@@ -284,6 +284,7 @@ export namespace data {
 	    shellLogHighlight?: boolean;
 	    shellLogHighlightColors: ShellLogHighlightColors;
 	    shellLogHighlightDisabled: string[];
+	    shellAsciiInput?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new GlobalConfig(source);
@@ -312,6 +313,7 @@ export namespace data {
 	        this.shellLogHighlight = source["shellLogHighlight"];
 	        this.shellLogHighlightColors = this.convertValues(source["shellLogHighlightColors"], ShellLogHighlightColors);
 	        this.shellLogHighlightDisabled = source["shellLogHighlightDisabled"];
+	        this.shellAsciiInput = source["shellAsciiInput"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

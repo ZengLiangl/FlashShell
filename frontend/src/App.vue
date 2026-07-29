@@ -114,6 +114,11 @@ import { hasOverlayAboveSettingsHub } from "./utils/dialogOverlay";
 import { setCachedUpdateCheck, isUsableUpdateResult } from "./utils/updateCheckCache";
 import { TASK_OUTPUT_MAX_LINES, clampTaskOutputMaxLines } from "./constants/shellMemory";
 import { copyMachineRecord } from "./utils/machineCopy";
+import {
+  ensureShellAsciiInputListeners,
+  notifyLeaveShellMode,
+  setShellAsciiInputEnabled,
+} from "./utils/shellAsciiInput";
 
 const ShellWorkspace = defineAsyncComponent(() => import("./views/ShellWorkspace.vue"));
 const AboutDialog = defineAsyncComponent(() => import("./components/AboutDialog.vue"));
@@ -159,6 +164,7 @@ export default {
       try {
         const cfg = await App.GetSystemSettings();
         applyTaskOutputMaxLines(cfg?.taskOutputMaxLines);
+        setShellAsciiInputEnabled(cfg?.shellAsciiInput !== false);
       } catch {
         // 保持默认
       }
@@ -535,6 +541,7 @@ export default {
     };
 
     const leaveShellMode = async () => {
+      notifyLeaveShellMode();
       activeView.value = 'home';
       try {
         const cfg = await App.GetSystemSettings();
@@ -1140,6 +1147,7 @@ export default {
         ElMessage.success(pendingReloadToast);
       }
 
+      ensureShellAsciiInputListeners();
       loadConfig();
       loadTheme();
       loadShortcutMap();
@@ -1157,6 +1165,9 @@ export default {
       EventsOn("system-settings:changed", (payload) => {
         if (payload && Object.prototype.hasOwnProperty.call(payload, 'taskOutputMaxLines')) {
           applyTaskOutputMaxLines(payload.taskOutputMaxLines);
+        }
+        if (payload && Object.prototype.hasOwnProperty.call(payload, 'shellAsciiInput')) {
+          setShellAsciiInputEnabled(payload.shellAsciiInput !== false);
         }
       });
       EventsOn("shortcuts:changed", (data) => {
@@ -1205,7 +1216,10 @@ export default {
       }
     });
 
-    watch(activeView, (view) => {
+    watch(activeView, (view, prev) => {
+      if (prev === 'shell' && view !== 'shell') {
+        notifyLeaveShellMode();
+      }
       if (view === 'home') {
         maybePromptUpdateOnHome();
       }

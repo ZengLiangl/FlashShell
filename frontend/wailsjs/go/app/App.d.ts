@@ -274,6 +274,10 @@ export function SetMachineSensitiveData(arg1:string,arg2:define.SensitiveData):P
 
 export function SetMachineShellMonitorOpen(arg1:string,arg2:boolean):Promise<void>;
 
+export function ShellAsciiInputEnter():Promise<void>;
+
+export function ShellAsciiInputLeave():Promise<void>;
+
 export function ShellDirExists(arg1:string,arg2:string):Promise<boolean>;
 
 export function SkipUpdateVersion(arg1:string):Promise<void>;
