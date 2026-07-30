@@ -65,7 +65,7 @@ html.dark {
   --app-card-active-bg: #2a3441;
   --app-card-hover-shadow: color-mix(in srgb, var(--app-accent-color) 25%, transparent);
   --app-accent-color: #79bbff;
-  --app-accent-bg: color-mix(in srgb, var(--app-accent-color) 18%, #1d1e1f);
+  --app-accent-bg: color-mix(in srgb, var(--app-accent-color) 22%, transparent);
   --app-surface-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
   /* 暗色：primary light 向深色底混，避免树选中/按钮悬浮变成近白块 */
   --el-color-primary: var(--app-accent-color);

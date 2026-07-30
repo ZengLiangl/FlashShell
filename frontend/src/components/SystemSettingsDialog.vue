@@ -535,6 +535,7 @@ import {
     UI_FONTS,
     TERMINAL_FONTS,
     getUiAccent,
+    resolveAccentBg,
     getUiFont,
     getTerminalFont,
     getTerminalPreset,
@@ -774,7 +775,7 @@ export default {
             const size = form.themeSettings.uiFontSize > 0 ? form.themeSettings.uiFontSize : 14
             return {
                 '--preview-accent': palette.accent,
-                '--preview-accent-bg': palette.accentBg,
+                '--preview-accent-bg': resolveAccentBg(palette.accent, previewIsDark.value, palette.accentBg),
                 fontFamily: font.value,
                 fontSize: `${size}px`,
                 background: previewIsDark.value ? '#1d1e1f' : '#f5f7fa',

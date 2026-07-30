@@ -1,7 +1,7 @@
 import { ref, watch } from 'vue'
 import * as App from '../../wailsjs/go/app/App'
 import { WindowSetDarkTheme, WindowSetLightTheme, WindowSetSystemDefaultTheme, WindowSetBackgroundColour } from '../../wailsjs/runtime/runtime'
-import { getUiAccent, getUiFont, isCustomUiAccent, applyElementPrimaryCssVars, UI_ACCENTS, TERMINAL_PRESETS } from '../utils/themePresets'
+import { getUiAccent, getUiFont, isCustomUiAccent, applyElementPrimaryCssVars, resolveAccentBg, UI_ACCENTS, TERMINAL_PRESETS } from '../utils/themePresets'
 
 const isDark = ref(false)
 const terminalPreset = ref('classic')
@@ -55,7 +55,7 @@ function applyAccentAndFont(accentId, fontId, fontSize, dark) {
   const accent = getUiAccent(accentId)
   const palette = dark ? accent.dark : accent.light
   root.style.setProperty('--app-accent-color', palette.accent)
-  root.style.setProperty('--app-accent-bg', palette.accentBg)
+  root.style.setProperty('--app-accent-bg', resolveAccentBg(palette.accent, dark, palette.accentBg))
   root.style.setProperty(
     '--app-card-hover-shadow',
     dark

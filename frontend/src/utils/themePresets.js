@@ -685,9 +685,16 @@ export function buildAccentFromHex(hex) {
     },
     dark: {
       accent: mixHex(accent, '#ffffff', 0.28),
-      accentBg: mixHex(accent, '#000000', 0.72),
+      // 仅作回退；实际 DOM 由 resolveAccentBg 生成半透明主题色
+      accentBg: mixHex(accent, '#000000', 0.55),
     },
   }
+}
+
+/** 深色模式强调底用半透明主题色，避免写死深紫/酒红底看不出主题色 */
+export function resolveAccentBg(accentHex, dark, lightBg) {
+  if (!dark) return lightBg
+  return `color-mix(in srgb, ${accentHex} 22%, transparent)`
 }
 
 export function getUiAccent(id) {
