@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -128,74 +130,100 @@ func uploadDirectory(rm *define.RemoteMachine, localPath, remotePath, targetFile
 	return nil
 }
 
-// uploadDirectoryZip 使用 ZIP 压缩上传文件夹
+func shellSingleQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'"
+}
+
+// uploadDirectoryZip 使用 ZIP 压缩上传文件夹；远端无解压工具时回退 SFTP 递归上传
 func uploadDirectoryZip(rm *define.RemoteMachine, localPath, remotePath, targetFileName string, outputChan chan<- string) error {
-	// 创建临时 ZIP 文件
 	tempZipFile, err := os.CreateTemp("", "upload_*.zip")
 	if err != nil {
 		return fmt.Errorf("创建临时文件失败: %w", err)
 	}
-	defer os.Remove(tempZipFile.Name()) // 确保删除临时文件
-	defer tempZipFile.Close()
+	tempZipPath := tempZipFile.Name()
+	_ = tempZipFile.Close()
+	defer os.Remove(tempZipPath)
 
-	// 使用 LocalZip 函数创建压缩包
-	err = utils.LocalZip(localPath, tempZipFile.Name())
-	if err != nil {
+	if err := utils.LocalZip(localPath, tempZipPath); err != nil {
 		return fmt.Errorf("创建ZIP压缩包失败: %w", err)
 	}
 
-	// 上传压缩包到远程临时位置
-	tempRemotePath := fmt.Sprintf("/tmp/upload_%d.zip", time.Now().Unix())
-	err = uploadFile(rm, tempZipFile.Name(), tempRemotePath, targetFileName, outputChan)
-	if err != nil {
+	tempRemotePath := fmt.Sprintf("/tmp/upload_%d.zip", time.Now().UnixNano())
+	if err := uploadFile(rm, tempZipPath, tempRemotePath, targetFileName, outputChan); err != nil {
 		return fmt.Errorf("上传压缩包失败: %w", err)
 	}
 
-	// 在远程解压并删除压缩包
-	err = extractTarOnRemote(rm, tempRemotePath, remotePath, outputChan)
-	if err != nil {
-		return fmt.Errorf("远程解压失败: %w", err)
+	if err := extractZipOnRemote(rm, tempRemotePath, remotePath, outputChan); err != nil {
+		_ = runRemoteCommand(rm, "rm -f "+shellSingleQuote(tempRemotePath), nil)
+		utils.SendOutput(outputChan, "远端无可用解压工具，回退为 SFTP 递归上传…")
+		if fallbackErr := uploadDirectoryRecursive(rm, localPath, remotePath, outputChan); fallbackErr != nil {
+			return fmt.Errorf("远程解压失败且递归上传失败: %v / %v", err, fallbackErr)
+		}
+		return nil
 	}
 	return nil
 }
 
-// extractTarOnRemote 在远程解压 tar 文件
-func extractTarOnRemote(rm *define.RemoteMachine, remoteTarPath, targetPath string, outputChan chan<- string) error {
-	// 创建 SSH session
+// extractZipOnRemote 尝试 unzip / busybox / python 在远端解压
+func extractZipOnRemote(rm *define.RemoteMachine, remoteZipPath, targetPath string, outputChan chan<- string) error {
+	tq := shellSingleQuote(targetPath)
+	zq := shellSingleQuote(remoteZipPath)
+	candidates := []string{
+		fmt.Sprintf("mkdir -p %s && unzip -o %s -d %s && rm -f %s", tq, zq, tq, zq),
+		fmt.Sprintf("mkdir -p %s && busybox unzip -o %s -d %s && rm -f %s", tq, zq, tq, zq),
+		fmt.Sprintf(
+			"mkdir -p %s && python3 -c %s && rm -f %s",
+			tq,
+			shellSingleQuote(fmt.Sprintf("import zipfile; zipfile.ZipFile(%q).extractall(%q)", remoteZipPath, targetPath)),
+			zq,
+		),
+		fmt.Sprintf(
+			"mkdir -p %s && python -c %s && rm -f %s",
+			tq,
+			shellSingleQuote(fmt.Sprintf("import zipfile; zipfile.ZipFile(%q).extractall(%q)", remoteZipPath, targetPath)),
+			zq,
+		),
+	}
+	var lastErr error
+	for _, cmd := range candidates {
+		if err := runRemoteCommand(rm, cmd, outputChan); err != nil {
+			lastErr = err
+			continue
+		}
+		return nil
+	}
+	if lastErr == nil {
+		lastErr = fmt.Errorf("远端无可用解压工具")
+	}
+	return lastErr
+}
+
+func runRemoteCommand(rm *define.RemoteMachine, cmd string, outputChan chan<- string) error {
 	session, err := rm.NewSession()
 	if err != nil {
 		return fmt.Errorf("创建SSH会话失败: %w", err)
 	}
 	defer session.Close()
 
-	// 构建解压命令
-	extractCmd := fmt.Sprintf("mkdir -p %s && cd %s && unzip -o %s && rm -f %s",
-		targetPath, targetPath, remoteTarPath, remoteTarPath)
-
-	// 设置输出管道
 	stdout, err := session.StdoutPipe()
 	if err != nil {
 		return fmt.Errorf("获取stdout管道失败: %w", err)
 	}
-
 	stderr, err := session.StderrPipe()
 	if err != nil {
 		return fmt.Errorf("获取stderr管道失败: %w", err)
 	}
 
-	// 启动命令
-	if err := session.Start(extractCmd); err != nil {
-		return fmt.Errorf("启动解压命令失败: %w", err)
+	if err := session.Start(cmd); err != nil {
+		return fmt.Errorf("启动命令失败: %w", err)
 	}
 
-	// 读取输出
 	go func() {
 		scanner := bufio.NewScanner(stdout)
 		for scanner.Scan() {
 			utils.SendOutput(outputChan, scanner.Text())
 		}
 	}()
-
 	go func() {
 		scanner := bufio.NewScanner(stderr)
 		for scanner.Scan() {
@@ -203,11 +231,53 @@ func extractTarOnRemote(rm *define.RemoteMachine, remoteTarPath, targetPath stri
 		}
 	}()
 
-	// 等待命令完成
 	if err := session.Wait(); err != nil {
-		return fmt.Errorf("解压命令执行失败: %w", err)
+		return fmt.Errorf("命令执行失败: %w", err)
+	}
+	return nil
+}
+
+// uploadDirectoryRecursive 通过 SFTP 递归上传本地目录内容到远端目标路径
+func uploadDirectoryRecursive(rm *define.RemoteMachine, localPath, remotePath string, outputChan chan<- string) error {
+	if rm.SFTPClient == nil {
+		return fmt.Errorf("SFTP 未连接")
+	}
+	if err := rm.SFTPClient.MkdirAll(remotePath); err != nil {
+		return fmt.Errorf("创建远程目录失败: %w", err)
 	}
 
+	base, err := filepath.Abs(filepath.Clean(localPath))
+	if err != nil {
+		return fmt.Errorf("解析本地目录失败: %w", err)
+	}
+
+	var fileCount int
+	err = filepath.Walk(base, func(p string, info os.FileInfo, walkErr error) error {
+		if walkErr != nil {
+			return walkErr
+		}
+		rel, err := filepath.Rel(base, p)
+		if err != nil {
+			return err
+		}
+		if rel == "." {
+			return nil
+		}
+		remoteFile := path.Join(remotePath, filepath.ToSlash(rel))
+		if info.IsDir() {
+			return rm.SFTPClient.MkdirAll(remoteFile)
+		}
+		if !info.Mode().IsRegular() {
+			return nil
+		}
+		fileCount++
+		utils.SendOutput(outputChan, fmt.Sprintf("递归上传: %s", filepath.ToSlash(rel)))
+		return uploadFile(rm, p, remoteFile, info.Name(), outputChan)
+	})
+	if err != nil {
+		return err
+	}
+	utils.SendOutput(outputChan, fmt.Sprintf("SFTP 递归上传完成，共 %d 个文件", fileCount))
 	return nil
 }
 
