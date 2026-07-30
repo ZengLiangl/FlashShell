@@ -253,6 +253,8 @@ export default {
     const searchVisible = ref(false)
     const searchQuery = ref('')
     const searchMatchSummary = ref('')
+    const SEARCH_INPUT_DEBOUNCE_MS = 180
+    let searchQueryTimer = null
     const pickerVisible = ref(false)
     const pickerInitialTab = ref('')
     const transferVisible = ref(false)
@@ -416,10 +418,11 @@ export default {
     const formatSearchSummary = (result) => {
       if (!result) return '未找到'
       const total = Number(result.resultCount) || 0
-      if (!total) return '未找到'
+      if (!total) return result.found ? '已定位' : '未找到'
+      if (result.capped) return `${total}+`
       const idx = Number(result.resultIndex)
-      if (idx < 0) return `${total}+`
-      return `${idx + 1}/${total}`
+      if (idx >= 0) return `${idx + 1}/${total}`
+      return `共 ${total} 处`
     }
 
     const onSearchResult = (result) => {
@@ -483,10 +486,18 @@ export default {
       }
       nextTick(() => {
         filePanelRef.value?.focusSearch?.()
-        if (searchQuery.value.trim()) {
+        // 打开时立刻搜一次；清掉输入防抖，避免 180ms 后再 findNext 跳到下一处
+        if (searchQueryTimer != null) {
+          clearTimeout(searchQueryTimer)
+          searchQueryTimer = null
+        }
+        if (!searchQuery.value.trim()) return
+        // 先让搜索栏完成绘制，再同步建装饰，避免 Ctrl+F 瞬间整窗卡死
+        searchQueryTimer = setTimeout(() => {
+          searchQueryTimer = null
           const result = tabsRef.value?.findNext?.()
           searchMatchSummary.value = formatSearchSummary(result)
-        }
+        }, 0)
       })
     }
 
@@ -507,6 +518,10 @@ export default {
       EventsOff('shell:cwd')
       EventsOff('shortcuts:changed')
       if (tunnelTimer) clearInterval(tunnelTimer)
+      if (searchQueryTimer != null) {
+        clearTimeout(searchQueryTimer)
+        searchQueryTimer = null
+      }
     })
 
     /** 终端 cd 后同步 SFTP（直接驱动面板，不依赖 shell:cwd 事件） */
@@ -546,6 +561,10 @@ export default {
     }
 
     const closeSearch = () => {
+      if (searchQueryTimer != null) {
+        clearTimeout(searchQueryTimer)
+        searchQueryTimer = null
+      }
       searchVisible.value = false
       searchQuery.value = ''
       tabsRef.value?.clearSearch?.()
@@ -701,16 +720,21 @@ export default {
 
     watch(searchQuery, (q) => {
       if (!searchVisible.value) return
+      if (searchQueryTimer != null) {
+        clearTimeout(searchQueryTimer)
+        searchQueryTimer = null
+      }
       if (!q.trim()) {
         searchMatchSummary.value = ''
         tabsRef.value?.clearSearch?.()
         return
       }
-      // 输入时由终端 watch 触发 find；summary 在下一帧由 findNext 结果更新
-      nextTick(() => {
+      // 输入防抖：避免每个字符都同步重建大量高亮装饰导致卡死
+      searchQueryTimer = setTimeout(() => {
+        searchQueryTimer = null
         const result = tabsRef.value?.findNext?.()
         searchMatchSummary.value = formatSearchSummary(result)
-      })
+      }, SEARCH_INPUT_DEBOUNCE_MS)
     })
 
     const onCommandPaletteInsert = async (text) => {

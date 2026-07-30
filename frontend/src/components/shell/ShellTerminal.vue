@@ -33,8 +33,8 @@
 import { ref, reactive, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
-import { SearchAddon } from 'xterm-addon-search'
 import { getTerminalSelectionText } from '../../utils/shellSelection'
+import { findInTerminalBuffer, selectTerminalMatch, highlightViewportMatches, clearSearchDecorations } from '../../utils/shellTerminalSearch'
 import 'xterm/css/xterm.css'
 import * as App from '../../../wailsjs/go/app/App'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
@@ -89,7 +89,6 @@ export default {
     const ctxMenuRef = ref(null)
     const term = ref(null)
     const fitAddon = ref(null)
-    const searchAddon = ref(null)
     const ctx = reactive({ visible: false, x: 0, y: 0, selection: '' })
     const { shellFontSize, shellLineHeight, terminalPreset, shellFontFamily } = useTheme()
     let resizeObserver = null
@@ -97,10 +96,7 @@ export default {
     let initialized = false
     let unregisterWriter = null
     let inputListener = null
-    let searchResultsListener = null
-    let writeParsedListener = null
-    let searchRefreshTimer = null
-    let lastSearchResults = { resultIndex: -1, resultCount: 0 }
+    let lastSearchResults = { resultIndex: -1, resultCount: 0, capped: false }
     let cwdSyncTimer = null
     let inputLine = ''
     let logHighlightEnabled = true
@@ -108,76 +104,121 @@ export default {
     let tuiModeDepth = 0
     let scrollbackLines = SHELL_TERMINAL_SCROLLBACK
     const textDecoder = new TextDecoder('utf-8')
-    /** less/vim 等重绘后，SearchAddon 行缓存可能过期导致高亮错位 */
-    const SEARCH_REFRESH_MS = 50
+    /**
+     * 不用 xterm-addon-search：它对超长折行（grep 出的整行 JSON）会拼成巨串同步扫描，必卡死。
+     * 改为按物理行查找 + 异步分片计数。
+     */
+    const SEARCH_COUNT_CAP = 999
+    let searchCountToken = 0
+    let searchCountTimer = null
+    let lastCountedQuery = ''
+    let activeSearchQuery = ''
+    let lastActiveMatch = null
+    /** @type {Array<{ dispose?: Function }>} */
+    let searchDecorationBucket = []
+    let searchHighlightTimer = null
+    let scrollListener = null
 
-    const SEARCH_DECORATIONS = {
-      // 普通匹配：淡琥珀色；当前定位：蓝色，和选区颜色一致便于辨认
-      matchBackground: '#3d3728',
-      matchBorder: '#a9945a',
-      matchOverviewRuler: '#a9945a',
-      activeMatchBackground: '#1f6feb',
-      activeMatchBorder: '#79c0ff',
-      activeMatchColorOverviewRuler: '#79c0ff',
+    const clearViewportHighlights = () => {
+      if (searchHighlightTimer != null) {
+        clearTimeout(searchHighlightTimer)
+        searchHighlightTimer = null
+      }
+      clearSearchDecorations(searchDecorationBucket)
     }
 
-    const searchOptions = (extra = {}) => ({
-      caseSensitive: false,
-      regex: false,
-      incremental: false,
-      decorations: SEARCH_DECORATIONS,
-      ...extra,
-    })
-
-    /** 清掉 SearchAddon 内部行缓存（私有 API，与 xterm-addon-search 0.13 对齐） */
-    const invalidateSearchLineCache = (addon) => {
-      if (!addon) return
-      if (typeof addon._destroyLinesCache === 'function') {
-        addon._destroyLinesCache()
+    const refreshViewportHighlights = (query = activeSearchQuery, activeMatch = lastActiveMatch) => {
+      const terminal = term.value
+      if (!terminal || !query) {
+        clearViewportHighlights()
         return
       }
-      addon._linesCache = undefined
+      highlightViewportMatches(terminal, query, activeMatch, searchDecorationBucket)
     }
 
-    /** 取消 SearchAddon 内置的 200ms 重搜，避免与我们的刷新竞态 */
-    const cancelAddonSearchUpdate = (addon) => {
-      if (!addon?._highlightTimeout) return
-      window.clearTimeout(addon._highlightTimeout)
-      addon._highlightTimeout = undefined
+    const scheduleViewportHighlights = () => {
+      if (!activeSearchQuery || !term.value) return
+      if (searchHighlightTimer != null) clearTimeout(searchHighlightTimer)
+      searchHighlightTimer = setTimeout(() => {
+        searchHighlightTimer = null
+        refreshViewportHighlights()
+      }, 50)
     }
 
-    /**
-     * less/vim 等会原位重绘缓冲区；SearchAddon 默认只在光标移动时失效行缓存，
-     * 导致高亮仍按旧文本坐标绘制。写入后强制清缓存并重搜（不滚动视口）。
-     */
-    const refreshSearchHighlights = () => {
-      const query = props.searchQuery.trim()
-      const addon = searchAddon.value
-      if (!addon || !query || !props.active) return
-      try {
-        cancelAddonSearchUpdate(addon)
-        invalidateSearchLineCache(addon)
-        addon._cachedSearchTerm = undefined
-        addon.findPrevious(query, searchOptions({ incremental: true, noScroll: true }))
-      } catch (err) {
-        console.warn('[shell-search] refresh failed:', err)
+    const cancelAsyncMatchCount = () => {
+      searchCountToken += 1
+      if (searchCountTimer != null) {
+        clearTimeout(searchCountTimer)
+        searchCountTimer = null
       }
     }
 
-    const scheduleSearchRefresh = () => {
-      if (!searchAddon.value || !props.searchQuery.trim()) return
-      if (searchRefreshTimer != null) clearTimeout(searchRefreshTimer)
-      searchRefreshTimer = setTimeout(() => {
-        searchRefreshTimer = null
-        refreshSearchHighlights()
-      }, SEARCH_REFRESH_MS)
+    const emitSearchResult = (payload) => {
+      lastSearchResults = {
+        resultIndex: payload.resultIndex ?? -1,
+        resultCount: payload.resultCount ?? 0,
+        capped: !!payload.capped,
+      }
+      if (!props.active) return
+      emit('search-result', {
+        found: !!payload.found,
+        ...lastSearchResults,
+      })
     }
 
-    const clearSearchRefreshTimer = () => {
-      if (searchRefreshTimer != null) {
-        clearTimeout(searchRefreshTimer)
-        searchRefreshTimer = null
+    /** 分片扫描缓冲统计匹配数，每帧让出主线程 */
+    const scheduleAsyncMatchCount = (query) => {
+      if (!query || query === lastCountedQuery) return
+      cancelAsyncMatchCount()
+      lastCountedQuery = query
+      const token = searchCountToken
+      const terminal = term.value
+      if (!terminal) return
+
+      const needle = query.toLowerCase()
+      const buf = terminal.buffer.active
+      const totalRows = buf.length
+      let row = 0
+      let count = 0
+
+      const step = () => {
+        if (token !== searchCountToken || !term.value) return
+        const deadline = performance.now() + 6
+        while (row < totalRows) {
+          const line = buf.getLine(row)
+          row += 1
+          if (!line) continue
+          const hay = line.translateToString(true).toLowerCase()
+          let from = 0
+          while (count < SEARCH_COUNT_CAP) {
+            const at = hay.indexOf(needle, from)
+            if (at < 0) break
+            count += 1
+            from = at + Math.max(1, needle.length)
+          }
+          if (count >= SEARCH_COUNT_CAP) {
+            emitSearchResult({
+              found: true,
+              resultIndex: -1,
+              resultCount: SEARCH_COUNT_CAP,
+              capped: true,
+            })
+            return
+          }
+          if (performance.now() >= deadline) break
+        }
+        if (row >= totalRows) {
+          emitSearchResult({
+            found: count > 0,
+            resultIndex: -1,
+            resultCount: count,
+            capped: false,
+          })
+          return
+        }
+        searchCountTimer = setTimeout(step, 0)
       }
+      searchCountTimer = setTimeout(step, 0)
     }
 
     const hideContextMenu = () => {
@@ -479,14 +520,12 @@ export default {
         lineHeight: shellLineHeight.value || 1.2,
         fontFamily: getTerminalFont(shellFontFamily.value).value,
         theme: terminalThemeForPreset(terminalPreset.value),
-        // SearchAddon 高亮依赖 experimental decoration API
+        // 视口内搜索高亮依赖 proposed decoration API
         allowProposedApi: true,
-        overviewRulerWidth: 14,
+        overviewRulerWidth: 10,
       })
       const fit = new FitAddon()
-      const search = new SearchAddon()
       terminal.loadAddon(fit)
-      terminal.loadAddon(search)
       terminal.open(terminalRef.value)
 
       // 拦截原生复制：Ctrl/Cmd+C、系统菜单复制也会走 xterm 默认选区（含 less 视觉换行）
@@ -509,36 +548,13 @@ export default {
       bindAsciiInputListeners(terminal)
       bindInputHandler(terminal)
 
-      searchResultsListener?.dispose?.()
-      searchResultsListener = search.onDidChangeResults?.((e) => {
-        lastSearchResults = {
-          resultIndex: e?.resultIndex ?? -1,
-          resultCount: e?.resultCount ?? 0,
-        }
-        if (props.active) {
-          emit('search-result', {
-            found: (e?.resultCount ?? 0) > 0 && (e?.resultIndex ?? -1) >= 0,
-            ...lastSearchResults,
-          })
-        }
-      }) || null
-
-      // 缓冲区写入后使行缓存失效并重搜，修复 less 滚动后高亮错位
-      writeParsedListener?.dispose?.()
-      writeParsedListener = terminal.onWriteParsed?.(() => {
-        if (!props.searchQuery.trim()) return
-        cancelAddonSearchUpdate(search)
-        invalidateSearchLineCache(search)
-        // TUI 原位重绘时立刻清掉错位装饰；普通输出交给防抖重搜即可
-        if (tuiModeDepth > 0) {
-          search.clearDecorations(true)
-        }
-        scheduleSearchRefresh()
+      scrollListener?.dispose?.()
+      scrollListener = terminal.onScroll?.(() => {
+        if (activeSearchQuery) scheduleViewportHighlights()
       }) || null
 
       term.value = terminal
       fitAddon.value = fit
-      searchAddon.value = search
       initialized = true
       if (props.connected || props.connecting) attachWriter(terminal, { replay: true })
       setupObservers()
@@ -549,14 +565,16 @@ export default {
     const destroyTerminal = () => {
       clearFitTimers()
       clearCwdSyncTimer()
-      clearSearchRefreshTimer()
+      cancelAsyncMatchCount()
+      clearViewportHighlights()
+      activeSearchQuery = ''
+      lastActiveMatch = null
+      lastCountedQuery = ''
+      scrollListener?.dispose?.()
+      scrollListener = null
       detachWriter()
       resetShellWriterReplay(props.machineName)
       tuiModeDepth = 0
-      searchResultsListener?.dispose?.()
-      searchResultsListener = null
-      writeParsedListener?.dispose?.()
-      writeParsedListener = null
       if (resizeObserver) {
         resizeObserver.disconnect()
         resizeObserver = null
@@ -572,10 +590,9 @@ export default {
         term.value.dispose()
         term.value = null
         fitAddon.value = null
-        searchAddon.value = null
       }
       initialized = false
-      lastSearchResults = { resultIndex: -1, resultCount: 0 }
+      lastSearchResults = { resultIndex: -1, resultCount: 0, capped: false }
     }
 
     const clear = () => term.value?.clear()
@@ -584,18 +601,37 @@ export default {
       found: !!found,
       resultIndex: lastSearchResults.resultIndex,
       resultCount: lastSearchResults.resultCount,
+      capped: lastSearchResults.capped,
     })
 
     const findNext = () => {
       const query = props.searchQuery.trim()
-      if (!searchAddon.value || !query) {
-        lastSearchResults = { resultIndex: -1, resultCount: 0 }
+      const terminal = term.value
+      if (!terminal || !query) {
+        cancelAsyncMatchCount()
+        clearViewportHighlights()
+        activeSearchQuery = ''
+        lastActiveMatch = null
+        lastCountedQuery = ''
+        emitSearchResult({ found: false, resultIndex: -1, resultCount: 0 })
         return toSearchResult(false)
       }
       try {
-        invalidateSearchLineCache(searchAddon.value)
-        const found = searchAddon.value.findNext(query, searchOptions())
-        return toSearchResult(found)
+        const sameQuery = query === lastCountedQuery
+        const match = findInTerminalBuffer(terminal, query, { reverse: false })
+        if (match) selectTerminalMatch(terminal, match)
+        else terminal.clearSelection()
+        activeSearchQuery = query
+        lastActiveMatch = match
+        refreshViewportHighlights(query, match)
+        emitSearchResult({
+          found: !!match,
+          resultIndex: -1,
+          resultCount: sameQuery ? lastSearchResults.resultCount : 0,
+          capped: sameQuery ? lastSearchResults.capped : false,
+        })
+        if (!sameQuery) scheduleAsyncMatchCount(query)
+        return toSearchResult(!!match)
       } catch (err) {
         console.warn('[shell-search] findNext failed:', err)
         return toSearchResult(false)
@@ -604,14 +640,32 @@ export default {
 
     const findPrevious = () => {
       const query = props.searchQuery.trim()
-      if (!searchAddon.value || !query) {
-        lastSearchResults = { resultIndex: -1, resultCount: 0 }
+      const terminal = term.value
+      if (!terminal || !query) {
+        cancelAsyncMatchCount()
+        clearViewportHighlights()
+        activeSearchQuery = ''
+        lastActiveMatch = null
+        lastCountedQuery = ''
+        emitSearchResult({ found: false, resultIndex: -1, resultCount: 0 })
         return toSearchResult(false)
       }
       try {
-        invalidateSearchLineCache(searchAddon.value)
-        const found = searchAddon.value.findPrevious(query, searchOptions())
-        return toSearchResult(found)
+        const sameQuery = query === lastCountedQuery
+        const match = findInTerminalBuffer(terminal, query, { reverse: true })
+        if (match) selectTerminalMatch(terminal, match)
+        else terminal.clearSelection()
+        activeSearchQuery = query
+        lastActiveMatch = match
+        refreshViewportHighlights(query, match)
+        emitSearchResult({
+          found: !!match,
+          resultIndex: -1,
+          resultCount: sameQuery ? lastSearchResults.resultCount : 0,
+          capped: sameQuery ? lastSearchResults.capped : false,
+        })
+        if (!sameQuery) scheduleAsyncMatchCount(query)
+        return toSearchResult(!!match)
       } catch (err) {
         console.warn('[shell-search] findPrevious failed:', err)
         return toSearchResult(false)
@@ -619,9 +673,13 @@ export default {
     }
 
     const clearSearch = () => {
-      clearSearchRefreshTimer()
-      searchAddon.value?.clearDecorations()
-      lastSearchResults = { resultIndex: -1, resultCount: 0 }
+      cancelAsyncMatchCount()
+      clearViewportHighlights()
+      activeSearchQuery = ''
+      lastActiveMatch = null
+      lastCountedQuery = ''
+      term.value?.clearSelection?.()
+      emitSearchResult({ found: false, resultIndex: -1, resultCount: 0 })
     }
 
     const stripAnsi = (s) => String(s || '')
