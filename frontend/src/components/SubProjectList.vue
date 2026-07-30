@@ -35,7 +35,7 @@
                             <ArrowRight />
                         </el-icon>
                         <div class="row-text">
-                            <div class="subproject-name">{{ subProject.name }}</div>
+                            <div class="subproject-name" :title="subProject.name">{{ subProject.name }}</div>
                             <div v-if="subProject.description" class="subproject-desc">{{ subProject.description }}</div>
                             <div class="subproject-meta">
                                 <span class="meta-pill">{{ subProject.stepCount }} 个命令</span>
@@ -92,7 +92,7 @@
                                     <ArrowRight />
                                 </el-icon>
                                 <div class="row-text">
-                                    <div class="command-name">{{ command.name }}</div>
+                                    <div class="command-name" :title="command.name">{{ command.name }}</div>
                                     <div class="command-meta">
                                         <el-tag size="small" :type="getCommandTagType(command.type)" effect="plain">
                                             {{ getCommandTypeText(command.type) }}
@@ -406,7 +406,9 @@ export default {
     font-size: 13px;
     color: var(--app-text);
     line-height: 18px;
-    word-break: break-word;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .command-name {
@@ -414,7 +416,9 @@ export default {
     font-size: 12.5px;
     color: var(--app-text);
     line-height: 17px;
-    word-break: break-word;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .subproject-desc {
