@@ -98,6 +98,8 @@ export default {
     let unregisterWriter = null
     let inputListener = null
     let searchResultsListener = null
+    let writeParsedListener = null
+    let searchRefreshTimer = null
     let lastSearchResults = { resultIndex: -1, resultCount: 0 }
     let cwdSyncTimer = null
     let inputLine = ''
@@ -106,6 +108,8 @@ export default {
     let tuiModeDepth = 0
     let scrollbackLines = SHELL_TERMINAL_SCROLLBACK
     const textDecoder = new TextDecoder('utf-8')
+    /** less/vim 等重绘后，SearchAddon 行缓存可能过期导致高亮错位 */
+    const SEARCH_REFRESH_MS = 50
 
     const SEARCH_DECORATIONS = {
       // 普通匹配：淡琥珀色；当前定位：蓝色，和选区颜色一致便于辨认
@@ -115,6 +119,65 @@ export default {
       activeMatchBackground: '#1f6feb',
       activeMatchBorder: '#79c0ff',
       activeMatchColorOverviewRuler: '#79c0ff',
+    }
+
+    const searchOptions = (extra = {}) => ({
+      caseSensitive: false,
+      regex: false,
+      incremental: false,
+      decorations: SEARCH_DECORATIONS,
+      ...extra,
+    })
+
+    /** 清掉 SearchAddon 内部行缓存（私有 API，与 xterm-addon-search 0.13 对齐） */
+    const invalidateSearchLineCache = (addon) => {
+      if (!addon) return
+      if (typeof addon._destroyLinesCache === 'function') {
+        addon._destroyLinesCache()
+        return
+      }
+      addon._linesCache = undefined
+    }
+
+    /** 取消 SearchAddon 内置的 200ms 重搜，避免与我们的刷新竞态 */
+    const cancelAddonSearchUpdate = (addon) => {
+      if (!addon?._highlightTimeout) return
+      window.clearTimeout(addon._highlightTimeout)
+      addon._highlightTimeout = undefined
+    }
+
+    /**
+     * less/vim 等会原位重绘缓冲区；SearchAddon 默认只在光标移动时失效行缓存，
+     * 导致高亮仍按旧文本坐标绘制。写入后强制清缓存并重搜（不滚动视口）。
+     */
+    const refreshSearchHighlights = () => {
+      const query = props.searchQuery.trim()
+      const addon = searchAddon.value
+      if (!addon || !query || !props.active) return
+      try {
+        cancelAddonSearchUpdate(addon)
+        invalidateSearchLineCache(addon)
+        addon._cachedSearchTerm = undefined
+        addon.findPrevious(query, searchOptions({ incremental: true, noScroll: true }))
+      } catch (err) {
+        console.warn('[shell-search] refresh failed:', err)
+      }
+    }
+
+    const scheduleSearchRefresh = () => {
+      if (!searchAddon.value || !props.searchQuery.trim()) return
+      if (searchRefreshTimer != null) clearTimeout(searchRefreshTimer)
+      searchRefreshTimer = setTimeout(() => {
+        searchRefreshTimer = null
+        refreshSearchHighlights()
+      }, SEARCH_REFRESH_MS)
+    }
+
+    const clearSearchRefreshTimer = () => {
+      if (searchRefreshTimer != null) {
+        clearTimeout(searchRefreshTimer)
+        searchRefreshTimer = null
+      }
     }
 
     const hideContextMenu = () => {
@@ -263,7 +326,7 @@ export default {
 
     const writeHighlighted = (terminal, bytes) => {
       const raw = bytes instanceof Uint8Array ? bytes : decodeBase64(bytes)
-      if (!logHighlightEnabled || isProbablyBinary(raw)) {
+      if (isProbablyBinary(raw)) {
         terminal.write(raw)
         return
       }
@@ -275,7 +338,8 @@ export default {
         return
       }
       tuiModeDepth = updateTuiModeDepth(tuiModeDepth, text)
-      if (tuiModeDepth > 0 || hasInteractiveTerminalSequences(text)) {
+      const interactive = tuiModeDepth > 0 || hasInteractiveTerminalSequences(text)
+      if (!logHighlightEnabled || interactive) {
         terminal.write(raw)
         return
       }
@@ -459,6 +523,19 @@ export default {
         }
       }) || null
 
+      // 缓冲区写入后使行缓存失效并重搜，修复 less 滚动后高亮错位
+      writeParsedListener?.dispose?.()
+      writeParsedListener = terminal.onWriteParsed?.(() => {
+        if (!props.searchQuery.trim()) return
+        cancelAddonSearchUpdate(search)
+        invalidateSearchLineCache(search)
+        // TUI 原位重绘时立刻清掉错位装饰；普通输出交给防抖重搜即可
+        if (tuiModeDepth > 0) {
+          search.clearDecorations(true)
+        }
+        scheduleSearchRefresh()
+      }) || null
+
       term.value = terminal
       fitAddon.value = fit
       searchAddon.value = search
@@ -472,11 +549,14 @@ export default {
     const destroyTerminal = () => {
       clearFitTimers()
       clearCwdSyncTimer()
+      clearSearchRefreshTimer()
       detachWriter()
       resetShellWriterReplay(props.machineName)
       tuiModeDepth = 0
       searchResultsListener?.dispose?.()
       searchResultsListener = null
+      writeParsedListener?.dispose?.()
+      writeParsedListener = null
       if (resizeObserver) {
         resizeObserver.disconnect()
         resizeObserver = null
@@ -500,13 +580,6 @@ export default {
 
     const clear = () => term.value?.clear()
 
-    const searchOptions = () => ({
-      caseSensitive: false,
-      regex: false,
-      incremental: false,
-      decorations: SEARCH_DECORATIONS,
-    })
-
     const toSearchResult = (found) => ({
       found: !!found,
       resultIndex: lastSearchResults.resultIndex,
@@ -520,6 +593,7 @@ export default {
         return toSearchResult(false)
       }
       try {
+        invalidateSearchLineCache(searchAddon.value)
         const found = searchAddon.value.findNext(query, searchOptions())
         return toSearchResult(found)
       } catch (err) {
@@ -535,6 +609,7 @@ export default {
         return toSearchResult(false)
       }
       try {
+        invalidateSearchLineCache(searchAddon.value)
         const found = searchAddon.value.findPrevious(query, searchOptions())
         return toSearchResult(found)
       } catch (err) {
@@ -544,6 +619,7 @@ export default {
     }
 
     const clearSearch = () => {
+      clearSearchRefreshTimer()
       searchAddon.value?.clearDecorations()
       lastSearchResults = { resultIndex: -1, resultCount: 0 }
     }
