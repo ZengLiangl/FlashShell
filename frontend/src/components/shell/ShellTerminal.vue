@@ -69,7 +69,7 @@ export default {
     props: {
     machineName: { type: String, required: true },
     active: { type: Boolean, default: false },
-    /** Shell 工作区是否可见（回首页时为 false，避免 display:none 下 fit 成极窄列宽） */
+    /** Shell 工作区是否可见；隐藏时不 fit/不转发输入，但保留 xterm 以免回放协议应答 */
     viewVisible: { type: Boolean, default: true },
     connected: { type: Boolean, default: false },
     connecting: { type: Boolean, default: false },
@@ -96,6 +96,8 @@ export default {
     let initialized = false
     let unregisterWriter = null
     let inputListener = null
+    /** 缓冲回放期间抑制 onData→PTY，避免 DA/OSC 颜色应答被当成键盘输入 */
+    let suppressInputForwardDepth = 0
     let lastSearchResults = { resultIndex: -1, resultCount: 0, capped: false }
     let cwdSyncTimer = null
     let inputLine = ''
@@ -360,34 +362,39 @@ export default {
       return bytes
     }
 
+    const writeTerminal = (terminal, data) => new Promise((resolve) => {
+      try {
+        terminal.write(data, () => resolve())
+      } catch {
+        resolve()
+      }
+    })
+
     const writeDataToTerminal = (terminal, data) => {
       const bytes = data instanceof Uint8Array ? data : decodeBase64(data)
-      writeHighlighted(terminal, bytes)
+      return writeHighlighted(terminal, bytes)
     }
 
     const writeHighlighted = (terminal, bytes) => {
       const raw = bytes instanceof Uint8Array ? bytes : decodeBase64(bytes)
       if (isProbablyBinary(raw)) {
-        terminal.write(raw)
-        return
+        return writeTerminal(terminal, raw)
       }
       let text = ''
       try {
         text = textDecoder.decode(raw, { stream: true })
       } catch {
-        terminal.write(raw)
-        return
+        return writeTerminal(terminal, raw)
       }
       tuiModeDepth = updateTuiModeDepth(tuiModeDepth, text)
       const interactive = tuiModeDepth > 0 || hasInteractiveTerminalSequences(text)
       if (!logHighlightEnabled || interactive) {
-        terminal.write(raw)
-        return
+        return writeTerminal(terminal, raw)
       }
       try {
-        terminal.write(highlightShellChunk(text, logHighlightConfig))
+        return writeTerminal(terminal, highlightShellChunk(text, logHighlightConfig))
       } catch {
-        terminal.write(raw)
+        return writeTerminal(terminal, raw)
       }
     }
 
@@ -779,9 +786,19 @@ export default {
       scheduleCwdSyncAfterEnter()
     }
 
+    const beginSuppressInputForward = () => {
+      suppressInputForwardDepth += 1
+    }
+
+    const endSuppressInputForward = () => {
+      suppressInputForwardDepth = Math.max(0, suppressInputForwardDepth - 1)
+    }
+
     const bindInputHandler = (terminal) => {
       inputListener?.dispose?.()
       inputListener = terminal.onData((data) => {
+        // 回放历史输出时 xterm 会应答 DA/OSC 查询；不能当作用户输入发回 PTY
+        if (suppressInputForwardDepth > 0) return
         if (!props.active || !props.viewVisible) return
         if (!props.connected) {
           if (props.connecting) return
@@ -799,15 +816,36 @@ export default {
 
     const attachWriter = (terminal, { replay = false } = {}) => {
       unregisterWriter?.()
-      unregisterWriter = registerShellWriter(
+      let holdingReplaySuppress = false
+      const releaseReplaySuppress = () => {
+        if (!holdingReplaySuppress) return
+        holdingReplaySuppress = false
+        endSuppressInputForward()
+      }
+      const unreg = registerShellWriter(
         props.machineName,
         {
           writeData: (data) => writeDataToTerminal(terminal, data),
-          writeLine: (line) => terminal.writeln(`\x1b[33m${line}\x1b[0m`),
+          writeLine: (line) => writeTerminal(terminal, `\x1b[33m${line}\x1b[0m\r\n`),
           clear: () => terminal.clear(),
         },
-        { replay },
+        {
+          replay,
+          aroundReplay: (phase) => {
+            if (phase === 'start') {
+              holdingReplaySuppress = true
+              beginSuppressInputForward()
+              return
+            }
+            releaseReplaySuppress()
+          },
+        },
       )
+      unregisterWriter = () => {
+        // 中途卸载时也要释放，避免 suppress 计数泄漏导致键盘永久失效
+        releaseReplaySuppress()
+        unreg()
+      }
     }
 
     const detachWriter = () => {
@@ -873,8 +911,9 @@ export default {
 
     watch(() => props.viewVisible, async (visible) => {
       if (!visible) {
+        // 仅隐藏：保留 xterm，避免回首页/任务模式时销毁→回放把协议应答灌进输入
         clearFitTimers()
-        destroyTerminal()
+        notifyShellTerminalBlur()
         return
       }
       if (!props.active) return

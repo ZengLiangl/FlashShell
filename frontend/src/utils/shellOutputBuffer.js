@@ -65,12 +65,18 @@ function trimBuffer(buf, machineName) {
   }
 }
 
-function replayBufferItems(buf, writer, fromIndex = 0) {
+function writeBufferItem(writer, item) {
+  const result = item.type === 'data'
+    ? writer.writeData(item.content)
+    : writer.writeLine(item.content)
+  return Promise.resolve(result)
+}
+
+/** 回放缓冲；若 writer 返回 Promise，则等写入完成（便于抑制 xterm 协议应答回灌） */
+async function replayBufferItems(buf, writer, fromIndex = 0) {
   const start = Math.max(0, fromIndex)
   for (let i = start; i < buf.items.length; i++) {
-    const item = buf.items[i]
-    if (item.type === 'data') writer.writeData(item.content)
-    else writer.writeLine(item.content)
+    await writeBufferItem(writer, buf.items[i])
   }
   buf.replayedCount = buf.items.length
 }
@@ -162,15 +168,33 @@ export function finalizeShellOutputMigration(fromName, toName) {
   migrateShellOutput(fromName, toName)
 }
 
+/**
+ * @param {object} [options]
+ * @param {boolean} [options.replay=true]
+ * @param {(phase: 'start' | 'end') => void} [options.aroundReplay] 回放开始/结束钩子（end 在全部 write 完成之后）
+ * @returns {() => void} unregister
+ */
 export function registerShellWriter(machineName, writer, options = {}) {
-  const { replay = true } = options
+  const { replay = true, aroundReplay } = options
   writers.set(machineName, writer)
+  const unregister = () => {
+    if (writers.get(machineName) === writer) writers.delete(machineName)
+  }
   const buf = buffers.get(machineName)
   if (!buf || !replay) {
-    return () => writers.delete(machineName)
+    return unregister
   }
-  replayBufferItems(buf, writer, buf.replayedCount || 0)
-  return () => writers.delete(machineName)
+  const from = buf.replayedCount || 0
+  if (from >= buf.items.length) {
+    return unregister
+  }
+  aroundReplay?.('start')
+  replayBufferItems(buf, writer, from)
+    .catch(() => {})
+    .finally(() => {
+      aroundReplay?.('end')
+    })
+  return unregister
 }
 
 /** 终端销毁后重置回放游标，下次挂载可完整回放仍在缓冲中的内容 */
