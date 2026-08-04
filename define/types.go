@@ -61,8 +61,22 @@ type Machine struct {
 	Name          string `yaml:"name" json:"name"`
 	Group         string `yaml:"group,omitempty" json:"group,omitempty"`
 	KeyFile       string `yaml:"key_file,omitempty" json:"key_file,omitempty"`
-	// ProxyJump 跳板机：引用另一台 Machine 名称，或 host[:port] / user@host[:port]
-	ProxyJump     string `yaml:"proxyJump,omitempty" json:"proxyJump,omitempty"`
+	// ProxyJump 跳板机：引用另一台 Machine 名称，或 host[:port] / user@host[:port]（单跳，与 JumpChain 二选一）
+	ProxyJump string `yaml:"proxyJump,omitempty" json:"proxyJump,omitempty"`
+	// JumpChain 有序跳板链（机器名或 host[:port] / user@host[:port]）；非空时优先于 ProxyJump
+	JumpChain []string `yaml:"jumpChain,omitempty" json:"jumpChain,omitempty"`
+	// ProxyOverride 每主机代理覆盖（inherit=全局 | none=直连 | manual=独立代理）
+	ProxyOverride *MachineProxyOverride `yaml:"proxyOverride,omitempty" json:"proxyOverride,omitempty"`
+	// LegacyAlgorithms 启用旧设备兼容算法（华为/思科等网络设备）
+	LegacyAlgorithms bool `yaml:"legacyAlgorithms,omitempty" json:"legacyAlgorithms,omitempty"`
+	// SkipEcdsaHostKey 跳过 ECDSA 主机密钥（部分老设备兼容）
+	SkipEcdsaHostKey bool `yaml:"skipEcdsaHostKey,omitempty" json:"skipEcdsaHostKey,omitempty"`
+	// SftpEncoding SFTP 文件名编码：auto | utf-8 | gb18030
+	SftpEncoding string `yaml:"sftpEncoding,omitempty" json:"sftpEncoding,omitempty"`
+	// StartupCommand 连接后自动执行的启动命令（单行）
+	StartupCommand string `yaml:"startupCommand,omitempty" json:"startupCommand,omitempty"`
+	// AgentForwarding 启用 SSH Agent 转发
+	AgentForwarding bool `yaml:"agentForwarding,omitempty" json:"agentForwarding,omitempty"`
 	// Tunnels SSH 隧道（本地/远程/动态），连接后自动建立
 	Tunnels []SSHTunnel `yaml:"tunnels,omitempty" json:"tunnels,omitempty"`
 	// ListHost/ListPort/ListUser 列表展示与搜索用（明文；密码等仍在 encrypted_data）

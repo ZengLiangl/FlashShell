@@ -609,6 +609,9 @@ func (a *App) SetMachineShellMonitorOpen(machineKey string, open bool) error {
 // AddMachine 添加机器配置（到全局配置）
 func (a *App) AddMachine(machine define.Machine) error {
 	machine.EnsureID()
+	if err := prepareMachineForSave(&machine, nil); err != nil {
+		return err
+	}
 	return a.configManager.AddMachineToGlobal(&machine)
 }
 
@@ -638,6 +641,9 @@ func (a *App) UpdateMachine(machineID string, machine define.Machine) error {
 	}
 	// 监控栏展开状态由 SetMachineShellMonitorOpen 单独维护，避免普通编辑覆盖
 	machine.ShellMonitorOpen = existing.ShellMonitorOpen
+	if err := prepareMachineForSave(&machine, existing); err != nil {
+		return err
+	}
 	return a.configManager.AddMachineToGlobal(&machine)
 }
 

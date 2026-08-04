@@ -112,6 +112,11 @@ func DialContext(ctx context.Context, network, address string) (net.Conn, error)
 	return dialWith(ctx, s, network, address)
 }
 
+// DialWith 按指定配置拨号（每主机代理覆盖等场景）
+func DialWith(ctx context.Context, s Settings, network, address string) (net.Conn, error) {
+	return dialWith(ctx, Normalize(s), network, address)
+}
+
 // Test 用指定配置（可不先 Apply）请求 testURL，检测连通性
 func Test(ctx context.Context, s Settings, testURL string) error {
 	s = Normalize(s)
