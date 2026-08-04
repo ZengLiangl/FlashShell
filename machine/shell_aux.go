@@ -30,6 +30,7 @@ type ShellAuxManager struct {
 	lastNetRx    uint64
 	lastNetTx    uint64
 	lastNetIface string
+	fileBackend  string // sftp | scp | ""
 }
 
 // NewShellAuxManager 创建辅助连接管理器
@@ -100,18 +101,9 @@ func (a *ShellAuxManager) Attach(client *SSHClient, machineName, host string) er
 	return nil
 }
 
-// EnsureSFTP 按需初始化 SFTP（文件列表/传输需要）。
+// EnsureSFTP 按需初始化文件后端（SFTP 或 SCP 回退）。
 func (a *ShellAuxManager) EnsureSFTP() error {
-	a.mu.Lock()
-	client := a.client
-	a.mu.Unlock()
-	if client == nil || !client.IsConnected() {
-		return fmt.Errorf("辅助连接未建立")
-	}
-	if client.remoteMachine == nil {
-		return fmt.Errorf("远程未连接")
-	}
-	return client.remoteMachine.EnsureSFTP()
+	return a.EnsureFileBackend()
 }
 
 // Close 关闭辅助连接（复用 PTY 时仅关闭 SFTP，不关 SSH）
@@ -136,6 +128,7 @@ func (a *ShellAuxManager) releaseLocked() error {
 	}
 	a.client = nil
 	a.ownsClient = false
+	a.fileBackend = ""
 	a.uidNames = nil
 	a.gidNames = nil
 	a.idMapsReady = false
@@ -462,8 +455,19 @@ func (a *ShellAuxManager) Home() (string, error) {
 
 // DirExists 判断远端路径是否为可列出的目录（以 ReadDir 为准，兼容 symlink）
 func (a *ShellAuxManager) DirExists(remotePath string) (bool, error) {
-	if err := a.EnsureSFTP(); err != nil {
+	if err := a.EnsureFileBackend(); err != nil {
 		return false, err
+	}
+	if a.isSCPBackend() {
+		entry, err := a.statSCP(remotePath)
+		if err != nil {
+			errText := strings.ToLower(err.Error())
+			if strings.Contains(errText, "不存在") || strings.Contains(errText, "no such") {
+				return false, nil
+			}
+			return false, err
+		}
+		return entry.IsDir, nil
 	}
 	a.mu.Lock()
 	client := a.client
@@ -529,8 +533,11 @@ func (a *ShellAuxManager) PtyCwdFile() (string, error) {
 
 // ListDir 列出目录
 func (a *ShellAuxManager) ListDir(dirPath string, showHidden bool) ([]define.SftpEntry, error) {
-	if err := a.EnsureSFTP(); err != nil {
+	if err := a.EnsureFileBackend(); err != nil {
 		return nil, err
+	}
+	if a.isSCPBackend() {
+		return a.listDirSCP(dirPath, showHidden)
 	}
 	a.mu.Lock()
 	client := a.client
@@ -659,8 +666,11 @@ func (a *ShellAuxManager) resolveGID(gid uint32) string {
 
 // RemovePath 删除远端文件或空目录；目录非空则递归删除
 func (a *ShellAuxManager) RemovePath(remotePath string) error {
-	if err := a.EnsureSFTP(); err != nil {
+	if err := a.EnsureFileBackend(); err != nil {
 		return err
+	}
+	if a.isSCPBackend() {
+		return a.removeSCP(remotePath)
 	}
 	a.mu.Lock()
 	client := a.client
@@ -699,6 +709,12 @@ func removeDirRecursive(c *sftp.Client, dir string) error {
 
 // StatPath 获取远端路径信息
 func (a *ShellAuxManager) StatPath(remotePath string) (*define.SftpEntry, error) {
+	if err := a.EnsureFileBackend(); err != nil {
+		return nil, err
+	}
+	if a.isSCPBackend() {
+		return a.statSCP(remotePath)
+	}
 	c, err := a.sftpClient()
 	if err != nil {
 		return nil, err

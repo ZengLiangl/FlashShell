@@ -73,6 +73,8 @@ type Machine struct {
 	SkipEcdsaHostKey bool `yaml:"skipEcdsaHostKey,omitempty" json:"skipEcdsaHostKey,omitempty"`
 	// SftpEncoding SFTP 文件名编码：auto | utf-8 | gb18030
 	SftpEncoding string `yaml:"sftpEncoding,omitempty" json:"sftpEncoding,omitempty"`
+	// SftpFileProtocol 文件协议：auto（优先 SFTP，失败回退 SCP）| sftp | scp
+	SftpFileProtocol string `yaml:"sftpFileProtocol,omitempty" json:"sftpFileProtocol,omitempty"`
 	// StartupCommand 连接后自动执行的启动命令（单行）
 	StartupCommand string `yaml:"startupCommand,omitempty" json:"startupCommand,omitempty"`
 	// AgentForwarding 启用 SSH Agent 转发

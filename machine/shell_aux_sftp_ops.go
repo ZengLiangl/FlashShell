@@ -4,12 +4,19 @@ import (
 	"io"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/pkg/sftp"
 )
 
 // MkdirRemotePath 创建远端目录
 func (a *ShellAuxManager) MkdirRemotePath(remotePath string) error {
+	if err := a.EnsureFileBackend(); err != nil {
+		return err
+	}
+	if a.isSCPBackend() {
+		return a.mkdirSCP(remotePath)
+	}
 	c, err := a.sftpClient()
 	if err != nil {
 		return err
@@ -19,6 +26,12 @@ func (a *ShellAuxManager) MkdirRemotePath(remotePath string) error {
 
 // RenameRemotePath 重命名远端路径
 func (a *ShellAuxManager) RenameRemotePath(oldPath, newPath string) error {
+	if err := a.EnsureFileBackend(); err != nil {
+		return err
+	}
+	if a.isSCPBackend() {
+		return a.renameSCP(oldPath, newPath)
+	}
 	c, err := a.sftpClient()
 	if err != nil {
 		return err
@@ -28,6 +41,12 @@ func (a *ShellAuxManager) RenameRemotePath(oldPath, newPath string) error {
 
 // ChmodRemotePath 修改远端权限（mode 为 Unix 权限位，如 0755）
 func (a *ShellAuxManager) ChmodRemotePath(remotePath string, mode uint32) error {
+	if err := a.EnsureFileBackend(); err != nil {
+		return err
+	}
+	if a.isSCPBackend() {
+		return a.chmodSCP(remotePath, mode)
+	}
 	c, err := a.sftpClient()
 	if err != nil {
 		return err
@@ -37,6 +56,16 @@ func (a *ShellAuxManager) ChmodRemotePath(remotePath string, mode uint32) error 
 
 // ReadSymlinkTarget 读取符号链接目标
 func (a *ShellAuxManager) ReadSymlinkTarget(remotePath string) (string, error) {
+	if err := a.EnsureFileBackend(); err != nil {
+		return "", err
+	}
+	if a.isSCPBackend() {
+		out, err := a.Exec("readlink -- " + shellQuotePath(remotePath))
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(out), nil
+	}
 	c, err := a.sftpClient()
 	if err != nil {
 		return "", err
@@ -50,6 +79,12 @@ func (a *ShellAuxManager) ReadSymlinkTarget(remotePath string) (string, error) {
 
 // CopyRemotePath 同机复制文件或目录（递归）
 func (a *ShellAuxManager) CopyRemotePath(srcPath, dstPath string) error {
+	if err := a.EnsureFileBackend(); err != nil {
+		return err
+	}
+	if a.isSCPBackend() {
+		return a.copyRemoteSCP(srcPath, dstPath)
+	}
 	c, err := a.sftpClient()
 	if err != nil {
 		return err

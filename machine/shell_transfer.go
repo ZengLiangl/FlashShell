@@ -111,8 +111,11 @@ func shellSingleQuote(s string) string {
 }
 
 func (a *ShellAuxManager) sftpClient() (*sftp.Client, error) {
-	if err := a.EnsureSFTP(); err != nil {
+	if err := a.EnsureFileBackend(); err != nil {
 		return nil, err
+	}
+	if a.isSCPBackend() {
+		return nil, fmt.Errorf("当前为 SCP 模式，不支持该 SFTP 操作")
 	}
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -126,6 +129,12 @@ func (a *ShellAuxManager) sftpClient() (*sftp.Client, error) {
 func (a *ShellAuxManager) DownloadFile(ctx context.Context, remotePath, localPath string, onProgress TransferProgressFunc) error {
 	if err := ctxErr(ctx); err != nil {
 		return err
+	}
+	if err := a.EnsureFileBackend(); err != nil {
+		return err
+	}
+	if a.isSCPBackend() {
+		return a.DownloadFileSCP(ctx, remotePath, localPath, onProgress)
 	}
 	sftpClient, err := a.sftpClient()
 	if err != nil {
@@ -193,10 +202,16 @@ func (a *ShellAuxManager) DownloadFile(ctx context.Context, remotePath, localPat
 	return nil
 }
 
-// UploadFile 上传本地文件到远端路径（支持断点续传）
+// UploadFile 上传本地文件到远端路径（支持断点续传；SCP 模式不支持续传）
 func (a *ShellAuxManager) UploadFile(ctx context.Context, localPath, remotePath string, onProgress TransferProgressFunc) error {
 	if err := ctxErr(ctx); err != nil {
 		return err
+	}
+	if err := a.EnsureFileBackend(); err != nil {
+		return err
+	}
+	if a.isSCPBackend() {
+		return a.UploadFileSCP(ctx, localPath, remotePath, onProgress)
 	}
 	sftpClient, err := a.sftpClient()
 	if err != nil {
