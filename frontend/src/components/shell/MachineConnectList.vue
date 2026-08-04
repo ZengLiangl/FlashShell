@@ -47,6 +47,7 @@
           <div class="ml-body">
             <div class="ml-line">
               <span class="ml-name">{{ machine.name }}</span>
+              <el-icon v-if="machine.pinned" class="ml-pin" :size="12" title="已置顶"><StarFilled /></el-icon>
               <template v-if="variant !== 'cards'">
                 <span v-if="sessionCount(machine.name) > 0" class="ml-badge">{{ sessionCount(machine.name) }} 会话</span>
                 <span v-else-if="machineConnecting(machine.name)" class="ml-badge connecting">连接中</span>
@@ -90,6 +91,7 @@
         <div class="ml-body">
           <div class="ml-line">
             <span class="ml-name">{{ machine.name }}</span>
+            <el-icon v-if="machine.pinned" class="ml-pin" :size="12" title="已置顶"><StarFilled /></el-icon>
             <template v-if="variant !== 'cards'">
               <span v-if="sessionCount(machine.name) > 0" class="ml-badge">{{ sessionCount(machine.name) }} 会话</span>
               <span v-else-if="machineConnecting(machine.name)" class="ml-badge connecting">连接中</span>
@@ -118,13 +120,14 @@
     @copy="onCopy"
     @edit="onEdit"
     @delete="onDelete"
+    @toggle-pin="onTogglePin"
     @hide="hideContextMenu"
   />
 </template>
 
 <script>
 import { computed, ref, watch } from 'vue'
-import { ArrowRight, Setting, Monitor } from '@element-plus/icons-vue'
+import { ArrowRight, Setting, Monitor, StarFilled } from '@element-plus/icons-vue'
 import {
   splitMachineTree,
   formatMachineAddr,
@@ -137,7 +140,7 @@ import MachineContextMenu from './MachineContextMenu.vue'
 
 export default {
   name: 'MachineConnectList',
-  components: { ArrowRight, Setting, Monitor, MachineContextMenu },
+  components: { ArrowRight, Setting, Monitor, StarFilled, MachineContextMenu },
   props: {
     machines: { type: Array, default: () => [] },
     sessions: { type: Array, default: () => [] },
@@ -153,7 +156,7 @@ export default {
     /** default：紧凑列表；cards：与首页任务卡片同尺寸的卡片行 */
     variant: { type: String, default: 'default' },
   },
-  emits: ['connect', 'edit-machine', 'copy-machine', 'delete-machine'],
+  emits: ['connect', 'edit-machine', 'copy-machine', 'delete-machine', 'toggle-pin'],
   setup(props, { emit }) {
     const expandedGroups = ref([])
     const { ctx, hideContextMenu, onMachineContextMenu, isContextTarget } = useMachineContextMenu()
@@ -217,6 +220,11 @@ export default {
       if (machine) emit('delete-machine', machine)
     }
 
+    const onTogglePin = (machine) => {
+      hideContextMenu()
+      if (machine) emit('toggle-pin', machine)
+    }
+
     return {
       ctx,
       hideContextMenu,
@@ -235,6 +243,7 @@ export default {
       onCopy,
       onEdit,
       onDelete,
+      onTogglePin,
     }
   },
 }

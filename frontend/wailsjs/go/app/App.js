@@ -570,6 +570,10 @@ export function SetHomeMinimizedZone(arg1) {
   return window['go']['app']['App']['SetHomeMinimizedZone'](arg1);
 }
 
+export function SetMachinePinned(arg1, arg2) {
+  return window['go']['app']['App']['SetMachinePinned'](arg1, arg2);
+}
+
 export function SetMachineSensitiveData(arg1, arg2) {
   return window['go']['app']['App']['SetMachineSensitiveData'](arg1, arg2);
 }

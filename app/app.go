@@ -606,6 +606,11 @@ func (a *App) SetMachineShellMonitorOpen(machineKey string, open bool) error {
 	return a.configManager.UpdateMachineShellMonitorOpen(machineKey, open)
 }
 
+// SetMachinePinned 设置机器是否置顶
+func (a *App) SetMachinePinned(machineKey string, pinned bool) error {
+	return a.configManager.UpdateMachinePinned(machineKey, pinned)
+}
+
 // AddMachine 添加机器配置（到全局配置）
 func (a *App) AddMachine(machine define.Machine) error {
 	machine.EnsureID()
@@ -641,6 +646,8 @@ func (a *App) UpdateMachine(machineID string, machine define.Machine) error {
 	}
 	// 监控栏展开状态由 SetMachineShellMonitorOpen 单独维护，避免普通编辑覆盖
 	machine.ShellMonitorOpen = existing.ShellMonitorOpen
+	// 置顶由 SetMachinePinned 单独维护
+	machine.Pinned = existing.Pinned
 	if err := prepareMachineForSave(&machine, existing); err != nil {
 		return err
 	}

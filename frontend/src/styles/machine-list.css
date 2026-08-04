@@ -175,6 +175,11 @@
   white-space: nowrap;
 }
 
+.ml-pin {
+  flex-shrink: 0;
+  color: var(--el-color-warning, #e6a23c);
+}
+
 .ml-badge {
   flex-shrink: 0;
   font-size: 10px;

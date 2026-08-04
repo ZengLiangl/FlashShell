@@ -226,3 +226,29 @@ func (gcm *GlobalConfigManager) UpdateMachineShellMonitorOpen(machineKey string,
 	}
 	return fmt.Errorf("机器配置 '%s' 不存在", machineKey)
 }
+
+// UpdateMachinePinned 仅更新机器置顶状态，保留其它字段。
+// machineKey 可为机器 ID 或名称。
+func (gcm *GlobalConfigManager) UpdateMachinePinned(machineKey string, pinned bool) error {
+	machineKey = strings.TrimSpace(machineKey)
+	if machineKey == "" {
+		return fmt.Errorf("机器 ID 或名称不能为空")
+	}
+	if gcm.config == nil {
+		if _, err := gcm.LoadGlobalConfig(); err != nil {
+			return err
+		}
+	}
+	for i := range gcm.config.Machines {
+		m := &gcm.config.Machines[i]
+		if m.ID != machineKey && m.Name != machineKey {
+			continue
+		}
+		if m.Pinned == pinned {
+			return nil
+		}
+		m.Pinned = pinned
+		return gcm.SaveGlobalConfig(gcm.config)
+	}
+	return fmt.Errorf("机器配置 '%s' 不存在", machineKey)
+}

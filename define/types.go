@@ -79,6 +79,8 @@ type Machine struct {
 	StartupCommand string `yaml:"startupCommand,omitempty" json:"startupCommand,omitempty"`
 	// AgentForwarding 启用 SSH Agent 转发
 	AgentForwarding bool `yaml:"agentForwarding,omitempty" json:"agentForwarding,omitempty"`
+	// Pinned 首页置顶
+	Pinned bool `yaml:"pinned,omitempty" json:"pinned,omitempty"`
 	// Tunnels SSH 隧道（本地/远程/动态），连接后自动建立
 	Tunnels []SSHTunnel `yaml:"tunnels,omitempty" json:"tunnels,omitempty"`
 	// ListHost/ListPort/ListUser 列表展示与搜索用（明文；密码等仍在 encrypted_data）

@@ -10,6 +10,7 @@
       @mouseleave="$emit('hide')"
     >
       <li v-if="showConnect" @click="onConnect">连接</li>
+      <li @click="onTogglePin">{{ isPinned ? '取消置顶' : '置顶' }}</li>
       <li @click="onCopy">复制</li>
       <li @click="onEdit">编辑</li>
       <li class="danger" @click="onDelete">删除</li>
@@ -18,7 +19,7 @@
 </template>
 
 <script>
-import { ref, watch, nextTick } from 'vue'
+import { ref, watch, nextTick, computed } from 'vue'
 
 export default {
   name: 'MachineContextMenu',
@@ -26,11 +27,12 @@ export default {
     ctx: { type: Object, required: true },
     showConnect: { type: Boolean, default: true },
   },
-  emits: ['connect', 'copy', 'edit', 'delete', 'hide'],
+  emits: ['connect', 'copy', 'edit', 'delete', 'toggle-pin', 'hide'],
   setup(props, { emit }) {
     const menuRef = ref(null)
 
     const machine = () => props.ctx.machine
+    const isPinned = computed(() => !!machine()?.pinned)
 
     const adjustPosition = async () => {
       await nextTick()
@@ -66,8 +68,9 @@ export default {
     const onCopy = () => emit('copy', machine())
     const onEdit = () => emit('edit', machine())
     const onDelete = () => emit('delete', machine())
+    const onTogglePin = () => emit('toggle-pin', machine())
 
-    return { menuRef, onConnect, onCopy, onEdit, onDelete }
+    return { menuRef, isPinned, onConnect, onCopy, onEdit, onDelete, onTogglePin }
   },
 }
 </script>

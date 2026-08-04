@@ -280,17 +280,72 @@
             <p class="app-empty-desc">点击右上角 + 添加机器</p>
           </div>
           <div v-else class="zone-list-wrap">
-            <MachineConnectList
-              :machines="filteredMachines"
-              :sessions="sessions"
-              :workspace-sessions="workspaceSessions"
-              :connecting-name="connectingName"
-              :filter-keyword="machineKeyword"
-              layout="grid"
-              variant="cards"
-              empty-text="无匹配机器"
-              @connect="onConnectMachine"
-            />
+            <div v-if="quickConnectHint" class="quick-connect-bar">
+              <span class="quick-connect-text">{{ quickConnectHint.text }}</span>
+              <el-button size="small" type="primary" @click="onQuickConnect">
+                {{ quickConnectHint.action }}
+              </el-button>
+            </div>
+
+            <div v-if="pinnedMachines.length" class="home-section">
+              <div class="home-section-title">置顶</div>
+              <MachineConnectList
+                :machines="pinnedMachines"
+                :sessions="sessions"
+                :workspace-sessions="workspaceSessions"
+                :connecting-name="connectingName"
+                :filter-keyword="machineKeyword"
+                layout="grid"
+                variant="cards"
+                show-context-menu
+                empty-text="无匹配机器"
+                @connect="onConnectMachine"
+                @edit-machine="(m) => $emit('edit-machine', m)"
+                @copy-machine="(m) => $emit('copy-machine', m)"
+                @delete-machine="(m) => $emit('delete-machine', m)"
+                @toggle-pin="onTogglePin"
+              />
+            </div>
+
+            <div v-if="recentMachines.length" class="home-section">
+              <div class="home-section-title">最近连接</div>
+              <MachineConnectList
+                :machines="recentMachines"
+                :sessions="sessions"
+                :workspace-sessions="workspaceSessions"
+                :connecting-name="connectingName"
+                :filter-keyword="machineKeyword"
+                layout="grid"
+                variant="cards"
+                show-context-menu
+                empty-text="无匹配机器"
+                @connect="onConnectMachine"
+                @edit-machine="(m) => $emit('edit-machine', m)"
+                @copy-machine="(m) => $emit('copy-machine', m)"
+                @delete-machine="(m) => $emit('delete-machine', m)"
+                @toggle-pin="onTogglePin"
+              />
+            </div>
+
+            <div class="home-section">
+              <div v-if="pinnedMachines.length || recentMachines.length" class="home-section-title">全部机器</div>
+              <MachineConnectList
+                :machines="filteredMachines"
+                :sessions="sessions"
+                :workspace-sessions="workspaceSessions"
+                :connecting-name="connectingName"
+                :filter-keyword="machineKeyword"
+                layout="grid"
+                variant="cards"
+                show-context-menu
+                empty-text="无匹配机器"
+                @connect="onConnectMachine"
+                @edit-machine="(m) => $emit('edit-machine', m)"
+                @copy-machine="(m) => $emit('copy-machine', m)"
+                @delete-machine="(m) => $emit('delete-machine', m)"
+                @toggle-pin="onTogglePin"
+              />
+            </div>
           </div>
         </div>
       </section>
@@ -305,6 +360,7 @@ import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import { machineMatchesKeyword, isMachineConnecting } from '../utils/machineGroups'
 import { mergeShortcuts, formatShortcut } from '../utils/shortcuts'
+import { parseQuickConnectTarget, findMachineForQuickConnect } from '../utils/quickConnect'
 import MachineConnectList from './shell/MachineConnectList.vue'
 
 function basename(filePath) {
@@ -338,6 +394,9 @@ export default {
     'open-shell',
     'connect-machine',
     'add-machine',
+    'edit-machine',
+    'copy-machine',
+    'delete-machine',
     'open-system-settings',
     'open-config-editor',
   ],
@@ -347,6 +406,7 @@ export default {
     const currentConfig = ref('')
     const shortcuts = ref(mergeShortcuts())
     const minimizedZone = ref('')
+    const historyRecords = ref([])
 
     const hasProjects = computed(() => (props.projects || []).length > 0)
     const labelOf = (id) => formatShortcut(shortcuts.value[id])
@@ -360,6 +420,14 @@ export default {
         minimizedZone.value = normalizeMinimizedZone(await App.GetHomeMinimizedZone())
       } catch {
         minimizedZone.value = ''
+      }
+    }
+
+    const loadHistory = async () => {
+      try {
+        historyRecords.value = (await App.GetShellHistory()) || []
+      } catch {
+        historyRecords.value = []
       }
     }
 
@@ -430,6 +498,50 @@ export default {
       return list.filter((m) => machineMatchesKeyword(m, kw))
     })
 
+    const pinnedMachines = computed(() =>
+      filteredMachines.value.filter((m) => !!m.pinned),
+    )
+
+    const recentMachines = computed(() => {
+      const byName = new Map((props.machines || []).map((m) => [m.name, m]))
+      const out = []
+      const seen = new Set()
+      for (const rec of historyRecords.value || []) {
+        const name = rec?.machineName || rec?.configName || rec?.name
+        if (!name || seen.has(name)) continue
+        const m = byName.get(name)
+        if (!m) continue
+        if (String(machineKeyword.value || '').trim() && !machineMatchesKeyword(m, machineKeyword.value)) {
+          continue
+        }
+        seen.add(name)
+        out.push(m)
+        if (out.length >= 8) break
+      }
+      return out
+    })
+
+    const quickTarget = computed(() => parseQuickConnectTarget(machineKeyword.value))
+    const quickMatched = computed(() =>
+      findMachineForQuickConnect(props.machines || [], quickTarget.value),
+    )
+    const quickConnectHint = computed(() => {
+      const t = quickTarget.value
+      if (!t) return null
+      if (quickMatched.value) {
+        return {
+          text: `快速连接 ${quickMatched.value.name}（${t.user ? `${t.user}@` : ''}${t.host}${t.port ? `:${t.port}` : ''}）`,
+          action: '连接',
+          mode: 'connect',
+        }
+      }
+      return {
+        text: `未找到匹配机器：${t.user ? `${t.user}@` : ''}${t.host}${t.port ? `:${t.port}` : ''}，可先添加`,
+        action: '添加机器',
+        mode: 'add',
+      }
+    })
+
     const onConnectMachine = (name) => {
       if (isMachineConnecting(name, props.workspaceSessions.length ? props.workspaceSessions : props.sessions)) {
         return
@@ -437,7 +549,29 @@ export default {
       emit('connect-machine', name)
     }
 
-    const handleRefresh = () => emit('refresh')
+    const onQuickConnect = () => {
+      if (quickConnectHint.value?.mode === 'connect' && quickMatched.value) {
+        onConnectMachine(quickMatched.value.name)
+        return
+      }
+      emit('add-machine')
+    }
+
+    const onTogglePin = async (machine) => {
+      if (!machine) return
+      const key = machine.id || machine.name
+      try {
+        await App.SetMachinePinned(key, !machine.pinned)
+        emit('refresh')
+      } catch (e) {
+        console.error('置顶失败:', e)
+      }
+    }
+
+    const handleRefresh = () => {
+      loadHistory()
+      emit('refresh')
+    }
 
     const onMinimizedZoneChanged = (zone) => {
       minimizedZone.value = normalizeMinimizedZone(zone)
@@ -447,6 +581,7 @@ export default {
       loadConfigMenu()
       loadShortcuts()
       loadMinimizedZone()
+      loadHistory()
       EventsOn('config:changed', loadConfigMenu)
       EventsOn('shortcuts:changed', loadShortcuts)
       EventsOn('home:minimized-zone', onMinimizedZoneChanged)
@@ -465,12 +600,17 @@ export default {
       currentConfig,
       hasProjects,
       filteredMachines,
+      pinnedMachines,
+      recentMachines,
+      quickConnectHint,
       minimizedZone,
       basename,
       labelOf,
       onConfigCommand,
       openConfigEditor,
       onConnectMachine,
+      onQuickConnect,
+      onTogglePin,
       handleRefresh,
       toggleMinimize,
     }
@@ -693,6 +833,36 @@ export default {
 
 .zone-list-wrap {
   width: 100%;
+}
+
+.home-section {
+  margin-bottom: 16px;
+}
+
+.home-section-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--app-text-muted, #909399);
+  margin: 0 0 8px 2px;
+  letter-spacing: 0.02em;
+}
+
+.quick-connect-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--app-border, #e4e7ed);
+  background: color-mix(in srgb, var(--app-accent-color, #409eff) 8%, var(--app-card-bg, #fff));
+}
+
+.quick-connect-text {
+  font-size: 13px;
+  color: var(--app-text, #303133);
+  line-height: 1.4;
 }
 
 .item-grid {

@@ -746,6 +746,7 @@ export namespace define {
 	    sftpFileProtocol?: string;
 	    startupCommand?: string;
 	    agentForwarding?: boolean;
+	    pinned?: boolean;
 	    tunnels?: SSHTunnel[];
 	    list_host?: string;
 	    list_port?: number;
@@ -775,6 +776,7 @@ export namespace define {
 	        this.sftpFileProtocol = source["sftpFileProtocol"];
 	        this.startupCommand = source["startupCommand"];
 	        this.agentForwarding = source["agentForwarding"];
+	        this.pinned = source["pinned"];
 	        this.tunnels = this.convertValues(source["tunnels"], SSHTunnel);
 	        this.list_host = source["list_host"];
 	        this.list_port = source["list_port"];

@@ -203,6 +203,14 @@ func (cm *ConfigManager) UpdateMachineShellMonitorOpen(machineKey string, open b
 	return cm.globalConfigManager.UpdateMachineShellMonitorOpen(machineKey, open)
 }
 
+// UpdateMachinePinned 更新机器置顶状态
+func (cm *ConfigManager) UpdateMachinePinned(machineKey string, pinned bool) error {
+	if cm.globalConfigManager == nil {
+		return fmt.Errorf("全局配置管理器未初始化")
+	}
+	return cm.globalConfigManager.UpdateMachinePinned(machineKey, pinned)
+}
+
 // GetAllMachinesFromGlobal 从全局配置获取所有机器配置
 func (cm *ConfigManager) GetAllMachinesFromGlobal() []define.Machine {
 	if cm.globalConfigManager == nil {
