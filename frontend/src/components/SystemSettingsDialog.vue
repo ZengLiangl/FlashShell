@@ -130,6 +130,36 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- 主机密钥 -->
+                        <div v-show="systemPanel === 'security'" class="appear-pane-body">
+                            <div class="system-setting-row system-setting-row--stack">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">已信任主机</span>
+                                    <span class="system-setting-hint">连接 SSH 时校验的主机指纹；可从系统 ~/.ssh/known_hosts 合并导入</span>
+                                </div>
+                                <div class="known-hosts-toolbar icon-actions">
+                                    <el-button size="small" type="primary" :loading="importingKnownHosts" @click="importSystemKnownHosts">
+                                        导入系统 known_hosts
+                                    </el-button>
+                                    <el-button size="small" text :loading="loadingKnownHosts" @click="loadKnownHosts">
+                                        刷新
+                                    </el-button>
+                                </div>
+                                <el-table :data="knownHosts" size="small" style="width: 100%; margin-top: 8px" empty-text="暂无已信任主机" max-height="320">
+                                    <el-table-column prop="host" label="主机" min-width="120" show-overflow-tooltip />
+                                    <el-table-column prop="port" label="端口" width="70" />
+                                    <el-table-column prop="fingerprint" label="指纹" min-width="200" show-overflow-tooltip />
+                                    <el-table-column label="操作" width="72" align="center">
+                                        <template #default="{ row }">
+                                            <el-button size="small" text type="danger" @click="removeKnownHost(row)">
+                                                删除
+                                            </el-button>
+                                        </template>
+                                    </el-table-column>
+                                </el-table>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -597,6 +627,9 @@ export default {
         const downloadFailed = ref(false)
         const selectedDownloadSource = ref('GitHub')
         const accounts = ref([])
+        const knownHosts = ref([])
+        const loadingKnownHosts = ref(false)
+        const importingKnownHosts = ref(false)
         const accountEditVisible = ref(false)
         const editingAccountIndex = ref(-1)
         const accountForm = reactive({ id: '', name: '', user: '', password: '' })
@@ -612,6 +645,7 @@ export default {
         const systemPanels = [
             { id: 'app', label: '应用信息' },
             { id: 'shell', label: 'Shell' },
+            { id: 'security', label: '主机密钥' },
         ]
         const themePanel = ref('ui')
         const themePanels = [
@@ -866,6 +900,42 @@ theme preview · ${theme.foreground}`
                 appVersion.value = ''
             }
             await Promise.all([loadSystemFonts(), loadAppIconPresets()])
+            await loadKnownHosts()
+        }
+
+        const loadKnownHosts = async () => {
+            loadingKnownHosts.value = true
+            try {
+                knownHosts.value = (await App.GetKnownHosts()) || []
+            } catch {
+                knownHosts.value = []
+            } finally {
+                loadingKnownHosts.value = false
+            }
+        }
+
+        const importSystemKnownHosts = async () => {
+            importingKnownHosts.value = true
+            try {
+                const n = await App.ImportSystemKnownHosts()
+                await loadKnownHosts()
+                ElMessage.success(n > 0 ? `已导入 ${n} 条主机密钥` : '未导入新记录（文件为空或均为哈希主机名）')
+            } catch (e) {
+                ElMessage.error('导入失败: ' + e)
+            } finally {
+                importingKnownHosts.value = false
+            }
+        }
+
+        const removeKnownHost = async (row) => {
+            if (!row?.host) return
+            try {
+                await App.RemoveKnownHost(row.host, row.port || 22)
+                await loadKnownHosts()
+                ElMessage.success('已删除')
+            } catch (e) {
+                ElMessage.error('删除失败: ' + e)
+            }
         }
 
         const loadSystemFonts = async () => {
@@ -1054,6 +1124,10 @@ theme preview · ${theme.foreground}`
             }
         }
 
+        watch(systemPanel, (panel) => {
+            if (panel === 'security') loadKnownHosts()
+        })
+
         watch(() => props.modelValue, (open) => {
             if (!props.embedded && open) load()
         })
@@ -1210,6 +1284,12 @@ theme preview · ${theme.foreground}`
             previewTermLabel,
             previewTermSample,
             accounts,
+            knownHosts,
+            loadingKnownHosts,
+            importingKnownHosts,
+            loadKnownHosts,
+            importSystemKnownHosts,
+            removeKnownHost,
             saving,
             savingAccount,
             sessionId,
