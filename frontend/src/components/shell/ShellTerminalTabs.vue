@@ -131,6 +131,12 @@
           </div>
           <ShellTerminal :ref="(el) => setTerminalRef(session.machineName, el)" :machine-name="session.machineName"
             :connected="!!session.connected" :connecting="!!session.connecting"
+            :ever-connected="!!session.everConnected"
+            :tab-label="session.tabLabel || ''"
+            :host="sessionMeta(session).host"
+            :user="sessionMeta(session).user"
+            :jump-chain="sessionMeta(session).jumpChain"
+            :proxy-jump="sessionMeta(session).proxyJump"
             :active="isTerminalActive(session.machineName)" :view-visible="viewVisible" :search-query="searchQuery"
             :broadcast-enabled="broadcastEnabled"
             :in-split="splitViewVisible && splitSessionIds.includes(session.machineName)"
@@ -234,6 +240,7 @@ export default {
   },
   props: {
     sessions: { type: Array, default: () => [] },
+    machines: { type: Array, default: () => [] },
     activeMachine: { type: String, default: '' },
     searchQuery: { type: String, default: '' },
     viewVisible: { type: Boolean, default: true },
@@ -261,6 +268,17 @@ export default {
     const localTabOrder = ref([])
     const paneMenu = reactive({ visible: false, x: 0, y: 0, sessionId: '' })
     const tabMenu = reactive({ visible: false, x: 0, y: 0, sessionId: '' })
+
+    const sessionMeta = (session) => {
+      const key = session?.configName || session?.machineName || ''
+      const m = (props.machines || []).find((x) => x?.name === key || x?.id === key)
+      return {
+        host: session?.host || m?.host || m?.list_host || '',
+        user: session?.user || m?.user || m?.list_user || '',
+        jumpChain: Array.isArray(m?.jumpChain) ? m.jumpChain : [],
+        proxyJump: m?.proxyJump || '',
+      }
+    }
 
     const orderedSessions = computed(() => {
       const map = new Map((props.sessions || []).map((s) => [s.machineName, s]))
@@ -749,6 +767,7 @@ export default {
       dropReorderAfter,
       tabReorderFrom,
       orderedSessions,
+      sessionMeta,
       draggingTab,
       draggingSplitPane,
       dropZones,

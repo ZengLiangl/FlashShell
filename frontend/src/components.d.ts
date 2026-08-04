@@ -60,6 +60,7 @@ declare module 'vue' {
     ShellBroadcastBar: typeof import('./components/shell/ShellBroadcastBar.vue')['default']
     ShellCommandPalette: typeof import('./components/shell/ShellCommandPalette.vue')['default']
     ShellConnectionHistory: typeof import('./components/shell/ShellConnectionHistory.vue')['default']
+    ShellConnectionOverlay: typeof import('./components/shell/ShellConnectionOverlay.vue')['default']
     ShellFilePanel: typeof import('./components/shell/ShellFilePanel.vue')['default']
     ShellHistoryList: typeof import('./components/shell/ShellHistoryList.vue')['default']
     ShellMachineList: typeof import('./components/shell/ShellMachineList.vue')['default']

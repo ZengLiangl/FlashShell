@@ -6,6 +6,15 @@
     @mousedown="onPaneFocus"
   >
     <div ref="terminalRef" class="terminal-host"></div>
+    <ShellConnectionOverlay
+      :status="overlayStatus"
+      :machine-name="displayName"
+      :host="host"
+      :user="user"
+      :jump-chain="jumpChain"
+      :proxy-jump="proxyJump"
+      @reconnect="$emit('reconnect', machineName)"
+    />
     <Teleport to="body">
       <ul
         v-if="ctx.visible"
@@ -30,7 +39,7 @@
 </template>
 
 <script>
-import { ref, reactive, watch, onMounted, onUnmounted, nextTick } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import { getTerminalSelectionText } from '../../utils/shellSelection'
@@ -63,9 +72,11 @@ import {
   notifyShellTerminalFocus,
   setShellAsciiInputEnabled,
 } from '../../utils/shellAsciiInput'
+import ShellConnectionOverlay from './ShellConnectionOverlay.vue'
 
 export default {
   name: 'ShellTerminal',
+  components: { ShellConnectionOverlay },
     props: {
     machineName: { type: String, required: true },
     active: { type: Boolean, default: false },
@@ -73,11 +84,18 @@ export default {
     viewVisible: { type: Boolean, default: true },
     connected: { type: Boolean, default: false },
     connecting: { type: Boolean, default: false },
+    tabLabel: { type: String, default: '' },
+    host: { type: String, default: '' },
+    user: { type: String, default: '' },
+    jumpChain: { type: Array, default: () => [] },
+    proxyJump: { type: String, default: '' },
     searchQuery: { type: String, default: '' },
     broadcastEnabled: { type: Boolean, default: false },
     broadcastTargets: { type: Array, default: () => [] },
     /** 当前是否处于分屏窗格中 */
     inSplit: { type: Boolean, default: false },
+    /** 是否曾成功连接过（用于区分「尚未连上」与「已断开」） */
+    everConnected: { type: Boolean, default: false },
   },
   emits: [
     'open-search', 'clear-cache', 'reconnect', 'search-result', 'cwd-sync',
@@ -91,6 +109,12 @@ export default {
     const fitAddon = ref(null)
     const ctx = reactive({ visible: false, x: 0, y: 0, selection: '' })
     const { shellFontSize, shellLineHeight, terminalPreset, shellFontFamily } = useTheme()
+    const displayName = computed(() => props.tabLabel || props.machineName || '')
+    const overlayStatus = computed(() => {
+      if (props.connecting) return 'connecting'
+      if (!props.connected && props.everConnected) return 'disconnected'
+      return ''
+    })
     let resizeObserver = null
     let fitTimers = []
     let initialized = false
@@ -972,6 +996,8 @@ export default {
       terminalRef,
       ctxMenuRef,
       ctx,
+      displayName,
+      overlayStatus,
       hideContextMenu,
       onContextMenu,
       onCopy,

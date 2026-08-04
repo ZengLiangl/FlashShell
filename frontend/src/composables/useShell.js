@@ -1,4 +1,4 @@
-import { ref, computed, onUnmounted, nextTick } from 'vue'
+import { ref, computed, watch, onUnmounted, nextTick } from 'vue'
 import { ElMessage } from 'element-plus'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
@@ -12,6 +12,24 @@ import {
 } from '../utils/shellOutputBuffer'
 import { remoteConfigName, buildKnownMachineNames } from '../utils/sessionId'
 import { parseHostKeyError } from '../utils/hostKey'
+
+const SHELL_LAYOUT_KEY = 'flashdock.shell.layout.v1'
+
+const readShellLayout = () => {
+  try {
+    return JSON.parse(localStorage.getItem(SHELL_LAYOUT_KEY) || '{}') || {}
+  } catch {
+    return {}
+  }
+}
+
+const writeShellLayout = (payload) => {
+  try {
+    localStorage.setItem(SHELL_LAYOUT_KEY, JSON.stringify(payload || {}))
+  } catch {
+    // ignore
+  }
+}
 
 const isLocalSession = (name) => {
   const n = String(name || '')
@@ -54,12 +72,25 @@ export function useShell() {
   })
   const testingName = ref('')
   /** 命令广播目标会话 ID 列表；空表示关闭广播 */
-  const broadcastTargets = ref([])
-  const broadcastEnabled = ref(false)
+  const savedLayout = readShellLayout()
+  const broadcastTargets = ref(Array.isArray(savedLayout.broadcastTargets) ? savedLayout.broadcastTargets : [])
+  const broadcastEnabled = ref(!!savedLayout.broadcastEnabled)
   /** 平行视图：同时显示的会话 ID（最多 4） */
-  const splitSessionIds = ref([])
+  const splitSessionIds = ref(Array.isArray(savedLayout.splitSessionIds) ? savedLayout.splitSessionIds : [])
   /** 待信任的主机密钥（连接失败时弹出对话框） */
   const pendingHostKey = ref(null)
+
+  const persistShellLayout = () => {
+    writeShellLayout({
+      broadcastEnabled: broadcastEnabled.value,
+      broadcastTargets: broadcastTargets.value,
+      splitSessionIds: splitSessionIds.value,
+    })
+  }
+
+  watch(broadcastEnabled, persistShellLayout)
+  watch(broadcastTargets, persistShellLayout, { deep: true })
+  watch(splitSessionIds, persistShellLayout, { deep: true })
 
   const resolveRemoteConfigName = (sessionID) =>
     remoteConfigName(sessionID, buildKnownMachineNames(shellMachines.value))
@@ -137,6 +168,7 @@ export function useShell() {
     if (existing) {
       existing.connected = opts.connected !== undefined ? opts.connected : true
       existing.connecting = !!opts.connecting
+      if (existing.connected) existing.everConnected = true
       existing.kind = kind
       existing.configName = configName
       existing.tabLabel = tabLabel
@@ -146,12 +178,14 @@ export function useShell() {
       }
       return existing
     }
+    const connected = opts.connected !== undefined ? opts.connected : true
     const tab = {
       machineName: sessionID,
       configName,
       tabLabel,
-      connected: opts.connected !== undefined ? opts.connected : true,
+      connected,
       connecting: !!opts.connecting,
+      everConnected: !!connected,
       connectedAt: Date.now(),
       host: liveStatus?.host || '',
       user: liveStatus?.user || '',
@@ -198,6 +232,7 @@ export function useShell() {
         machineName: sessionID,
         connected,
         connecting,
+        everConnected: prev.everConnected || connected,
         tabLabel: liveStatus?.tabLabel || prev.tabLabel,
         configName: liveStatus?.configName || prev.configName,
         kind,
@@ -501,6 +536,7 @@ export function useShell() {
       const tab = openTabs.value.find((t) => t.machineName === id)
       if (tab) {
         tab.connected = true
+        tab.everConnected = true
         tab.connecting = false
         tab.kind = 'local'
       }
@@ -580,6 +616,7 @@ export function useShell() {
         const tab = openTabs.value.find((t) => t.machineName === realId)
         if (tab) {
           tab.connected = true
+          tab.everConnected = true
           tab.connecting = false
         }
         return true
@@ -751,6 +788,7 @@ export function useShell() {
         tab.connecting = false
         tab.reconnecting = false
         tab.connected = true
+        tab.everConnected = true
       }
       pushShellOutput(name, 'line', '重连成功')
       syncSessions()
