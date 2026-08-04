@@ -40,18 +40,81 @@
     </div>
     <div v-if="expanded" class="file-toolbar">
       <div class="toolbar-left">
-        <el-input
-          v-model="pathDraft"
-          class="cwd-input"
-          size="small"
-          :title="cwd"
-          placeholder="/"
-          @keydown.enter.exact.prevent="submitPathDraft"
-          @blur="syncPathDraftFromCwd"
-        />
+        <div class="cwd-wrap">
+          <el-input
+            v-model="pathDraft"
+            class="cwd-input"
+            size="small"
+            :title="cwd"
+            placeholder="/"
+            @focus="pathSuggestOpen = true"
+            @input="onPathDraftInput"
+            @keydown.down.exact.prevent="movePathSuggest(1)"
+            @keydown.up.exact.prevent="movePathSuggest(-1)"
+            @keydown.enter.exact.prevent="onPathEnter"
+            @keydown.esc.exact.prevent="pathSuggestOpen = false"
+            @blur="onPathBlur"
+          />
+          <ul v-if="pathSuggestOpen && pathSuggestions.length" class="path-suggest">
+            <li
+              v-for="(s, i) in pathSuggestions"
+              :key="s.type + s.path"
+              :class="{ active: i === pathSuggestIndex }"
+              @mousedown.prevent="applyPathSuggestion(s.path)"
+            >
+              <span class="path-suggest-type">{{ pathSuggestTypeLabel(s.type) }}</span>
+              <span class="path-suggest-path">{{ s.path }}</span>
+            </li>
+          </ul>
+        </div>
         <el-checkbox v-model="showHidden" size="small" class="hidden-check" @change="reload">
           显示隐藏文件
         </el-checkbox>
+        <el-checkbox v-model="followCwd" size="small" class="follow-check" @change="onFollowCwdChange">
+          跟随终端目录
+        </el-checkbox>
+        <el-dropdown
+          size="small"
+          trigger="click"
+          :show-timeout="80"
+          :hide-timeout="120"
+          @command="onBookmarkCommand"
+        >
+          <el-button
+            size="small"
+            text
+            class="tool-icon-btn"
+            :class="{ 'is-bookmarked': isCurrentBookmarked }"
+            :title="bookmarkButtonTitle"
+            @click="onBookmarkButtonClick"
+          >
+            <el-icon><StarFilled v-if="isCurrentBookmarked" /><Star v-else /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item
+                v-if="bookmarks.length"
+                disabled
+                class="bm-head"
+              >收藏路径</el-dropdown-item>
+              <el-dropdown-item
+                v-for="bm in bookmarks"
+                :key="bm.id"
+                :command="`goto:${bm.id}`"
+              >
+                <span class="bm-row">
+                  <span class="bm-path" :title="bm.path">{{ bm.label || bm.path }}</span>
+                  <span v-if="bm.global" class="bm-tag">全局</span>
+                </span>
+              </el-dropdown-item>
+              <el-dropdown-item v-if="!bookmarks.length" disabled>暂无收藏路径</el-dropdown-item>
+              <el-dropdown-item divided :command="isCurrentBookmarked ? 'remove-current' : 'add-host'">
+                {{ isCurrentBookmarked ? '取消收藏' : '收藏此路径' }}
+              </el-dropdown-item>
+              <el-dropdown-item command="add-global">+全局</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
         <el-button
           size="small"
           text
@@ -262,6 +325,17 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import * as App from '../../../wailsjs/go/app/App'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import { OnFileDrop, OnFileDropOff } from '../../../wailsjs/runtime/runtime'
+import {
+  mergedBookmarks,
+  isPathBookmarked,
+  toggleHostBookmark,
+  addGlobalBookmark,
+  removeBookmark,
+  pushPathHistory,
+  loadFollowCwd,
+  saveFollowCwd,
+  suggestPaths,
+} from '../../utils/sftpBookmarks'
 
 export default {
   name: 'ShellFilePanel',
@@ -296,6 +370,10 @@ export default {
     /** 按机器记住 SFTP 展开状态，切换会话互不影响 */
     const expandedByMachine = reactive({})
     const showHidden = ref(false)
+    const followCwd = ref(true)
+    const bookmarksVersion = ref(0)
+    const pathSuggestOpen = ref(false)
+    const pathSuggestIndex = ref(-1)
     const cwd = ref('')
     const pathDraft = ref('')
     const entries = ref([])
@@ -589,6 +667,7 @@ export default {
       cwd.value = abs
       pathDraft.value = abs
       emit('cwd-change', abs)
+      if (props.machineName) pushPathHistory(props.machineName, abs)
       await reloadList()
       if (rebuildTree) {
         try {
@@ -673,6 +752,7 @@ export default {
 
     /** 供父组件在终端 cwd 变化后直接调用 */
     const applyCwdHint = async (hint) => {
+      if (!followCwd.value) return
       const abs = normalizeAbs(hint)
       if (!abs) return
       const seq = ++navSeq
@@ -700,6 +780,122 @@ export default {
       } catch (e) {
         console.warn('同步目录树失败:', e)
       }
+    }
+
+    const hostKey = () => props.machineName || ''
+    const bookmarks = computed(() => {
+      bookmarksVersion.value
+      return mergedBookmarks(hostKey())
+    })
+    const isCurrentBookmarked = computed(() => {
+      bookmarksVersion.value
+      return isPathBookmarked(hostKey(), cwd.value)
+    })
+    const bookmarkButtonTitle = computed(() => {
+      if (!bookmarks.value.length && !isCurrentBookmarked.value) return '收藏此路径'
+      return '收藏路径'
+    })
+    const pathSuggestions = computed(() => {
+      if (!pathSuggestOpen.value) return []
+      return suggestPaths({
+        hostKey: hostKey(),
+        draft: pathDraft.value,
+        folderEntries: entries.value,
+      })
+    })
+
+    const refreshBookmarks = () => { bookmarksVersion.value += 1 }
+
+    const onFollowCwdChange = () => {
+      saveFollowCwd(hostKey(), followCwd.value)
+    }
+
+    const onBookmarkButtonClick = (e) => {
+      if (!bookmarks.value.length && !isCurrentBookmarked.value && cwd.value) {
+        e?.stopPropagation?.()
+        e?.preventDefault?.()
+        toggleHostBookmark(hostKey(), cwd.value)
+        refreshBookmarks()
+        ElMessage.success('已收藏路径')
+      }
+    }
+
+    const onBookmarkCommand = async (cmd) => {
+      const c = String(cmd || '')
+      if (c === 'add-host') {
+        if (!cwd.value) return
+        toggleHostBookmark(hostKey(), cwd.value)
+        refreshBookmarks()
+        return
+      }
+      if (c === 'remove-current') {
+        if (!cwd.value) return
+        toggleHostBookmark(hostKey(), cwd.value)
+        refreshBookmarks()
+        return
+      }
+      if (c === 'add-global') {
+        if (!cwd.value) return
+        addGlobalBookmark(cwd.value)
+        refreshBookmarks()
+        ElMessage.success('已添加全局收藏')
+        return
+      }
+      if (c.startsWith('goto:')) {
+        const id = c.slice(5)
+        const bm = bookmarks.value.find((b) => b.id === id)
+        if (bm?.path) await navigateTo(bm.path, { alreadyAbsolute: true })
+        return
+      }
+      if (c.startsWith('remove:')) {
+        removeBookmark(hostKey(), c.slice(7))
+        refreshBookmarks()
+      }
+    }
+
+    const pathSuggestTypeLabel = (type) => {
+      if (type === 'bookmark') return '收藏'
+      if (type === 'history') return '历史'
+      return '目录'
+    }
+
+    const onPathDraftInput = () => {
+      pathSuggestOpen.value = true
+      pathSuggestIndex.value = -1
+    }
+
+    const movePathSuggest = (delta) => {
+      const list = pathSuggestions.value
+      if (!list.length) return
+      pathSuggestOpen.value = true
+      const n = list.length
+      pathSuggestIndex.value = (pathSuggestIndex.value + delta + n) % n
+    }
+
+    const applyPathSuggestion = async (path) => {
+      pathDraft.value = path
+      pathSuggestOpen.value = false
+      pathSuggestIndex.value = -1
+      await submitPathDraft()
+    }
+
+    const onPathEnter = async () => {
+      if (pathSuggestOpen.value && pathSuggestIndex.value >= 0) {
+        const s = pathSuggestions.value[pathSuggestIndex.value]
+        if (s) {
+          await applyPathSuggestion(s.path)
+          return
+        }
+      }
+      pathSuggestOpen.value = false
+      await submitPathDraft()
+    }
+
+    const onPathBlur = () => {
+      setTimeout(() => {
+        pathSuggestOpen.value = false
+        syncPathDraftFromCwd()
+      }, 120)
     }
 
     const onTreeClick = async (data) => {
@@ -1049,10 +1245,20 @@ export default {
       try {
         const conflict = await App.CheckShellUploadConflict(props.machineName, localPath, remotePath)
         if (conflict) {
+          const remoteSize = conflict.isDir ? '目录' : formatSize(conflict.remoteSize)
+          const localSize = conflict.isDir ? '目录' : formatSize(conflict.localSize)
+          const mtime = conflict.remoteMtime
+            ? new Date(conflict.remoteMtime * 1000).toLocaleString()
+            : '-'
           await ElMessageBox.confirm(
-            `远端已存在「${baseName}」（${conflict.isDir ? '目录' : formatSize(conflict.remoteSize)}），是否覆盖？`,
+            `远端已存在「${baseName}」\n本地：${localSize}\n远端：${remoteSize}\n远端修改时间：${mtime}\n\n是否覆盖？`,
             '上传冲突',
-            { type: 'warning', confirmButtonText: '覆盖', cancelButtonText: '跳过' },
+            {
+              type: 'warning',
+              confirmButtonText: '覆盖',
+              cancelButtonText: '跳过',
+              distinguishCancelAndClose: true,
+            },
           )
         }
       } catch (e) {
@@ -1188,6 +1394,8 @@ export default {
       expandedKeys.value = ['/']
       closeMenu()
       stopPwdTimer()
+      followCwd.value = loadFollowCwd(name || '')
+      refreshBookmarks()
       const shouldExpand = !!(name && expandedByMachine[name])
       if (expanded.value !== shouldExpand) {
         expanded.value = shouldExpand
@@ -1254,6 +1462,13 @@ export default {
     return {
       expanded,
       showHidden,
+      followCwd,
+      bookmarks,
+      isCurrentBookmarked,
+      bookmarkButtonTitle,
+      pathSuggestOpen,
+      pathSuggestIndex,
+      pathSuggestions,
       cwd,
       pathDraft,
       entries,
@@ -1286,6 +1501,15 @@ export default {
       goParent,
       submitPathDraft,
       syncPathDraftFromCwd,
+      onPathDraftInput,
+      movePathSuggest,
+      applyPathSuggestion,
+      onPathEnter,
+      onPathBlur,
+      pathSuggestTypeLabel,
+      onFollowCwdChange,
+      onBookmarkButtonClick,
+      onBookmarkCommand,
       startHeightResize,
       startResize,
       onContextMenu,
@@ -1496,6 +1720,91 @@ export default {
   flex: 1;
   min-width: 120px;
   max-width: 480px;
+}
+
+.cwd-wrap {
+  position: relative;
+  flex: 1;
+  min-width: 120px;
+  max-width: 480px;
+}
+
+.cwd-wrap .cwd-input {
+  max-width: none;
+  width: 100%;
+}
+
+.path-suggest {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 2px);
+  z-index: 30;
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+  max-height: 220px;
+  overflow: auto;
+  border-radius: 6px;
+  border: 1px solid var(--app-border, #e4e7ed);
+  background: var(--app-card-bg, #fff);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+}
+
+.path-suggest li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.path-suggest li.active,
+.path-suggest li:hover {
+  background: color-mix(in srgb, var(--app-accent-color, #409eff) 12%, transparent);
+}
+
+.path-suggest-type {
+  flex-shrink: 0;
+  color: var(--app-text-muted, #909399);
+  min-width: 2.5em;
+}
+
+.path-suggest-path {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--app-text, #303133);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-icon-btn.is-bookmarked {
+  color: var(--el-color-warning, #e6a23c);
+}
+
+.bm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 320px;
+}
+
+.bm-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bm-tag {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--app-text-muted, #909399);
+}
+
+.follow-check {
+  margin-left: 4px;
+  white-space: nowrap;
 }
 
 .cwd-input :deep(.el-input__wrapper) {
