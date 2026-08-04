@@ -59,6 +59,58 @@ var ShellLogHighlightRuleKeys = []string{
 	"timestamp", "threadId", "info", "debug", "warn", "error", "logger", "sql", "label",
 }
 
+// ShellLogHighlightCustomKeyword 用户自定义日志高亮关键字
+type ShellLogHighlightCustomKeyword struct {
+	Keyword string `yaml:"keyword" json:"keyword"`
+	Color   string `yaml:"color" json:"color"`
+	Enabled *bool  `yaml:"enabled,omitempty" json:"enabled,omitempty"` // nil/缺省视为开启
+}
+
+// ShellLogCustomKeywordEnabled 自定义关键字是否启用
+func ShellLogCustomKeywordEnabled(k ShellLogHighlightCustomKeyword) bool {
+	if k.Enabled == nil {
+		return true
+	}
+	return *k.Enabled
+}
+
+// NormalizeShellLogHighlightKeywords 清洗自定义关键字列表（最多 64 条，按关键字去重）
+func NormalizeShellLogHighlightKeywords(list []ShellLogHighlightCustomKeyword) []ShellLogHighlightCustomKeyword {
+	if len(list) == 0 {
+		return nil
+	}
+	out := make([]ShellLogHighlightCustomKeyword, 0, len(list))
+	seen := map[string]struct{}{}
+	for _, item := range list {
+		kw := strings.TrimSpace(item.Keyword)
+		if kw == "" {
+			continue
+		}
+		key := strings.ToLower(kw)
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		color := strings.TrimSpace(item.Color)
+		if !isHexColor(color) {
+			color = "#e5c07b"
+		}
+		en := ShellLogCustomKeywordEnabled(item)
+		out = append(out, ShellLogHighlightCustomKeyword{
+			Keyword: kw,
+			Color:   color,
+			Enabled: &en,
+		})
+		if len(out) >= 64 {
+			break
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 // NormalizeShellLogHighlightDisabled 校验并去重 disabled 列表
 func NormalizeShellLogHighlightDisabled(list []string) []string {
 	if len(list) == 0 {
@@ -185,6 +237,8 @@ type GlobalConfig struct {
 	ShellLogHighlightColors ShellLogHighlightColors `yaml:"shellLogHighlightColors,omitempty" json:"shellLogHighlightColors"`
 	// ShellLogHighlightDisabled 关闭高亮的关键字（缺省或空表示全部开启）
 	ShellLogHighlightDisabled []string `yaml:"shellLogHighlightDisabled,omitempty" json:"shellLogHighlightDisabled"`
+	// ShellLogHighlightKeywords 自定义高亮关键字
+	ShellLogHighlightKeywords []ShellLogHighlightCustomKeyword `yaml:"shellLogHighlightKeywords,omitempty" json:"shellLogHighlightKeywords"`
 	// ShellAsciiInput Shell 终端获得焦点时临时关闭中文组词（失焦/离开 Shell 后恢复）；nil 表示默认开启
 	ShellAsciiInput *bool `yaml:"shellAsciiInput,omitempty" json:"shellAsciiInput"`
 }

@@ -326,7 +326,7 @@
                                     <div>
                                         <span class="appear-field-label">启用日志高亮</span>
                                         <p class="log-hl-colors-hint">
-                                            识别时间戳 / 级别 / SQL 等关键字并着色（已有 ANSI 颜色的输出不受影响）
+                                            对输出中的时间戳 / 级别 / SQL / 自定义关键字着色，不区分命令（tail、grep、less 等整行输出均可）
                                         </p>
                                     </div>
                                     <el-switch v-model="form.shellLogHighlight" size="small" />
@@ -376,6 +376,44 @@
                                                         size="small" color-format="hex" :predefine="logColorPredefine"
                                                         :disabled="!form.shellLogHighlightRules[item.key]" />
                                                 </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <div class="appear-field">
+                                        <div class="log-hl-colors-head">
+                                            <span class="appear-field-label">自定义关键字</span>
+                                            <el-button size="small" text type="primary" @click="addCustomKeyword">
+                                                添加
+                                            </el-button>
+                                        </div>
+                                        <p class="log-hl-colors-hint">命中文本即着色，最多 64 条；适合业务码、TraceId 等</p>
+                                        <div v-if="!form.shellLogHighlightKeywords.length" class="log-hl-kw-empty">
+                                            暂无自定义关键字
+                                        </div>
+                                        <div v-else class="log-hl-kw-list">
+                                            <div
+                                                v-for="(item, idx) in form.shellLogHighlightKeywords"
+                                                :key="'kw-' + idx"
+                                                class="log-hl-kw-row"
+                                            >
+                                                <el-switch v-model="item.enabled" size="small" />
+                                                <el-input
+                                                    v-model="item.keyword"
+                                                    size="small"
+                                                    placeholder="关键字"
+                                                    maxlength="64"
+                                                    class="log-hl-kw-input"
+                                                />
+                                                <el-color-picker
+                                                    v-model="item.color"
+                                                    size="small"
+                                                    color-format="hex"
+                                                    :predefine="logColorPredefine"
+                                                    :disabled="!item.enabled"
+                                                />
+                                                <el-button size="small" text type="danger" @click="removeCustomKeyword(idx)">
+                                                    删除
+                                                </el-button>
                                             </div>
                                         </div>
                                     </div>
@@ -576,9 +614,11 @@ import {
 } from '../utils/themePresets'
 import {
     DEFAULT_SHELL_LOG_COLORS,
+    DEFAULT_CUSTOM_KEYWORD_COLOR,
     SHELL_LOG_COLOR_PRESETS,
     mergeLogHighlightColors,
     mergeLogHighlightRules,
+    normalizeCustomKeywords,
     rulesToDisabled,
     logHighlightPreviewSegments,
     getLogHighlightPreset,
@@ -678,6 +718,7 @@ export default {
             shellAsciiInput: true,
             shellLogHighlightColors: { ...DEFAULT_SHELL_LOG_COLORS },
             shellLogHighlightRules: mergeLogHighlightRules([]),
+            shellLogHighlightKeywords: [],
         })
 
         const appIconPresets = ref([])
@@ -730,6 +771,7 @@ export default {
                 LOG_HIGHLIGHT_SAMPLE,
                 form.shellLogHighlightColors,
                 form.shellLogHighlightRules,
+                form.shellLogHighlightKeywords,
             ),
         )
 
@@ -741,6 +783,24 @@ export default {
         const resetLogHighlightConfig = () => {
             applyLogHighlightPreset('windterm')
             Object.assign(form.shellLogHighlightRules, mergeLogHighlightRules([]))
+            form.shellLogHighlightKeywords.splice(0, form.shellLogHighlightKeywords.length)
+        }
+
+        const addCustomKeyword = () => {
+            if (form.shellLogHighlightKeywords.length >= 64) {
+                ElMessage.warning('最多添加 64 条自定义关键字')
+                return
+            }
+            form.shellLogHighlightKeywords.push({
+                keyword: '',
+                color: DEFAULT_CUSTOM_KEYWORD_COLOR,
+                enabled: true,
+            })
+        }
+
+        const removeCustomKeyword = (idx) => {
+            if (idx < 0 || idx >= form.shellLogHighlightKeywords.length) return
+            form.shellLogHighlightKeywords.splice(idx, 1)
         }
 
         const uiAccents = UI_ACCENTS
@@ -890,6 +950,11 @@ theme preview · ${theme.foreground}`
             Object.assign(
                 form.shellLogHighlightRules,
                 mergeLogHighlightRules(config.shellLogHighlightDisabled),
+            )
+            form.shellLogHighlightKeywords.splice(
+                0,
+                form.shellLogHighlightKeywords.length,
+                ...normalizeCustomKeywords(config.shellLogHighlightKeywords),
             )
             accounts.value = await App.GetGlobalAccounts() || []
             const session = await App.GetSessionInfo()
@@ -1234,7 +1299,13 @@ theme preview · ${theme.foreground}`
                 config.shellAsciiInput = !!form.shellAsciiInput
                 config.shellLogHighlightColors = mergeLogHighlightColors(form.shellLogHighlightColors)
                 config.shellLogHighlightDisabled = rulesToDisabled(form.shellLogHighlightRules)
+                config.shellLogHighlightKeywords = normalizeCustomKeywords(form.shellLogHighlightKeywords)
                 await App.SaveSystemSettings(config)
+                form.shellLogHighlightKeywords.splice(
+                    0,
+                    form.shellLogHighlightKeywords.length,
+                    ...normalizeCustomKeywords(config.shellLogHighlightKeywords),
+                )
                 form.windowsName = config.windowsName
                 form.appIconPreset = config.appIconPreset
                 applyThemeSettings(form.themeSettings)
@@ -1269,6 +1340,8 @@ theme preview · ${theme.foreground}`
             logHighlightPreviewParts,
             applyLogHighlightPreset,
             resetLogHighlightConfig,
+            addCustomKeyword,
+            removeCustomKeyword,
             uiAccents,
             accentPredefine,
             isCustomAccentActive,
@@ -1888,6 +1961,30 @@ theme preview · ${theme.foreground}`
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px 16px;
+}
+
+.log-hl-kw-empty {
+    margin-top: 8px;
+    font-size: 12px;
+    color: var(--app-text-muted, #909399);
+}
+
+.log-hl-kw-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 8px;
+}
+
+.log-hl-kw-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.log-hl-kw-input {
+    flex: 1;
+    min-width: 0;
 }
 
 .log-hl-color-row {

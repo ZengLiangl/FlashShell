@@ -1,8 +1,8 @@
 /**
  * Shell 日志高亮：对完整行注入 ANSI（风格接近 WindTerm）。
- * - 仅处理换行结束的完整日志行；less 等分页器的行内重绘原样透传
- * - 仅处理「像日志」的行
- * - 可按关键字单独关闭高亮
+ * - 按完整行着色，不区分命令；tail/grep/less 等只要输出整行即可命中
+ * - 含光标定位/反显等交互序列的片段原样透传，避免破坏分页器重绘
+ * - 支持内置级别/SQL 等规则与自定义关键字
  */
 
 const R = '\x1b[0m'
@@ -30,6 +30,9 @@ export const DEFAULT_SHELL_LOG_COLORS = {
   sql: '#dcdcaa',
   label: '#9cdcfe',
 }
+
+export const DEFAULT_CUSTOM_KEYWORD_COLOR = '#e5c07b'
+const MAX_CUSTOM_KEYWORDS = 64
 
 /** 日志高亮配色方案（均可再自定义单项颜色） */
 export const SHELL_LOG_COLOR_PRESETS = [
@@ -283,11 +286,33 @@ export function rulesToDisabled(rules) {
   return LOG_HIGHLIGHT_KEYS.filter((k) => rules[k] === false)
 }
 
+/** 清洗自定义关键字 */
+export function normalizeCustomKeywords(list) {
+  if (!Array.isArray(list)) return []
+  const out = []
+  const seen = new Set()
+  for (const item of list) {
+    const keyword = String(item?.keyword || item?.Keyword || '').trim()
+    if (!keyword) continue
+    const key = keyword.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    let color = String(item?.color || item?.Color || '').trim()
+    if (!HEX_COLOR.test(color)) color = DEFAULT_CUSTOM_KEYWORD_COLOR
+    const enabledRaw = item?.enabled ?? item?.Enabled
+    const enabled = enabledRaw !== false
+    out.push({ keyword, color, enabled })
+    if (out.length >= MAX_CUSTOM_KEYWORDS) break
+  }
+  return out
+}
+
 /** 合并完整高亮配置 */
 export function mergeLogHighlightConfig(input) {
   return {
     colors: mergeLogHighlightColors(input?.colors ?? input?.shellLogHighlightColors),
     rules: mergeLogHighlightRules(input?.disabled ?? input?.shellLogHighlightDisabled),
+    keywords: normalizeCustomKeywords(input?.keywords ?? input?.shellLogHighlightKeywords),
   }
 }
 
@@ -342,15 +367,8 @@ export function updateTuiModeDepth(depth, text) {
   return Math.max(0, depth + enters - leaves)
 }
 
-function looksLikeLogLine(line) {
-  if (!line || line.length < 8) return false
-  const hasTs = /\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}|\d{2}:\d{2}:\d{2}[.,]\d/.test(line)
-  const hasLevel = /\b(TRACE|DEBUG|INFO|NOTICE|WARN(?:ING)?|ERROR|FATAL|SEVERE|CRITICAL)\b/i.test(line)
-  if (hasTs && hasLevel) return true
-  if (hasLevel && /\[(TRACE|DEBUG|INFO|WARN|ERROR|FATAL)\]/i.test(line)) return true
-  if (/\b(?:Preparing|Parameters|Total)\b:/.test(line)) return true
-  if (hasTs && /\b(?:SELECT|INSERT|UPDATE|DELETE)\b/i.test(line)) return true
-  return false
+function escapeRegExp(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
 function pushMatch(matches, start, end, ansiColor, hexColor) {
@@ -432,6 +450,19 @@ function collectMatches(line, config) {
     run(RE_SQL_KW, palette.sql, colors.sql, 'sql')
   }
 
+  const customs = normalizeCustomKeywords(config?.keywords)
+  for (const item of customs) {
+    if (!item.enabled || !item.keyword) continue
+    const ansi = hexToAnsi(item.color)
+    if (!ansi) continue
+    const re = new RegExp(escapeRegExp(item.keyword), 'gi')
+    let m
+    while ((m = re.exec(line)) !== null) {
+      pushMatch(matches, m.index, m.index + m[0].length, ansi, item.color)
+      if (m[0].length === 0) re.lastIndex++
+    }
+  }
+
   return matches
 }
 
@@ -462,13 +493,10 @@ function applyMatches(line, matches) {
 }
 
 /** 设置页预览：分段 + hex 颜色 */
-export function logHighlightPreviewSegments(sample, colors, rules) {
+export function logHighlightPreviewSegments(sample, colors, rules, keywords) {
   const plain = stripTerminalControls(sample)
   if (!plain) return [{ text: sample || '', color: null }]
-  if (!looksLikeLogLine(plain)) {
-    return [{ text: plain, color: null }]
-  }
-  const config = { colors, rules }
+  const config = { colors, rules, keywords }
   const picked = pickMatches(collectMatches(plain, config))
   if (!picked.length) return [{ text: plain, color: null }]
   const segs = []
@@ -482,23 +510,25 @@ export function logHighlightPreviewSegments(sample, colors, rules) {
   return segs
 }
 
-/** 高亮单行（不含换行符）；仅处理完整日志行，保留分页器自带的 ANSI */
+/** 高亮单行（不含换行符）；含交互控制序列则原样返回 */
 export function highlightLogLine(line, config) {
   if (!line) return line
   if (hasInteractiveTerminalSequences(line)) return line
   const plain = stripTerminalControls(line).replace(/\r+$/, '')
-  if (!plain || !looksLikeLogLine(plain)) return line
-  return applyMatches(plain, collectMatches(plain, config))
+  if (!plain) return line
+  const matches = collectMatches(plain, config)
+  if (!matches.length) return line
+  return applyMatches(plain, matches)
 }
 
 /**
  * 高亮数据块中的完整行；尾部不完整行原样返回。
+ * 不按命令区分；整块含交互序列时仍按行处理，仅跳过带交互序列的行。
  * @param {string} text
- * @param {object} [config] colors + rules 或 shellLogHighlightColors/Disabled
+ * @param {object} [config] colors + rules + keywords
  */
 export function highlightShellChunk(text, config) {
   if (!text) return text
-  if (hasInteractiveTerminalSequences(text)) return text
 
   let result = ''
   let start = 0

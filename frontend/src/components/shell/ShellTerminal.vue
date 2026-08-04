@@ -57,14 +57,9 @@ import { useTheme } from '../../composables/useTheme'
 import { terminalThemeForPreset, getTerminalFont } from '../../utils/themePresets'
 import {
   highlightShellChunk,
-  hasInteractiveTerminalSequences,
   isProbablyBinary,
   mergeLogHighlightConfig,
-  mergeLogHighlightColors,
-  mergeLogHighlightRules,
-  rulesToDisabled,
   updateTuiModeDepth,
-  DEFAULT_SHELL_LOG_COLORS,
 } from '../../utils/shellLogHighlight'
 import {
   ensureShellAsciiInputListeners,
@@ -411,11 +406,11 @@ export default {
         return writeTerminal(terminal, raw)
       }
       tuiModeDepth = updateTuiModeDepth(tuiModeDepth, text)
-      const interactive = tuiModeDepth > 0 || hasInteractiveTerminalSequences(text)
-      if (!logHighlightEnabled || interactive) {
+      if (!logHighlightEnabled) {
         return writeTerminal(terminal, raw)
       }
       try {
+        // 不因 less/TUI 整块跳过：按行高亮，含交互序列的行仍原样透传
         return writeTerminal(terminal, highlightShellChunk(text, logHighlightConfig))
       } catch {
         return writeTerminal(terminal, raw)
@@ -463,7 +458,8 @@ export default {
       // disabled 可能为 null/[]，不能用真值判断，否则「全部开启」时配色/规则不更新
       if (
         Object.prototype.hasOwnProperty.call(payload, 'shellLogHighlightColors') ||
-        Object.prototype.hasOwnProperty.call(payload, 'shellLogHighlightDisabled')
+        Object.prototype.hasOwnProperty.call(payload, 'shellLogHighlightDisabled') ||
+        Object.prototype.hasOwnProperty.call(payload, 'shellLogHighlightKeywords')
       ) {
         const nextConfig = mergeLogHighlightConfig(payload)
         if (JSON.stringify(nextConfig) !== JSON.stringify(logHighlightConfig)) {

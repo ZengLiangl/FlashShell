@@ -1381,6 +1381,7 @@ func (a *App) GetSystemSettings() (*data.GlobalConfig, error) {
 		}
 		cfg.ShellLogHighlightColors = data.NormalizeShellLogHighlightColors(cfg.ShellLogHighlightColors)
 		cfg.ShellLogHighlightDisabled = data.NormalizeShellLogHighlightDisabled(cfg.ShellLogHighlightDisabled)
+		cfg.ShellLogHighlightKeywords = data.NormalizeShellLogHighlightKeywords(cfg.ShellLogHighlightKeywords)
 		if cfg.ShellAsciiInput == nil {
 			v := true
 			cfg.ShellAsciiInput = &v
@@ -1446,6 +1447,7 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	config.ShellMonitorIntervalSec = 0
 	config.ShellLogHighlightColors = data.NormalizeShellLogHighlightColors(config.ShellLogHighlightColors)
 	config.ShellLogHighlightDisabled = data.NormalizeShellLogHighlightDisabled(config.ShellLogHighlightDisabled)
+	config.ShellLogHighlightKeywords = data.NormalizeShellLogHighlightKeywords(config.ShellLogHighlightKeywords)
 	if err := a.configManager.SaveGlobalConfig(config); err != nil {
 		return err
 	}
@@ -1472,6 +1474,7 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 			"shellLogHighlight":         data.ShellLogHighlightEnabled(config),
 			"shellLogHighlightColors":   config.ShellLogHighlightColors,
 			"shellLogHighlightDisabled": config.ShellLogHighlightDisabled,
+			"shellLogHighlightKeywords": config.ShellLogHighlightKeywords,
 			"shellAsciiInput":           data.ShellAsciiInputEnabled(config),
 			"proxySettings":             config.ProxySettings,
 			"windowsName":               config.WindowsName,

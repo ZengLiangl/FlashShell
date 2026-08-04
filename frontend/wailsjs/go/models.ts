@@ -186,6 +186,22 @@ export namespace data {
 	        this.password = source["password"];
 	    }
 	}
+	export class ShellLogHighlightCustomKeyword {
+	    keyword: string;
+	    color: string;
+	    enabled?: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShellLogHighlightCustomKeyword(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.keyword = source["keyword"];
+	        this.color = source["color"];
+	        this.enabled = source["enabled"];
+	    }
+	}
 	export class ShellLogHighlightColors {
 	    timestamp: string;
 	    threadId: string;
@@ -288,6 +304,7 @@ export namespace data {
 	    shellLogHighlight?: boolean;
 	    shellLogHighlightColors: ShellLogHighlightColors;
 	    shellLogHighlightDisabled: string[];
+	    shellLogHighlightKeywords: ShellLogHighlightCustomKeyword[];
 	    shellAsciiInput?: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -317,6 +334,7 @@ export namespace data {
 	        this.shellLogHighlight = source["shellLogHighlight"];
 	        this.shellLogHighlightColors = this.convertValues(source["shellLogHighlightColors"], ShellLogHighlightColors);
 	        this.shellLogHighlightDisabled = source["shellLogHighlightDisabled"];
+	        this.shellLogHighlightKeywords = this.convertValues(source["shellLogHighlightKeywords"], ShellLogHighlightCustomKeyword);
 	        this.shellAsciiInput = source["shellAsciiInput"];
 	    }
 	
@@ -493,6 +511,7 @@ export namespace data {
 	        this.terminalPreset = source["terminalPreset"];
 	    }
 	}
+	
 	
 	export class ShellSnippet {
 	    id: string;
