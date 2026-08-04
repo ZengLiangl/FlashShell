@@ -220,8 +220,11 @@ export function collectLogHighlightPredefineColors() {
 
 const RE_ANSI = /\x1b(?:\[[0-9;?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\))/g
 
-/** less/vim 等全屏或行内重绘用的控制序列（非单纯配色 SGR） */
-const RE_INTERACTIVE_TERMINAL = /\x1b(?:\[\??(?:1049|1047|47)[hl]|\[[0-9;]*[HJKsuABCDEFG]|\[7m|\[27m|\][^\x07\x1b]*(?:\x07|\x1b\\)|[78])/g
+/** less/vim 等全屏或行内重绘用的控制序列（非单纯配色 SGR）
+ * 注意：不含 CSI K（Erase in Line）。GNU grep --color 会夹带 \x1b[K，
+ * 若把它当成交互序列会导致整行跳过关键字高亮。
+ */
+const RE_INTERACTIVE_TERMINAL = /\x1b(?:\[\??(?:1049|1047|47)[hl]|\[[0-9;]*[HJsuABCDEFG]|\[7m|\[27m|\][^\x07\x1b]*(?:\x07|\x1b\\)|[78])/g
 
 const RE_ALT_SCREEN_ENTER = /\x1b\[\??(?:1049|1047|47)h|\x1b\[1049h/g
 const RE_ALT_SCREEN_LEAVE = /\x1b\[\??(?:1049|1047|47)l|\x1b\[1049l/g
@@ -510,7 +513,9 @@ export function logHighlightPreviewSegments(sample, colors, rules, keywords) {
   return segs
 }
 
-/** 高亮单行（不含换行符）；含交互控制序列则原样返回 */
+/** 高亮单行（不含换行符）。
+ * grep --color 的 SGR/EL 会先剥离再着色；仅光标定位/反显/备用屏等重绘序列才原样透传。
+ */
 export function highlightLogLine(line, config) {
   if (!line) return line
   if (hasInteractiveTerminalSequences(line)) return line
