@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strings"
 	"sync"
 
 	"FlashDock/define"
@@ -32,6 +33,7 @@ type ShellSessionManager struct {
 	cancelled   bool // Disconnect 后拒绝把拨号结果写回
 	session     *ssh.Session
 	stdin       io.WriteCloser
+	borrowedSSH bool // 复用同机其它 Tab 的 SSH 传输
 	cancelRead  context.CancelFunc
 	readDone    chan struct{}
 }
@@ -102,9 +104,8 @@ func (sm *ShellSessionManager) SharedSSHClient() *SSHClient {
 	return sm.client
 }
 
-// Connect 建立 SSH 连接并启动交互式 PTY Shell。sessionID 为池内唯一键。
-// 网络拨号不持有 sm.mu，避免 ListSessions/GetStatus 被长时间阻塞。
-func (sm *ShellSessionManager) Connect(sessionID string, machine *define.Machine, workVars map[string]string, handler ShellOutputHandler) error {
+// Connect 建立 SSH 连接并启动交互式 PTY Shell。sharedClient 非空时复用已有 SSH 传输（免二次认证）。
+func (sm *ShellSessionManager) Connect(sessionID string, machine *define.Machine, workVars map[string]string, handler ShellOutputHandler, sharedClient *SSHClient) error {
 	sm.mu.Lock()
 	if sm.client != nil && sm.client.IsConnected() {
 		sm.mu.Unlock()
@@ -114,7 +115,11 @@ func (sm *ShellSessionManager) Connect(sessionID string, machine *define.Machine
 	sm.mu.Unlock()
 
 	client := NewSSHClient(machine, workVars)
-	if err := client.Connect(machine, false); err != nil {
+	borrowed := false
+	if sharedClient != nil && sharedClient.IsConnected() && sharedClient.remoteMachine != nil {
+		client = sharedClient
+		borrowed = true
+	} else if err := client.Connect(machine, false); err != nil {
 		return err
 	}
 
@@ -139,6 +144,14 @@ func (sm *ShellSessionManager) Connect(sessionID string, machine *define.Machine
 		_ = session.Close()
 		_ = client.Close()
 		return fmt.Errorf("请求 PTY 失败: %w", err)
+	}
+
+	if machine.AgentForwarding {
+		if err := requestSessionAgentForwarding(session); err != nil {
+			_ = session.Close()
+			_ = client.Close()
+			return fmt.Errorf("启用 Agent 转发失败: %w", err)
+		}
 	}
 
 	stdin, err := session.StdinPipe()
@@ -190,10 +203,15 @@ func (sm *ShellSessionManager) Connect(sessionID string, machine *define.Machine
 	sm.user = sensitive.User
 	sm.session = session
 	sm.stdin = stdin
+	sm.borrowedSSH = borrowed
 	sm.cancelRead = cancel
 	sm.readDone = readDone
 	sm.connecting = false
 	sm.mu.Unlock()
+
+	if startup := strings.TrimSpace(machine.StartupCommand); startup != "" {
+		_, _ = stdin.Write([]byte(startup + "\n"))
+	}
 
 	go sm.readPTY(stdout, handler, ctx, readDone)
 	sm.notifyStatus(handler)
@@ -286,10 +304,11 @@ func (sm *ShellSessionManager) closeResourcesLocked() {
 		_ = sm.session.Close()
 		sm.session = nil
 	}
-	if sm.client != nil {
+	if sm.client != nil && !sm.borrowedSSH {
 		_ = sm.client.Close()
-		sm.client = nil
 	}
+	sm.client = nil
+	sm.borrowedSSH = false
 	sm.sessionID = ""
 	sm.configName = ""
 	sm.host = ""

@@ -64,7 +64,8 @@ func pendingStatus(machine *define.Machine, sessionID string) (host, user string
 }
 
 func (p *ShellSessionPool) runConnect(sessionID string, sm *ShellSessionManager, machine *define.Machine, workVars map[string]string, handler ShellOutputHandler, onComplete ShellConnectCallback) {
-	err := sm.Connect(sessionID, machine, workVars, handler)
+	shared := p.SharedClientForConfig(machine.Name)
+	err := sm.Connect(sessionID, machine, workVars, handler, shared)
 	if err != nil {
 		sm.MarkFailed()
 		if handler.OnLine != nil {

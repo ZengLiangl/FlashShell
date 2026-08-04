@@ -220,6 +220,7 @@ func (a *ShellAuxManager) UploadFile(ctx context.Context, localPath, remotePath 
 	}
 
 	var offset int64
+	useAtomic := total > 0
 	if rst, err := sftpClient.Stat(remotePath); err == nil && rst.Size() > 0 {
 		if rst.Size() >= total && total > 0 {
 			if onProgress != nil {
@@ -229,15 +230,21 @@ func (a *ShellAuxManager) UploadFile(ctx context.Context, localPath, remotePath 
 		}
 		if rst.Size() < total {
 			offset = rst.Size()
+			useAtomic = false
 		}
+	}
+	stagingPath := remotePath
+	if useAtomic {
+		stagingPath = remotePath + ".flashdock-upload-" + fmt.Sprintf("%d", time.Now().UnixNano())
 	}
 
 	var dst *sftp.File
+	targetWrite := stagingPath
 	if offset > 0 {
 		if _, err := src.Seek(offset, io.SeekStart); err != nil {
 			return fmt.Errorf("本地定位失败: %w", err)
 		}
-		dst, err = sftpClient.OpenFile(remotePath, os.O_WRONLY)
+		dst, err = sftpClient.OpenFile(targetWrite, os.O_WRONLY)
 		if err != nil {
 			return fmt.Errorf("打开远端文件失败: %w", err)
 		}
@@ -246,7 +253,7 @@ func (a *ShellAuxManager) UploadFile(ctx context.Context, localPath, remotePath 
 			return fmt.Errorf("远端定位失败: %w", err)
 		}
 	} else {
-		dst, err = sftpClient.Create(remotePath)
+		dst, err = sftpClient.Create(targetWrite)
 		if err != nil {
 			return fmt.Errorf("创建远端文件失败: %w", err)
 		}
@@ -258,7 +265,16 @@ func (a *ShellAuxManager) UploadFile(ctx context.Context, localPath, remotePath 
 		onProgress(offset, total, 0)
 	}
 	if _, err := utils.CopyBuffer(writer, src); err != nil {
+		if useAtomic {
+			_ = sftpClient.Remove(stagingPath)
+		}
 		return fmt.Errorf("上传失败: %w", err)
+	}
+	if useAtomic {
+		_ = sftpClient.Remove(remotePath)
+		if err := sftpClient.Rename(stagingPath, remotePath); err != nil {
+			return fmt.Errorf("原子替换失败: %w", err)
+		}
 	}
 	if onProgress != nil {
 		onProgress(writer.transferred, total, writer.speedBPS)
