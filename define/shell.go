@@ -83,6 +83,7 @@ type SftpEntry struct {
 	Owner   string `json:"owner"`   // 用户名或 uid
 	Group   string `json:"group"`   // 组名或 gid
 	Type    string `json:"type"`    // 目录/文件/链接/...
+	LinkTarget string `json:"linkTarget,omitempty"` // 符号链接目标
 }
 
 // LocalFileEntry 本地文件/目录项（与 SftpEntry 字段对齐）

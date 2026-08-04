@@ -545,13 +545,18 @@ func (a *ShellAuxManager) ListDir(dirPath string, showHidden bool) ([]define.Sft
 	if err != nil {
 		return nil, err
 	}
+	machineCfg := resolveMachine(a.machineName)
 	entries := make([]define.SftpEntry, 0, len(infos))
+	sftpClient := client.remoteMachine.SFTPClient
 	for _, info := range infos {
 		name := info.Name()
+		if machineCfg != nil {
+			name = decodeSftpName(machineCfg, name)
+		}
 		if !showHidden && strings.HasPrefix(name, ".") {
 			continue
 		}
-		full := path.Join(dirPath, name)
+		full := path.Join(dirPath, info.Name())
 		mode := info.Mode()
 		entry := define.SftpEntry{
 			Name:    name,
@@ -565,6 +570,11 @@ func (a *ShellAuxManager) ListDir(dirPath string, showHidden bool) ([]define.Sft
 		if stat, ok := info.Sys().(*sftp.FileStat); ok && stat != nil {
 			entry.Owner = a.resolveUID(stat.UID)
 			entry.Group = a.resolveGID(stat.GID)
+		}
+		if mode&os.ModeSymlink != 0 {
+			if target, err := sftpClient.ReadLink(full); err == nil {
+				entry.LinkTarget = target
+			}
 		}
 		entries = append(entries, entry)
 	}
