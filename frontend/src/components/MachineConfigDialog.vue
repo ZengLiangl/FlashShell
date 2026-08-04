@@ -348,6 +348,14 @@
                         <el-option label="GB18030" value="gb18030" />
                     </el-select>
                 </el-form-item>
+                <el-form-item label="文件协议">
+                    <el-select v-model="machineForm.sftpFileProtocol" style="width: 100%">
+                        <el-option label="自动（SFTP 优先，失败回退 SCP）" value="auto" />
+                        <el-option label="仅 SFTP" value="sftp" />
+                        <el-option label="仅 SCP" value="scp" />
+                    </el-select>
+                    <p class="field-hint">远端无 SFTP 子系统时可用 SCP 回退完成浏览与传输</p>
+                </el-form-item>
                 <el-form-item label="启动命令">
                     <el-input v-model="machineForm.startupCommand" placeholder="连接后自动执行（单行）" clearable />
                 </el-form-item>
@@ -610,6 +618,7 @@ export default {
             legacyAlgorithms: false,
             skipEcdsaHostKey: false,
             sftpEncoding: 'auto',
+            sftpFileProtocol: 'auto',
             startupCommand: '',
             agentForwarding: false,
             tunnels: [],
@@ -705,6 +714,7 @@ export default {
             machineForm.legacyAlgorithms = !!machine.legacyAlgorithms
             machineForm.skipEcdsaHostKey = !!machine.skipEcdsaHostKey
             machineForm.sftpEncoding = machine.sftpEncoding || 'auto'
+            machineForm.sftpFileProtocol = machine.sftpFileProtocol || 'auto'
             machineForm.startupCommand = machine.startupCommand || ''
             machineForm.agentForwarding = !!machine.agentForwarding
             machineForm.tunnels = (machine.tunnels || []).map((t) => ({
@@ -776,6 +786,7 @@ export default {
             machineForm.legacyAlgorithms = false
             machineForm.skipEcdsaHostKey = false
             machineForm.sftpEncoding = 'auto'
+            machineForm.sftpFileProtocol = 'auto'
             machineForm.startupCommand = ''
             machineForm.agentForwarding = false
             machineForm.tunnels = []
@@ -866,6 +877,7 @@ export default {
                     legacyAlgorithms: machineForm.legacyAlgorithms,
                     skipEcdsaHostKey: machineForm.skipEcdsaHostKey,
                     sftpEncoding: machineForm.sftpEncoding || 'auto',
+                    sftpFileProtocol: machineForm.sftpFileProtocol || 'auto',
                     startupCommand: machineForm.startupCommand?.trim() || '',
                     agentForwarding: machineForm.agentForwarding,
                     tunnels: (machineForm.tunnels || []).filter((t) => t.localPort > 0),
@@ -1500,11 +1512,13 @@ export default {
 }
 
 .field-hint {
-  margin: 4px 0 0;
-  font-size: 12px;
-  color: var(--el-text-color-secondary);
-  line-height: 1.4;
+    margin: 4px 0 0;
+    font-size: 12px;
+    color: var(--el-text-color-secondary);
+    line-height: 1.4;
 }
+
+.tunnel-head {
     display: flex;
     align-items: center;
     gap: 8px;

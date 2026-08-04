@@ -203,11 +203,46 @@
       </ul>
     </Teleport>
 
-    <el-dialog v-model="chmodVisible" title="修改权限" width="360px" append-to-body>
-      <el-input v-model="chmodDraft" placeholder="如 0755 或 644" />
+    <el-dialog
+      v-model="chmodVisible"
+      width="400px"
+      append-to-body
+      class="sftp-perm-dialog"
+      :show-close="true"
+      destroy-on-close
+    >
+      <template #header>
+        <div class="perm-header">
+          <div class="perm-title">编辑权限</div>
+          <div class="perm-filename" :title="chmodName">{{ chmodName }}</div>
+        </div>
+      </template>
+      <div class="perm-body">
+        <div
+          v-for="role in permRoles"
+          :key="role.key"
+          class="perm-row"
+        >
+          <div class="perm-role">{{ role.label }}</div>
+          <div class="perm-checks">
+            <label
+              v-for="bit in permBits"
+              :key="bit.key"
+              class="perm-check"
+            >
+              <el-checkbox v-model="chmodPerms[role.key][bit.key]" />
+              <span>{{ bit.label }}</span>
+            </label>
+          </div>
+        </div>
+        <div class="perm-summary">
+          <span>八进制: <code>{{ chmodOctal }}</code></span>
+          <span>符号: <code>{{ chmodSymbolic }}</code></span>
+        </div>
+      </div>
       <template #footer>
         <el-button @click="chmodVisible = false">取消</el-button>
-        <el-button type="primary" :loading="chmodSaving" @click="submitChmod">确定</el-button>
+        <el-button type="primary" :loading="chmodSaving" @click="submitChmod">应用</el-button>
       </template>
     </el-dialog>
 
@@ -280,9 +315,78 @@ export default {
     const editorTitle = ref('编辑文件')
     const editorSaving = ref(false)
     const chmodVisible = ref(false)
-    const chmodDraft = ref('')
     const chmodSaving = ref(false)
     const chmodTarget = ref('')
+    const chmodName = ref('')
+    const emptyPermBits = () => ({ read: false, write: false, execute: false })
+    const chmodPerms = reactive({
+      owner: emptyPermBits(),
+      group: emptyPermBits(),
+      others: emptyPermBits(),
+    })
+    const permRoles = [
+      { key: 'owner', label: '所有者' },
+      { key: 'group', label: '群组' },
+      { key: 'others', label: '其他' },
+    ]
+    const permBits = [
+      { key: 'read', label: 'R' },
+      { key: 'write', label: 'W' },
+      { key: 'execute', label: 'X' },
+    ]
+
+    const roleToNum = (p) => (p.read ? 4 : 0) + (p.write ? 2 : 0) + (p.execute ? 1 : 0)
+    const roleToSym = (p) => `${p.read ? 'r' : '-'}${p.write ? 'w' : '-'}${p.execute ? 'x' : '-'}`
+    const chmodOctal = computed(() =>
+      `${roleToNum(chmodPerms.owner)}${roleToNum(chmodPerms.group)}${roleToNum(chmodPerms.others)}`,
+    )
+    const chmodSymbolic = computed(() =>
+      roleToSym(chmodPerms.owner) + roleToSym(chmodPerms.group) + roleToSym(chmodPerms.others),
+    )
+
+    const applyModeToPerms = (modeStr) => {
+      const raw = String(modeStr || '').trim()
+      let owner = emptyPermBits()
+      let group = emptyPermBits()
+      let others = emptyPermBits()
+      if (/^[0-7]{3,4}$/.test(raw)) {
+        const octal = raw.length === 4 ? raw.slice(1) : raw
+        const parse = (n) => ({
+          read: (n & 4) !== 0,
+          write: (n & 2) !== 0,
+          execute: (n & 1) !== 0,
+        })
+        owner = parse(parseInt(octal[0], 10))
+        group = parse(parseInt(octal[1], 10))
+        others = parse(parseInt(octal[2], 10))
+      } else {
+        const pStr = raw.length >= 10 ? raw.slice(1) : raw
+        if (pStr.length >= 9) {
+          owner = {
+            read: pStr[0] === 'r',
+            write: pStr[1] === 'w',
+            execute: pStr[2] === 'x' || pStr[2] === 's' || pStr[2] === 'S',
+          }
+          group = {
+            read: pStr[3] === 'r',
+            write: pStr[4] === 'w',
+            execute: pStr[5] === 'x' || pStr[5] === 's' || pStr[5] === 'S',
+          }
+          others = {
+            read: pStr[6] === 'r',
+            write: pStr[7] === 'w',
+            execute: pStr[8] === 'x' || pStr[8] === 't' || pStr[8] === 'T',
+          }
+        } else {
+          owner = { read: true, write: true, execute: false }
+          group = { read: true, write: false, execute: false }
+          others = { read: true, write: false, execute: false }
+        }
+      }
+      Object.assign(chmodPerms.owner, owner)
+      Object.assign(chmodPerms.group, group)
+      Object.assign(chmodPerms.others, others)
+    }
     const localSearchQuery = ref(props.searchQuery)
     const searchInputRef = ref(null)
     const dragOver = ref(false)
@@ -904,24 +1008,16 @@ export default {
       closeMenu()
       if (!row?.path || !props.machineName) return
       chmodTarget.value = row.path
-      chmodDraft.value = '0644'
+      chmodName.value = row.name || ''
+      applyModeToPerms(row.mode)
       chmodVisible.value = true
-    }
-
-    const parseChmodMode = (raw) => {
-      const s = String(raw || '').trim()
-      if (/^\d{3,4}$/.test(s)) {
-        const n = parseInt(s, 8)
-        return n & 0xfff
-      }
-      throw new Error('权限格式无效，请使用如 0755 或 644')
     }
 
     const submitChmod = async () => {
       if (!chmodTarget.value || !props.machineName) return
       chmodSaving.value = true
       try {
-        const mode = parseChmodMode(chmodDraft.value)
+        const mode = parseInt(chmodOctal.value, 8) & 0xfff
         await App.ChmodShellRemotePath(props.machineName, chmodTarget.value, mode)
         ElMessage.success('权限已更新')
         chmodVisible.value = false
@@ -1209,7 +1305,12 @@ export default {
       submitChmod,
       copyDirHere,
       chmodVisible,
-      chmodDraft,
+      chmodName,
+      chmodPerms,
+      chmodOctal,
+      chmodSymbolic,
+      permRoles,
+      permBits,
       chmodSaving,
       deleteEntry,
       onDragOver,
@@ -1543,5 +1644,101 @@ export default {
 .ctx-menu li.danger:hover {
   background: rgba(245, 108, 108, 0.12);
   color: var(--terminal-error);
+}
+</style>
+
+<style>
+/* append-to-body 弹框，需非 scoped */
+.sftp-perm-dialog .el-dialog__header {
+  padding: 16px 20px 8px;
+  margin-right: 0;
+}
+
+.sftp-perm-dialog .el-dialog__body {
+  padding: 8px 20px 12px;
+}
+
+.sftp-perm-dialog .el-dialog__footer {
+  padding: 8px 20px 16px;
+}
+
+.sftp-perm-dialog .perm-header {
+  padding-right: 24px;
+}
+
+.sftp-perm-dialog .perm-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--el-text-color-primary, #303133);
+  line-height: 1.4;
+}
+
+.sftp-perm-dialog .perm-filename {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary, #909399);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sftp-perm-dialog .perm-body {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 8px 0 4px;
+}
+
+.sftp-perm-dialog .perm-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.sftp-perm-dialog .perm-role {
+  width: 56px;
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--el-text-color-primary, #303133);
+}
+
+.sftp-perm-dialog .perm-checks {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.sftp-perm-dialog .perm-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--el-text-color-regular, #606266);
+  user-select: none;
+}
+
+.sftp-perm-dialog .perm-check .el-checkbox {
+  height: auto;
+  margin-right: 0;
+}
+
+.sftp-perm-dialog .perm-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--el-border-color-lighter, #ebeef5);
+  font-size: 12px;
+  color: var(--el-text-color-secondary, #909399);
+}
+
+.sftp-perm-dialog .perm-summary code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  color: var(--el-text-color-primary, #303133);
+  font-size: 12px;
 }
 </style>
