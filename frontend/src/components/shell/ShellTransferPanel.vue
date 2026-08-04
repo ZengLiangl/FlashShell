@@ -1,9 +1,9 @@
 <template>
   <el-drawer
     v-model="visibleProxy"
-    title="文件传输"
+    title="全局传输中心"
     direction="rtl"
-    size="400px"
+    size="420px"
     :append-to-body="true"
     class="shell-transfer-drawer"
   >
@@ -13,11 +13,24 @@
           <el-icon><FolderOpened /></el-icon>
         </el-button>
       </el-tooltip>
+      <el-tooltip content="全部暂停" placement="top">
+        <el-button size="small" text type="warning" @click="pauseAll">
+          <el-icon><VideoPause /></el-icon>
+        </el-button>
+      </el-tooltip>
+      <el-tooltip content="全部继续" placement="top">
+        <el-button size="small" text type="primary" @click="resumeAll">
+          <el-icon><VideoPlay /></el-icon>
+        </el-button>
+      </el-tooltip>
       <el-tooltip content="清除已结束" placement="top">
         <el-button size="small" text @click="clearFinished">
           <el-icon><Delete /></el-icon>
         </el-button>
       </el-tooltip>
+      <el-select v-model="maxConcurrent" size="small" class="concurrency-select" @change="onConcurrencyChange">
+        <el-option v-for="n in 8" :key="n" :label="`并发 ${n}`" :value="n" />
+      </el-select>
     </div>
     <div v-if="records.length === 0" class="transfer-empty">暂无传输记录</div>
     <ul v-else class="transfer-list">
@@ -31,13 +44,14 @@
           {{ item.machineName }} · {{ item.isDir ? '目录' : '文件' }}
         </div>
         <el-progress
-          v-if="item.status === 'running' || item.status === 'pending'"
+          v-if="item.status === 'running' || item.status === 'pending' || item.status === 'queued'"
           :percentage="Math.min(100, Math.round(item.percent || 0))"
           :stroke-width="6"
           :show-text="false"
         />
         <div class="progress-row">
-          <span v-if="item.status === 'running' || item.status === 'pending'">
+          <span v-if="item.status === 'queued'">排队中（优先级 {{ item.priority || 0 }}）</span>
+          <span v-else-if="item.status === 'running' || item.status === 'pending'">
             {{ formatSize(item.transferred) }}
             <template v-if="item.total > 0"> / {{ formatSize(item.total) }}</template>
             <template v-if="item.speedBps > 0"> · {{ formatSpeed(item.speedBps) }}</template>
@@ -47,7 +61,10 @@
           <span v-else-if="item.status === 'error'" class="err" :title="item.error">{{ item.error || '失败' }}</span>
         </div>
         <div class="item-actions icon-actions">
-          <el-tooltip v-if="item.status === 'running' || item.status === 'pending'" content="暂停" placement="top">
+          <el-tooltip v-if="item.status === 'queued'" content="优先传输" placement="top">
+            <el-button size="small" text type="primary" @click="prioritizeItem(item)">优先</el-button>
+          </el-tooltip>
+          <el-tooltip v-if="item.status === 'running' || item.status === 'pending' || item.status === 'queued'" content="暂停" placement="top">
             <el-button size="small" text type="warning" @click="pauseItem(item)">
               <el-icon><VideoPause /></el-icon>
             </el-button>
@@ -102,8 +119,10 @@ export default {
       }
     })
 
+    const maxConcurrent = ref(2)
+
     const activeCount = computed(() =>
-      records.value.filter((r) => r.status === 'running' || r.status === 'pending').length,
+      records.value.filter((r) => r.status === 'running' || r.status === 'pending' || r.status === 'queued').length,
     )
 
     watch(activeCount, (n) => emit('active-change', n), { immediate: true })
@@ -122,10 +141,25 @@ export default {
       }
     }
 
+    const callGo = async (name, ...args) => {
+      const fromModule = App?.[name]
+      const fromRuntime = typeof window !== 'undefined'
+        ? window?.go?.app?.App?.[name]
+        : null
+      const fn = typeof fromModule === 'function' ? fromModule : fromRuntime
+      if (typeof fn !== 'function') {
+        throw new Error(`${name} 不可用：请完全退出并重新运行 wails dev（仅热更新前端不够）`)
+      }
+      return fn(...args)
+    }
+
     const load = async () => {
       try {
         const list = await App.ListShellTransfers()
         records.value = list || []
+        try {
+          maxConcurrent.value = await callGo('GetShellTransferMaxConcurrent') || 2
+        } catch { /* ignore */ }
       } catch {
         records.value = []
       }
@@ -148,22 +182,47 @@ export default {
     const clearFinished = async () => {
       try {
         await App.ClearFinishedShellTransfers()
-        records.value = records.value.filter((r) => r.status === 'running' || r.status === 'pending')
+        records.value = records.value.filter((r) =>
+          r.status === 'running' || r.status === 'pending' || r.status === 'queued',
+        )
       } catch (e) {
         ElMessage.error('清除失败: ' + e)
       }
     }
 
-    const callGo = async (name, ...args) => {
-      const fromModule = App?.[name]
-      const fromRuntime = typeof window !== 'undefined'
-        ? window?.go?.app?.App?.[name]
-        : null
-      const fn = typeof fromModule === 'function' ? fromModule : fromRuntime
-      if (typeof fn !== 'function') {
-        throw new Error(`${name} 不可用：请完全退出并重新运行 wails dev（仅热更新前端不够）`)
+    const pauseAll = async () => {
+      try {
+        await callGo('PauseAllShellTransfers')
+        await load()
+      } catch (e) {
+        ElMessage.error('全部暂停失败: ' + e)
       }
-      return fn(...args)
+    }
+
+    const resumeAll = async () => {
+      try {
+        await callGo('ResumeAllShellTransfers')
+        await load()
+      } catch (e) {
+        ElMessage.error('全部继续失败: ' + e)
+      }
+    }
+
+    const prioritizeItem = async (item) => {
+      if (!item?.id) return
+      try {
+        await callGo('PrioritizeShellTransfer', item.id)
+      } catch (e) {
+        ElMessage.error('优先失败: ' + e)
+      }
+    }
+
+    const onConcurrencyChange = async (n) => {
+      try {
+        maxConcurrent.value = await callGo('SetShellTransferMaxConcurrent', n)
+      } catch (e) {
+        ElMessage.error('设置并发失败: ' + e)
+      }
     }
 
     const pauseItem = async (item) => {
@@ -212,6 +271,7 @@ export default {
     }
 
     const statusLabel = (s) => {
+      if (s === 'queued') return '排队'
       if (s === 'pending') return '等待'
       if (s === 'running') return '进行中'
       if (s === 'done') return '完成'
@@ -224,11 +284,12 @@ export default {
       await load()
       EventsOn(EVENT, (payload) => {
         if (!payload?.id) return
-        const isNewTask = payload.status === 'pending'
+        const isNewTask = (payload.status === 'pending' || payload.status === 'queued')
           && !records.value.some((r) => r.id === payload.id)
         upsert(payload)
-        // 仅新任务自动打开；手动关闭后同一任务进度不再弹
-        if (isNewTask) {
+        if (isNewTask && !suppressAutoOpen.value) {
+          visibleProxy.value = true
+        } else if (isNewTask) {
           suppressAutoOpen.value = false
           visibleProxy.value = true
         }
@@ -244,8 +305,13 @@ export default {
     return {
       visibleProxy,
       records,
+      maxConcurrent,
       openDownloadDir,
       clearFinished,
+      pauseAll,
+      resumeAll,
+      prioritizeItem,
+      onConcurrencyChange,
       pauseItem,
       resumeItem,
       removeItem,
@@ -262,6 +328,17 @@ export default {
   justify-content: flex-end;
   width: 100%;
   margin-bottom: 10px;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.concurrency-select {
+  width: 96px;
+  margin-left: 4px;
+}
+
+.status.queued {
+  color: var(--el-color-info);
 }
 
 .transfer-empty {

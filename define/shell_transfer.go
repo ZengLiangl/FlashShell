@@ -14,7 +14,8 @@ type SftpTransferRecord struct {
 	LocalPath   string  `json:"localPath"`
 	RemotePath  string  `json:"remotePath"`
 	IsDir       bool    `json:"isDir"`
-	Status      string  `json:"status"` // pending | running | done | error | paused
+	Status      string  `json:"status"` // pending | running | done | error | paused | queued
+	Priority    int     `json:"priority"` // 越大越优先，默认 0
 	Total       int64   `json:"total"`
 	Transferred int64   `json:"transferred"`
 	Percent     float64 `json:"percent"`
@@ -24,3 +25,7 @@ type SftpTransferRecord struct {
 	UpdatedAt   int64   `json:"updatedAt"`
 	FinishedAt  int64   `json:"finishedAt,omitempty"`
 }
+
+// DefaultTransferMaxConcurrent 全局传输默认并发上限
+const DefaultTransferMaxConcurrent = 2
+

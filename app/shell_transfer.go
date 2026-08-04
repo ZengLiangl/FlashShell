@@ -23,16 +23,19 @@ import (
 const shellTransferEvent = "shell:transfer"
 
 type shellTransferStore struct {
-	mu      sync.Mutex
-	items   map[string]*define.SftpTransferRecord
-	cancels map[string]context.CancelFunc
+	mu             sync.Mutex
+	items          map[string]*define.SftpTransferRecord
+	cancels        map[string]context.CancelFunc
+	maxConcurrent  int
+	activeRunning  int
 }
 
 func (a *App) ensureTransferStore() *shellTransferStore {
 	if a.transfers == nil {
 		a.transfers = &shellTransferStore{
-			items:   make(map[string]*define.SftpTransferRecord),
-			cancels: make(map[string]context.CancelFunc),
+			items:         make(map[string]*define.SftpTransferRecord),
+			cancels:       make(map[string]context.CancelFunc),
+			maxConcurrent: define.DefaultTransferMaxConcurrent,
 		}
 	}
 	return a.transfers
@@ -97,13 +100,17 @@ func (a *App) finishTransfer(id string, err error) {
 	rec, ok := store.items[id]
 	if !ok {
 		store.mu.Unlock()
+		a.pumpTransferQueue()
 		return
 	}
-	// 已被暂停则不覆盖为 error
+	wasRunning := rec.Status == "running" || rec.Status == "pending"
+	// 已被暂停则不覆盖为 error（Pause 已扣减 activeRunning）
 	if rec.Status == "paused" {
 		store.mu.Unlock()
+		a.pumpTransferQueue()
 		return
 	}
+	_ = wasRunning
 	now := time.Now().Unix()
 	rec.UpdatedAt = now
 	rec.FinishedAt = now
@@ -123,9 +130,13 @@ func (a *App) finishTransfer(id string, err error) {
 			rec.Transferred = rec.Total
 		}
 	}
+	if store.activeRunning > 0 {
+		store.activeRunning--
+	}
 	cp := *rec
 	store.mu.Unlock()
 	a.emitTransfer(&cp)
+	a.pumpTransferQueue()
 }
 
 // PickShellUploadPaths 选择要上传的本地文件（可多选）
@@ -221,15 +232,19 @@ func (a *App) PauseShellTransfer(id string) error {
 		store.mu.Unlock()
 		return fmt.Errorf("记录不存在")
 	}
-	if rec.Status != "running" && rec.Status != "pending" {
+	if rec.Status != "running" && rec.Status != "pending" && rec.Status != "queued" {
 		store.mu.Unlock()
 		return fmt.Errorf("当前状态无法暂停")
 	}
+	wasActive := rec.Status == "running" || rec.Status == "pending"
 	cancel := store.cancels[id]
 	rec.Status = "paused"
 	rec.SpeedBPS = 0
 	rec.UpdatedAt = time.Now().Unix()
 	rec.FinishedAt = rec.UpdatedAt
+	if wasActive && store.activeRunning > 0 {
+		store.activeRunning--
+	}
 	cp := *rec
 	store.mu.Unlock()
 
@@ -238,6 +253,7 @@ func (a *App) PauseShellTransfer(id string) error {
 	}
 	a.unregisterTransferCancel(id)
 	a.emitTransfer(&cp)
+	a.pumpTransferQueue()
 	return nil
 }
 
@@ -307,7 +323,7 @@ func (a *App) launchTransfer(seed *define.SftpTransferRecord) {
 		rec = seed
 		store.items[seed.ID] = rec
 	}
-	rec.Status = "pending"
+	rec.Status = "queued"
 	rec.Error = ""
 	rec.SpeedBPS = 0
 	rec.FinishedAt = 0
@@ -315,18 +331,58 @@ func (a *App) launchTransfer(seed *define.SftpTransferRecord) {
 	cp := *rec
 	store.mu.Unlock()
 	a.emitTransfer(&cp)
+	a.pumpTransferQueue()
+}
 
-	aux, err := a.shellAuxPool.Get(cp.MachineName)
-	if err != nil {
-		a.finishTransfer(cp.ID, err)
-		return
+// pumpTransferQueue 按优先级启动排队中的传输，遵守并发上限
+func (a *App) pumpTransferQueue() {
+	store := a.ensureTransferStore()
+	for {
+		store.mu.Lock()
+		max := store.maxConcurrent
+		if max <= 0 {
+			max = define.DefaultTransferMaxConcurrent
+		}
+		if store.activeRunning >= max {
+			store.mu.Unlock()
+			return
+		}
+		var next *define.SftpTransferRecord
+		for _, rec := range store.items {
+			if rec.Status != "queued" {
+				continue
+			}
+			if next == nil ||
+				rec.Priority > next.Priority ||
+				(rec.Priority == next.Priority && rec.StartedAt < next.StartedAt) {
+				next = rec
+			}
+		}
+		if next == nil {
+			store.mu.Unlock()
+			return
+		}
+		next.Status = "pending"
+		next.UpdatedAt = time.Now().Unix()
+		store.activeRunning++
+		cp := *next
+		store.mu.Unlock()
+		a.emitTransfer(&cp)
+		a.startTransferWorker(&cp)
 	}
+}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	a.registerTransferCancel(cp.ID, cancel)
-
+func (a *App) startTransferWorker(cp *define.SftpTransferRecord) {
 	go func() {
+		aux, err := a.shellAuxPool.Get(cp.MachineName)
+		if err != nil {
+			a.finishTransfer(cp.ID, err)
+			return
+		}
+		ctx, cancel := context.WithCancel(context.Background())
+		a.registerTransferCancel(cp.ID, cancel)
 		defer a.unregisterTransferCancel(cp.ID)
+
 		a.updateTransferProgress(cp.ID, cp.Transferred, cp.Total, 0)
 		progress := func(transferred, total int64, speedBPS float64) {
 			a.updateTransferProgress(cp.ID, transferred, total, speedBPS)
@@ -358,6 +414,101 @@ func (a *App) launchTransfer(seed *define.SftpTransferRecord) {
 		}
 		a.finishTransfer(cp.ID, transferErr)
 	}()
+}
+
+// PrioritizeShellTransfer 提高任务优先级并尝试立即调度
+func (a *App) PrioritizeShellTransfer(id string) error {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return fmt.Errorf("参数无效")
+	}
+	store := a.ensureTransferStore()
+	store.mu.Lock()
+	rec, ok := store.items[id]
+	if !ok {
+		store.mu.Unlock()
+		return fmt.Errorf("记录不存在")
+	}
+	maxPri := 0
+	for _, r := range store.items {
+		if r.Priority > maxPri {
+			maxPri = r.Priority
+		}
+	}
+	rec.Priority = maxPri + 1
+	rec.UpdatedAt = time.Now().Unix()
+	cp := *rec
+	store.mu.Unlock()
+	a.emitTransfer(&cp)
+	a.pumpTransferQueue()
+	return nil
+}
+
+// PauseAllShellTransfers 暂停全部进行中/排队中的传输
+func (a *App) PauseAllShellTransfers() int {
+	store := a.ensureTransferStore()
+	store.mu.Lock()
+	ids := make([]string, 0)
+	for id, rec := range store.items {
+		if rec.Status == "running" || rec.Status == "pending" || rec.Status == "queued" {
+			ids = append(ids, id)
+		}
+	}
+	store.mu.Unlock()
+	n := 0
+	for _, id := range ids {
+		if err := a.PauseShellTransfer(id); err == nil {
+			n++
+		}
+	}
+	return n
+}
+
+// ResumeAllShellTransfers 继续全部已暂停/失败的传输
+func (a *App) ResumeAllShellTransfers() int {
+	store := a.ensureTransferStore()
+	store.mu.Lock()
+	ids := make([]string, 0)
+	for id, rec := range store.items {
+		if rec.Status == "paused" || rec.Status == "error" {
+			ids = append(ids, id)
+		}
+	}
+	store.mu.Unlock()
+	n := 0
+	for _, id := range ids {
+		if err := a.ResumeShellTransfer(id); err == nil {
+			n++
+		}
+	}
+	return n
+}
+
+// SetShellTransferMaxConcurrent 设置全局传输并发上限（1–8）
+func (a *App) SetShellTransferMaxConcurrent(n int) int {
+	if n < 1 {
+		n = 1
+	}
+	if n > 8 {
+		n = 8
+	}
+	store := a.ensureTransferStore()
+	store.mu.Lock()
+	store.maxConcurrent = n
+	store.mu.Unlock()
+	a.pumpTransferQueue()
+	return n
+}
+
+// GetShellTransferMaxConcurrent 获取全局传输并发上限
+func (a *App) GetShellTransferMaxConcurrent() int {
+	store := a.ensureTransferStore()
+	store.mu.Lock()
+	defer store.mu.Unlock()
+	if store.maxConcurrent <= 0 {
+		return define.DefaultTransferMaxConcurrent
+	}
+	return store.maxConcurrent
 }
 
 // StartShellDownload 下载远端路径到 Downloads/fddownload（异步）

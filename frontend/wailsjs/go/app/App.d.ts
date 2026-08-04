@@ -138,6 +138,8 @@ export function GetShellStatus():Promise<define.ShellStatus>;
 
 export function GetShellSystemInfo(arg1:string):Promise<define.ShellSystemInfo>;
 
+export function GetShellTransferMaxConcurrent():Promise<number>;
+
 export function GetShellTunnelStatus(arg1:string):Promise<Array<define.SSHTunnelStatus>>;
 
 export function GetShortcutSettings():Promise<data.ShortcutSettings>;
@@ -212,6 +214,8 @@ export function OpenSystemSettings():Promise<void>;
 
 export function OpenWorkPathConfig():Promise<void>;
 
+export function PauseAllShellTransfers():Promise<number>;
+
 export function PauseShellTransfer(arg1:string):Promise<void>;
 
 export function PauseUpdateDownload():Promise<void>;
@@ -221,6 +225,8 @@ export function PickCustomAppIcon():Promise<string>;
 export function PickShellUploadFolder():Promise<string>;
 
 export function PickShellUploadPaths():Promise<Array<string>>;
+
+export function PrioritizeShellTransfer(arg1:string):Promise<void>;
 
 export function ReadShellRemoteFile(arg1:string,arg2:string):Promise<string>;
 
@@ -247,6 +253,8 @@ export function RenameShellRemotePath(arg1:string,arg2:string,arg3:string):Promi
 export function ResizeShell(arg1:string,arg2:number,arg3:number):Promise<void>;
 
 export function ResolveShellPath(arg1:string,arg2:string,arg3:string):Promise<string>;
+
+export function ResumeAllShellTransfers():Promise<number>;
 
 export function ResumeShellTransfer(arg1:string):Promise<void>;
 
@@ -285,6 +293,8 @@ export function SetHomeMinimizedZone(arg1:string):Promise<void>;
 export function SetMachineSensitiveData(arg1:string,arg2:define.SensitiveData):Promise<void>;
 
 export function SetMachineShellMonitorOpen(arg1:string,arg2:boolean):Promise<void>;
+
+export function SetShellTransferMaxConcurrent(arg1:number):Promise<number>;
 
 export function ShellAsciiInputEnter():Promise<void>;
 

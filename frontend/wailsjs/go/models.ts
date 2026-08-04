@@ -743,6 +743,7 @@ export namespace define {
 	    legacyAlgorithms?: boolean;
 	    skipEcdsaHostKey?: boolean;
 	    sftpEncoding?: string;
+	    sftpFileProtocol?: string;
 	    startupCommand?: string;
 	    agentForwarding?: boolean;
 	    tunnels?: SSHTunnel[];
@@ -771,6 +772,7 @@ export namespace define {
 	        this.legacyAlgorithms = source["legacyAlgorithms"];
 	        this.skipEcdsaHostKey = source["skipEcdsaHostKey"];
 	        this.sftpEncoding = source["sftpEncoding"];
+	        this.sftpFileProtocol = source["sftpFileProtocol"];
 	        this.startupCommand = source["startupCommand"];
 	        this.agentForwarding = source["agentForwarding"];
 	        this.tunnels = this.convertValues(source["tunnels"], SSHTunnel);
@@ -1010,6 +1012,7 @@ export namespace define {
 	    remotePath: string;
 	    isDir: boolean;
 	    status: string;
+	    priority: number;
 	    total: number;
 	    transferred: number;
 	    percent: number;
@@ -1033,6 +1036,7 @@ export namespace define {
 	        this.remotePath = source["remotePath"];
 	        this.isDir = source["isDir"];
 	        this.status = source["status"];
+	        this.priority = source["priority"];
 	        this.total = source["total"];
 	        this.transferred = source["transferred"];
 	        this.percent = source["percent"];

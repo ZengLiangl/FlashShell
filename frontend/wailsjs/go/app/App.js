@@ -266,6 +266,10 @@ export function GetShellSystemInfo(arg1) {
   return window['go']['app']['App']['GetShellSystemInfo'](arg1);
 }
 
+export function GetShellTransferMaxConcurrent() {
+  return window['go']['app']['App']['GetShellTransferMaxConcurrent']();
+}
+
 export function GetShellTunnelStatus(arg1) {
   return window['go']['app']['App']['GetShellTunnelStatus'](arg1);
 }
@@ -414,6 +418,10 @@ export function OpenWorkPathConfig() {
   return window['go']['app']['App']['OpenWorkPathConfig']();
 }
 
+export function PauseAllShellTransfers() {
+  return window['go']['app']['App']['PauseAllShellTransfers']();
+}
+
 export function PauseShellTransfer(arg1) {
   return window['go']['app']['App']['PauseShellTransfer'](arg1);
 }
@@ -432,6 +440,10 @@ export function PickShellUploadFolder() {
 
 export function PickShellUploadPaths() {
   return window['go']['app']['App']['PickShellUploadPaths']();
+}
+
+export function PrioritizeShellTransfer(arg1) {
+  return window['go']['app']['App']['PrioritizeShellTransfer'](arg1);
 }
 
 export function ReadShellRemoteFile(arg1, arg2) {
@@ -484,6 +496,10 @@ export function ResizeShell(arg1, arg2, arg3) {
 
 export function ResolveShellPath(arg1, arg2, arg3) {
   return window['go']['app']['App']['ResolveShellPath'](arg1, arg2, arg3);
+}
+
+export function ResumeAllShellTransfers() {
+  return window['go']['app']['App']['ResumeAllShellTransfers']();
 }
 
 export function ResumeShellTransfer(arg1) {
@@ -560,6 +576,10 @@ export function SetMachineSensitiveData(arg1, arg2) {
 
 export function SetMachineShellMonitorOpen(arg1, arg2) {
   return window['go']['app']['App']['SetMachineShellMonitorOpen'](arg1, arg2);
+}
+
+export function SetShellTransferMaxConcurrent(arg1) {
+  return window['go']['app']['App']['SetShellTransferMaxConcurrent'](arg1);
 }
 
 export function ShellAsciiInputEnter() {
