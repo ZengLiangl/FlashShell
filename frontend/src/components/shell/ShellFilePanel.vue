@@ -67,6 +67,11 @@
             <el-icon><RefreshRight /></el-icon>
           </el-button>
         </el-tooltip>
+        <el-tooltip content="新建文件夹" placement="top">
+          <el-button size="small" text class="tool-icon-btn" @click="promptMkdir">
+            <el-icon><Folder /></el-icon>
+          </el-button>
+        </el-tooltip>
         <el-dropdown
           size="small"
           trigger="hover"
@@ -148,9 +153,11 @@
               <span class="name-cell">
                 <el-icon class="icon">
                   <Folder v-if="row.isDir" />
+                  <Link v-else-if="row.type === '链接'" />
                   <Document v-else />
                 </el-icon>
-                {{ row.name }}
+                <span class="name-text">{{ row.name }}</span>
+                <span v-if="row.linkTarget" class="link-target">→ {{ row.linkTarget }}</span>
               </span>
             </template>
           </el-table-column>
@@ -184,6 +191,10 @@
         @click.stop
         @mouseleave="closeMenu"
       >
+        <li @click="promptMkdir">新建文件夹</li>
+        <li v-if="ctx.row" @click="promptRename">重命名</li>
+        <li v-if="ctx.row" @click="promptChmod">修改权限</li>
+        <li v-if="ctx.row && ctx.row.isDir" @click="copyDirHere">复制到当前目录</li>
         <li v-if="ctx.row && !ctx.row.isDir" @click="editEntry">编辑</li>
         <li v-if="ctx.row && !ctx.row.isDir" @click="openExternalEntry">用系统应用打开</li>
         <li @click="downloadEntry">下载</li>
@@ -191,6 +202,14 @@
         <li class="danger" @click="deleteEntry">删除</li>
       </ul>
     </Teleport>
+
+    <el-dialog v-model="chmodVisible" title="修改权限" width="360px" append-to-body>
+      <el-input v-model="chmodDraft" placeholder="如 0755 或 644" />
+      <template #footer>
+        <el-button @click="chmodVisible = false">取消</el-button>
+        <el-button type="primary" :loading="chmodSaving" @click="submitChmod">确定</el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="editorVisible" :title="editorTitle" width="640px" append-to-body>
       <el-input v-model="editorContent" type="textarea" :rows="18" class="editor-area" />
@@ -260,6 +279,10 @@ export default {
     const editorPath = ref('')
     const editorTitle = ref('编辑文件')
     const editorSaving = ref(false)
+    const chmodVisible = ref(false)
+    const chmodDraft = ref('')
+    const chmodSaving = ref(false)
+    const chmodTarget = ref('')
     const localSearchQuery = ref(props.searchQuery)
     const searchInputRef = ref(null)
     const dragOver = ref(false)
@@ -826,6 +849,123 @@ export default {
       }
     }
 
+    const joinRemote = (base, name) => {
+      const b = String(base || '/').replace(/\/+$/, '') || ''
+      const n = String(name || '').replace(/^\/+/, '')
+      if (!b) return '/' + n
+      return `${b}/${n}`
+    }
+
+    const promptMkdir = async () => {
+      closeMenu()
+      if (!props.machineName || !cwd.value) return
+      try {
+        const { value } = await ElMessageBox.prompt('输入新文件夹名称', '新建文件夹', {
+          confirmButtonText: '创建',
+          cancelButtonText: '取消',
+          inputPattern: /.+/,
+          inputErrorMessage: '名称不能为空',
+        })
+        const remotePath = joinRemote(cwd.value, value)
+        await App.MkdirShellRemotePath(props.machineName, remotePath)
+        ElMessage.success('文件夹已创建')
+        reload()
+      } catch (e) {
+        if (e === 'cancel') return
+        ElMessage.error(String(e))
+      }
+    }
+
+    const promptRename = async () => {
+      const row = ctx.row
+      closeMenu()
+      if (!row?.path || !props.machineName) return
+      try {
+        const { value } = await ElMessageBox.prompt('输入新名称', '重命名', {
+          confirmButtonText: '确定',
+          cancelButtonText: '取消',
+          inputValue: row.name,
+          inputPattern: /.+/,
+          inputErrorMessage: '名称不能为空',
+        })
+        const parent = row.path.replace(/\/[^/]+$/, '') || '/'
+        const newPath = joinRemote(parent, value)
+        await App.RenameShellRemotePath(props.machineName, row.path, newPath)
+        ElMessage.success('已重命名')
+        reload()
+      } catch (e) {
+        if (e === 'cancel') return
+        ElMessage.error(String(e))
+      }
+    }
+
+    const promptChmod = () => {
+      const row = ctx.row
+      closeMenu()
+      if (!row?.path || !props.machineName) return
+      chmodTarget.value = row.path
+      chmodDraft.value = '0644'
+      chmodVisible.value = true
+    }
+
+    const parseChmodMode = (raw) => {
+      const s = String(raw || '').trim()
+      if (/^\d{3,4}$/.test(s)) {
+        const n = parseInt(s, 8)
+        return n & 0xfff
+      }
+      throw new Error('权限格式无效，请使用如 0755 或 644')
+    }
+
+    const submitChmod = async () => {
+      if (!chmodTarget.value || !props.machineName) return
+      chmodSaving.value = true
+      try {
+        const mode = parseChmodMode(chmodDraft.value)
+        await App.ChmodShellRemotePath(props.machineName, chmodTarget.value, mode)
+        ElMessage.success('权限已更新')
+        chmodVisible.value = false
+        reload()
+      } catch (e) {
+        ElMessage.error(String(e))
+      } finally {
+        chmodSaving.value = false
+      }
+    }
+
+    const copyDirHere = async () => {
+      const row = ctx.row
+      closeMenu()
+      if (!row?.path || !row.isDir || !props.machineName || !cwd.value) return
+      const dst = joinRemote(cwd.value, row.name + '_copy')
+      try {
+        await App.CopyShellRemotePath(props.machineName, row.path, dst)
+        ElMessage.success('已复制到当前目录')
+        reload()
+      } catch (e) {
+        ElMessage.error(String(e))
+      }
+    }
+
+    const uploadWithConflictCheck = async (localPath) => {
+      const baseName = localPath.replace(/\\/g, '/').split('/').pop()
+      const remotePath = joinRemote(cwd.value, baseName)
+      try {
+        const conflict = await App.CheckShellUploadConflict(props.machineName, localPath, remotePath)
+        if (conflict) {
+          await ElMessageBox.confirm(
+            `远端已存在「${baseName}」（${conflict.isDir ? '目录' : formatSize(conflict.remoteSize)}），是否覆盖？`,
+            '上传冲突',
+            { type: 'warning', confirmButtonText: '覆盖', cancelButtonText: '跳过' },
+          )
+        }
+      } catch (e) {
+        if (e === 'cancel') return false
+      }
+      await App.StartShellUpload(props.machineName, localPath, cwd.value)
+      return true
+    }
+
     const startUploads = async (paths) => {
       if (!props.machineName || !expanded.value || !cwd.value) {
         ElMessage.warning('请先打开文件面板并进入目标目录')
@@ -836,8 +976,8 @@ export default {
       let started = 0
       for (const localPath of list) {
         try {
-          await App.StartShellUpload(props.machineName, localPath, cwd.value)
-          started++
+          const ok = await uploadWithConflictCheck(localPath)
+          if (ok) started++
         } catch (e) {
           ElMessage.error(`上传失败 (${localPath}): ${e}`)
         }
@@ -1063,6 +1203,14 @@ export default {
       editorContent,
       editorTitle,
       editorSaving,
+      promptMkdir,
+      promptRename,
+      promptChmod,
+      submitChmod,
+      copyDirHere,
+      chmodVisible,
+      chmodDraft,
+      chmodSaving,
       deleteEntry,
       onDragOver,
       onDragLeave,
@@ -1337,9 +1485,16 @@ export default {
 }
 
 .name-cell {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+}
+.link-target {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .icon {

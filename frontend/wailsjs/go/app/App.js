@@ -38,6 +38,14 @@ export function CheckForUpdates() {
   return window['go']['app']['App']['CheckForUpdates']();
 }
 
+export function CheckShellUploadConflict(arg1, arg2, arg3) {
+  return window['go']['app']['App']['CheckShellUploadConflict'](arg1, arg2, arg3);
+}
+
+export function ChmodShellRemotePath(arg1, arg2, arg3) {
+  return window['go']['app']['App']['ChmodShellRemotePath'](arg1, arg2, arg3);
+}
+
 export function ClearFinishedShellTransfers() {
   return window['go']['app']['App']['ClearFinishedShellTransfers']();
 }
@@ -72,6 +80,10 @@ export function ConnectLocalShell(arg1) {
 
 export function ConnectShell(arg1) {
   return window['go']['app']['App']['ConnectShell'](arg1);
+}
+
+export function CopyShellRemotePath(arg1, arg2, arg3) {
+  return window['go']['app']['App']['CopyShellRemotePath'](arg1, arg2, arg3);
 }
 
 export function CreateApplicationMenu() {
@@ -302,6 +314,10 @@ export function ImportMachineTemplateFromFile(arg1) {
   return window['go']['app']['App']['ImportMachineTemplateFromFile'](arg1);
 }
 
+export function ImportSystemKnownHosts() {
+  return window['go']['app']['App']['ImportSystemKnownHosts']();
+}
+
 export function ImportXshellFromFile(arg1, arg2, arg3) {
   return window['go']['app']['App']['ImportXshellFromFile'](arg1, arg2, arg3);
 }
@@ -336,6 +352,10 @@ export function ListShellTransfers() {
 
 export function ListSystemFonts() {
   return window['go']['app']['App']['ListSystemFonts']();
+}
+
+export function MkdirShellRemotePath(arg1, arg2) {
+  return window['go']['app']['App']['MkdirShellRemotePath'](arg1, arg2);
 }
 
 export function NewWindow() {
@@ -452,6 +472,10 @@ export function RemoveShellTunnel(arg1, arg2) {
 
 export function RenameMachineGroup(arg1, arg2) {
   return window['go']['app']['App']['RenameMachineGroup'](arg1, arg2);
+}
+
+export function RenameShellRemotePath(arg1, arg2, arg3) {
+  return window['go']['app']['App']['RenameShellRemotePath'](arg1, arg2, arg3);
 }
 
 export function ResizeShell(arg1, arg2, arg3) {

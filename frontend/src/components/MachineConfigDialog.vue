@@ -280,7 +280,79 @@
                 </el-form-item>
 
                 <el-form-item label="跳板机">
-                    <el-input v-model="machineForm.proxyJump" placeholder="机器名称，或 host[:port] / user@host[:port]" clearable />
+                    <el-input v-model="machineForm.proxyJump" placeholder="单跳：机器名或 host[:port]（多跳请用下方跳板链）" clearable />
+                </el-form-item>
+
+                <el-form-item label="跳板链">
+                    <el-select
+                        v-model="machineForm.jumpChain"
+                        multiple
+                        filterable
+                        allow-create
+                        default-first-option
+                        collapse-tags
+                        collapse-tags-tooltip
+                        placeholder="按顺序选择或输入跳板（优先于单跳跳板机）"
+                        style="width: 100%"
+                    >
+                        <el-option
+                            v-for="m in machines"
+                            :key="m.id || m.name"
+                            :label="m.name"
+                            :value="m.name"
+                        />
+                    </el-select>
+                    <p class="field-hint">多跳时按从左到右顺序连接，最后一跳再连目标主机</p>
+                </el-form-item>
+
+                <el-divider content-position="left">每主机代理</el-divider>
+                <el-form-item label="代理模式">
+                    <el-select v-model="machineForm.proxyOverride.mode" style="width: 100%">
+                        <el-option label="继承全局" value="inherit" />
+                        <el-option label="直连（不走代理）" value="none" />
+                        <el-option label="独立代理" value="manual" />
+                    </el-select>
+                </el-form-item>
+                <template v-if="machineForm.proxyOverride.mode === 'manual'">
+                    <el-form-item label="代理类型">
+                        <el-select v-model="machineForm.proxyOverride.type" style="width: 100%">
+                            <el-option label="HTTP" value="http" />
+                            <el-option label="SOCKS5" value="socks" />
+                        </el-select>
+                    </el-form-item>
+                    <el-form-item label="代理主机">
+                        <el-input v-model="machineForm.proxyOverride.host" placeholder="主机" />
+                    </el-form-item>
+                    <el-form-item label="代理端口">
+                        <el-input-number v-model="machineForm.proxyOverride.port" :min="1" :max="65535" />
+                    </el-form-item>
+                    <el-form-item label="代理用户">
+                        <el-input v-model="machineForm.proxyOverride.user" clearable />
+                    </el-form-item>
+                    <el-form-item label="代理密码">
+                        <el-input v-model="machineForm.proxyOverride.password" type="password" show-password clearable />
+                    </el-form-item>
+                </template>
+
+                <el-divider content-position="left">高级选项</el-divider>
+                <el-form-item label="旧设备算法">
+                    <el-switch v-model="machineForm.legacyAlgorithms" active-text="启用兼容算法" />
+                </el-form-item>
+                <el-form-item label="跳过 ECDSA 主机密钥">
+                    <el-switch v-model="machineForm.skipEcdsaHostKey" />
+                </el-form-item>
+                <el-form-item label="SFTP 编码">
+                    <el-select v-model="machineForm.sftpEncoding" style="width: 100%">
+                        <el-option label="自动" value="auto" />
+                        <el-option label="UTF-8" value="utf-8" />
+                        <el-option label="GB18030" value="gb18030" />
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="启动命令">
+                    <el-input v-model="machineForm.startupCommand" placeholder="连接后自动执行（单行）" clearable />
+                </el-form-item>
+                <el-form-item label="Agent 转发">
+                    <el-switch v-model="machineForm.agentForwarding" active-text="启用 SSH Agent 转发" />
                 </el-form-item>
 
                 <el-divider content-position="left">SSH 隧道</el-divider>
@@ -526,6 +598,20 @@ export default {
             user: '',
             password: '',
             proxyJump: '',
+            jumpChain: [],
+            proxyOverride: {
+                mode: 'inherit',
+                type: 'http',
+                host: '',
+                port: 7890,
+                user: '',
+                password: '',
+            },
+            legacyAlgorithms: false,
+            skipEcdsaHostKey: false,
+            sftpEncoding: 'auto',
+            startupCommand: '',
+            agentForwarding: false,
             tunnels: [],
         })
 
@@ -606,6 +692,21 @@ export default {
             machineForm.group = machine.group || ''
             machineForm.key_file = machine.key_file || ''
             machineForm.proxyJump = machine.proxyJump || ''
+            machineForm.jumpChain = Array.isArray(machine.jumpChain) ? [...machine.jumpChain] : []
+            const po = machine.proxyOverride || {}
+            machineForm.proxyOverride = {
+                mode: po.mode || 'inherit',
+                type: po.type || 'http',
+                host: po.host || '',
+                port: po.port || 7890,
+                user: po.user || '',
+                password: po.password || '',
+            }
+            machineForm.legacyAlgorithms = !!machine.legacyAlgorithms
+            machineForm.skipEcdsaHostKey = !!machine.skipEcdsaHostKey
+            machineForm.sftpEncoding = machine.sftpEncoding || 'auto'
+            machineForm.startupCommand = machine.startupCommand || ''
+            machineForm.agentForwarding = !!machine.agentForwarding
             machineForm.tunnels = (machine.tunnels || []).map((t) => ({
                 enabled: t.enabled !== false,
                 name: t.name || '',
@@ -663,6 +764,20 @@ export default {
             machineForm.user = ''
             machineForm.password = ''
             machineForm.proxyJump = ''
+            machineForm.jumpChain = []
+            machineForm.proxyOverride = {
+                mode: 'inherit',
+                type: 'http',
+                host: '',
+                port: 7890,
+                user: '',
+                password: '',
+            }
+            machineForm.legacyAlgorithms = false
+            machineForm.skipEcdsaHostKey = false
+            machineForm.sftpEncoding = 'auto'
+            machineForm.startupCommand = ''
+            machineForm.agentForwarding = false
             machineForm.tunnels = []
         }
 
@@ -734,11 +849,25 @@ export default {
             try {
                 await machineFormRef.value.validate()
                 savingMachine.value = true
+                const proxyOverride = { ...machineForm.proxyOverride }
+                if (proxyOverride.mode !== 'manual') {
+                    proxyOverride.host = ''
+                    proxyOverride.port = 0
+                    proxyOverride.user = ''
+                    proxyOverride.password = ''
+                }
                 const machineData = {
                     name: machineForm.name,
                     group: normalizeGroup(machineForm.group),
                     key_file: machineForm.key_file,
                     proxyJump: machineForm.proxyJump?.trim() || '',
+                    jumpChain: (machineForm.jumpChain || []).map((s) => String(s).trim()).filter(Boolean),
+                    proxyOverride: proxyOverride.mode === 'inherit' ? null : proxyOverride,
+                    legacyAlgorithms: machineForm.legacyAlgorithms,
+                    skipEcdsaHostKey: machineForm.skipEcdsaHostKey,
+                    sftpEncoding: machineForm.sftpEncoding || 'auto',
+                    startupCommand: machineForm.startupCommand?.trim() || '',
+                    agentForwarding: machineForm.agentForwarding,
                     tunnels: (machineForm.tunnels || []).filter((t) => t.localPort > 0),
                 }
                 const sensitiveData = {
@@ -1370,7 +1499,12 @@ export default {
     width: 100%;
 }
 
-.tunnel-head {
+.field-hint {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  line-height: 1.4;
+}
     display: flex;
     align-items: center;
     gap: 8px;

@@ -709,6 +709,28 @@ export namespace define {
 	        this.temporary = source["temporary"];
 	    }
 	}
+	export class MachineProxyOverride {
+	    mode: string;
+	    type: string;
+	    host: string;
+	    port: number;
+	    user: string;
+	    password: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new MachineProxyOverride(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.mode = source["mode"];
+	        this.type = source["type"];
+	        this.host = source["host"];
+	        this.port = source["port"];
+	        this.user = source["user"];
+	        this.password = source["password"];
+	    }
+	}
 	export class Machine {
 	    id: string;
 	    encrypted_data?: string;
@@ -716,6 +738,13 @@ export namespace define {
 	    group?: string;
 	    key_file?: string;
 	    proxyJump?: string;
+	    jumpChain?: string[];
+	    proxyOverride?: MachineProxyOverride;
+	    legacyAlgorithms?: boolean;
+	    skipEcdsaHostKey?: boolean;
+	    sftpEncoding?: string;
+	    startupCommand?: string;
+	    agentForwarding?: boolean;
 	    tunnels?: SSHTunnel[];
 	    list_host?: string;
 	    list_port?: number;
@@ -737,6 +766,13 @@ export namespace define {
 	        this.group = source["group"];
 	        this.key_file = source["key_file"];
 	        this.proxyJump = source["proxyJump"];
+	        this.jumpChain = source["jumpChain"];
+	        this.proxyOverride = this.convertValues(source["proxyOverride"], MachineProxyOverride);
+	        this.legacyAlgorithms = source["legacyAlgorithms"];
+	        this.skipEcdsaHostKey = source["skipEcdsaHostKey"];
+	        this.sftpEncoding = source["sftpEncoding"];
+	        this.startupCommand = source["startupCommand"];
+	        this.agentForwarding = source["agentForwarding"];
 	        this.tunnels = this.convertValues(source["tunnels"], SSHTunnel);
 	        this.list_host = source["list_host"];
 	        this.list_port = source["list_port"];
@@ -765,6 +801,7 @@ export namespace define {
 		    return a;
 		}
 	}
+	
 	export class SubProject {
 	    name: string;
 	    description: string;
@@ -944,6 +981,7 @@ export namespace define {
 	    owner: string;
 	    group: string;
 	    type: string;
+	    linkTarget?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SftpEntry(source);
@@ -960,6 +998,7 @@ export namespace define {
 	        this.owner = source["owner"];
 	        this.group = source["group"];
 	        this.type = source["type"];
+	        this.linkTarget = source["linkTarget"];
 	    }
 	}
 	export class SftpTransferRecord {
@@ -1261,6 +1300,26 @@ export namespace machine {
 	        this.whenResult = source["whenResult"];
 	        this.skipped = source["skipped"];
 	        this.parallel = source["parallel"];
+	    }
+	}
+	export class SftpUploadConflict {
+	    remotePath: string;
+	    localSize: number;
+	    remoteSize: number;
+	    remoteMtime: number;
+	    isDir: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new SftpUploadConflict(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.remotePath = source["remotePath"];
+	        this.localSize = source["localSize"];
+	        this.remoteSize = source["remoteSize"];
+	        this.remoteMtime = source["remoteMtime"];
+	        this.isDir = source["isDir"];
 	    }
 	}
 
