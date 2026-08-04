@@ -57,6 +57,11 @@ func (a *App) ImportKnownHosts(jsonData string) (int, error) {
 	return data.GlobalHostKeyManager().ImportJSON([]byte(jsonData))
 }
 
+// ImportSystemKnownHosts 从系统 ~/.ssh/known_hosts 导入
+func (a *App) ImportSystemKnownHosts() (int, error) {
+	return data.GlobalHostKeyManager().ImportOpenSSHKnownHosts("")
+}
+
 // IsHostKeyUnknownError 判断是否为未知主机密钥错误
 func IsHostKeyUnknownError(err error) (*data.HostKeyUnknownError, bool) {
 	if hk := data.ParseHostKeyUnknownError(err); hk != nil {
