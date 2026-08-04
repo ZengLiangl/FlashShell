@@ -10,7 +10,7 @@
     <el-input
       ref="inputRef"
       v-model="query"
-      placeholder="搜索历史命令或片段…"
+      placeholder="搜索历史命令、片段或机器…"
       clearable
       @keydown.down.prevent="moveSel(1)"
       @keydown.up.prevent="moveSel(-1)"
@@ -112,6 +112,39 @@
           </li>
         </ul>
       </el-tab-pane>
+
+      <el-tab-pane label="机器" name="machines">
+        <div class="tip-bar">
+          <span>按名称 / IP / 用户搜索并连接机器。</span>
+        </div>
+        <div v-if="!filteredMachines.length" class="snippet-empty">
+          <p>暂无匹配机器</p>
+        </div>
+        <ul v-else class="snippet-list">
+          <li
+            v-for="(m, i) in filteredMachines"
+            :key="m.id || m.name"
+            class="snippet-card"
+            :class="{ selected: tab === 'machines' && i === selectedIdx }"
+            @mouseenter="selectedIdx = i"
+          >
+            <button type="button" class="snippet-main" @click="connectMachine(m)">
+              <div class="snippet-card-top">
+                <span class="sn-name">{{ m.name }}</span>
+                <span v-if="m.pinned" class="sn-badge">置顶</span>
+              </div>
+              <div class="sn-cmd" :title="machineAddr(m)">{{ machineAddr(m) }}</div>
+            </button>
+            <div class="snippet-ops icon-actions icon-actions--sm" @click.stop>
+              <el-tooltip content="连接" placement="top">
+                <el-button size="small" text type="primary" circle @click="connectMachine(m)">
+                  <el-icon><VideoPlay /></el-icon>
+                </el-button>
+              </el-tooltip>
+            </div>
+          </li>
+        </ul>
+      </el-tab-pane>
     </el-tabs>
 
     <el-dialog
@@ -204,6 +237,7 @@ import * as App from '../../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../../wailsjs/runtime/runtime'
 import { normalizeSnippets, normalizeSnippet, emptySnippetBinding } from '../../utils/shortcuts'
 import { formatKeyMapBinding, formatKeyMapParts, keymapBindingFromEvent } from '../../utils/keymaps'
+import { machineMatchesKeyword, formatMachineAddr } from '../../utils/machineGroups'
 
 function emptyEditor() {
   return {
@@ -223,8 +257,9 @@ export default {
     modelValue: { type: Boolean, default: false },
     sessionId: { type: String, default: '' },
     configName: { type: String, default: '' },
+    machines: { type: Array, default: () => [] },
   },
-  emits: ['update:modelValue', 'insert'],
+  emits: ['update:modelValue', 'insert', 'connect'],
   setup(props, { emit }) {
     const visible = ref(false)
     const query = ref('')
@@ -255,6 +290,20 @@ export default {
         return (s.name || '').toLowerCase().includes(q) || (s.command || '').toLowerCase().includes(q)
       })
     })
+
+    const filteredMachines = computed(() => {
+      const list = props.machines || []
+      const q = query.value
+      const filtered = String(q || '').trim()
+        ? list.filter((m) => machineMatchesKeyword(m, q))
+        : list
+      return [...filtered].sort((a, b) => {
+        if (!!a.pinned !== !!b.pinned) return a.pinned ? -1 : 1
+        return String(a.name || '').localeCompare(String(b.name || ''), 'zh')
+      })
+    })
+
+    const machineAddr = (m) => formatMachineAddr(m)
 
     const bindingLabel = (binding) => formatKeyMapBinding(binding)
     const bindingParts = (binding) => formatKeyMapParts(binding)
@@ -301,9 +350,20 @@ export default {
     }
 
     const moveSel = (delta) => {
-      const list = tab.value === 'history' ? historyItems.value : filteredSnippets.value
+      const list =
+        tab.value === 'history'
+          ? historyItems.value
+          : tab.value === 'machines'
+            ? filteredMachines.value
+            : filteredSnippets.value
       if (!list.length) return
       selectedIdx.value = (selectedIdx.value + delta + list.length) % list.length
+    }
+
+    const connectMachine = (m) => {
+      if (!m?.name) return
+      visible.value = false
+      emit('connect', m.name)
     }
 
     const recordHistory = async (cmd) => {
@@ -350,6 +410,10 @@ export default {
     const applySelected = () => {
       if (tab.value === 'history') {
         insert(historyItems.value[selectedIdx.value], true)
+        return
+      }
+      if (tab.value === 'machines') {
+        connectMachine(filteredMachines.value[selectedIdx.value])
         return
       }
       const s = filteredSnippets.value[selectedIdx.value]
@@ -527,6 +591,9 @@ export default {
       inputRef,
       historyItems,
       filteredSnippets,
+      filteredMachines,
+      machineAddr,
+      connectMachine,
       editorVisible,
       editorSaving,
       editorForm,

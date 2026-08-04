@@ -7,16 +7,66 @@
         class="left-panel shell-left-panel"
         :class="{ collapsed: leftCollapsed, resizing: isResizing }"
       >
-        <ShellMonitorPanel
-          v-if="monitorSession && !leftCollapsed"
-          :active-machine="monitorMachineName"
-          :active-connected="monitorConnected"
-          :connecting="monitorConnecting"
-          @toggle-connection="onToggleConnection"
-        />
-        <LocalFileTreePanel
-          v-else-if="localFileSession && !leftCollapsed"
-        />
+        <div v-if="!leftCollapsed" class="left-tools">
+          <div class="left-tool-tabs" role="tablist">
+            <button
+              type="button"
+              role="tab"
+              class="left-tool-tab"
+              :class="{ active: leftToolTab === 'monitor' }"
+              :aria-selected="leftToolTab === 'monitor'"
+              @click="leftToolTab = 'monitor'"
+            >监控</button>
+            <button
+              type="button"
+              role="tab"
+              class="left-tool-tab"
+              :class="{ active: leftToolTab === 'files' }"
+              :aria-selected="leftToolTab === 'files'"
+              @click="leftToolTab = 'files'"
+            >本机文件</button>
+            <button
+              type="button"
+              role="tab"
+              class="left-tool-tab"
+              :class="{ active: leftToolTab === 'sessions' }"
+              :aria-selected="leftToolTab === 'sessions'"
+              @click="leftToolTab = 'sessions'"
+            >会话</button>
+          </div>
+
+          <div class="left-tool-body">
+            <ShellMonitorPanel
+              v-if="leftToolTab === 'monitor' && monitorSession"
+              :active-machine="monitorMachineName"
+              :active-connected="monitorConnected"
+              :connecting="monitorConnecting"
+              @toggle-connection="onToggleConnection"
+            />
+            <div v-else-if="leftToolTab === 'monitor'" class="left-tool-empty">连接远程机器后显示监控</div>
+
+            <LocalFileTreePanel v-else-if="leftToolTab === 'files'" />
+
+            <div v-else class="session-quick-list">
+              <div v-if="!(workspaceSessions || []).length" class="left-tool-empty">暂无会话</div>
+              <button
+                v-for="s in workspaceSessions"
+                :key="s.machineName"
+                type="button"
+                class="session-quick-item"
+                :class="{
+                  active: s.machineName === activeMachine,
+                  connected: !!s.connected,
+                  connecting: !!s.connecting,
+                }"
+                @click="$emit('update:activeMachine', s.machineName)"
+              >
+                <span class="sq-name">{{ s.tabLabel || s.machineName }}</span>
+                <span class="sq-status">{{ sessionStatusText(s) }}</span>
+              </button>
+            </div>
+          </div>
+        </div>
         <!-- 右边框：拖拽改宽 + 悬停显示收起 -->
         <div
           v-if="!leftCollapsed"
@@ -61,6 +111,7 @@
           ref="tabsRef"
           class="shell-tabs-area"
           :sessions="workspaceSessions"
+          :machines="machines"
           :active-machine="activeMachine"
           :search-query="searchQuery"
           :view-visible="active"
@@ -149,7 +200,9 @@
       v-model="commandPaletteVisible"
       :session-id="activeMachine"
       :config-name="activeConfigName"
+      :machines="machines"
       @insert="onCommandPaletteInsert"
+      @connect="(name) => $emit('connect', name)"
     />
 
     <ShellTransferPanel
@@ -326,9 +379,11 @@ export default {
       return n === 'local' || n.startsWith('local-')
     }
 
+    const leftToolTab = ref('monitor')
+
     const showMonitorPanel = computed(() => !!monitorSession.value)
 
-    const showLeftPanel = computed(() => !!monitorSession.value || !!localFileSession.value)
+    const showLeftPanel = computed(() => (props.workspaceSessions || []).length > 0)
 
     const localFileSession = computed(() => {
       const sessions = props.workspaceSessions || []
@@ -352,6 +407,26 @@ export default {
       if (tab.kind === 'local' || isLocalSessionName(tab.machineName)) return null
       return tab
     })
+
+    const sessionStatusText = (s) => {
+      if (s?.connecting) return '连接中'
+      if (s?.connected) return '已连接'
+      return '未连接'
+    }
+
+    watch(
+      () => [!!localFileSession.value, !!monitorSession.value],
+      ([isLocal, isRemote]) => {
+        if (isLocal && leftToolTab.value === 'monitor') leftToolTab.value = 'files'
+        if (isRemote && leftToolTab.value === 'files' && !localFileSession.value) {
+          // keep files tab available for remote too; no auto-switch away
+        }
+        if (isRemote && leftToolTab.value === 'monitor') return
+        if (isRemote && leftToolTab.value !== 'sessions' && leftToolTab.value !== 'files') {
+          leftToolTab.value = 'monitor'
+        }
+      },
+    )
 
     const monitorMachineName = computed(() => {
       const tab = monitorSession.value
@@ -830,6 +905,8 @@ export default {
       activeConnected,
       showMonitorPanel,
       showLeftPanel,
+      leftToolTab,
+      sessionStatusText,
       localFileSession,
       monitorSession,
       monitorMachineName,
@@ -992,6 +1069,106 @@ export default {
 .shell-left-panel :deep(.shell-monitor) {
   overflow: auto;
   height: 100%;
+}
+
+.left-tools {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.left-tool-tabs {
+  display: flex;
+  gap: 2px;
+  padding: 8px 8px 0;
+  flex-shrink: 0;
+}
+
+.left-tool-tab {
+  flex: 1;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--app-text-muted, #909399);
+  font-size: 12px;
+  line-height: 1;
+  padding: 8px 6px;
+  border-radius: 6px 6px 0 0;
+  cursor: pointer;
+}
+
+.left-tool-tab.active {
+  color: var(--app-accent-color, #409eff);
+  background: var(--app-card-bg, #fff);
+  border-color: var(--app-border, #e4e7ed);
+  border-bottom-color: var(--app-card-bg, #fff);
+}
+
+.left-tool-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  border-top: 1px solid var(--app-border, #e4e7ed);
+}
+
+.left-tool-empty {
+  padding: 24px 16px;
+  text-align: center;
+  color: var(--app-text-muted, #909399);
+  font-size: 13px;
+}
+
+.session-quick-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 8px;
+}
+
+.session-quick-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--app-text, #303133);
+  cursor: pointer;
+  text-align: left;
+}
+
+.session-quick-item:hover {
+  background: color-mix(in srgb, var(--app-accent-color, #409eff) 8%, transparent);
+}
+
+.session-quick-item.active {
+  border-color: color-mix(in srgb, var(--app-accent-color, #409eff) 35%, transparent);
+  background: color-mix(in srgb, var(--app-accent-color, #409eff) 12%, transparent);
+}
+
+.sq-name {
+  font-size: 13px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sq-status {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--app-text-muted, #909399);
+}
+
+.session-quick-item.connected .sq-status {
+  color: var(--el-color-success, #67c23a);
+}
+
+.session-quick-item.connecting .sq-status {
+  color: var(--app-accent-color, #409eff);
 }
 
 .shell-left-panel.collapsed {
