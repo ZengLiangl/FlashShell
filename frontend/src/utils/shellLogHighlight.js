@@ -1,7 +1,8 @@
 /**
  * Shell 日志高亮：对完整行注入 ANSI（风格接近 WindTerm）。
  * - 按完整行着色，不区分命令；tail/grep/less 等只要输出整行即可命中
- * - 含光标定位/反显等交互序列的片段原样透传，避免破坏分页器重绘
+ * - 保留行内已有 SGR（grep --color、less ?/ 反显等），再叠加日志级别/关键字色
+ * - 行首/行尾的光标定位、清行等 chrome 原样保留；正文中间夹杂布局序列时整行透传
  * - 支持内置级别/SQL 等规则与自定义关键字
  */
 
@@ -220,14 +221,19 @@ export function collectLogHighlightPredefineColors() {
 
 const RE_ANSI = /\x1b(?:\[[0-9;?]*[ -/]*[@-~]|\][^\x07\x1b]*(?:\x07|\x1b\\))/g
 
-/** less/vim 等全屏或行内重绘用的控制序列（非单纯配色 SGR）
- * 注意：不含 CSI K（Erase in Line）。GNU grep --color 会夹带 \x1b[K，
- * 若把它当成交互序列会导致整行跳过关键字高亮。
+/**
+ * 布局/重绘控制（不含 SGR 配色与反显 7m/27m，也不含 CSI K）。
+ * - grep --color 夹带 \x1b[K，不能当布局序列，否则会跳过关键字高亮
+ * - less ?/ 搜索用 \x1b[7m 反显，应保留为源着色而非整行跳过
  */
-const RE_INTERACTIVE_TERMINAL = /\x1b(?:\[\??(?:1049|1047|47)[hl]|\[[0-9;]*[HJsuABCDEFG]|\[7m|\[27m|\][^\x07\x1b]*(?:\x07|\x1b\\)|[78])/g
+const RE_LAYOUT_TERMINAL =
+  /\x1b(?:\[\??(?:1049|1047|47)[hl]|\[[0-9;]*[HJsuABCDEFG]|\][^\x07\x1b]*(?:\x07|\x1b\\)|[78])/g
 
 const RE_ALT_SCREEN_ENTER = /\x1b\[\??(?:1049|1047|47)h|\x1b\[1049h/g
 const RE_ALT_SCREEN_LEAVE = /\x1b\[\??(?:1049|1047|47)l|\x1b\[1049l/g
+
+/** SGR 关闭类参数：不开启新的「源着色」区间 */
+const SGR_OFF_CODES = new Set([0, 22, 23, 24, 25, 27, 28, 29, 39, 49, 59])
 
 const RE_TIMESTAMP =
   /\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d{1,9})?|\b\d{2}:\d{2}:\d{2}(?:[.,]\d{1,3})?\b/g
@@ -356,10 +362,147 @@ export function stripTerminalControls(text) {
     .replace(/[\x00-\x08\x0b\x0c\x0e-\x1a\x7f]/g, '')
 }
 
-/** 是否包含分页器/全屏程序的交互控制序列（搜索反显、清行、光标定位等） */
+function isStrippableC0(code) {
+  return (
+    (code >= 0 && code <= 8) ||
+    code === 0x0b ||
+    code === 0x0c ||
+    (code >= 0x0e && code <= 0x1a) ||
+    code === 0x7f
+  )
+}
+
+/** SGR 是否为复位（无色） */
+function isSgrReset(params) {
+  if (params == null || params === '') return true
+  const parts = String(params).split(';').filter((p) => p !== '')
+  if (!parts.length) return true
+  return parts.every((p) => p === '0')
+}
+
+/** SGR 是否开启可保留的源着色（颜色/粗体/反显等；关闭码不算） */
+function sgrOpensHighlight(params) {
+  if (isSgrReset(params)) return false
+  const parts = String(params)
+    .split(';')
+    .filter((p) => p !== '')
+    .map((p) => Number(p))
+  if (!parts.length || parts.some((n) => Number.isNaN(n))) return false
+  return !parts.every((p) => SGR_OFF_CODES.has(p))
+}
+
+function consumeAnsiAt(s, i) {
+  const reAnsi = new RegExp(RE_ANSI.source, 'g')
+  reAnsi.lastIndex = i
+  const m = reAnsi.exec(s)
+  if (m && m.index === i) return i + m[0].length
+  return i + 1
+}
+
+/**
+ * 拆出行首/行尾 chrome（CSI/OSC/C0）与中间正文。
+ * less 重绘常见：`\\x1b[row;colH\\x1b[K` + 正文(+反显) + 可选尾部序列
+ */
+export function splitLineChrome(line) {
+  const s = String(line || '')
+  const tokens = []
+  let i = 0
+  while (i < s.length) {
+    if (s[i] === '\x1b') {
+      const next = consumeAnsiAt(s, i)
+      tokens.push({ type: 'ansi', value: s.slice(i, next) })
+      i = next
+      continue
+    }
+    const code = s.charCodeAt(i)
+    if (isStrippableC0(code)) {
+      tokens.push({ type: 'c0', value: s[i] })
+      i += 1
+      continue
+    }
+    let j = i + 1
+    while (j < s.length && s[j] !== '\x1b' && !isStrippableC0(s.charCodeAt(j))) j += 1
+    tokens.push({ type: 'text', value: s.slice(i, j) })
+    i = j
+  }
+
+  let a = 0
+  while (a < tokens.length && tokens[a].type !== 'text') a += 1
+  let b = tokens.length
+  while (b > a && tokens[b - 1].type !== 'text') b -= 1
+
+  const join = (from, to) => tokens.slice(from, to).map((t) => t.value).join('')
+  return {
+    prefix: join(0, a),
+    middle: join(a, b),
+    suffix: join(b, tokens.length),
+  }
+}
+
+/**
+ * 剥离控制符的同时提取已有 SGR 着色区间（相对纯文本下标）。
+ * 用于保留 grep --color / less 反显 / 上游已着色片段，再叠加本机日志规则。
+ * @returns {{ plain: string, spans: Array<{ start: number, end: number, ansiColor: string }> }}
+ */
+export function extractPlainAndColorSpans(text) {
+  const s = String(text || '')
+  let plain = ''
+  const spans = []
+  let i = 0
+  let openAnsi = null
+  let spanStart = -1
+
+  const closeSpan = () => {
+    if (openAnsi && spanStart >= 0 && plain.length > spanStart) {
+      spans.push({ start: spanStart, end: plain.length, ansiColor: openAnsi })
+    }
+    openAnsi = null
+    spanStart = -1
+  }
+
+  const reAnsi = new RegExp(RE_ANSI.source, 'g')
+  while (i < s.length) {
+    if (s[i] === '\x1b') {
+      reAnsi.lastIndex = i
+      const m = reAnsi.exec(s)
+      if (!m || m.index !== i) {
+        i += 1
+        continue
+      }
+      const full = m[0]
+      i += full.length
+      // 仅 SGR(m) 影响着色；CSI K / OSC 等忽略
+      if (!full.startsWith('\x1b[') || !full.endsWith('m')) continue
+      const params = full.slice(2, -1)
+      closeSpan()
+      if (sgrOpensHighlight(params)) {
+        openAnsi = `\x1b[${params}m`
+        spanStart = plain.length
+      }
+      continue
+    }
+
+    const code = s.charCodeAt(i)
+    if (isStrippableC0(code)) {
+      i += 1
+      continue
+    }
+    plain += s[i]
+    i += 1
+  }
+  closeSpan()
+  return { plain, spans }
+}
+
+/** 是否包含光标定位/清屏/备用屏等布局序列（不含反显 SGR、不含 CSI K） */
 export function hasInteractiveTerminalSequences(text) {
-  RE_INTERACTIVE_TERMINAL.lastIndex = 0
-  return RE_INTERACTIVE_TERMINAL.test(String(text || ''))
+  RE_LAYOUT_TERMINAL.lastIndex = 0
+  return RE_LAYOUT_TERMINAL.test(String(text || ''))
+}
+
+/** @see hasInteractiveTerminalSequences */
+export function hasLayoutTerminalSequences(text) {
+  return hasInteractiveTerminalSequences(text)
 }
 
 /** 根据 alternate screen 进出序列更新 TUI 嵌套深度 */
@@ -374,9 +517,9 @@ function escapeRegExp(s) {
   return String(s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
-function pushMatch(matches, start, end, ansiColor, hexColor) {
+function pushMatch(matches, start, end, ansiColor, hexColor, priority = 1) {
   if (!ansiColor || start < 0 || end <= start) return
-  matches.push({ start, end, ansiColor, hexColor: hexColor || null })
+  matches.push({ start, end, ansiColor, hexColor: hexColor || null, priority })
 }
 
 function levelRuleKey(level) {
@@ -469,16 +612,37 @@ function collectMatches(line, config) {
   return matches
 }
 
+/**
+ * 按 priority 优先占位（越小越高）；低优先级区间被高优先级裁切后仍保留两侧空隙。
+ * 这样 grep 匹配色与 INFO/时间戳等可同时出现在同一行。
+ */
 function pickMatches(matches) {
-  matches.sort((a, b) => a.start - b.start || b.end - a.end)
-  const picked = []
-  let lastEnd = 0
-  for (const m of matches) {
-    if (m.start < lastEnd) continue
-    picked.push(m)
-    lastEnd = m.end
+  const sorted = [...matches].sort(
+    (a, b) =>
+      (a.priority ?? 1) - (b.priority ?? 1) || a.start - b.start || b.end - a.end,
+  )
+  const placed = []
+  for (const m of sorted) {
+    let fragments = [{ start: m.start, end: m.end, ansiColor: m.ansiColor, hexColor: m.hexColor }]
+    for (const p of placed) {
+      const next = []
+      for (const f of fragments) {
+        if (f.end <= p.start || f.start >= p.end) {
+          next.push(f)
+          continue
+        }
+        if (f.start < p.start) next.push({ ...f, end: p.start })
+        if (f.end > p.end) next.push({ ...f, start: p.end })
+      }
+      fragments = next
+      if (!fragments.length) break
+    }
+    for (const f of fragments) {
+      if (f.end > f.start) placed.push(f)
+    }
   }
-  return picked
+  placed.sort((a, b) => a.start - b.start)
+  return placed
 }
 
 function applyMatches(line, matches) {
@@ -513,22 +677,48 @@ export function logHighlightPreviewSegments(sample, colors, rules, keywords) {
   return segs
 }
 
+/** 对正文着色：保留已有 SGR（grep/less 反显），再叠加日志规则 */
+function highlightLogLineContent(line, config) {
+  const { plain: extracted, spans } = extractPlainAndColorSpans(line)
+  const plain = extracted.replace(/\r+$/, '')
+  if (!plain) return line
+
+  const plainLen = plain.length
+  const sourceMatches = []
+  for (const s of spans) {
+    const start = s.start
+    const end = Math.min(s.end, plainLen)
+    if (start >= plainLen || end <= start) continue
+    pushMatch(sourceMatches, start, end, s.ansiColor, null, 0)
+  }
+
+  const logMatches = collectMatches(plain, config)
+  // 仅有上游着色、无日志规则命中时，原样返回以保留 grep 的 EL(\x1b[K) 等细节
+  if (!logMatches.length) return line
+  if (!sourceMatches.length) return applyMatches(plain, logMatches)
+  return applyMatches(plain, [...sourceMatches, ...logMatches])
+}
+
 /** 高亮单行（不含换行符）。
- * grep --color 的 SGR/EL 会先剥离再着色；仅光标定位/反显/备用屏等重绘序列才原样透传。
+ * 保留行首/行尾布局 chrome；正文保留 grep/less 反显等 SGR，并叠加日志规则。
+ * 仅当「正文中间」夹杂光标定位等布局序列时整行透传。
  */
 export function highlightLogLine(line, config) {
   if (!line) return line
-  if (hasInteractiveTerminalSequences(line)) return line
-  const plain = stripTerminalControls(line).replace(/\r+$/, '')
-  if (!plain) return line
-  const matches = collectMatches(plain, config)
-  if (!matches.length) return line
-  return applyMatches(plain, matches)
+
+  const { prefix, middle, suffix } = splitLineChrome(line)
+  if (!middle) return line
+  // 正文中夹杂 CUP/ED 等无法安全重写
+  if (hasLayoutTerminalSequences(middle)) return line
+
+  const highlighted = highlightLogLineContent(middle, config)
+  if (highlighted === middle && !prefix && !suffix) return line
+  return prefix + highlighted + suffix
 }
 
 /**
  * 高亮数据块中的完整行；尾部不完整行原样返回。
- * 不按命令区分；整块含交互序列时仍按行处理，仅跳过带交互序列的行。
+ * 不按命令区分；按行处理。行内 \\r 重绘（非 \\r\\n）原样透传，避免 less 状态行错位。
  * @param {string} text
  * @param {object} [config] colors + rules + keywords
  */
@@ -549,7 +739,7 @@ export function highlightShellChunk(text, config) {
       start = i + 1
       continue
     }
-    // less 搜索等行内重绘：不可剥离/重着色，否则字符错位
+    // less 状态行等：单独 \\r 回车重绘，不可按「完整行」剥离/重着色
     if (ch === '\r' && text[i + 1] !== '\n') {
       result += text.slice(start, i + 1)
       start = i + 1
