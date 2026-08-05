@@ -72,12 +72,39 @@ function writeBufferItem(writer, item) {
   return Promise.resolve(result)
 }
 
-/** 回放缓冲；若 writer 返回 Promise，则等写入完成（便于抑制 xterm 协议应答回灌） */
+function concatUint8(chunks) {
+  let total = 0
+  for (const c of chunks) total += c.byteLength
+  const out = new Uint8Array(total)
+  let offset = 0
+  for (const c of chunks) {
+    out.set(c, offset)
+    offset += c.byteLength
+  }
+  return out
+}
+
+/** 回放缓冲；合并连续 data 块以减少中间滚动闪烁 */
 async function replayBufferItems(buf, writer, fromIndex = 0) {
   const start = Math.max(0, fromIndex)
-  for (let i = start; i < buf.items.length; i++) {
-    await writeBufferItem(writer, buf.items[i])
+  /** @type {Uint8Array[]} */
+  let dataBatch = []
+  const flushData = async () => {
+    if (!dataBatch.length) return
+    const merged = dataBatch.length === 1 ? dataBatch[0] : concatUint8(dataBatch)
+    dataBatch = []
+    await Promise.resolve(writer.writeData(merged))
   }
+  for (let i = start; i < buf.items.length; i++) {
+    const item = buf.items[i]
+    if (item.type === 'data' && item.content instanceof Uint8Array) {
+      dataBatch.push(item.content)
+      continue
+    }
+    await flushData()
+    await writeBufferItem(writer, item)
+  }
+  await flushData()
   buf.replayedCount = buf.items.length
 }
 

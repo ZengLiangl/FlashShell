@@ -858,6 +858,12 @@ export default {
               return
             }
             releaseReplaySuppress()
+            // 回放结束后直接落底，避免逐块写入时的滚动过程
+            try {
+              terminal.scrollToBottom?.()
+            } catch {
+              // ignore
+            }
           },
         },
       )
@@ -924,9 +930,12 @@ export default {
       setShellOutputSessionActive(props.machineName, val)
       if (val && props.viewVisible) {
         await wakeTerminal()
-      } else if (!val) {
-        destroyTerminal()
+        return
       }
+      // 切换 Tab 时保留 xterm，避免销毁后整缓冲回放造成「从第一行滚到末行」
+      clearFitTimers()
+      clearCwdSyncTimer()
+      notifyShellTerminalBlur()
     })
 
     watch(() => props.viewVisible, async (visible) => {
