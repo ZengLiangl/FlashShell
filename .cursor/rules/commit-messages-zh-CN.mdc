@@ -1,17 +1,18 @@
 ---
-description: Git 提交说明使用简体中文
+description: Git 提交说明使用简体中文，且不含 Co-authored-by
 alwaysApply: true
 ---
 
 # Git 提交说明（中文）
 
-创建 git commit 时，提交说明必须使用**简体中文**。
+创建 git commit 时，提交说明必须使用**简体中文**，且**不得**带上 AI/Cursor 的 Co-authored-by。
 
 ## 要求
 
 - 标题（subject）用中文写清楚「为什么」改，而不是只堆文件名或英文动词。
 - 需要补充说明时，正文也用中文。
 - 沿用仓库既有风格（如 `fix(...)`、`feat(...)` 前缀可保留），但描述部分必须是中文。
+- 提交完成后用 `git log -1 --format=full` 核对：正文里不能出现 `Co-authored-by`。
 
 ## 示例
 
@@ -27,3 +28,5 @@ feat(data-grid): 为无唯一键结果集增加 COUNT 二次定位提交
 
 - 不要只用英文写提交标题或正文（除非用户明确要求英文）。
 - 不要在未获用户要求时擅自改成英文 commit message。
+- **禁止**在提交说明中加入任何 `Co-authored-by:` trailer（包括 `Co-authored-by: Cursor <cursoragent@cursor.com>`）。
+- 若工具/环境自动注入了该 trailer：在尚未 push 且该提交由本次会话创建时，必须立刻去掉后再结束（可用无 hook 的 `git commit-tree` + `git update-ref` 重写说明，或用户明确允许时再 `--amend`）；**不要**把带 Co-authored-by 的提交当作完成态留给用户。
