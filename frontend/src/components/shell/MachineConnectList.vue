@@ -7,6 +7,7 @@
       v-for="group in customGroups"
       :key="group.name"
       class="ml-group"
+      :class="{ 'is-open': isGroupExpanded(group.name) }"
     >
       <button
         type="button"
@@ -14,11 +15,17 @@
         :aria-expanded="isGroupExpanded(group.name)"
         @click="toggleGroup(group.name)"
       >
+        <span class="ml-group-icon" aria-hidden="true">
+          <el-icon :size="variant === 'cards' ? 16 : 14"><Folder /></el-icon>
+        </span>
+        <span class="ml-group-meta">
+          <span class="ml-group-name">{{ group.name }}</span>
+          <span class="ml-group-sub">{{ group.machines.length }} 台机器</span>
+        </span>
+        <span class="ml-group-count">{{ group.machines.length }}</span>
         <el-icon class="ml-group-caret" :class="{ open: isGroupExpanded(group.name) }">
           <ArrowRight />
         </el-icon>
-        <span class="ml-group-name">{{ group.name }}</span>
-        <span class="ml-group-count">{{ group.machines.length }}</span>
       </button>
       <ul
         v-show="isGroupExpanded(group.name)"
@@ -127,7 +134,7 @@
 
 <script>
 import { computed, ref, watch } from 'vue'
-import { ArrowRight, Setting, Monitor, StarFilled } from '@element-plus/icons-vue'
+import { ArrowRight, Setting, Monitor, StarFilled, Folder } from '@element-plus/icons-vue'
 import {
   splitMachineTree,
   formatMachineAddr,
@@ -140,7 +147,7 @@ import MachineContextMenu from './MachineContextMenu.vue'
 
 export default {
   name: 'MachineConnectList',
-  components: { ArrowRight, Setting, Monitor, StarFilled, MachineContextMenu },
+  components: { ArrowRight, Setting, Monitor, StarFilled, Folder, MachineContextMenu },
   props: {
     machines: { type: Array, default: () => [] },
     sessions: { type: Array, default: () => [] },
@@ -155,13 +162,21 @@ export default {
     layout: { type: String, default: 'list' },
     /** default：紧凑列表；cards：与首页任务卡片同尺寸的卡片行 */
     variant: { type: String, default: 'default' },
+    /** 不按分组名折叠，按传入顺序直接展示机器（如首页最近连接） */
+    flat: { type: Boolean, default: false },
   },
   emits: ['connect', 'edit-machine', 'copy-machine', 'delete-machine', 'toggle-pin'],
   setup(props, { emit }) {
     const expandedGroups = ref([])
     const { ctx, hideContextMenu, onMachineContextMenu, isContextTarget } = useMachineContextMenu()
 
-    const machineTree = computed(() => splitMachineTree(props.machines || []))
+    const machineTree = computed(() => {
+      const list = props.machines || []
+      if (props.flat) {
+        return { customGroups: [], defaultMachines: list }
+      }
+      return splitMachineTree(list)
+    })
     const customGroups = computed(() => machineTree.value.customGroups)
     const defaultMachines = computed(() => machineTree.value.defaultMachines)
     const hasTree = computed(

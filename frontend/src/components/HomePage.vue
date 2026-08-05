@@ -317,6 +317,7 @@
                 :filter-keyword="machineKeyword"
                 layout="grid"
                 variant="cards"
+                flat
                 show-context-menu
                 empty-text="无匹配机器"
                 @connect="onConnectMachine"
