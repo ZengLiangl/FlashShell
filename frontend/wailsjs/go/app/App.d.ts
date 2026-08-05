@@ -138,8 +138,6 @@ export function GetShellStatus():Promise<define.ShellStatus>;
 
 export function GetShellSystemInfo(arg1:string):Promise<define.ShellSystemInfo>;
 
-export function GetShellTransferMaxConcurrent():Promise<number>;
-
 export function GetShellTunnelStatus(arg1:string):Promise<Array<define.SSHTunnelStatus>>;
 
 export function GetShortcutSettings():Promise<data.ShortcutSettings>;
@@ -295,8 +293,6 @@ export function SetMachinePinned(arg1:string,arg2:boolean):Promise<void>;
 export function SetMachineSensitiveData(arg1:string,arg2:define.SensitiveData):Promise<void>;
 
 export function SetMachineShellMonitorOpen(arg1:string,arg2:boolean):Promise<void>;
-
-export function SetShellTransferMaxConcurrent(arg1:number):Promise<number>;
 
 export function ShellAsciiInputEnter():Promise<void>;
 

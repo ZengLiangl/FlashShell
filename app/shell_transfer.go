@@ -23,19 +23,17 @@ import (
 const shellTransferEvent = "shell:transfer"
 
 type shellTransferStore struct {
-	mu             sync.Mutex
-	items          map[string]*define.SftpTransferRecord
-	cancels        map[string]context.CancelFunc
-	maxConcurrent  int
-	activeRunning  int
+	mu            sync.Mutex
+	items         map[string]*define.SftpTransferRecord
+	cancels       map[string]context.CancelFunc
+	activeRunning int
 }
 
 func (a *App) ensureTransferStore() *shellTransferStore {
 	if a.transfers == nil {
 		a.transfers = &shellTransferStore{
-			items:         make(map[string]*define.SftpTransferRecord),
-			cancels:       make(map[string]context.CancelFunc),
-			maxConcurrent: define.DefaultTransferMaxConcurrent,
+			items:   make(map[string]*define.SftpTransferRecord),
+			cancels: make(map[string]context.CancelFunc),
 		}
 	}
 	return a.transfers
@@ -334,15 +332,12 @@ func (a *App) launchTransfer(seed *define.SftpTransferRecord) {
 	a.pumpTransferQueue()
 }
 
-// pumpTransferQueue 按优先级启动排队中的传输，遵守并发上限
+// pumpTransferQueue 按优先级启动排队中的传输，遵守固定并发上限
 func (a *App) pumpTransferQueue() {
 	store := a.ensureTransferStore()
 	for {
 		store.mu.Lock()
-		max := store.maxConcurrent
-		if max <= 0 {
-			max = define.DefaultTransferMaxConcurrent
-		}
+		max := define.TransferMaxConcurrent
 		if store.activeRunning >= max {
 			store.mu.Unlock()
 			return
@@ -482,33 +477,6 @@ func (a *App) ResumeAllShellTransfers() int {
 		}
 	}
 	return n
-}
-
-// SetShellTransferMaxConcurrent 设置全局传输并发上限（1–8）
-func (a *App) SetShellTransferMaxConcurrent(n int) int {
-	if n < 1 {
-		n = 1
-	}
-	if n > 8 {
-		n = 8
-	}
-	store := a.ensureTransferStore()
-	store.mu.Lock()
-	store.maxConcurrent = n
-	store.mu.Unlock()
-	a.pumpTransferQueue()
-	return n
-}
-
-// GetShellTransferMaxConcurrent 获取全局传输并发上限
-func (a *App) GetShellTransferMaxConcurrent() int {
-	store := a.ensureTransferStore()
-	store.mu.Lock()
-	defer store.mu.Unlock()
-	if store.maxConcurrent <= 0 {
-		return define.DefaultTransferMaxConcurrent
-	}
-	return store.maxConcurrent
 }
 
 // StartShellDownload 下载远端路径到 Downloads/fddownload（异步）

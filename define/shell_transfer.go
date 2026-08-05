@@ -26,6 +26,6 @@ type SftpTransferRecord struct {
 	FinishedAt  int64   `json:"finishedAt,omitempty"`
 }
 
-// DefaultTransferMaxConcurrent 全局传输默认并发上限
-const DefaultTransferMaxConcurrent = 2
+// TransferMaxConcurrent 全局传输并发上限（固定最大值，不提供 UI 调节）
+const TransferMaxConcurrent = 8
 

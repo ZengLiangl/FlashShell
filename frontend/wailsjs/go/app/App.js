@@ -266,10 +266,6 @@ export function GetShellSystemInfo(arg1) {
   return window['go']['app']['App']['GetShellSystemInfo'](arg1);
 }
 
-export function GetShellTransferMaxConcurrent() {
-  return window['go']['app']['App']['GetShellTransferMaxConcurrent']();
-}
-
 export function GetShellTunnelStatus(arg1) {
   return window['go']['app']['App']['GetShellTunnelStatus'](arg1);
 }
@@ -580,10 +576,6 @@ export function SetMachineSensitiveData(arg1, arg2) {
 
 export function SetMachineShellMonitorOpen(arg1, arg2) {
   return window['go']['app']['App']['SetMachineShellMonitorOpen'](arg1, arg2);
-}
-
-export function SetShellTransferMaxConcurrent(arg1) {
-  return window['go']['app']['App']['SetShellTransferMaxConcurrent'](arg1);
 }
 
 export function ShellAsciiInputEnter() {

@@ -28,9 +28,6 @@
           <el-icon><Delete /></el-icon>
         </el-button>
       </el-tooltip>
-      <el-select v-model="maxConcurrent" size="small" class="concurrency-select" @change="onConcurrencyChange">
-        <el-option v-for="n in 8" :key="n" :label="`并发 ${n}`" :value="n" />
-      </el-select>
     </div>
     <div v-if="records.length === 0" class="transfer-empty">暂无传输记录</div>
     <ul v-else class="transfer-list">
@@ -119,8 +116,6 @@ export default {
       }
     })
 
-    const maxConcurrent = ref(2)
-
     const activeCount = computed(() =>
       records.value.filter((r) => r.status === 'running' || r.status === 'pending' || r.status === 'queued').length,
     )
@@ -157,9 +152,6 @@ export default {
       try {
         const list = await App.ListShellTransfers()
         records.value = list || []
-        try {
-          maxConcurrent.value = await callGo('GetShellTransferMaxConcurrent') || 2
-        } catch { /* ignore */ }
       } catch {
         records.value = []
       }
@@ -214,14 +206,6 @@ export default {
         await callGo('PrioritizeShellTransfer', item.id)
       } catch (e) {
         ElMessage.error('优先失败: ' + e)
-      }
-    }
-
-    const onConcurrencyChange = async (n) => {
-      try {
-        maxConcurrent.value = await callGo('SetShellTransferMaxConcurrent', n)
-      } catch (e) {
-        ElMessage.error('设置并发失败: ' + e)
       }
     }
 
@@ -305,13 +289,11 @@ export default {
     return {
       visibleProxy,
       records,
-      maxConcurrent,
       openDownloadDir,
       clearFinished,
       pauseAll,
       resumeAll,
       prioritizeItem,
-      onConcurrencyChange,
       pauseItem,
       resumeItem,
       removeItem,
@@ -330,11 +312,6 @@ export default {
   margin-bottom: 10px;
   flex-wrap: wrap;
   gap: 4px;
-}
-
-.concurrency-select {
-  width: 96px;
-  margin-left: 4px;
 }
 
 .status.queued {
