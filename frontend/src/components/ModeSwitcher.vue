@@ -322,15 +322,12 @@ export default {
 }
 
 .mode-switcher-host.is-compact.is-expanded {
-  min-width: 336px;
   z-index: 50;
 }
 
 .mode-switcher-host.is-compact.is-float-end.is-expanded {
-  position: absolute;
-  right: 0;
-  top: 50%;
-  transform: translateY(-50%);
+  /* 保持占位，面板向下展开，避免横向盖住旁侧按钮 */
+  position: relative;
 }
 
 .mode-trigger {
@@ -366,9 +363,12 @@ export default {
 }
 
 .mode-switcher-host.is-compact.is-expanded .mode-trigger {
-  opacity: 0;
-  pointer-events: none;
-  position: absolute;
+  opacity: 1;
+  pointer-events: auto;
+  position: relative;
+  color: var(--app-accent-color);
+  background: var(--app-accent-bg);
+  border-color: color-mix(in srgb, var(--app-accent-color) 35%, var(--app-border));
 }
 
 .mode-trigger-icon {
@@ -395,8 +395,10 @@ export default {
 }
 
 .mode-switcher.is-floating {
-  position: relative;
-  z-index: 1;
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
   width: max-content;
   min-width: 336px;
   background: var(--app-panel-bg);
@@ -408,10 +410,20 @@ export default {
   animation: mode-float-in 0.14s ease-out;
 }
 
+/* 触发器与下拉面板之间的悬停桥，避免移入时提前收起 */
+.mode-switcher.is-floating::before {
+  content: '';
+  position: absolute;
+  top: -10px;
+  left: 0;
+  right: 0;
+  height: 10px;
+}
+
 @keyframes mode-float-in {
   from {
     opacity: 0;
-    transform: translateY(-2px) scale(0.97);
+    transform: translateY(-4px) scale(0.98);
   }
   to {
     opacity: 1;

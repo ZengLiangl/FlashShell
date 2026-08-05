@@ -1707,7 +1707,7 @@ export default {
 
 /* Shell 顶栏悬浮不占位：会话 Tab 与监控栏齐顶，右侧给设置按钮留空 */
 .app-container:has(.app-menu-bar.is-shell-top) .shell-view-host :deep(.tabs-bar) {
-  padding-right: 140px;
+  padding-right: 168px;
 }
 
 .projectlist-fullscreen {

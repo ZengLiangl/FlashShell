@@ -25,23 +25,24 @@
     </div>
 
     <div class="menu-side menu-right">
-      <div v-if="showCompactSwitcher" class="mode-compact-slot">
-        <ModeSwitcher
-          compact
-          float-align="end"
-          :model-value="activeView"
-          :has-projects="hasProjects"
-          :has-machines="hasMachines"
-          :has-task="hasTask"
-          :task-running="taskRunning"
-          :connected-count="connectedCount"
-          :projects="projects"
-          :selected-project-name="selectedProjectName"
-          @change="$emit('change-view', $event)"
-          @select-project="$emit('select-project', $event)"
-        />
-      </div>
       <div class="menu-icons">
+        <div v-if="showCompactSwitcher" class="mode-compact-slot">
+          <ModeSwitcher
+            compact
+            float-align="end"
+            :model-value="activeView"
+            :has-projects="hasProjects"
+            :has-machines="hasMachines"
+            :has-task="hasTask"
+            :task-running="taskRunning"
+            :connected-count="connectedCount"
+            :projects="projects"
+            :selected-project-name="selectedProjectName"
+            @change="$emit('change-view', $event)"
+            @select-project="$emit('select-project', $event)"
+          />
+        </div>
+
         <button
           type="button"
           class="icon-btn"
@@ -226,6 +227,29 @@ export default {
   display: flex;
   align-items: center;
   flex-shrink: 0;
+}
+
+/* 并入设置组后，触发器尺寸与旁侧 icon-btn 对齐 */
+.menu-icons .mode-compact-slot :deep(.mode-trigger) {
+  width: 30px;
+  height: 28px;
+  min-width: 30px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  box-shadow: none;
+  opacity: 1;
+  color: var(--app-text-secondary, var(--app-text));
+}
+
+.menu-icons .mode-compact-slot :deep(.mode-trigger:hover),
+.menu-icons .mode-compact-slot :deep(.mode-switcher-host.is-expanded .mode-trigger) {
+  background: var(--app-accent-bg);
+  color: var(--app-accent-color);
+}
+
+.menu-icons .mode-compact-slot :deep(.mode-trigger-icon) {
+  font-size: 16px;
 }
 
 .menu-icons {
