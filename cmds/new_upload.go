@@ -6,11 +6,11 @@ import (
 	"bufio"
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -80,24 +80,29 @@ func uploadFile(rm *define.RemoteMachine, localPath, remotePath, targetFileName 
 	}
 	defer dstFile.Close()
 
-	// 创建进度写入器
-	progressWriter := &progressWriter{
-		wrapped:    dstFile,
-		totalSize:  fileInfo.Size(),
-		startTime:  time.Now(),
-		fileName:   targetFileName,
-		progressID: fmt.Sprintf("upload_%d_%s", time.Now().UnixNano(), targetFileName),
-		outputChan: outputChan,
-		transferID: transferID,
-		localPath:  localPath,
-		remotePath: remotePath,
-	}
+	totalSize := fileInfo.Size()
+	startTime := time.Now()
+	progressID := fmt.Sprintf("upload_%d_%s", time.Now().UnixNano(), targetFileName)
+	var written atomic.Int64
+	stopProgress := make(chan struct{})
+	go runUploadProgressDisplay(outputChan, progressID, targetFileName, totalSize, startTime, stopProgress, written.Load)
 
-	// 启动进度显示goroutine
-	go progressWriter.startProgressDisplay()
+	reader := utils.NewCountingReader(srcFile, totalSize, 0, func(transferred, total int64, _ float64) {
+		written.Store(transferred)
+		if total <= 0 {
+			return
+		}
+		reportTransfer(&define.SftpTransferRecord{
+			ID: transferID, Direction: "upload", Name: targetFileName,
+			LocalPath: localPath, RemotePath: remotePath, Status: "running",
+			Total: total, Transferred: transferred,
+			Percent:   float64(transferred) / float64(total) * 100,
+			UpdatedAt: time.Now().Unix(),
+		})
+	})
 
-	// 复制文件并显示进度
-	_, err = utils.CopyBuffer(progressWriter, srcFile)
+	_, err = utils.CopySFTPUpload(dstFile, reader)
+	close(stopProgress)
 	if err != nil {
 		reportTransfer(&define.SftpTransferRecord{
 			ID: transferID, Direction: "upload", Name: targetFileName, Status: "error",
@@ -108,7 +113,7 @@ func uploadFile(rm *define.RemoteMachine, localPath, remotePath, targetFileName 
 	reportTransfer(&define.SftpTransferRecord{
 		ID: transferID, Direction: "upload", Name: targetFileName,
 		LocalPath: localPath, RemotePath: remotePath, Status: "done",
-		Total: fileInfo.Size(), Transferred: fileInfo.Size(), Percent: 100,
+		Total: totalSize, Transferred: totalSize, Percent: 100,
 		FinishedAt: time.Now().Unix(),
 	})
 	return nil
@@ -302,67 +307,39 @@ func bytesToHumanReadable(bytes int64) string {
 	return fmt.Sprintf("%.2f PB", float64(bytes)/float64(unit))
 }
 
-// progressWriter 结构体用于追踪写入进度和速度
-type progressWriter struct {
-	wrapped    io.WriteCloser // 原始写入目标
-	totalSize  int64          // 文件总大小
-	written    int64          // 已写入字节数
-	startTime  time.Time      // 开始时间
-	fileName   string         // 文件名
-	progressID string         // 进度唯一标识
-	outputChan chan<- string  // 输出通道
-	transferID string
-	localPath  string
-	remotePath string
-}
-
-// Write 实现io.Writer接口，记录写入的数据
-func (pw *progressWriter) Write(p []byte) (n int, err error) {
-	n, err = pw.wrapped.Write(p)
-	if err != nil {
-		return n, err
-	}
-	pw.written += int64(n)
-	if pw.transferID != "" && pw.totalSize > 0 {
-		reportTransfer(&define.SftpTransferRecord{
-			ID: pw.transferID, Direction: "upload", Name: pw.fileName,
-			LocalPath: pw.localPath, RemotePath: pw.remotePath, Status: "running",
-			Total: pw.totalSize, Transferred: pw.written,
-			Percent:   float64(pw.written) / float64(pw.totalSize) * 100,
-			UpdatedAt: time.Now().Unix(),
-		})
-	}
-	return n, err
-}
-
-// startProgressDisplay 启动进度显示
-func (pw *progressWriter) startProgressDisplay() {
-	ticker := time.NewTicker(500 * time.Millisecond) // 每500ms更新一次
+// runUploadProgressDisplay 每 500ms 刷新任务输出区进度行（不占用 SFTP 写热路径）。
+func runUploadProgressDisplay(
+	outputChan chan<- string,
+	progressID, fileName string,
+	totalSize int64,
+	startTime time.Time,
+	stop <-chan struct{},
+	written func() int64,
+) {
+	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
-	for range ticker.C {
-		elapsed := time.Since(pw.startTime).Seconds()
-		if elapsed > 0 && pw.written < pw.totalSize {
-			speed := float64(pw.written) / elapsed / 1024 // KB/s
-			progress := float64(pw.written) / float64(pw.totalSize) * 100
-			// 构建当前进度行
-			currentProgressLine := fmt.Sprintf("[%s] 进度: %.2f%%, 速度: %.2f KB/s", pw.fileName, progress, speed)
-			// 使用特殊标记表示这是进度更新，包含进度ID
-			utils.SendOutput(pw.outputChan, fmt.Sprintf("PROGRESS_UPDATE:%s:%s", pw.progressID, currentProgressLine))
-		} else if pw.written >= pw.totalSize {
-			// 传输完成
-			elapsed := time.Since(pw.startTime).Seconds()
-			if elapsed > 0 {
-				speed := float64(pw.written) / elapsed / 1024 // KB/s
-				// 传输完成，输出最终结果
-				completionLine := fmt.Sprintf("[%s] 传输完成: 100%%, 文件大小: %s, 平均速度: %.2f KB/s, 耗时: %.2f秒", pw.fileName, bytesToHumanReadable(pw.totalSize), speed, elapsed)
-				utils.SendOutput(pw.outputChan, fmt.Sprintf("PROGRESS_UPDATE:%s:%s", pw.progressID, completionLine))
+	for {
+		select {
+		case <-stop:
+			n := written()
+			elapsed := time.Since(startTime).Seconds()
+			if elapsed > 0 && totalSize > 0 && n >= totalSize {
+				avg := utils.FormatTransferSpeed(float64(n) / elapsed)
+				line := fmt.Sprintf("[%s] 传输完成: 100%%, 文件大小: %s, 平均速度: %s, 耗时: %.2f秒",
+					fileName, bytesToHumanReadable(totalSize), avg, elapsed)
+				utils.SendOutput(outputChan, fmt.Sprintf("PROGRESS_UPDATE:%s:%s", progressID, line))
 			}
 			return
+		case <-ticker.C:
+			n := written()
+			elapsed := time.Since(startTime).Seconds()
+			if elapsed <= 0 || totalSize <= 0 || n >= totalSize {
+				continue
+			}
+			speed := utils.FormatTransferSpeed(float64(n) / elapsed)
+			progress := float64(n) / float64(totalSize) * 100
+			line := fmt.Sprintf("[%s] 进度: %.2f%%, 速度: %s", fileName, progress, speed)
+			utils.SendOutput(outputChan, fmt.Sprintf("PROGRESS_UPDATE:%s:%s", progressID, line))
 		}
 	}
-}
-
-// Close 关闭底层的io.WriteCloser
-func (pw *progressWriter) Close() error {
-	return pw.wrapped.Close()
 }

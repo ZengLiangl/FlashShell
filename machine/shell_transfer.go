@@ -30,6 +30,15 @@ type countingReader struct {
 	speedBPS    float64
 }
 
+// Size 返回剩余字节，供 pkg/sftp.ReadFrom 估算并发度。
+func (c *countingReader) Size() int64 {
+	remain := c.total - c.transferred
+	if remain < 0 {
+		return 0
+	}
+	return remain
+}
+
 func (c *countingReader) Read(p []byte) (int, error) {
 	if err := ctxErr(c.ctx); err != nil {
 		return 0, err
@@ -189,15 +198,16 @@ func (a *ShellAuxManager) DownloadFile(ctx context.Context, remotePath, localPat
 	}
 	defer dst.Close()
 
-	reader := &countingReader{ctx: ctx, r: src, total: total, transferred: offset, onProgress: onProgress}
+	writer := &countingWriter{ctx: ctx, w: dst, total: total, transferred: offset, onProgress: onProgress}
 	if onProgress != nil && offset > 0 {
 		onProgress(offset, total, 0)
 	}
-	if _, err := utils.CopyBuffer(dst, reader); err != nil {
+	// 进度挂在本地 Writer，保留 *sftp.File.WriteTo 并发读
+	if _, err := utils.CopySFTPDownload(writer, src); err != nil {
 		return fmt.Errorf("下载失败: %w", err)
 	}
 	if onProgress != nil {
-		onProgress(reader.transferred, total, reader.speedBPS)
+		onProgress(writer.transferred, total, writer.speedBPS)
 	}
 	return nil
 }
@@ -275,11 +285,12 @@ func (a *ShellAuxManager) UploadFile(ctx context.Context, localPath, remotePath 
 	}
 	defer dst.Close()
 
-	writer := &countingWriter{ctx: ctx, w: dst, total: total, transferred: offset, onProgress: onProgress}
+	reader := &countingReader{ctx: ctx, r: src, total: total, transferred: offset, onProgress: onProgress}
 	if onProgress != nil && offset > 0 {
 		onProgress(offset, total, 0)
 	}
-	if _, err := utils.CopyBuffer(writer, src); err != nil {
+	// 走 *sftp.File.ReadFromWithConcurrency，避免 Writer 包装导致串行 FXP_WRITE
+	if _, err := utils.CopySFTPUpload(dst, reader); err != nil {
 		if useAtomic {
 			_ = sftpClient.Remove(stagingPath)
 		}
@@ -292,7 +303,7 @@ func (a *ShellAuxManager) UploadFile(ctx context.Context, localPath, remotePath 
 		}
 	}
 	if onProgress != nil {
-		onProgress(writer.transferred, total, writer.speedBPS)
+		onProgress(reader.transferred, total, reader.speedBPS)
 	}
 	return nil
 }
@@ -737,28 +748,29 @@ func (a *ShellAuxManager) downloadFileWithChunk(ctx context.Context, c *sftp.Cli
 	}
 	defer dst.Close()
 
-	buf := make([]byte, utils.TransferBufferSize)
-	for {
-		if err := ctxErr(ctx); err != nil {
-			return err
-		}
-		n, readErr := src.Read(buf)
-		if n > 0 {
-			if _, werr := dst.Write(buf[:n]); werr != nil {
-				return werr
-			}
-			if onChunk != nil {
-				onChunk(int64(n))
-			}
-		}
-		if readErr == io.EOF {
-			break
-		}
-		if readErr != nil {
-			return readErr
-		}
+	writer := &chunkCountingWriter{ctx: ctx, w: dst, onChunk: onChunk}
+	if _, err := utils.CopySFTPDownload(writer, src); err != nil {
+		return err
 	}
 	return nil
+}
+
+// chunkCountingWriter 把增量字节交给目录下载汇总进度，同时保留 ctx 取消。
+type chunkCountingWriter struct {
+	ctx     context.Context
+	w       io.Writer
+	onChunk func(int64)
+}
+
+func (c *chunkCountingWriter) Write(p []byte) (int, error) {
+	if err := ctxErr(c.ctx); err != nil {
+		return 0, err
+	}
+	n, err := c.w.Write(p)
+	if n > 0 && c.onChunk != nil {
+		c.onChunk(int64(n))
+	}
+	return n, err
 }
 
 func promoteExtractedDir(staging, expectName, finalDir string) error {

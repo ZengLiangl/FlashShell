@@ -21,6 +21,14 @@ func (a *App) reportTaskTransfer(rec *define.SftpTransferRecord) {
 	rec.UpdatedAt = now
 	if rec.Status == "done" || rec.Status == "error" {
 		rec.FinishedAt = now
+		a.upsertTransfer(rec)
+		return
 	}
-	a.upsertTransfer(rec)
+	// running：异步推送，避免 Wails IPC 阻塞 SFTP 热路径
+	store := a.ensureTransferStore()
+	store.mu.Lock()
+	store.items[rec.ID] = rec
+	cp := *rec
+	store.mu.Unlock()
+	go a.emitTransfer(&cp)
 }

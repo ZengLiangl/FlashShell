@@ -347,9 +347,11 @@ func (rm *RemoteMachine) EnsureSFTP() error {
 	if rm.SSHClient == nil {
 		return fmt.Errorf("SSH客户端未连接")
 	}
+	// 默认 maxPacket=32KiB：过大的 MaxPacketUnchecked 在部分服务器上会直接 EOF。
+	// UseConcurrentWrites + ReadFromWithConcurrency（见 utils.CopySFTPUpload）才能叠包跑满高延迟链路。
 	sftpClient, err := sftp.NewClient(rm.SSHClient,
-		sftp.MaxPacketUnchecked(512*1024),
 		sftp.UseConcurrentWrites(true),
+		sftp.MaxConcurrentRequestsPerFile(64),
 	)
 	if err != nil {
 		return fmt.Errorf("SFTP连接失败: %w", err)
