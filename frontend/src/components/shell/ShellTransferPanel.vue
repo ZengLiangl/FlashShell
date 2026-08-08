@@ -53,7 +53,10 @@
             <template v-if="item.total > 0"> / {{ formatSize(item.total) }}</template>
             <template v-if="item.speedBps > 0"> · {{ formatSpeed(item.speedBps) }}</template>
           </span>
-          <span v-else-if="item.status === 'done'">{{ formatSize(item.total || item.transferred) }} · 完成</span>
+          <span v-else-if="item.status === 'done'">
+            {{ formatSize(item.total || item.transferred) }} · 完成
+            <template v-if="avgSpeedBps(item) > 0"> · 平均 {{ formatSpeed(avgSpeedBps(item)) }}</template>
+          </span>
           <span v-else-if="item.status === 'paused'">已暂停 · {{ formatSize(item.transferred) }}</span>
           <span v-else-if="item.status === 'error'" class="err" :title="item.error">{{ item.error || '失败' }}</span>
         </div>
@@ -246,12 +249,30 @@ export default {
         v /= 1024
         i++
       }
-      return i === 0 ? `${v} ${units[i]}` : `${v.toFixed(1)} ${units[i]}`
+      return i === 0 ? `${v} ${units[i]}` : `${v.toFixed(2)} ${units[i]}`
     }
 
     const formatSpeed = (bps) => {
       if (!bps || bps <= 0) return ''
-      return `${formatSize(bps)}/s`
+      const units = ['B/s', 'KB/s', 'MB/s', 'GB/s', 'TB/s']
+      let v = bps
+      let i = 0
+      while (v >= 1024 && i < units.length - 1) {
+        v /= 1024
+        i++
+      }
+      return i === 0 ? `${Math.round(v)} ${units[i]}` : `${v.toFixed(2)} ${units[i]}`
+    }
+
+    const avgSpeedBps = (item) => {
+      if (!item) return 0
+      const bytes = item.total || item.transferred || 0
+      const start = item.startedAt || 0
+      const end = item.finishedAt || item.updatedAt || 0
+      if (bytes > 0 && start > 0 && end > start) {
+        return bytes / (end - start)
+      }
+      return item.speedBps > 0 ? item.speedBps : 0
     }
 
     const statusLabel = (s) => {
@@ -299,6 +320,7 @@ export default {
       removeItem,
       formatSize,
       formatSpeed,
+      avgSpeedBps,
       statusLabel,
     }
   },
