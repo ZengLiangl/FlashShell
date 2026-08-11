@@ -53,7 +53,11 @@
                                 <el-icon><Document /></el-icon>
                             </el-button>
                         </el-tooltip>
-                        <el-tooltip :content="isSubProjectRunning(subProject) ? '运行中' : '执行'" placement="top">
+                        <el-tooltip
+                            content="执行"
+                            placement="top"
+                            :disabled="isSubProjectRunning(subProject)"
+                        >
                             <el-button
                                 size="small"
                                 type="primary"

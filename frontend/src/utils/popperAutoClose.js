@@ -1,6 +1,7 @@
 /**
  * 1) 下拉面板（Dropdown / Select / Autocomplete）鼠标离开后自动关闭。
- * 2) 按钮上的 hover Tooltip：点击后立即关闭，并兜底清除「loading/disabled 吃掉 mouseleave」后的残留。
+ * 2) 按钮上的 hover Tooltip：点击后立即关闭，并抑制短时间内重开；
+ *    兜底清除「loading/disabled 吃掉 mouseleave」后的残留。
  */
 const SELECTORS = [
   '.el-dropdown__popper',
@@ -12,12 +13,20 @@ const SELECTORS = [
 const MENU_TRIGGER_ANCESTOR =
   '.el-dropdown, .el-select, .el-cascader, .el-autocomplete, .el-popconfirm'
 
-const TOOLTIP_POPPER = '.el-popper.el-tooltip, .el-popper.is-dark, .el-popper.is-light'
+const TOOLTIP_POPPER = '.el-popper.el-tooltip, .el-popper.is-dark, .el-popper.is-light, .el-popper[role="tooltip"]'
 
 const HIDE_DELAY_MS = 160
 /** 须大于 Element Plus Tooltip 默认 hideAfter(200)，避免移向气泡途中被误关 */
 const ORPHAN_HIDE_DELAY_MS = 240
+/** 点击后抑制 hover 重开的时长（覆盖 loading 状态切换） */
+const SUPPRESS_MS = 450
+const HIDE_CSS_CLASS = 'fd-hide-hover-tooltips'
+
 const bound = new WeakSet()
+/** @type {WeakMap<Element, number>} */
+const suppressedUntil = new WeakMap()
+/** @type {WeakMap<object, number>} */
+const suppressedInstUntil = new WeakMap()
 
 function isSelectPopper(popper) {
   return (
@@ -223,7 +232,18 @@ function isTooltipComponent(inst) {
   return name === 'ElTooltip' || name === 'tooltip'
 }
 
+function setOpenFalse(bag) {
+  if (!bag) return false
+  const open = bag.open
+  if (open && typeof open === 'object' && 'value' in open && open.value) {
+    open.value = false
+    return true
+  }
+  return false
+}
+
 function forceCloseTooltipInst(inst) {
+  if (!inst) return false
   const bags = [inst.exposed, inst.setupState, inst.ctx, inst.proxy]
   let closed = false
 
@@ -250,35 +270,41 @@ function forceCloseTooltipInst(inst) {
 
   // 再强制清 open，防止延迟回调把状态拉回
   for (const bag of bags) {
-    const open = bag?.open
-    if (open && typeof open === 'object' && 'value' in open && open.value) {
-      open.value = false
-      closed = true
-    }
+    if (setOpenFalse(bag)) closed = true
   }
+
+  // setupState 里的 open 是真正的 ref（exposed 未导出 open）
+  if (setOpenFalse(inst.setupState)) closed = true
 
   return closed
 }
 
-/** 只关 ElTooltip，避免误调到其它组件的 hide/blur */
-function callTooltipClose(startEl) {
-  if (!startEl) return false
+function findTooltipInstFromEl(startEl) {
+  if (!startEl) return null
   const seen = new Set()
 
-  const tryInst = (inst) => {
+  const walkInst = (inst) => {
     while (inst && !seen.has(inst)) {
       seen.add(inst)
-      if (isTooltipComponent(inst) && forceCloseTooltipInst(inst)) return true
+      if (isTooltipComponent(inst)) return inst
       inst = inst.parent
     }
-    return false
+    return null
   }
 
   let el = startEl
   while (el) {
-    if (tryInst(el.__vueParentComponent)) return true
+    const found = walkInst(el.__vueParentComponent)
+    if (found) return found
     el = el.parentElement
   }
+  return null
+}
+
+/** 只关 ElTooltip，避免误调到其它组件的 hide/blur */
+function callTooltipClose(startEl) {
+  const inst = findTooltipInstFromEl(startEl)
+  if (inst && forceCloseTooltipInst(inst)) return true
   return false
 }
 
@@ -304,7 +330,8 @@ function findTooltipTriggerByPopper(popper) {
       const triggerRef =
         inst.setupState?.contentRef?.value?.triggerRef ||
         inst.exposed?.popperRef?.value?.triggerRef ||
-        inst.setupState?.popperRef?.value?.triggerRef
+        inst.setupState?.popperRef?.value?.triggerRef ||
+        inst.setupState?.popperRef?.value?.contentRef?.triggerRef
       const el = triggerRef?.value ?? triggerRef
       if (el instanceof Element) return el
       break
@@ -351,13 +378,55 @@ function isPointOverTooltip(x, y, popper) {
   return false
 }
 
+function flashHideCss(ms = 120) {
+  const root = document.documentElement
+  root.classList.add(HIDE_CSS_CLASS)
+  window.setTimeout(() => {
+    root.classList.remove(HIDE_CSS_CLASS)
+  }, ms)
+}
+
+function hideAllHoverTooltips() {
+  document.querySelectorAll(TOOLTIP_POPPER).forEach((popper) => {
+    if (!isHoverTooltipPopper(popper)) return
+    callTooltipClose(popper)
+  })
+}
+
+function suppressTrigger(trigger, ms = SUPPRESS_MS) {
+  if (!(trigger instanceof Element)) return
+  const until = Date.now() + ms
+  suppressedUntil.set(trigger, until)
+  const inst = findTooltipInstFromEl(trigger)
+  if (inst) suppressedInstUntil.set(inst, until)
+}
+
+function isSuppressed(trigger) {
+  if (!(trigger instanceof Element)) return false
+  const until = suppressedUntil.get(trigger) || 0
+  if (until > Date.now()) return true
+  const inst = findTooltipInstFromEl(trigger)
+  if (inst) {
+    const iu = suppressedInstUntil.get(inst) || 0
+    if (iu > Date.now()) return true
+  }
+  return false
+}
+
 /** 关掉鼠标已不在触发器/气泡上的残留 hover tooltip */
 function hideOrphanHoverTooltips(clientX, clientY) {
   if (!Number.isFinite(clientX) || !Number.isFinite(clientY)) return
 
   document.querySelectorAll(TOOLTIP_POPPER).forEach((popper) => {
     if (!isHoverTooltipPopper(popper)) return
-    if (isPointOverTooltip(clientX, clientY, popper)) return
+    if (isPointOverTooltip(clientX, clientY, popper)) {
+      // 仍在触发器上，但触发器处于点击抑制期：继续关
+      const trigger = findTooltipTriggerByPopper(popper)
+      if (trigger && isSuppressed(trigger)) {
+        callTooltipClose(popper)
+      }
+      return
+    }
     callTooltipClose(popper)
   })
 }
@@ -367,15 +436,37 @@ function hideButtonTooltipFromEvent(e) {
   if (!(target instanceof Element)) return
   const trigger = target.closest('.el-tooltip__trigger')
   if (!isButtonTooltipTrigger(trigger)) return
-  callTooltipClose(trigger)
 
-  // 点击后若按钮马上 loading/disabled，mouseleave 不会再来；下一帧再清一次孤儿
+  suppressTrigger(trigger)
+  callTooltipClose(trigger)
+  hideAllHoverTooltips()
+  flashHideCss(160)
+
+  // 去掉点击后焦点，避免部分环境下 tooltip 因 focus 残留
+  try {
+    const focusEl =
+      (trigger.matches('button, [href], input, select, textarea, [tabindex]')
+        ? trigger
+        : trigger.querySelector('button, [href], input, select, textarea, [tabindex]')) ||
+      (document.activeElement instanceof HTMLElement ? document.activeElement : null)
+    if (focusEl && typeof focusEl.blur === 'function') focusEl.blur()
+  } catch {
+    /* ignore */
+  }
+
+  // 点击后若按钮马上 loading/disabled，mouseleave 不会再来；多帧再清
   const x = e.clientX
   const y = e.clientY
-  requestAnimationFrame(() => {
+  const reclose = () => {
+    callTooltipClose(trigger)
     hideOrphanHoverTooltips(x, y)
-    setTimeout(() => hideOrphanHoverTooltips(x, y), 0)
-    setTimeout(() => hideOrphanHoverTooltips(x, y), 50)
+    hideAllHoverTooltips()
+  }
+  requestAnimationFrame(() => {
+    reclose()
+    setTimeout(reclose, 0)
+    setTimeout(reclose, 50)
+    setTimeout(reclose, 200)
   })
 }
 
@@ -386,7 +477,9 @@ function hideTooltipForDisabledTrigger(el) {
     el.closest('.el-tooltip__trigger') ||
     (el.classList.contains('el-tooltip__trigger') ? el : null)
   if (!isButtonTooltipTrigger(trigger)) return
+  suppressTrigger(trigger)
   callTooltipClose(trigger)
+  flashHideCss(120)
 }
 
 function isDisabledLike(el) {
@@ -394,6 +487,17 @@ function isDisabledLike(el) {
   if (el.matches(':disabled, [disabled], .is-disabled, .is-loading')) return true
   if (el.classList.contains('is-loading') || el.classList.contains('is-disabled')) return true
   return el.getAttribute('aria-disabled') === 'true'
+}
+
+/** 点击抑制期内拦截 mouseover 导致的重开 */
+function onMouseOverCapture(e) {
+  const target = e.target
+  if (!(target instanceof Element)) return
+  const trigger = target.closest('.el-tooltip__trigger')
+  if (!isButtonTooltipTrigger(trigger) || !isSuppressed(trigger)) return
+  callTooltipClose(trigger)
+  // 下一帧再关一次，盖住 EP 的 showAfter=0 打开
+  requestAnimationFrame(() => callTooltipClose(trigger))
 }
 
 export function installPopperAutoClose() {
@@ -410,6 +514,7 @@ export function installPopperAutoClose() {
   if (window.__flashdockTooltipClickHide) {
     try {
       document.removeEventListener('pointerdown', window.__flashdockTooltipClickHide, true)
+      document.removeEventListener('click', window.__flashdockTooltipClickHide, true)
     } catch {
       /* ignore */
     }
@@ -427,6 +532,14 @@ export function installPopperAutoClose() {
     try {
       document.documentElement.removeEventListener('mouseleave', window.__flashdockTooltipOrphanLeave)
       window.removeEventListener('blur', window.__flashdockTooltipOrphanLeave)
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (window.__flashdockTooltipMouseOver) {
+    try {
+      document.removeEventListener('mouseover', window.__flashdockTooltipMouseOver, true)
     } catch {
       /* ignore */
     }
@@ -464,9 +577,11 @@ export function installPopperAutoClose() {
           m.addedNodes.forEach((node) => {
             if (!(node instanceof Element)) return
             if (isDisabledLike(node)) hideTooltipForDisabledTrigger(node)
-            node.querySelectorAll?.('button:disabled, .el-button.is-loading, .el-button.is-disabled').forEach((el) => {
-              hideTooltipForDisabledTrigger(el)
-            })
+            node
+              .querySelectorAll?.('button:disabled, .el-button.is-loading, .el-button.is-disabled')
+              .forEach((el) => {
+                hideTooltipForDisabledTrigger(el)
+              })
           })
         }
       }
@@ -481,7 +596,11 @@ export function installPopperAutoClose() {
 
     const onPointerDown = (e) => hideButtonTooltipFromEvent(e)
     document.addEventListener('pointerdown', onPointerDown, true)
+    document.addEventListener('click', onPointerDown, true)
     window.__flashdockTooltipClickHide = onPointerDown
+
+    document.addEventListener('mouseover', onMouseOverCapture, true)
+    window.__flashdockTooltipMouseOver = onMouseOverCapture
 
     const onPointerMove = (e) => {
       lastX = e.clientX
@@ -497,9 +616,7 @@ export function installPopperAutoClose() {
         clearTimeout(orphanTimer)
         orphanTimer = null
       }
-      document.querySelectorAll(TOOLTIP_POPPER).forEach((popper) => {
-        if (isHoverTooltipPopper(popper)) callTooltipClose(popper)
-      })
+      hideAllHoverTooltips()
     }
     // 鼠标离开文档/窗口时清掉残留
     document.documentElement.addEventListener('mouseleave', onLeaveWindow)

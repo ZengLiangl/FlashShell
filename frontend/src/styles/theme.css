@@ -477,3 +477,13 @@ html.dark .app-menu-bar .menu-inner {
   background: var(--app-accent-bg) !important;
   color: var(--app-accent-color) !important;
 }
+
+/* 点击按钮后短暂隐藏残留 hover tooltip（由 popperAutoClose 挂/卸 class） */
+html.fd-hide-hover-tooltips .el-popper.el-tooltip,
+html.fd-hide-hover-tooltips .el-popper[role="tooltip"],
+html.fd-hide-hover-tooltips .el-popper.is-pure.is-dark,
+html.fd-hide-hover-tooltips .el-popper.is-pure.is-light {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
+}

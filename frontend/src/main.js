@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
 import { ElLoading } from 'element-plus'
+import ElTooltip from 'element-plus/es/components/tooltip/index.mjs'
 import 'element-plus/theme-chalk/dark/css-vars.css'
 import 'element-plus/es/components/message/style/css'
 import 'element-plus/es/components/message-box/style/css'
@@ -11,6 +12,11 @@ import './styles/scrollbar-hover.css'
 import App from './App.vue'
 import { installPopperAutoClose } from './utils/popperAutoClose'
 import { registerAppIcons } from './utils/registerIcons'
+
+// 按钮点击获得焦点后，Enter/Space 会再次 toggle tooltip；图标按钮场景关闭该行为
+if (ElTooltip?.props?.triggerKeys) {
+  ElTooltip.props.triggerKeys.default = () => []
+}
 
 const app = createApp(App)
 
