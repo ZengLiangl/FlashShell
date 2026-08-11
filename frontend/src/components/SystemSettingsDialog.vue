@@ -296,6 +296,10 @@
                                     <span class="memory-saver-label">Shell 意外断开时自动重连</span>
                                     <el-switch v-model="form.themeSettings.shellAutoReconnect" size="small" />
                                 </div>
+                                <div class="appear-field memory-saver-row">
+                                    <span class="memory-saver-label">启动时恢复 Shell 会话</span>
+                                    <el-switch v-model="form.shellSessionRestore" size="small" />
+                                </div>
                                 <div class="appear-field appear-field--fill">
                                     <span class="appear-field-label">配色方案</span>
                                     <div class="preset-grid terminal-grid">
@@ -722,6 +726,7 @@ export default {
             shellTerminalScrollback: SHELL_TERMINAL_SCROLLBACK,
             taskOutputMaxLines: TASK_OUTPUT_MAX_LINES,
             shellCommandHistoryMax: SHELL_COMMAND_HISTORY_MAX,
+            shellSessionRestore: true,
             shellLogHighlight: true,
             shellAsciiInput: true,
             shellLogHighlightColors: { ...DEFAULT_SHELL_LOG_COLORS },
@@ -949,6 +954,7 @@ theme preview · ${theme.foreground}`
             form.shellTerminalScrollback = clampShellTerminalScrollback(config.shellTerminalScrollback)
             form.taskOutputMaxLines = clampTaskOutputMaxLines(config.taskOutputMaxLines)
             form.shellCommandHistoryMax = clampShellCommandHistoryMax(config.shellCommandHistoryMax)
+            form.shellSessionRestore = config.shellSessionRestore !== false
             form.shellLogHighlight = config.shellLogHighlight !== false
             form.shellAsciiInput = config.shellAsciiInput !== false
             Object.assign(
@@ -1315,6 +1321,7 @@ theme preview · ${theme.foreground}`
                 config.shellTerminalScrollback = clampShellTerminalScrollback(form.shellTerminalScrollback)
                 config.taskOutputMaxLines = clampTaskOutputMaxLines(form.taskOutputMaxLines)
                 config.shellCommandHistoryMax = clampShellCommandHistoryMax(form.shellCommandHistoryMax)
+                config.shellSessionRestore = !!form.shellSessionRestore
                 config.shellLogHighlight = !!form.shellLogHighlight
                 config.shellAsciiInput = !!form.shellAsciiInput
                 config.shellLogHighlightColors = mergeLogHighlightColors(form.shellLogHighlightColors)

@@ -128,13 +128,19 @@ export function GetShellDownloadDir():Promise<string>;
 
 export function GetShellHistory():Promise<Array<define.ShellHistoryRecord>>;
 
+export function GetShellListenPorts(arg1:string):Promise<define.ShellListenPortList>;
+
 export function GetShellMonitor(arg1:string,arg2:string):Promise<define.ShellMonitorSnapshot>;
+
+export function GetShellProcessList(arg1:string):Promise<define.ShellProcessList>;
 
 export function GetShellPtyCwd(arg1:string):Promise<string>;
 
 export function GetShellRemoteHome(arg1:string):Promise<string>;
 
 export function GetShellRemotePwd(arg1:string):Promise<string>;
+
+export function GetShellSessionRestore():Promise<Array<data.ShellSessionRestoreTab>>;
 
 export function GetShellSessions():Promise<Array<define.ShellStatus>>;
 
@@ -283,6 +289,8 @@ export function SaveKeyMapSettings(arg1:data.KeyMapSettings):Promise<void>;
 export function SaveShellRemoteFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function SaveShortcutSettings(arg1:data.ShortcutSettings):Promise<void>;
+
+export function SaveShellSessionRestore(arg1:Array<data.ShellSessionRestoreTab>):Promise<void>;
 
 export function SaveSystemSettings(arg1:data.GlobalConfig):Promise<void>;
 

@@ -21,6 +21,8 @@ type ShellSnippet struct {
 	Binding *KeyMapBinding `json:"binding,omitempty"`
 	// Execute 为 true 时发送到终端后追加换行并执行；false 仅插入文本
 	Execute bool `json:"execute"`
+	// OnConnect 为 true 时，Shell 会话连接成功后自动插入/执行（作用域为 global 或匹配机器）
+	OnConnect bool `json:"onConnect,omitempty"`
 }
 
 // ShortcutSettings 可自定义系统快捷键（独立 JSON 文件）

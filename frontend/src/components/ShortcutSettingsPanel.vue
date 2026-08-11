@@ -79,7 +79,7 @@
       <div class="tip-bar">
         <span>
           命令面板可插入；绑定快捷键后可在 Shell 直接触发。
-          「直接执行」开启时自动换行。支持 <code>\n</code> <code>\t</code> <code>\e</code>。
+          「直接执行」开启时自动换行。支持 <code>\n</code> <code>\t</code> <code>\e</code> 与 <code v-pre>{{变量}}</code> 占位符。
         </span>
       </div>
 
@@ -171,6 +171,10 @@
             <div class="snippet-footer-exec">
               <el-switch v-model="s.execute" size="small" />
               <span class="sn-execute-label">直接执行</span>
+            </div>
+            <div class="snippet-footer-exec">
+              <el-switch v-model="s.onConnect" size="small" />
+              <span class="sn-execute-label">连接后自动执行</span>
             </div>
           </div>
         </li>
@@ -367,6 +371,7 @@ export default {
               command: s.command,
               scope: s.scope || 'global',
               execute: !!s.execute,
+              onConnect: !!s.onConnect,
             }
             if (s.binding?.key) {
               out.binding = {

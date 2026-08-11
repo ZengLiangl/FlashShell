@@ -246,8 +246,16 @@ export function GetShellHistory() {
   return window['go']['app']['App']['GetShellHistory']();
 }
 
+export function GetShellListenPorts(arg1) {
+  return window['go']['app']['App']['GetShellListenPorts'](arg1);
+}
+
 export function GetShellMonitor(arg1, arg2) {
   return window['go']['app']['App']['GetShellMonitor'](arg1, arg2);
+}
+
+export function GetShellProcessList(arg1) {
+  return window['go']['app']['App']['GetShellProcessList'](arg1);
 }
 
 export function GetShellPtyCwd(arg1) {
@@ -260,6 +268,10 @@ export function GetShellRemoteHome(arg1) {
 
 export function GetShellRemotePwd(arg1) {
   return window['go']['app']['App']['GetShellRemotePwd'](arg1);
+}
+
+export function GetShellSessionRestore() {
+  return window['go']['app']['App']['GetShellSessionRestore']();
 }
 
 export function GetShellSessions() {
@@ -556,6 +568,10 @@ export function SaveShellRemoteFile(arg1, arg2, arg3) {
 
 export function SaveShortcutSettings(arg1) {
   return window['go']['app']['App']['SaveShortcutSettings'](arg1);
+}
+
+export function SaveShellSessionRestore(arg1) {
+  return window['go']['app']['App']['SaveShellSessionRestore'](arg1);
 }
 
 export function SaveSystemSettings(arg1) {

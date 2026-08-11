@@ -3,6 +3,7 @@ import {
   expandSendString,
   matchesKeyMapBinding,
 } from './keymaps'
+import { resolveSnippetCommand } from './snippetVariables'
 
 /** 默认快捷键（useMod=true 表示 Cmd/Ctrl） */
 export const DEFAULT_SHORTCUTS = {
@@ -145,6 +146,7 @@ export function normalizeSnippet(raw, index = 0) {
     command: raw?.command != null ? String(raw.command) : '',
     scope: raw?.scope ? String(raw.scope) : 'global',
     execute: raw?.execute !== undefined ? !!raw.execute : true,
+    onConnect: !!raw?.onConnect,
     binding: {
       key: binding?.key != null ? String(binding.key) : '',
       useMod: !!binding?.useMod,
@@ -169,8 +171,10 @@ export function findMatchingSnippet(e, snippets) {
 }
 
 /** 片段发送内容：支持转义；execute 时自动补换行 */
-export function buildSnippetPayload(snippet) {
-  let text = expandSendString(snippet?.command || '')
+export async function buildSnippetPayload(snippet, { promptVars = true } = {}) {
+  const resolved = await resolveSnippetCommand(snippet, { prompt: promptVars })
+  if (resolved == null) return ''
+  let text = expandSendString(resolved)
   if (snippet?.execute && text && !/[\r\n]$/.test(text)) {
     text += '\n'
   }

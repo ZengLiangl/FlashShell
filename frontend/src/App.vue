@@ -64,6 +64,7 @@
         @test="testShellConnection" @update:broadcast-enabled="(v) => (broadcastEnabled = v)"
         @update:broadcast-targets="(v) => (broadcastTargets = v)"
         @update:split-session-ids="(v) => (splitSessionIds = v)" @reorder-tabs="({ from, to }) => reorderTabs(from, to)"
+        @cwd-sync="({ machineName, cwd }) => updateTabLastCwd(machineName, cwd)"
         @add-machine="openShellMachineDialog" @edit-machine="openShellMachineEdit" @copy-machine="copyShellMachine"
         @delete-machine="deleteShellMachine" @start-resize="startResize" @machines-changed="onMachinesChanged" />
     </div>
@@ -257,6 +258,7 @@ export default {
       setSplitSessions,
       toggleSplitSession,
       reorderTabs,
+      updateTabLastCwd,
     } = useShell();
     const hostKeyDialogVisible = computed({
       get: () => !!pendingHostKey.value,

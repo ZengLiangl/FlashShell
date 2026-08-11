@@ -1399,6 +1399,10 @@ func (a *App) GetSystemSettings() (*data.GlobalConfig, error) {
 			v := true
 			cfg.ShellAsciiInput = &v
 		}
+		if cfg.ShellSessionRestore == nil {
+			v := true
+			cfg.ShellSessionRestore = &v
+		}
 	}
 	return cfg, nil
 }
@@ -1489,6 +1493,7 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 			"shellLogHighlightDisabled": config.ShellLogHighlightDisabled,
 			"shellLogHighlightKeywords": config.ShellLogHighlightKeywords,
 			"shellAsciiInput":           data.ShellAsciiInputEnabled(config),
+			"shellSessionRestore":       data.ShellSessionRestoreEnabled(config),
 			"proxySettings":             config.ProxySettings,
 			"windowsName":               config.WindowsName,
 			"appIconPreset":             config.AppIconPreset,
@@ -1997,6 +2002,60 @@ func (a *App) GetShellSystemInfo(machineName string) *define.ShellSystemInfo {
 		}
 	}
 	return info
+}
+
+// GetShellProcessList 获取进程列表
+func (a *App) GetShellProcessList(machineName string) *define.ShellProcessList {
+	aux, err := a.getShellAux(machineName)
+	if err != nil {
+		host := ""
+		cfgName := a.remoteConfigName(machineName)
+		if m := a.configManager.GetMachine(cfgName); m != nil {
+			if s, e := m.GetSensitiveData(); e == nil {
+				host = s.Host
+			}
+		}
+		return &define.ShellProcessList{
+			MachineName: machineName,
+			Host:        host,
+			Processes:   []define.ShellProcessStat{},
+			Error:       err.Error(),
+		}
+	}
+	list := aux.FetchProcessList(50)
+	if m := a.configManager.GetMachine(a.remoteConfigName(machineName)); m != nil {
+		if s, e := m.GetSensitiveData(); e == nil && s.Host != "" {
+			list.Host = s.Host
+		}
+	}
+	return list
+}
+
+// GetShellListenPorts 获取监听端口列表
+func (a *App) GetShellListenPorts(machineName string) *define.ShellListenPortList {
+	aux, err := a.getShellAux(machineName)
+	if err != nil {
+		host := ""
+		cfgName := a.remoteConfigName(machineName)
+		if m := a.configManager.GetMachine(cfgName); m != nil {
+			if s, e := m.GetSensitiveData(); e == nil {
+				host = s.Host
+			}
+		}
+		return &define.ShellListenPortList{
+			MachineName: machineName,
+			Host:        host,
+			Ports:       []define.ShellListenPort{},
+			Error:       err.Error(),
+		}
+	}
+	list := aux.FetchListenPorts()
+	if m := a.configManager.GetMachine(a.remoteConfigName(machineName)); m != nil {
+		if s, e := m.GetSensitiveData(); e == nil && s.Host != "" {
+			list.Host = s.Host
+		}
+	}
+	return list
 }
 
 // ListShellFiles 列出远端目录

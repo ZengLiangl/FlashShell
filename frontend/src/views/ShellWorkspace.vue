@@ -204,6 +204,7 @@ import {
   buildSnippetPayload,
   isFormFieldTarget,
 } from '../utils/shortcuts'
+import { runOnConnectSnippets, resetOnConnectSnippets } from '../utils/onConnectSnippets'
 
 export default {
   name: 'ShellWorkspace',
@@ -245,7 +246,7 @@ export default {
     'copy-machine', 'delete-machine',
     'add-local', 'start-resize', 'update:activeMachine', 'history-changed',
     'update:broadcast-enabled', 'update:broadcast-targets', 'update:split-session-ids',
-    'reorder-tabs', 'machines-changed',
+    'reorder-tabs', 'machines-changed', 'cwd-sync',
   ],
   setup(props, { emit }) {
     const tabsRef = ref(null)
@@ -537,6 +538,7 @@ export default {
       if (cwd.length > 1) cwd = cwd.replace(/\/+$/, '')
       ptyCwds[machineName] = cwd
       cwdHints[machineName] = cwd
+      emit('cwd-sync', { machineName, cwd })
       if (machineName !== props.activeMachine) return
       await nextTick()
       filePanelRef.value?.applyCwdHint?.(cwd)
@@ -558,6 +560,7 @@ export default {
       if (cwd.length > 1) cwd = cwd.replace(/\/+$/, '')
       ptyCwds[machineName] = cwd
       cwdHints[machineName] = cwd
+      emit('cwd-sync', { machineName, cwd })
       if (machineName !== props.activeMachine) return
       await nextTick()
       filePanelRef.value?.applyCwdHint?.(cwd)
@@ -784,19 +787,43 @@ export default {
     }
 
     /** 片段快捷键：Shell 视图内处理；shortcuts:changed 后立即用最新列表 */
-    const onSnippetHotkey = (e) => {
+    const onSnippetHotkey = async (e) => {
       if (!props.active || props.blockShortcuts) return
       if (commandPaletteVisible.value || tunnelDialogVisible.value || pickerVisible.value) return
       if (isFormFieldTarget(e.target)) return
       if (!snippetList.value.length) return
       const matched = findMatchingSnippet(e, snippetList.value)
       if (!matched) return
-      const payload = buildSnippetPayload(matched)
+      const payload = await buildSnippetPayload(matched)
       if (payload == null || payload === '') return
       e.preventDefault()
       e.stopImmediatePropagation()
       void sendMappedInput(payload)
     }
+
+    watch(
+      () => (props.workspaceSessions || []).map((s) => `${s.machineName}:${s.connected}:${s.connecting}`).join('\0'),
+      () => {
+        for (const session of props.workspaceSessions || []) {
+          if (session.connected && !session.connecting) {
+            void runOnConnectSnippets(session, snippetList.value)
+          }
+        }
+      },
+      { immediate: true },
+    )
+
+    watch(
+      () => props.workspaceSessions?.map((s) => s.machineName).join('\0') || '',
+      (cur, prev) => {
+        if (!prev) return
+        const prevSet = new Set(prev.split('\0').filter(Boolean))
+        const curSet = new Set(cur.split('\0').filter(Boolean))
+        for (const id of prevSet) {
+          if (!curSet.has(id)) resetOnConnectSnippets(id)
+        }
+      },
+    )
 
     onMounted(() => {
       document.addEventListener('keydown', onSnippetHotkey, true)

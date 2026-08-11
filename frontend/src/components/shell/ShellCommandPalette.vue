@@ -89,7 +89,7 @@
             :class="{ selected: tab === 'snippets' && i === selectedIdx }"
             @mouseenter="selectedIdx = i"
           >
-            <button type="button" class="snippet-main" @click="insert(s.command, !!s.execute)">
+            <button type="button" class="snippet-main" @click="insertSnippet(s)">
               <div class="snippet-card-top">
                 <span class="sn-name">{{ s.name || '(未命名)' }}</span>
                 <span v-if="s.execute" class="sn-badge">执行</span>
@@ -210,6 +210,12 @@
             <span class="editor-execute-hint">开启后发送时自动换行执行</span>
           </div>
         </el-form-item>
+        <el-form-item label="连接后执行">
+          <div class="editor-execute">
+            <el-switch v-model="editorForm.onConnect" />
+            <span class="editor-execute-hint">会话连接成功后自动插入/执行；支持 <code v-pre>{{变量}}</code></span>
+          </div>
+        </el-form-item>
       </el-form>
       <template #footer>
         <div class="dialog-footer icon-actions">
@@ -235,7 +241,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Edit, Delete, Close, Check, RefreshLeft, DocumentCopy, VideoPlay } from '@element-plus/icons-vue'
 import * as App from '../../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../../wailsjs/runtime/runtime'
-import { normalizeSnippets, normalizeSnippet, emptySnippetBinding } from '../../utils/shortcuts'
+import { normalizeSnippets, normalizeSnippet, emptySnippetBinding, buildSnippetPayload } from '../../utils/shortcuts'
 import { formatKeyMapBinding, formatKeyMapParts, keymapBindingFromEvent } from '../../utils/keymaps'
 import { machineMatchesKeyword, formatMachineAddr } from '../../utils/machineGroups'
 
@@ -246,6 +252,7 @@ function emptyEditor() {
     command: '',
     scope: 'global',
     execute: true,
+    onConnect: false,
     binding: emptySnippetBinding(),
   }
 }
@@ -379,11 +386,19 @@ export default {
     const insert = async (cmd, execute = true) => {
       if (cmd == null || cmd === '') return
       const raw = String(cmd)
-      // 先记历史再关闭，避免异步被打断
       await recordHistory(raw)
       visible.value = false
       let text = raw
       if (execute && !/[\r\n]$/.test(text)) text += '\n'
+      emit('insert', text)
+    }
+
+    const insertSnippet = async (snippet) => {
+      if (!snippet) return
+      const text = await buildSnippetPayload(snippet, { promptVars: true })
+      if (!text) return
+      await recordHistory(text.replace(/\r?\n$/, ''))
+      visible.value = false
       emit('insert', text)
     }
 
@@ -417,7 +432,7 @@ export default {
         return
       }
       const s = filteredSnippets.value[selectedIdx.value]
-      if (s) insert(s.command, !!s.execute)
+      if (s) insertSnippet(s)
     }
 
     const openEditor = (snippet = null) => {
@@ -429,6 +444,7 @@ export default {
           command: snippet.command || '',
           scope: snippet.scope || 'global',
           execute: snippet.execute !== false,
+          onConnect: !!snippet.onConnect,
           binding: snippet.binding?.key
             ? { ...snippet.binding }
             : emptySnippetBinding(),
@@ -489,6 +505,7 @@ export default {
             command: s.command,
             scope: s.scope || 'global',
             execute: !!s.execute,
+            onConnect: !!s.onConnect,
           }
           if (s.binding?.key) {
             out.binding = {
@@ -536,6 +553,7 @@ export default {
             command,
             scope: (form.scope || 'global').trim() || 'global',
             execute: !!form.execute,
+            onConnect: !!form.onConnect,
             binding,
           })
         } else {
@@ -546,6 +564,7 @@ export default {
               command,
               scope: (form.scope || 'global').trim() || 'global',
               execute: !!form.execute,
+              onConnect: !!form.onConnect,
               binding,
             }),
           )
@@ -604,6 +623,7 @@ export default {
       moveSel,
       applySelected,
       insert,
+      insertSnippet,
       openEditor,
       onEditorClosed,
       startBindRecord,

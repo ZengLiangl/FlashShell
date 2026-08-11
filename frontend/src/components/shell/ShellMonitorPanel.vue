@@ -14,6 +14,8 @@
 
     <div v-if="!activeMachine" class="empty">连接机器后显示监控信息</div>
     <template v-else>
+      <el-tabs v-model="monitorTab" class="monitor-tabs" @tab-change="onTabChange">
+        <el-tab-pane label="概览" name="overview">
       <div class="machine-title">{{ activeMachine }}</div>
 
       <div class="field">
@@ -120,6 +122,52 @@
       </div>
 
       <div v-if="displayError" class="error">{{ displayError }}</div>
+        </el-tab-pane>
+
+        <el-tab-pane label="进程" name="processes">
+          <div class="tab-toolbar">
+            <span class="tab-toolbar-label">进程列表</span>
+            <el-button size="small" text type="primary" :loading="processLoading" @click="loadProcesses">刷新</el-button>
+          </div>
+          <div v-if="processError" class="error-sm">{{ processError }}</div>
+          <div v-else-if="processLoading && !processList.length" class="empty-sm">加载中…</div>
+          <div v-else-if="!processList.length" class="empty-sm">暂无数据</div>
+          <div v-else class="data-table-wrap">
+            <div class="data-head proc-head">
+              <span>PID</span><span>用户</span><span>CPU</span><span>内存</span><span>命令</span>
+            </div>
+            <div v-for="(p, idx) in processList" :key="p.pid + idx" class="data-row proc-row">
+              <span>{{ p.pid }}</span>
+              <span>{{ p.user || '-' }}</span>
+              <span :class="{ 'is-danger': isHighUsage(p.cpu) }">{{ formatPct1(p.cpu) }}</span>
+              <span :class="{ 'is-danger': isHighUsage(p.mem) }">{{ formatPct1(p.mem) }}</span>
+              <span class="data-cmd" :title="p.command">{{ p.command }}</span>
+            </div>
+          </div>
+        </el-tab-pane>
+
+        <el-tab-pane label="端口" name="ports">
+          <div class="tab-toolbar">
+            <span class="tab-toolbar-label">监听端口</span>
+            <el-button size="small" text type="primary" :loading="portsLoading" @click="loadPorts">刷新</el-button>
+          </div>
+          <div v-if="portsError" class="error-sm">{{ portsError }}</div>
+          <div v-else-if="portsLoading && !portList.length" class="empty-sm">加载中…</div>
+          <div v-else-if="!portList.length" class="empty-sm">暂无数据</div>
+          <div v-else class="data-table-wrap">
+            <div class="data-head port-head">
+              <span>协议</span><span>地址</span><span>端口</span><span>PID</span><span>进程</span>
+            </div>
+            <div v-for="(p, idx) in portList" :key="p.proto + p.port + idx" class="data-row port-row">
+              <span>{{ p.proto }}</span>
+              <span>{{ p.address || '*' }}</span>
+              <span>{{ p.port }}</span>
+              <span>{{ p.pid || '-' }}</span>
+              <span class="data-cmd" :title="p.process">{{ p.process || '-' }}</span>
+            </div>
+          </div>
+        </el-tab-pane>
+      </el-tabs>
     </template>
   </div>
 </template>
@@ -160,6 +208,13 @@ export default {
     const sysinfoLoading = ref(false)
     const sysinfo = ref(null)
     const sysinfoError = ref('')
+    const monitorTab = ref('overview')
+    const processList = ref([])
+    const processLoading = ref(false)
+    const processError = ref('')
+    const portList = ref([])
+    const portsLoading = ref(false)
+    const portsError = ref('')
     let timer = null
     const NET_HISTORY_LEN = 24
 
@@ -328,6 +383,63 @@ export default {
       refresh()
     }
 
+    const loadProcesses = async () => {
+      if (!props.activeMachine || isIdle()) {
+        processList.value = []
+        processError.value = ''
+        return
+      }
+      processLoading.value = true
+      processError.value = ''
+      const machineAtStart = props.activeMachine
+      try {
+        const data = await App.GetShellProcessList(props.activeMachine)
+        if (isIdle() || props.activeMachine !== machineAtStart) return
+        if (data?.error && !isAuxMissingError(data.error)) {
+          processError.value = data.error
+          processList.value = []
+        } else {
+          processList.value = data?.processes || []
+        }
+      } catch (e) {
+        if (!isAuxMissingError(e)) processError.value = String(e)
+        processList.value = []
+      } finally {
+        processLoading.value = false
+      }
+    }
+
+    const loadPorts = async () => {
+      if (!props.activeMachine || isIdle()) {
+        portList.value = []
+        portsError.value = ''
+        return
+      }
+      portsLoading.value = true
+      portsError.value = ''
+      const machineAtStart = props.activeMachine
+      try {
+        const data = await App.GetShellListenPorts(props.activeMachine)
+        if (isIdle() || props.activeMachine !== machineAtStart) return
+        if (data?.error && !isAuxMissingError(data.error)) {
+          portsError.value = data.error
+          portList.value = []
+        } else {
+          portList.value = data?.ports || []
+        }
+      } catch (e) {
+        if (!isAuxMissingError(e)) portsError.value = String(e)
+        portList.value = []
+      } finally {
+        portsLoading.value = false
+      }
+    }
+
+    const onTabChange = (name) => {
+      if (name === 'processes') loadProcesses()
+      if (name === 'ports') loadPorts()
+    }
+
     const refresh = async () => {
       if (!props.activeMachine) {
         snapshot.value = null
@@ -441,8 +553,14 @@ export default {
         netIfaces.value = []
         sysinfo.value = null
         sysinfoError.value = ''
+        processList.value = []
+        processError.value = ''
+        portList.value = []
+        portsError.value = ''
         loadSystemInfo()
         startTimer()
+        if (monitorTab.value === 'processes') loadProcesses()
+        if (monitorTab.value === 'ports') loadPorts()
       },
       { immediate: true },
     )
@@ -477,6 +595,16 @@ export default {
       sysinfo,
       sysinfoError,
       sysinfoRows,
+      monitorTab,
+      processList,
+      processLoading,
+      processError,
+      portList,
+      portsLoading,
+      portsError,
+      loadProcesses,
+      loadPorts,
+      onTabChange,
       onNetIfaceChange,
       netChartMaxText,
       netChartMidText,
@@ -814,5 +942,69 @@ export default {
 
 .net-iface-select :deep(.el-input__inner) {
   font-size: 11px;
+}
+
+.monitor-tabs :deep(.el-tabs__header) {
+  margin-bottom: 8px;
+}
+
+.monitor-tabs :deep(.el-tabs__item) {
+  font-size: 12px;
+  padding: 0 10px;
+  height: 30px;
+}
+
+.tab-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.tab-toolbar-label {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.data-table-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.data-head,
+.data-row {
+  display: grid;
+  gap: 6px;
+  align-items: center;
+  font-size: 11px;
+  padding: 5px 0;
+}
+
+.proc-head,
+.proc-row {
+  grid-template-columns: 48px 52px 44px 44px minmax(0, 1fr);
+}
+
+.port-head,
+.port-row {
+  grid-template-columns: 44px minmax(0, 1fr) 44px 44px minmax(0, 1fr);
+}
+
+.data-head {
+  color: var(--app-text-muted);
+  border-bottom: 1px solid var(--app-border);
+}
+
+.data-row {
+  border-bottom: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.data-cmd {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

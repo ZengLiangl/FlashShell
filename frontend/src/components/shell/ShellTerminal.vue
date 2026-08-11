@@ -6,6 +6,10 @@
     @mousedown="onPaneFocus"
   >
     <div ref="terminalRef" class="terminal-host"></div>
+    <div v-if="ghostSuggestion" class="ghost-suggestion" @mousedown.prevent>
+      <span class="ghost-prefix">{{ ghostInput }}</span><span class="ghost-suffix">{{ ghostSuffix }}</span>
+      <span class="ghost-hint">Tab 补全 · Esc 关闭</span>
+    </div>
     <ShellConnectionOverlay
       :status="overlayStatus"
       :machine-name="displayName"
@@ -74,6 +78,7 @@ export default {
   components: { ShellConnectionOverlay },
     props: {
     machineName: { type: String, required: true },
+    configName: { type: String, default: '' },
     active: { type: Boolean, default: false },
     /** Shell 工作区是否可见；隐藏时不 fit/不转发输入，但保留 xterm 以免回放协议应答 */
     viewVisible: { type: Boolean, default: true },
@@ -139,6 +144,65 @@ export default {
     let searchDecorationBucket = []
     let searchHighlightTimer = null
     let scrollListener = null
+    let ghostLookupTimer = null
+    const ghostSuggestion = ref('')
+    const ghostInput = ref('')
+    const ghostSuffix = ref('')
+    const GHOST_LOOKUP_MS = 180
+
+    const historyScope = () => {
+      const cfg = String(props.configName || '').trim()
+      return cfg || 'global'
+    }
+
+    const clearGhostSuggestion = () => {
+      ghostSuggestion.value = ''
+      ghostInput.value = ''
+      ghostSuffix.value = ''
+    }
+
+    const findPrefixHistoryMatch = (input, history) => {
+      const q = String(input || '').trim()
+      if (!q) return ''
+      for (const cmd of history || []) {
+        if (cmd.startsWith(q) && cmd.length > q.length) return cmd
+      }
+      return ''
+    }
+
+    const scheduleGhostLookup = () => {
+      if (ghostLookupTimer) clearTimeout(ghostLookupTimer)
+      ghostLookupTimer = setTimeout(async () => {
+        ghostLookupTimer = null
+        const line = inputLine.trim()
+        if (!line || !props.connected || props.broadcastEnabled) {
+          clearGhostSuggestion()
+          return
+        }
+        try {
+          const history = await App.SearchShellCommandHistory(historyScope(), line, 30)
+          const match = findPrefixHistoryMatch(line, history)
+          if (!match) {
+            clearGhostSuggestion()
+            return
+          }
+          ghostSuggestion.value = match
+          ghostInput.value = line
+          ghostSuffix.value = match.slice(line.length)
+        } catch {
+          clearGhostSuggestion()
+        }
+      }, GHOST_LOOKUP_MS)
+    }
+
+    const acceptGhostSuggestion = () => {
+      const suffix = ghostSuffix.value
+      if (!suffix || !props.connected) return false
+      clearGhostSuggestion()
+      inputLine += suffix
+      App.SendShellInput(props.machineName, suffix).catch(() => {})
+      return true
+    }
 
     const clearViewportHighlights = () => {
       if (searchHighlightTimer != null) {
@@ -575,6 +639,21 @@ export default {
       bindAsciiInputListeners(terminal)
       bindInputHandler(terminal)
 
+      terminal.attachCustomKeyEventHandler((e) => {
+        if (!props.active || !props.viewVisible || !props.connected || props.broadcastEnabled) return true
+        if (ghostSuggestion.value && e.key === 'Tab' && !e.shiftKey && !e.altKey && !e.metaKey && !e.ctrlKey) {
+          e.preventDefault()
+          acceptGhostSuggestion()
+          return false
+        }
+        if (e.key === 'Escape' && ghostSuggestion.value) {
+          e.preventDefault()
+          clearGhostSuggestion()
+          return false
+        }
+        return true
+      })
+
       scrollListener?.dispose?.()
       scrollListener = terminal.onScroll?.(() => {
         if (activeSearchQuery) scheduleViewportHighlights()
@@ -592,6 +671,11 @@ export default {
     const destroyTerminal = () => {
       clearFitTimers()
       clearCwdSyncTimer()
+      if (ghostLookupTimer) {
+        clearTimeout(ghostLookupTimer)
+        ghostLookupTimer = null
+      }
+      clearGhostSuggestion()
       cancelAsyncMatchCount()
       clearViewportHighlights()
       activeSearchQuery = ''
@@ -764,18 +848,22 @@ export default {
       for (let i = 0; i < data.length; i++) {
         const ch = data[i]
         if (ch === '\r' || ch === '\n') {
+          clearGhostSuggestion()
           onEnterForCwd()
         } else if (ch === '\x7f' || ch === '\b') {
           inputLine = inputLine.slice(0, -1)
         } else if (ch === '\x03') {
           inputLine = ''
+          clearGhostSuggestion()
         } else if (ch === '\x1b') {
           // 方向键 / Tab 补全序列：inputLine 不可靠
           inputLine = ''
+          clearGhostSuggestion()
         } else if (ch >= ' ' || ch === '\t') {
           inputLine += ch
         }
       }
+      scheduleGhostLookup()
     }
 
     /**
@@ -1003,6 +1091,9 @@ export default {
       ctx,
       displayName,
       overlayStatus,
+      ghostSuggestion,
+      ghostInput,
+      ghostSuffix,
       hideContextMenu,
       onContextMenu,
       onCopy,
@@ -1071,6 +1162,38 @@ export default {
 .ctx-menu li.sep:hover {
   background: var(--app-border, #333);
   color: inherit;
+}
+
+.ghost-suggestion {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 6px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--app-panel-bg, #161b22) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--app-border, #30363d) 70%, transparent);
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+  pointer-events: none;
+}
+
+.ghost-prefix {
+  color: var(--app-text-muted, #8b949e);
+}
+
+.ghost-suffix {
+  color: color-mix(in srgb, var(--app-text-muted, #8b949e) 55%, transparent);
+}
+
+.ghost-hint {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--app-text-muted, #6e7681);
 }
 
 .terminal-host {

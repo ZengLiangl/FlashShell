@@ -368,6 +368,250 @@ func (a *ShellAuxManager) FetchSystemInfo() *define.ShellSystemInfo {
 	return info
 }
 
+const shellProcessListScript = `set +e
+echo __PS__
+LC_ALL=C ps aux --sort=-%cpu 2>/dev/null | head -n 51
+`
+
+const shellListenPortsScript = `set +e
+echo __PORTS__
+if command -v ss >/dev/null 2>&1; then
+  ss -tlnp 2>/dev/null
+elif command -v netstat >/dev/null 2>&1; then
+  netstat -tlnp 2>/dev/null
+fi
+`
+
+// FetchProcessList 拉取进程列表（按 CPU 排序）
+func (a *ShellAuxManager) FetchProcessList(limit int) *define.ShellProcessList {
+	if limit <= 0 {
+		limit = 50
+	}
+	out := &define.ShellProcessList{
+		MachineName: a.machineName,
+		Host:        a.host,
+		Processes:   []define.ShellProcessStat{},
+		UpdatedAt:   time.Now().Unix(),
+	}
+	if !a.IsConnected() {
+		out.Error = "辅助连接未建立"
+		return out
+	}
+	raw, err := a.execBashPath("/bin/bash", shellProcessListScript)
+	if err != nil && strings.TrimSpace(raw) == "" {
+		raw, err = a.execBashPath("bash", shellProcessListScript)
+	}
+	if err != nil && strings.TrimSpace(raw) == "" {
+		out.Error = err.Error()
+		return out
+	}
+	sections := parseTaggedSections(raw, []string{"__PS__"})
+	out.Processes = parsePsAux(sections["__PS__"], limit)
+	if len(out.Processes) == 0 {
+		snap := a.FetchMonitor("")
+		if len(snap.TopMem) > 0 {
+			out.Processes = snap.TopMem
+		}
+	}
+	return out
+}
+
+// FetchListenPorts 拉取 TCP 监听端口
+func (a *ShellAuxManager) FetchListenPorts() *define.ShellListenPortList {
+	out := &define.ShellListenPortList{
+		MachineName: a.machineName,
+		Host:        a.host,
+		Ports:       []define.ShellListenPort{},
+		UpdatedAt:   time.Now().Unix(),
+	}
+	if !a.IsConnected() {
+		out.Error = "辅助连接未建立"
+		return out
+	}
+	raw, err := a.execBashPath("/bin/bash", shellListenPortsScript)
+	if err != nil && strings.TrimSpace(raw) == "" {
+		raw, err = a.execBashPath("bash", shellListenPortsScript)
+	}
+	if err != nil && strings.TrimSpace(raw) == "" {
+		out.Error = err.Error()
+		return out
+	}
+	sections := parseTaggedSections(raw, []string{"__PORTS__"})
+	out.Ports = parseListenPorts(sections["__PORTS__"])
+	return out
+}
+
+func parsePsAux(raw string, limit int) []define.ShellProcessStat {
+	if limit <= 0 {
+		limit = 50
+	}
+	lines := strings.Split(strings.TrimSpace(raw), "\n")
+	out := make([]define.ShellProcessStat, 0, limit)
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if i == 0 && strings.Contains(strings.ToUpper(line), "PID") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 11 {
+			continue
+		}
+		if _, err := strconv.Atoi(fields[1]); err != nil {
+			continue
+		}
+		cpu, _ := strconv.ParseFloat(fields[2], 64)
+		mem, _ := strconv.ParseFloat(fields[3], 64)
+		out = append(out, define.ShellProcessStat{
+			PID:     fields[1],
+			User:    fields[0],
+			CPU:     cpu,
+			Mem:     mem,
+			MemRSS:  fields[5],
+			Command: strings.Join(fields[10:], " "),
+		})
+		if len(out) >= limit {
+			break
+		}
+	}
+	return out
+}
+
+func parseListenPorts(raw string) []define.ShellListenPort {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil
+	}
+	out := make([]define.ShellListenPort, 0)
+	seen := make(map[string]struct{})
+	for _, line := range strings.Split(raw, "\n") {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(strings.ToUpper(line), "STATE") ||
+			strings.HasPrefix(strings.ToUpper(line), "ACTIVE") ||
+			strings.HasPrefix(strings.ToUpper(line), "PROTO") {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 4 {
+			continue
+		}
+		proto := strings.ToLower(fields[0])
+		if proto != "tcp" && proto != "tcp6" && proto != "udp" && proto != "udp6" {
+			if strings.Contains(line, ":") && !strings.Contains(strings.ToUpper(line), "PID") {
+				if len(fields) >= 6 && strings.EqualFold(fields[len(fields)-2], "LISTEN") {
+					addr := fields[3]
+					pidProc := fields[len(fields)-1]
+					port := parsePortFromAddr(addr)
+					pid, proc := parsePIDProcess(pidProc)
+					key := proto + "|" + addr + "|" + pid
+					if _, ok := seen[key]; ok {
+						continue
+					}
+					seen[key] = struct{}{}
+					out = append(out, define.ShellListenPort{
+						Proto:   "tcp",
+						Address: stripPort(addr),
+						Port:    port,
+						PID:     pid,
+						Process: proc,
+					})
+				}
+			}
+			continue
+		}
+		addr := fields[3]
+		pid, proc := "", ""
+		for _, f := range fields[4:] {
+			if strings.Contains(f, "pid=") {
+				pid, proc = parseSsProcessToken(f)
+				break
+			}
+		}
+		if pid == "" && len(fields) >= 6 {
+			pid, proc = parsePIDProcess(fields[len(fields)-1])
+		}
+		port := parsePortFromAddr(addr)
+		key := proto + "|" + addr + "|" + pid
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, define.ShellListenPort{
+			Proto:   proto,
+			Address: stripPort(addr),
+			Port:    port,
+			PID:     pid,
+			Process: proc,
+		})
+	}
+	sort.Slice(out, func(i, j int) bool {
+		pi, _ := strconv.Atoi(out[i].Port)
+		pj, _ := strconv.Atoi(out[j].Port)
+		if pi != pj {
+			return pi < pj
+		}
+		return out[i].Address < out[j].Address
+	})
+	return out
+}
+
+func parsePortFromAddr(addr string) string {
+	addr = strings.TrimSpace(addr)
+	if addr == "" {
+		return ""
+	}
+	if strings.HasPrefix(addr, "[") {
+		if idx := strings.LastIndex(addr, "]:"); idx >= 0 {
+			return strings.TrimPrefix(addr[idx+2:], "*")
+		}
+	}
+	if idx := strings.LastIndex(addr, ":"); idx >= 0 {
+		return strings.TrimPrefix(addr[idx+1:], "*")
+	}
+	return ""
+}
+
+func stripPort(addr string) string {
+	addr = strings.TrimSpace(addr)
+	if strings.HasPrefix(addr, "[") {
+		if idx := strings.LastIndex(addr, "]:"); idx >= 0 {
+			return addr[:idx+1]
+		}
+	}
+	if idx := strings.LastIndex(addr, ":"); idx >= 0 {
+		return addr[:idx]
+	}
+	return addr
+}
+
+func parsePIDProcess(token string) (pid, proc string) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return "", ""
+	}
+	if idx := strings.Index(token, "/"); idx >= 0 {
+		return token[:idx], token[idx+1:]
+	}
+	return token, ""
+}
+
+func parseSsProcessToken(token string) (pid, proc string) {
+	token = strings.TrimPrefix(token, "users:((\"")
+	token = strings.TrimPrefix(token, "(")
+	token = strings.Trim(token, "\"),")
+	if idx := strings.Index(token, "\","); idx >= 0 {
+		proc = token[:idx]
+		token = token[idx+2:]
+	}
+	if strings.HasPrefix(token, "pid=") {
+		pid = strings.TrimSuffix(strings.TrimPrefix(token, "pid="), ",fd=3")
+		pid = strings.TrimSuffix(pid, ")")
+	}
+	return pid, proc
+}
+
 func (a *ShellAuxManager) applyNetRates(snap *define.ShellMonitorSnapshot, raw string) {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {

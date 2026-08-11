@@ -253,6 +253,16 @@ type GlobalConfig struct {
 	ShellLogHighlightKeywords []ShellLogHighlightCustomKeyword `yaml:"shellLogHighlightKeywords,omitempty" json:"shellLogHighlightKeywords"`
 	// ShellAsciiInput Shell 终端获得焦点时临时关闭中文组词（失焦/离开 Shell 后恢复）；nil 表示默认开启
 	ShellAsciiInput *bool `yaml:"shellAsciiInput,omitempty" json:"shellAsciiInput"`
+	// ShellSessionRestore 启动时恢复上次打开的 Shell 标签页；nil 表示默认开启
+	ShellSessionRestore *bool `yaml:"shellSessionRestore,omitempty" json:"shellSessionRestore"`
+}
+
+// ShellSessionRestoreEnabled 启动时是否恢复 Shell 会话（默认开启）
+func ShellSessionRestoreEnabled(cfg *GlobalConfig) bool {
+	if cfg == nil || cfg.ShellSessionRestore == nil {
+		return true
+	}
+	return *cfg.ShellSessionRestore
 }
 
 // NormalizeHomeMinimizedZone 校验首页最小化分区

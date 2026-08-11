@@ -148,6 +148,7 @@
             </button>
           </div>
           <ShellTerminal :ref="(el) => setTerminalRef(session.machineName, el)" :machine-name="session.machineName"
+            :config-name="session.configName || ''"
             :connected="!!session.connected" :connecting="!!session.connecting"
             :ever-connected="!!session.everConnected"
             :tab-label="session.tabLabel || ''"

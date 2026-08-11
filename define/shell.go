@@ -35,6 +35,33 @@ type ShellProcessStat struct {
 	Command string  `json:"command"`
 }
 
+// ShellListenPort 监听端口
+type ShellListenPort struct {
+	Proto   string `json:"proto"`
+	Address string `json:"address"`
+	Port    string `json:"port"`
+	PID     string `json:"pid"`
+	Process string `json:"process"`
+}
+
+// ShellProcessList 进程列表快照
+type ShellProcessList struct {
+	MachineName string             `json:"machineName"`
+	Host        string             `json:"host"`
+	Processes   []ShellProcessStat `json:"processes"`
+	Error       string             `json:"error,omitempty"`
+	UpdatedAt   int64              `json:"updatedAt"`
+}
+
+// ShellListenPortList 监听端口列表快照
+type ShellListenPortList struct {
+	MachineName string            `json:"machineName"`
+	Host        string            `json:"host"`
+	Ports       []ShellListenPort `json:"ports"`
+	Error       string            `json:"error,omitempty"`
+	UpdatedAt   int64              `json:"updatedAt"`
+}
+
 // ShellMonitorSnapshot 机器监控快照
 type ShellMonitorSnapshot struct {
 	MachineName string             `json:"machineName"`

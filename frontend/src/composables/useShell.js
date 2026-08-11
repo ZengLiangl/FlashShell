@@ -79,6 +79,104 @@ export function useShell() {
   const splitSessionIds = ref(Array.isArray(savedLayout.splitSessionIds) ? savedLayout.splitSessionIds : [])
   /** 待信任的主机密钥（连接失败时弹出对话框） */
   const pendingHostKey = ref(null)
+  /** 各会话最后已知 CWD（用于恢复） */
+  const tabLastCwds = ref({})
+  let sessionRestoreDone = false
+  let persistRestoreTimer = null
+
+  const isSessionRestoreEnabled = async () => {
+    try {
+      const cfg = await App.GetSystemSettings()
+      return cfg?.shellSessionRestore !== false
+    } catch {
+      return true
+    }
+  }
+
+  const buildRestoreTabs = () => {
+    const tabMap = new Map(openTabs.value.map((t) => [t.machineName, t]))
+    const order = syncTabOrder()
+    return order
+      .map((id) => tabMap.get(id))
+      .filter((t) => t && !isPendingSession(t.machineName) && (t.connected || t.everConnected))
+      .map((t) => ({
+        sessionId: t.machineName,
+        configName: t.configName || t.machineName,
+        kind: t.kind || (isLocalSession(t.machineName) ? 'local' : 'remote'),
+        tabLabel: t.tabLabel || t.machineName,
+        lastCwd: tabLastCwds.value[t.machineName] || '',
+      }))
+  }
+
+  const persistSessionRestore = () => {
+    if (persistRestoreTimer) clearTimeout(persistRestoreTimer)
+    persistRestoreTimer = setTimeout(async () => {
+      try {
+        if (!(await isSessionRestoreEnabled())) return
+        await App.SaveShellSessionRestore(buildRestoreTabs())
+      } catch {
+        // ignore
+      }
+    }, 600)
+  }
+
+  const updateTabLastCwd = (sessionId, cwd) => {
+    const id = String(sessionId || '').trim()
+    const path = String(cwd || '').trim()
+    if (!id || !path) return
+    tabLastCwds.value = { ...tabLastCwds.value, [id]: path }
+    persistSessionRestore()
+  }
+
+  const restoreShellSessions = async () => {
+    if (sessionRestoreDone) return
+    sessionRestoreDone = true
+    try {
+      if (!(await isSessionRestoreEnabled())) return
+      const saved = (await App.GetShellSessionRestore()) || []
+      if (!saved.length || openTabs.value.length > 0) return
+
+      ElMessage.info(`正在恢复 ${saved.length} 个 Shell 会话…`)
+      const restoredOrder = []
+      for (const tab of saved) {
+        try {
+          let sessionId = ''
+          if (tab.kind === 'local' || isLocalSession(tab.sessionId)) {
+            const ok = await connectLocal(tab.sessionId || '')
+            if (!ok) continue
+            sessionId = activeMachine.value
+          } else {
+            const cfg = tab.configName || tab.sessionId
+            if (!cfg) continue
+            const ok = await connect(cfg)
+            if (!ok) continue
+            sessionId = activeMachine.value
+          }
+          if (sessionId) restoredOrder.push(sessionId)
+          const cwd = String(tab.lastCwd || '').trim()
+          if (sessionId && cwd && cwd.startsWith('/')) {
+            await new Promise((r) => setTimeout(r, 600))
+            try {
+              const quoted = cwd.replace(/'/g, `'\\''`)
+              await App.SendShellInput(sessionId, `cd '${quoted}'\n`)
+              updateTabLastCwd(sessionId, cwd)
+            } catch {
+              // ignore cwd restore failure
+            }
+          }
+        } catch (error) {
+          ElMessage.warning(`恢复「${tab.tabLabel || tab.configName || tab.sessionId}」失败: ${error}`)
+        }
+      }
+      if (restoredOrder.length) tabOrder.value = restoredOrder
+      await syncSessions()
+    } catch {
+      // ignore restore load errors
+    }
+  }
+
+  watch(openTabs, persistSessionRestore, { deep: true })
+  watch(tabOrder, persistSessionRestore, { deep: true })
 
   const persistShellLayout = () => {
     writeShellLayout({
@@ -686,6 +784,10 @@ export function useShell() {
     removeShellOutput(machineName)
     openTabs.value = openTabs.value.filter((t) => t.machineName !== machineName)
     removeTabOrder(machineName)
+    const nextCwds = { ...tabLastCwds.value }
+    delete nextCwds[machineName]
+    tabLastCwds.value = nextCwds
+    persistSessionRestore()
     sessions.value = (sessions.value || []).filter((s) => s.machineName !== machineName)
     broadcastTargets.value = broadcastTargets.value.filter((id) => id !== machineName)
     splitSessionIds.value = splitSessionIds.value.filter((id) => id !== machineName)
@@ -830,6 +932,7 @@ export function useShell() {
   const ensureShellReady = async () => {
     setupShellEvents()
     await loadMachines()
+    await restoreShellSessions()
   }
 
   onUnmounted(() => {
@@ -868,6 +971,7 @@ export function useShell() {
     setupShellEvents,
     teardownShellEvents,
     ensureShellReady,
+    updateTabLastCwd,
     isMachineConnected: (name) => isMachineConnected(name, sessions.value),
   }
 }

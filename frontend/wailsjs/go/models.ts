@@ -380,6 +380,7 @@ export namespace data {
 	    shellLogHighlightDisabled: string[];
 	    shellLogHighlightKeywords: ShellLogHighlightCustomKeyword[];
 	    shellAsciiInput?: boolean;
+	    shellSessionRestore?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new GlobalConfig(source);
@@ -410,6 +411,7 @@ export namespace data {
 	        this.shellLogHighlightDisabled = source["shellLogHighlightDisabled"];
 	        this.shellLogHighlightKeywords = this.convertValues(source["shellLogHighlightKeywords"], ShellLogHighlightCustomKeyword);
 	        this.shellAsciiInput = source["shellAsciiInput"];
+	        this.shellSessionRestore = source["shellSessionRestore"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -585,6 +587,27 @@ export namespace data {
 	        this.terminalPreset = source["terminalPreset"];
 	    }
 	}
+
+	export class ShellSessionRestoreTab {
+	    sessionId: string;
+	    configName: string;
+	    kind: string;
+	    tabLabel: string;
+	    lastCwd?: string;
+
+	    static createFrom(source: any = {}) {
+	        return new ShellSessionRestoreTab(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.sessionId = source["sessionId"];
+	        this.configName = source["configName"];
+	        this.kind = source["kind"];
+	        this.tabLabel = source["tabLabel"];
+	        this.lastCwd = source["lastCwd"];
+	    }
+	}
 	
 	
 	export class ShellSnippet {
@@ -594,6 +617,7 @@ export namespace data {
 	    scope?: string;
 	    binding?: KeyMapBinding;
 	    execute: boolean;
+	    onConnect?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ShellSnippet(source);
@@ -607,6 +631,7 @@ export namespace data {
 	        this.scope = source["scope"];
 	        this.binding = this.convertValues(source["binding"], KeyMapBinding);
 	        this.execute = source["execute"];
+	        this.onConnect = source["onConnect"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -1193,6 +1218,102 @@ export namespace define {
 	        this.memRss = source["memRss"];
 	        this.command = source["command"];
 	    }
+	}
+	export class ShellProcessList {
+	    machineName: string;
+	    host: string;
+	    processes: ShellProcessStat[];
+	    error?: string;
+	    updatedAt: number;
+
+	    static createFrom(source: any = {}) {
+	        return new ShellProcessList(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.machineName = source["machineName"];
+	        this.host = source["host"];
+	        this.processes = this.convertValues(source["processes"], ShellProcessStat);
+	        this.error = source["error"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ShellListenPort {
+	    proto: string;
+	    address: string;
+	    port: string;
+	    pid: string;
+	    process: string;
+
+	    static createFrom(source: any = {}) {
+	        return new ShellListenPort(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.proto = source["proto"];
+	        this.address = source["address"];
+	        this.port = source["port"];
+	        this.pid = source["pid"];
+	        this.process = source["process"];
+	    }
+	}
+	export class ShellListenPortList {
+	    machineName: string;
+	    host: string;
+	    ports: ShellListenPort[];
+	    error?: string;
+	    updatedAt: number;
+
+	    static createFrom(source: any = {}) {
+	        return new ShellListenPortList(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.machineName = source["machineName"];
+	        this.host = source["host"];
+	        this.ports = this.convertValues(source["ports"], ShellListenPort);
+	        this.error = source["error"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class ShellMonitorSnapshot {
 	    machineName: string;
