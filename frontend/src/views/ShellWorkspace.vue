@@ -423,10 +423,10 @@ export default {
       if (!result) return '未找到'
       const total = Number(result.resultCount) || 0
       if (!total) return result.found ? '已定位' : '未找到'
-      if (result.capped) return `${total}+`
       const idx = Number(result.resultIndex)
-      if (idx >= 0) return `${idx + 1}/${total}`
-      return `共 ${total} 处`
+      const totalLabel = result.capped ? `${total}+` : String(total)
+      if (idx >= 0) return `${idx + 1}/${totalLabel}`
+      return result.capped ? `${total}+` : `共 ${total} 处`
     }
 
     const onSearchResult = (result) => {

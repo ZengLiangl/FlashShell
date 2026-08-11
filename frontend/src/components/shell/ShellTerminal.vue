@@ -47,7 +47,7 @@ import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import { getTerminalSelectionText } from '../../utils/shellSelection'
-import { findInTerminalBuffer, selectTerminalMatch, highlightViewportMatches, clearSearchDecorations } from '../../utils/shellTerminalSearch'
+import { findInTerminalBuffer, selectTerminalMatch, highlightViewportMatches, clearSearchDecorations, lineToSearchModel, charRangeToCells, indexOfSearchMatch } from '../../utils/shellTerminalSearch'
 import 'xterm/css/xterm.css'
 import * as App from '../../../wailsjs/go/app/App'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
@@ -138,6 +138,10 @@ export default {
     let searchCountToken = 0
     let searchCountTimer = null
     let lastCountedQuery = ''
+    /** 异步计数是否完成（完成前不报序号，避免大缓冲同步扫） */
+    let searchIndexReady = false
+    /** @type {Array<{ row: number, col: number }>} */
+    let searchMatchList = []
     let activeSearchQuery = ''
     let lastActiveMatch = null
     /** @type {Array<{ dispose?: Function }>} */
@@ -238,6 +242,16 @@ export default {
       }
     }
 
+    const resetSearchMatchIndex = () => {
+      searchIndexReady = false
+      searchMatchList = []
+    }
+
+    const resolveSearchIndex = (match) => {
+      if (!searchIndexReady || !match) return -1
+      return indexOfSearchMatch(searchMatchList, match)
+    }
+
     const emitSearchResult = (payload) => {
       lastSearchResults = {
         resultIndex: payload.resultIndex ?? -1,
@@ -251,54 +265,71 @@ export default {
       })
     }
 
-    /** 分片扫描缓冲统计匹配数，每帧让出主线程 */
+    /**
+     * 分片扫描缓冲：统计总数并缓存匹配坐标（≤999）。
+     * 不阻塞导航；完成后用二分得到「第几处」，大日志只吃空闲时间片。
+     */
     const scheduleAsyncMatchCount = (query) => {
       if (!query || query === lastCountedQuery) return
       cancelAsyncMatchCount()
       lastCountedQuery = query
+      resetSearchMatchIndex()
       const token = searchCountToken
       const terminal = term.value
       if (!terminal) return
 
       const needle = query.toLowerCase()
+      const needleLen = needle.length
       const buf = terminal.buffer.active
       const totalRows = buf.length
       let row = 0
-      let count = 0
+      /** @type {Array<{ row: number, col: number }>} */
+      const matches = []
+
+      const finish = (capped) => {
+        if (token !== searchCountToken) return
+        searchMatchList = matches
+        searchIndexReady = true
+        const active = lastActiveMatch
+        const idx = active && query === activeSearchQuery
+          ? indexOfSearchMatch(matches, active)
+          : -1
+        emitSearchResult({
+          found: matches.length > 0 || !!active,
+          resultIndex: idx,
+          resultCount: matches.length,
+          capped,
+        })
+      }
 
       const step = () => {
         if (token !== searchCountToken || !term.value) return
         const deadline = performance.now() + 6
         while (row < totalRows) {
           const line = buf.getLine(row)
+          const rowIndex = row
           row += 1
           if (!line) continue
-          const hay = line.translateToString(true).toLowerCase()
+          // 与查找高亮同一套单元格映射，避免 trim/宽字符导致计数与选区不一致
+          const model = lineToSearchModel(line)
+          const hay = model.text.toLowerCase()
+          if (!hay) continue
           let from = 0
-          while (count < SEARCH_COUNT_CAP) {
+          while (matches.length < SEARCH_COUNT_CAP) {
             const at = hay.indexOf(needle, from)
             if (at < 0) break
-            count += 1
-            from = at + Math.max(1, needle.length)
+            const { col } = charRangeToCells(model, at, needleLen)
+            matches.push({ row: rowIndex, col })
+            from = at + Math.max(1, needleLen)
           }
-          if (count >= SEARCH_COUNT_CAP) {
-            emitSearchResult({
-              found: true,
-              resultIndex: -1,
-              resultCount: SEARCH_COUNT_CAP,
-              capped: true,
-            })
+          if (matches.length >= SEARCH_COUNT_CAP) {
+            finish(true)
             return
           }
           if (performance.now() >= deadline) break
         }
         if (row >= totalRows) {
-          emitSearchResult({
-            found: count > 0,
-            resultIndex: -1,
-            resultCount: count,
-            capped: false,
-          })
+          finish(false)
           return
         }
         searchCountTimer = setTimeout(step, 0)
@@ -681,6 +712,7 @@ export default {
       activeSearchQuery = ''
       lastActiveMatch = null
       lastCountedQuery = ''
+      resetSearchMatchIndex()
       scrollListener?.dispose?.()
       scrollListener = null
       detachWriter()
@@ -724,6 +756,7 @@ export default {
         activeSearchQuery = ''
         lastActiveMatch = null
         lastCountedQuery = ''
+        resetSearchMatchIndex()
         emitSearchResult({ found: false, resultIndex: -1, resultCount: 0 })
         return toSearchResult(false)
       }
@@ -737,7 +770,7 @@ export default {
         refreshViewportHighlights(query, match)
         emitSearchResult({
           found: !!match,
-          resultIndex: -1,
+          resultIndex: resolveSearchIndex(match),
           resultCount: sameQuery ? lastSearchResults.resultCount : 0,
           capped: sameQuery ? lastSearchResults.capped : false,
         })
@@ -758,6 +791,7 @@ export default {
         activeSearchQuery = ''
         lastActiveMatch = null
         lastCountedQuery = ''
+        resetSearchMatchIndex()
         emitSearchResult({ found: false, resultIndex: -1, resultCount: 0 })
         return toSearchResult(false)
       }
@@ -771,7 +805,7 @@ export default {
         refreshViewportHighlights(query, match)
         emitSearchResult({
           found: !!match,
-          resultIndex: -1,
+          resultIndex: resolveSearchIndex(match),
           resultCount: sameQuery ? lastSearchResults.resultCount : 0,
           capped: sameQuery ? lastSearchResults.capped : false,
         })
@@ -789,6 +823,7 @@ export default {
       activeSearchQuery = ''
       lastActiveMatch = null
       lastCountedQuery = ''
+      resetSearchMatchIndex()
       term.value?.clearSelection?.()
       emitSearchResult({ found: false, resultIndex: -1, resultCount: 0 })
     }
