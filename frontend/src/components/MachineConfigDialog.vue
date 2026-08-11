@@ -81,6 +81,8 @@
                                 <el-dropdown-menu>
                                     <el-dropdown-item command="import-xshell">导入 Xshell</el-dropdown-item>
                                     <el-dropdown-item command="import-finalshell">导入 FinalShell</el-dropdown-item>
+                                    <el-dropdown-item command="import-openssh">导入 OpenSSH config</el-dropdown-item>
+                                    <el-dropdown-item command="import-csv">导入 CSV</el-dropdown-item>
                                     <el-dropdown-item command="export-template" divided>导出连接模板</el-dropdown-item>
                                     <el-dropdown-item command="import-template">导入连接模板</el-dropdown-item>
                                 </el-dropdown-menu>
@@ -215,22 +217,25 @@
                 </el-form-item>
 
                 <el-form-item label="分组" prop="group">
-                    <el-select
-                        v-model="machineForm.group"
-                        clearable
-                        filterable
-                        allow-create
-                        default-first-option
-                        placeholder="选择或输入分组，留空为默认分组"
-                        style="width: 100%"
-                    >
-                        <el-option
-                            v-for="g in groupOptions"
-                            :key="g"
-                            :label="g"
-                            :value="g === DEFAULT_MACHINE_GROUP ? '' : g"
-                        />
-                    </el-select>
+                    <div class="group-field-row">
+                        <el-select
+                            v-model="machineForm.group"
+                            clearable
+                            filterable
+                            allow-create
+                            default-first-option
+                            placeholder="选择或输入分组，留空为默认分组"
+                            style="width: 100%"
+                        >
+                            <el-option
+                                v-for="g in groupOptions"
+                                :key="g"
+                                :label="g"
+                                :value="g === DEFAULT_MACHINE_GROUP ? '' : g"
+                            />
+                        </el-select>
+                        <el-button text type="primary" size="small" @click="applyGroupDefaultsToForm">应用分组默认</el-button>
+                    </div>
                 </el-form-item>
 
                 <el-form-item label="标签">
@@ -465,9 +470,14 @@
             </div>
             <el-table :data="managedGroups" size="small" empty-text="暂无自定义分组">
                 <el-table-column prop="name" label="分组名称" />
-                <el-table-column label="操作" width="100" align="center">
+                <el-table-column label="操作" width="140" align="center">
                     <template #default="{ row }">
                         <div class="icon-actions">
+                            <el-tooltip content="默认配置" placement="top">
+                                <el-button size="small" text type="primary" @click="editGroupDefaults(row.name)">
+                                    <el-icon><Setting /></el-icon>
+                                </el-button>
+                            </el-tooltip>
                             <el-tooltip content="重命名" placement="top">
                                 <el-button size="small" text type="primary" @click="renameGroup(row.name)">
                                     <el-icon><Edit /></el-icon>
@@ -493,6 +503,56 @@
             </template>
         </el-dialog>
 
+        <el-dialog
+            v-model="groupDefaultsVisible"
+            :title="`分组默认：${groupDefaultsForm.name}`"
+            width="480px"
+            class="settings-sub-dialog"
+            append-to-body
+        >
+            <el-form :model="groupDefaultsForm" label-width="100px" size="small">
+                <el-form-item label="默认用户">
+                    <el-input v-model="groupDefaultsForm.user" clearable />
+                </el-form-item>
+                <el-form-item label="密钥文件">
+                    <div class="key-file-input">
+                        <el-input v-model="groupDefaultsForm.keyFile" readonly />
+                        <el-button type="primary" circle @click="selectGroupDefaultKeyFile">
+                            <el-icon><Folder /></el-icon>
+                        </el-button>
+                    </div>
+                </el-form-item>
+                <el-form-item label="跳板机">
+                    <el-input v-model="groupDefaultsForm.proxyJump" clearable />
+                </el-form-item>
+                <el-form-item label="启动命令">
+                    <el-input v-model="groupDefaultsForm.startupCommand" clearable />
+                </el-form-item>
+                <el-form-item label="SFTP 编码">
+                    <el-select v-model="groupDefaultsForm.sftpEncoding" style="width: 100%">
+                        <el-option label="自动" value="auto" />
+                        <el-option label="UTF-8" value="utf-8" />
+                        <el-option label="GB18030" value="gb18030" />
+                    </el-select>
+                </el-form-item>
+                <el-form-item label="默认标签">
+                    <el-select
+                        v-model="groupDefaultsForm.tags"
+                        multiple
+                        filterable
+                        allow-create
+                        default-first-option
+                        collapse-tags
+                        style="width: 100%"
+                    />
+                </el-form-item>
+            </el-form>
+            <template #footer>
+                <el-button @click="groupDefaultsVisible = false">取消</el-button>
+                <el-button type="primary" :loading="savingGroupDefaults" @click="saveGroupDefaults">保存</el-button>
+            </template>
+        </el-dialog>
+
         <MachineContextMenu
             :ctx="ctx"
             @connect="onContextConnect"
@@ -509,11 +569,13 @@
 import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-    Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid, Close, Check, Monitor, VideoPlay,
+    Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid, Close, Check, Monitor, VideoPlay, Setting,
 } from '@element-plus/icons-vue'
 import {
     GetMachines,
     GetMachineGroups,
+    GetMachineGroupDefaults,
+    SaveMachineGroupDefaults,
     AddMachineGroup,
     RenameMachineGroup,
     DeleteMachineGroup,
@@ -529,6 +591,8 @@ import {
     SelectKeyFile,
     ImportXshellPick,
     ImportFinalShellPick,
+    ImportOpenSSHConfigPick,
+    ImportMachinesCSVPick,
     ExportMachineTemplateToFile,
     ImportMachineTemplateFromFile,
 } from '../../wailsjs/go/app/App'
@@ -549,7 +613,7 @@ import TextOverflowTooltip from './TextOverflowTooltip.vue'
 export default {
     name: 'MachineConfigDialog',
     components: {
-        Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid, Close, Check, Monitor, VideoPlay,
+        Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid, Close, Check, Monitor, VideoPlay, Setting,
         MachineContextMenu,
         TextOverflowTooltip,
     },
@@ -622,6 +686,18 @@ export default {
         const machinesLoading = ref(false)
         const machineEditVisible = ref(false)
         const groupManageVisible = ref(false)
+        const groupDefaultsVisible = ref(false)
+        const savingGroupDefaults = ref(false)
+        const groupDefaultsList = ref([])
+        const groupDefaultsForm = reactive({
+            name: '',
+            user: '',
+            keyFile: '',
+            proxyJump: '',
+            startupCommand: '',
+            sftpEncoding: 'auto',
+            tags: [],
+        })
         const newGroupName = ref('')
         const savingMachine = ref(false)
         const testingDraft = ref(false)
@@ -636,6 +712,7 @@ export default {
             group: '',
             tags: [],
             notes: '',
+            identityId: '',
             key_file: '',
             host: '',
             port: 22,
@@ -687,9 +764,18 @@ export default {
             visibleProxy.value = false
         }
 
+        const loadGroupDefaults = async () => {
+            try {
+                groupDefaultsList.value = await GetMachineGroupDefaults() || []
+            } catch {
+                groupDefaultsList.value = []
+            }
+        }
+
         const loadGroups = async () => {
             try {
                 machineGroups.value = await GetMachineGroups() || []
+                await loadGroupDefaults()
             } catch {
                 machineGroups.value = []
             }
@@ -718,11 +804,72 @@ export default {
         }
 
         const applyGlobalAccount = (accountId) => {
+            machineForm.identityId = accountId || ''
             if (!accountId) return
             const account = globalAccounts.value.find((item) => item.id === accountId)
             if (!account) return
             machineForm.user = account.user || ''
             machineForm.password = account.password || ''
+            if (account.keyFile) machineForm.key_file = account.keyFile
+        }
+
+        const applyGroupDefaultsToForm = () => {
+            const groupName = normalizeGroup(machineForm.group)
+            const defaults = groupDefaultsList.value.find((item) => normalizeGroup(item.name) === groupName)
+            if (!defaults) {
+                ElMessage.info('当前分组暂无默认配置')
+                return
+            }
+            if (defaults.user) machineForm.user = defaults.user
+            if (defaults.keyFile) machineForm.key_file = defaults.keyFile
+            if (defaults.proxyJump) machineForm.proxyJump = defaults.proxyJump
+            if (defaults.startupCommand) machineForm.startupCommand = defaults.startupCommand
+            if (defaults.sftpEncoding) machineForm.sftpEncoding = defaults.sftpEncoding
+            if (defaults.tags?.length) machineForm.tags = normalizeMachineTags(defaults.tags)
+            ElMessage.success('已应用分组默认')
+        }
+
+        const editGroupDefaults = (groupName) => {
+            const existing = groupDefaultsList.value.find((item) => item.name === groupName)
+            groupDefaultsForm.name = groupName
+            groupDefaultsForm.user = existing?.user || ''
+            groupDefaultsForm.keyFile = existing?.keyFile || ''
+            groupDefaultsForm.proxyJump = existing?.proxyJump || ''
+            groupDefaultsForm.startupCommand = existing?.startupCommand || ''
+            groupDefaultsForm.sftpEncoding = existing?.sftpEncoding || 'auto'
+            groupDefaultsForm.tags = normalizeMachineTags(existing?.tags || [])
+            groupDefaultsVisible.value = true
+        }
+
+        const selectGroupDefaultKeyFile = async () => {
+            try {
+                const filePath = await SelectKeyFile()
+                if (filePath) groupDefaultsForm.keyFile = filePath
+            } catch (error) {
+                ElMessage.error('选择密钥文件失败: ' + error.message)
+            }
+        }
+
+        const saveGroupDefaults = async () => {
+            savingGroupDefaults.value = true
+            try {
+                await SaveMachineGroupDefaults({
+                    name: groupDefaultsForm.name,
+                    user: groupDefaultsForm.user?.trim() || '',
+                    keyFile: groupDefaultsForm.keyFile || '',
+                    proxyJump: groupDefaultsForm.proxyJump?.trim() || '',
+                    startupCommand: groupDefaultsForm.startupCommand?.trim() || '',
+                    sftpEncoding: groupDefaultsForm.sftpEncoding || 'auto',
+                    tags: normalizeMachineTags(groupDefaultsForm.tags),
+                })
+                ElMessage.success('分组默认已保存')
+                groupDefaultsVisible.value = false
+                await loadGroupDefaults()
+            } catch (error) {
+                ElMessage.error('保存失败: ' + (error?.message || error))
+            } finally {
+                savingGroupDefaults.value = false
+            }
         }
 
         const addMachine = () => {
@@ -734,11 +881,12 @@ export default {
 
         const editMachine = async (machine) => {
             editingMachine.value = machine
-            selectedAccountId.value = ''
+            selectedAccountId.value = machine.identityId || ''
             machineForm.name = machine.name
             machineForm.group = machine.group || ''
             machineForm.tags = normalizeMachineTags(machine.tags)
             machineForm.notes = machine.notes || ''
+            machineForm.identityId = machine.identityId || ''
             machineForm.key_file = machine.key_file || ''
             machineForm.proxyJump = machine.proxyJump || ''
             machineForm.jumpChain = Array.isArray(machine.jumpChain) ? [...machine.jumpChain] : []
@@ -810,6 +958,7 @@ export default {
             machineForm.group = ''
             machineForm.tags = []
             machineForm.notes = ''
+            machineForm.identityId = ''
             machineForm.key_file = ''
             machineForm.host = ''
             machineForm.port = 22
@@ -914,6 +1063,7 @@ export default {
                     group: normalizeGroup(machineForm.group),
                     tags: normalizeMachineTags(machineForm.tags),
                     notes: String(machineForm.notes || '').trim(),
+                    identityId: machineForm.identityId || '',
                     key_file: machineForm.key_file,
                     proxyJump: machineForm.proxyJump?.trim() || '',
                     jumpChain: (machineForm.jumpChain || []).map((s) => String(s).trim()).filter(Boolean),
@@ -1035,6 +1185,7 @@ export default {
                     {
                         name: machineForm.name || 'draft-test',
                         group: normalizeGroup(machineForm.group),
+                        identityId: machineForm.identityId || '',
                         key_file: machineForm.key_file,
                         proxyJump: machineForm.proxyJump?.trim() || '',
                     },
@@ -1134,9 +1285,42 @@ export default {
             }
         }
 
+        const showOpenSSHImportResult = (result) => {
+            const errors = result?.errors?.length ? `\n失败: ${result.errors.join('\n')}` : ''
+            ElMessage.success(`导入完成：新增 ${result?.added || 0}，更新 ${result?.updated || 0}，跳过 ${result?.skipped || 0}${errors}`)
+        }
+
+        const importOpenSSH = async () => {
+            if (!ensureImportApi(ImportOpenSSHConfigPick, 'OpenSSH 导入')) return
+            try {
+                const result = await ImportOpenSSHConfigPick(importAccountId.value || '', normalizeGroup(importGroup.value))
+                if (!result) return
+                showOpenSSHImportResult(result)
+                await loadMachines()
+                emit('changed')
+            } catch (error) {
+                ElMessage.error('导入失败: ' + error)
+            }
+        }
+
+        const importCSV = async () => {
+            if (!ensureImportApi(ImportMachinesCSVPick, 'CSV 导入')) return
+            try {
+                const result = await ImportMachinesCSVPick()
+                if (!result) return
+                showImportResult(result)
+                await loadMachines()
+                emit('changed')
+            } catch (error) {
+                ElMessage.error('导入失败: ' + error)
+            }
+        }
+
         const handleAddCommand = (command) => {
             if (command === 'import-finalshell') importFinalShell()
             else if (command === 'import-xshell') importXshell()
+            else if (command === 'import-openssh') importOpenSSH()
+            else if (command === 'import-csv') importCSV()
             else if (command === 'export-template') exportTemplate()
             else if (command === 'import-template') importTemplate()
         }
@@ -1218,6 +1402,9 @@ export default {
             machinesLoading,
             machineEditVisible,
             groupManageVisible,
+            groupDefaultsVisible,
+            groupDefaultsForm,
+            savingGroupDefaults,
             newGroupName,
             savingMachine,
             testingDraft,
@@ -1248,6 +1435,10 @@ export default {
             testDraftConnection,
             selectKeyFile,
             applyGlobalAccount,
+            applyGroupDefaultsToForm,
+            editGroupDefaults,
+            selectGroupDefaultKeyFile,
+            saveGroupDefaults,
             handleAddCommand,
             loadGroups,
             addGroup,
@@ -1553,6 +1744,13 @@ export default {
 .key-file-input {
     display: flex;
     gap: 8px;
+    width: 100%;
+}
+
+.group-field-row {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
     width: 100%;
 }
 

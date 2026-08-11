@@ -201,6 +201,17 @@ func isHexColor(s string) bool {
 	return true
 }
 
+// MachineGroupDefaults 分组级默认连接配置
+type MachineGroupDefaults struct {
+	Name           string   `yaml:"name" json:"name"`
+	User           string   `yaml:"user,omitempty" json:"user,omitempty"`
+	KeyFile        string   `yaml:"keyFile,omitempty" json:"keyFile,omitempty"`
+	ProxyJump      string   `yaml:"proxyJump,omitempty" json:"proxyJump,omitempty"`
+	StartupCommand string   `yaml:"startupCommand,omitempty" json:"startupCommand,omitempty"`
+	SftpEncoding   string   `yaml:"sftpEncoding,omitempty" json:"sftpEncoding,omitempty"`
+	Tags           []string `yaml:"tags,omitempty" json:"tags,omitempty"`
+}
+
 // GlobalConfig 全局配置结构
 type GlobalConfig struct {
 	AppId          string            `yaml:"appId" json:"appId"`
@@ -209,7 +220,8 @@ type GlobalConfig struct {
 	LastOpenedFile string            `yaml:"lastOpenedFile" json:"lastOpenedFile"`
 	WorkPaths      map[string]string `yaml:"workPaths" json:"workPaths"`
 	Machines       []define.Machine  `yaml:"machines,omitempty" json:"machines,omitempty"`
-	MachineGroups  []string          `yaml:"machineGroups,omitempty" json:"machineGroups,omitempty"`
+	MachineGroups            []string               `yaml:"machineGroups,omitempty" json:"machineGroups,omitempty"`
+	MachineGroupDefaultsList []MachineGroupDefaults `yaml:"machineGroupDefaults,omitempty" json:"machineGroupDefaults,omitempty"`
 	GlobalAccounts []GlobalAccount `yaml:"globalAccounts,omitempty" json:"globalAccounts,omitempty"`
 	ThemeSettings  ThemeSettings   `yaml:"themeSettings" json:"themeSettings"`
 	ProxySettings  ProxySettings     `yaml:"proxySettings" json:"proxySettings"`

@@ -13,6 +13,7 @@ type GlobalAccount struct {
 	ID                string `yaml:"id" json:"id"`
 	Name              string `yaml:"name" json:"name"`
 	User              string `yaml:"user" json:"user"`
+	KeyFile           string `yaml:"keyFile,omitempty" json:"keyFile,omitempty"`
 	EncryptedPassword string `yaml:"encrypted_password,omitempty" json:"encrypted_password,omitempty"`
 	password          string `yaml:"-" json:"-"`
 }
@@ -65,6 +66,7 @@ type GlobalAccountDTO struct {
 	Name     string `json:"name"`
 	User     string `json:"user"`
 	Password string `json:"password"`
+	KeyFile  string `json:"keyFile,omitempty"`
 }
 
 func (gcm *GlobalConfigManager) ensureGlobalAccountIDs() bool {
@@ -93,6 +95,7 @@ func (gcm *GlobalConfigManager) GetGlobalAccounts() []GlobalAccountDTO {
 			Name:     account.Name,
 			User:     account.User,
 			Password: password,
+			KeyFile:  account.KeyFile,
 		})
 	}
 	return result

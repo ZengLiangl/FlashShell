@@ -51,7 +51,7 @@
     </template>
 
     <!-- Shell 视图：挂载后用 v-show 保留会话，可与任务并行 -->
-    <div v-show="activeView === 'shell'" class="shell-view-host">
+    <div v-show="activeView === 'shell'" class="shell-view-host shell-with-aside">
       <ShellWorkspace ref="shellWorkspaceRef" v-if="shellMounted" :active="activeView === 'shell'"
         :block-shortcuts="settingsHubVisible" :left-panel-width="Math.min(leftPanelWidth, 320)"
         :is-resizing="isResizing" :app-info="statusBarInfo" :machines="shellMachines" :sessions="shellSessions"
@@ -70,7 +70,7 @@
 
     <!-- 首页：任务模式 + Shell 模式入口 -->
     <template v-if="activeView === 'home'">
-      <div class="projectlist-fullscreen">
+      <div class="projectlist-fullscreen home-with-aside">
         <HomePage ref="homePageRef" :projects="projects" :machines="shellMachines" :connected-count="connectedCount"
           :has-task="!!selectedProject" :task-running="status.isRunning" :connecting-name="connectingName"
           :sessions="shellSessions" :workspace-sessions="workspaceSessions" @refresh="refreshConfig"
@@ -85,6 +85,15 @@
     <SettingsHubDialog v-model="settingsHubVisible" :initial-section="settingsSection" :edit-machine-id="machineEditId"
       @machines-changed="onMachinesChanged" @machines-closed="machineEditId = ''"
       @connect-machine="onSettingsConnectMachine" />
+
+    <MachineAsidePanel
+      :open="machineAsideOpen"
+      :machine="machineAsideMachine"
+      :machines="shellMachines"
+      @close="machineAsideOpen = false"
+      @saved="onMachinesChanged"
+      @connect="onAsideConnect"
+    />
 
     <!-- 关于弹框 -->
     <AboutDialog v-model="aboutVisible" :intro-html="aboutIntroHtml" :prompt-mode="aboutPromptMode"
@@ -141,10 +150,11 @@ const ConfigEditorDialog = defineAsyncComponent(() => import("./components/Confi
 const SettingsHubDialog = defineAsyncComponent(() => import("./components/SettingsHubDialog.vue"));
 const HostKeyTrustDialog = defineAsyncComponent(() => import("./components/shell/HostKeyTrustDialog.vue"));
 const QuickSwitcher = defineAsyncComponent(() => import("./components/QuickSwitcher.vue"));
+const MachineAsidePanel = defineAsyncComponent(() => import("./components/MachineAsidePanel.vue"));
 
 export default {
   name: "App",
-  components: { AppMenuBar, TerminalOutput, StatusBar, ProjectList, HomePage, ShellWorkspace, SubProjectList, TerminalHeader, AboutDialog, ConfigEditorDialog, SettingsHubDialog, HostKeyTrustDialog, QuickSwitcher },
+  components: { AppMenuBar, TerminalOutput, StatusBar, ProjectList, HomePage, ShellWorkspace, SubProjectList, TerminalHeader, AboutDialog, ConfigEditorDialog, SettingsHubDialog, HostKeyTrustDialog, QuickSwitcher, MachineAsidePanel },
   setup() {
     const { isDark, themeMode, terminalPreset, loadTheme, applyThemeSettings } = useTheme();
     const projects = ref([]);
@@ -200,6 +210,8 @@ export default {
     const settingsHubVisible = ref(false);
     const settingsSection = ref('general');
     const machineEditId = ref('');
+    const machineAsideOpen = ref(false);
+    const machineAsideMachine = ref(null);
     const machines = ref([]);
     const machinesLoading = ref(false);
     const quickSwitcherVisible = ref(false);
@@ -612,15 +624,20 @@ export default {
     };
 
     const openShellMachineDialog = async () => {
-      machineEditId.value = '';
-      openSettingsHub('machines');
+      machineAsideMachine.value = null;
+      machineAsideOpen.value = true;
       await loadShellMachines();
     };
 
     const openShellMachineEdit = async (machine) => {
-      machineEditId.value = machine?.id || '';
-      openSettingsHub('machines');
+      machineAsideMachine.value = machine || null;
+      machineAsideOpen.value = true;
       await loadShellMachines();
+    };
+
+    const onAsideConnect = async (machineName) => {
+      machineAsideOpen.value = false;
+      await openShellAndConnect(machineName);
     };
 
     const copyShellMachine = async (machine) => {
@@ -1562,6 +1579,9 @@ export default {
       startResize,
       // 机器配置相关
       machineEditId,
+      machineAsideOpen,
+      machineAsideMachine,
+      onAsideConnect,
       machines,
       machinesLoading,
       settingsHubVisible,
@@ -1646,6 +1666,11 @@ export default {
 </script>
 
 <style scoped>
+.home-with-aside,
+.shell-with-aside {
+  position: relative;
+}
+
 .app-container {
   height: 100vh;
   display: flex;

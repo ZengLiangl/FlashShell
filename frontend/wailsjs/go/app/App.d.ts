@@ -108,6 +108,10 @@ export function GetLocalHomeDir():Promise<string>;
 
 export function GetMachineGroups():Promise<Array<string>>;
 
+export function GetMachineGroupDefaults():Promise<Array<data.MachineGroupDefaults>>;
+
+export function GetPortForwardStatus(arg1:string):Promise<Array<define.SSHTunnelStatus>>;
+
 export function GetMachineSensitiveData(arg1:string):Promise<define.SensitiveData>;
 
 export function GetMachines():Promise<Array<define.Machine>>;
@@ -162,6 +166,10 @@ export function ImportMachineTemplate(arg1:string,arg2:boolean):Promise<data.Imp
 
 export function ImportMachineTemplateFromFile(arg1:boolean):Promise<data.ImportMachineTemplateResult>;
 
+export function ImportMachinesCSVPick():Promise<data.MachineImportResult>;
+
+export function ImportOpenSSHConfigPick(arg1:string,arg2:string):Promise<data.OpenSSHImportResult>;
+
 export function ImportSystemKnownHosts():Promise<number>;
 
 export function ImportXshellFromFile(arg1:string,arg2:string,arg3:string):Promise<data.MachineImportResult>;
@@ -179,6 +187,8 @@ export function ListLocalFiles(arg1:string,arg2:boolean):Promise<Array<define.Sf
 export function ListShellFiles(arg1:string,arg2:string,arg3:boolean):Promise<Array<define.SftpEntry>>;
 
 export function ListShellTransfers():Promise<Array<define.SftpTransferRecord>>;
+
+export function ListPortForwards():Promise<Array<data.PortForwardRule>>;
 
 export function ListSystemFonts():Promise<Array<app.SystemFontInfo>>;
 
@@ -262,6 +272,10 @@ export function SaveGlobalAccounts(arg1:Array<data.GlobalAccount>):Promise<void>
 
 export function SaveGlobalAccountsFromDTO(arg1:Array<data.GlobalAccountDTO>):Promise<void>;
 
+export function SaveMachineGroupDefaults(arg1:data.MachineGroupDefaults):Promise<void>;
+
+export function SavePortForwards(arg1:Array<data.PortForwardRule>):Promise<void>;
+
 export function SaveGlobalConfig(arg1:data.GlobalConfig):Promise<void>;
 
 export function SaveKeyMapSettings(arg1:data.KeyMapSettings):Promise<void>;
@@ -311,6 +325,12 @@ export function StartShellUpload(arg1:string,arg2:string,arg3:string):Promise<st
 export function StopAllCommands():Promise<void>;
 
 export function StopAllSubProjects():Promise<void>;
+
+export function StartAutoPortForwards():Promise<void>;
+
+export function StartPortForward(arg1:string):Promise<void>;
+
+export function StopPortForward(arg1:string):Promise<void>;
 
 export function StopCommand(arg1:string,arg2:string,arg3:string):Promise<void>;
 

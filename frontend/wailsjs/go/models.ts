@@ -173,6 +173,7 @@ export namespace data {
 	    name: string;
 	    user: string;
 	    password: string;
+	    keyFile?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new GlobalAccountDTO(source);
@@ -184,6 +185,79 @@ export namespace data {
 	        this.name = source["name"];
 	        this.user = source["user"];
 	        this.password = source["password"];
+	        this.keyFile = source["keyFile"];
+	    }
+	}
+	export class MachineGroupDefaults {
+	    name: string;
+	    user?: string;
+	    keyFile?: string;
+	    proxyJump?: string;
+	    startupCommand?: string;
+	    sftpEncoding?: string;
+	    tags?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new MachineGroupDefaults(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.user = source["user"];
+	        this.keyFile = source["keyFile"];
+	        this.proxyJump = source["proxyJump"];
+	        this.startupCommand = source["startupCommand"];
+	        this.sftpEncoding = source["sftpEncoding"];
+	        this.tags = source["tags"];
+	    }
+	}
+	export class OpenSSHImportResult {
+	    added: number;
+	    updated: number;
+	    skipped: number;
+	    errors?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new OpenSSHImportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.added = source["added"];
+	        this.updated = source["updated"];
+	        this.skipped = source["skipped"];
+	        this.errors = source["errors"];
+	    }
+	}
+	export class PortForwardRule {
+	    id: string;
+	    name: string;
+	    type: string;
+	    localHost?: string;
+	    localPort: number;
+	    remoteHost?: string;
+	    remotePort?: number;
+	    machineName: string;
+	    enabled: boolean;
+	    autoStart: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PortForwardRule(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.type = source["type"];
+	        this.localHost = source["localHost"];
+	        this.localPort = source["localPort"];
+	        this.remoteHost = source["remoteHost"];
+	        this.remotePort = source["remotePort"];
+	        this.machineName = source["machineName"];
+	        this.enabled = source["enabled"];
+	        this.autoStart = source["autoStart"];
 	    }
 	}
 	export class ShellLogHighlightCustomKeyword {
@@ -766,6 +840,9 @@ export namespace define {
 	    startupCommand?: string;
 	    agentForwarding?: boolean;
 	    pinned?: boolean;
+	    tags?: string[];
+	    notes?: string;
+	    identityId?: string;
 	    tunnels?: SSHTunnel[];
 	    list_host?: string;
 	    list_port?: number;
@@ -796,6 +873,9 @@ export namespace define {
 	        this.startupCommand = source["startupCommand"];
 	        this.agentForwarding = source["agentForwarding"];
 	        this.pinned = source["pinned"];
+	        this.tags = source["tags"];
+	        this.notes = source["notes"];
+	        this.identityId = source["identityId"];
 	        this.tunnels = this.convertValues(source["tunnels"], SSHTunnel);
 	        this.list_host = source["list_host"];
 	        this.list_port = source["list_port"];

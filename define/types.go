@@ -85,6 +85,8 @@ type Machine struct {
 	Tags []string `yaml:"tags,omitempty" json:"tags,omitempty"`
 	// Notes 主机备注（纯文本/Markdown）
 	Notes string `yaml:"notes,omitempty" json:"notes,omitempty"`
+	// IdentityID 引用全局帐号（身份）；连接时覆盖用户名/密码/密钥，不落盘
+	IdentityID string `yaml:"identityId,omitempty" json:"identityId,omitempty"`
 	// Tunnels SSH 隧道（本地/远程/动态），连接后自动建立
 	Tunnels []SSHTunnel `yaml:"tunnels,omitempty" json:"tunnels,omitempty"`
 	// ListHost/ListPort/ListUser 列表展示与搜索用（明文；密码等仍在 encrypted_data）
@@ -265,6 +267,25 @@ func (m *Machine) GetSensitiveData() (*SensitiveData, error) {
 // ClearSensitiveData 清除敏感数据缓存
 func (m *Machine) ClearSensitiveData() {
 	m.sensitiveData = nil
+}
+
+// OverlaySensitiveFields 覆盖运行时用户名/密码（身份引用等，不落盘）
+func (m *Machine) OverlaySensitiveFields(user, password string) error {
+	sensitive, err := m.GetSensitiveData()
+	if err != nil {
+		return err
+	}
+	if sensitive == nil {
+		sensitive = &SensitiveData{}
+	}
+	if u := strings.TrimSpace(user); u != "" {
+		sensitive.User = u
+	}
+	if password != "" {
+		sensitive.Password = password
+	}
+	m.sensitiveData = sensitive
+	return nil
 }
 
 // RemoteMachine 远程机器包装类，包含 SSH 和 SFTP 客户端

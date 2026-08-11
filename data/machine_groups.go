@@ -104,6 +104,7 @@ func (gcm *GlobalConfigManager) RenameMachineGroup(oldName, newName string) erro
 		return fmt.Errorf("分组不存在: %s", oldName)
 	}
 	gcm.config.MachineGroups = groups
+	gcm.renameMachineGroupDefaults(oldName, newName)
 	// 确保新名在登记列表中
 	hasNew := false
 	for _, g := range gcm.config.MachineGroups {
@@ -154,6 +155,7 @@ func (gcm *GlobalConfigManager) DeleteMachineGroup(name string) error {
 		return fmt.Errorf("分组不存在: %s", name)
 	}
 	gcm.config.MachineGroups = groups
+	gcm.removeMachineGroupDefaults(name)
 	return gcm.SaveGlobalConfig(gcm.config)
 }
 

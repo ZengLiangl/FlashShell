@@ -35,6 +35,7 @@ type App struct {
 	localShellPool         *machine.LocalShellPool
 	shellAuxPool           *machine.ShellAuxPool
 	tunnelMgr              *machine.TunnelManager
+	portForwardSSH         *portForwardRuntimeStore
 	transfers              *shellTransferStore
 	externalEdits          *externalEditStore
 	outputChannel          chan string
@@ -110,11 +111,12 @@ func (a *App) Startup(ctx context.Context) {
 	a.applyWindowTheme(a.GetThemeSettings().Mode)
 	a.applyAppBrandingFromConfig()
 	a.applyStartupFullscreenFromConfig()
+	a.StartAutoPortForwards()
 }
 
 // DomReady is called after front-end resources have been loaded
 func (a *App) DomReady(ctx context.Context) {
-	// Add your action here
+	a.StartAutoPortForwards()
 }
 
 // BeforeClose 关闭窗口前触发；首次拦截并弹框确认，确认后再次关闭才真正退出。
@@ -163,6 +165,9 @@ func (a *App) cleanupBeforeQuit() {
 	a.shellAuxPool.DisconnectAll()
 	if a.tunnelMgr != nil {
 		a.tunnelMgr.StopAll()
+	}
+	if a.portForwardSSH != nil {
+		a.portForwardSSH.closeAll()
 	}
 }
 
@@ -515,8 +520,11 @@ func (a *App) TestMachineConnection(machineID string) error {
 	if machineConfig == nil {
 		return fmt.Errorf("未找到机器配置: %s", machineID)
 	}
-
-	sshClient := machine.NewSSHClient(machineConfig, a.configManager.GetWorkPathVars())
+	prepared, err := a.machineForConnect(machineConfig)
+	if err != nil {
+		return err
+	}
+	sshClient := machine.NewSSHClient(prepared, a.configManager.GetWorkPathVars())
 	return sshClient.TestConnection()
 }
 
@@ -541,7 +549,11 @@ func (a *App) TestMachineDraftConnection(m define.Machine, sensitive define.Sens
 	if err := m.SetSensitiveData(&sensitive); err != nil {
 		return fmt.Errorf("准备连接信息失败: %w", err)
 	}
-	sshClient := machine.NewSSHClient(&m, a.configManager.GetWorkPathVars())
+	prepared, err := a.machineForConnect(&m)
+	if err != nil {
+		return err
+	}
+	sshClient := machine.NewSSHClient(prepared, a.configManager.GetWorkPathVars())
 	return sshClient.TestConnection()
 }
 
@@ -896,9 +908,10 @@ func (a *App) SaveGlobalAccountsFromDTO(accounts []data.GlobalAccountDTO) error 
 	stored := make([]data.GlobalAccount, 0, len(accounts))
 	for _, dto := range accounts {
 		account := data.GlobalAccount{
-			ID:   dto.ID,
-			Name: dto.Name,
-			User: dto.User,
+			ID:      dto.ID,
+			Name:    dto.Name,
+			User:    dto.User,
+			KeyFile: dto.KeyFile,
 		}
 		account.EnsureID()
 		if err := account.SetPassword(dto.Password); err != nil {
@@ -1730,9 +1743,13 @@ func (a *App) ConnectShell(configName string) (string, error) {
 	if machineConfig == nil {
 		return "", fmt.Errorf("未找到机器配置: %s", configName)
 	}
+	prepared, err := a.machineForConnect(machineConfig)
+	if err != nil {
+		return "", err
+	}
 
 	workVars := a.configManager.GetWorkPathVars()
-	sessionID, err := a.shellPool.Connect(machineConfig, workVars, a.shellHandlerFor, func(id string, connectErr error) {
+	sessionID, err := a.shellPool.Connect(prepared, workVars, a.shellHandlerFor, func(id string, connectErr error) {
 		if connectErr == nil {
 			a.onRemoteShellConnected(id, machineConfig, configName)
 		}
@@ -1760,13 +1777,17 @@ func (a *App) ReconnectShell(sessionID string) (string, error) {
 	if machineConfig == nil {
 		return "", fmt.Errorf("未找到机器配置: %s", configName)
 	}
+	prepared, err := a.machineForConnect(machineConfig)
+	if err != nil {
+		return "", err
+	}
 	if a.shellPool.IsConnected(sessionID) {
 		a.ensureShellAux(sessionID, machineConfig)
 		a.emitShellSessions()
 		return sessionID, nil
 	}
 	workVars := a.configManager.GetWorkPathVars()
-	if err := a.shellPool.ConnectID(sessionID, machineConfig, workVars, a.shellHandlerFor(sessionID), func(_ string, connectErr error) {
+	if err := a.shellPool.ConnectID(sessionID, prepared, workVars, a.shellHandlerFor(sessionID), func(_ string, connectErr error) {
 		if connectErr == nil {
 			a.onRemoteShellConnected(sessionID, machineConfig, configName)
 		}

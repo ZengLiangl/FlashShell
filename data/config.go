@@ -268,6 +268,48 @@ func (cm *ConfigManager) ImportFinalShell(paths []string, accountID, group strin
 	return cm.globalConfigManager.ImportFinalShellFiles(paths, accountID, group)
 }
 
+func (cm *ConfigManager) ImportOpenSSHConfig(path, accountID, group string) (*OpenSSHImportResult, error) {
+	if cm.globalConfigManager == nil {
+		return nil, fmt.Errorf("全局配置管理器未初始化")
+	}
+	return cm.globalConfigManager.ImportOpenSSHConfig(path, accountID, group)
+}
+
+func (cm *ConfigManager) ImportMachinesCSV(path string) (*MachineImportResult, error) {
+	if cm.globalConfigManager == nil {
+		return nil, fmt.Errorf("全局配置管理器未初始化")
+	}
+	return cm.globalConfigManager.ImportMachinesCSV(path)
+}
+
+func (cm *ConfigManager) MachineForConnect(machine *define.Machine) (*define.Machine, error) {
+	if cm.globalConfigManager == nil {
+		return machine, nil
+	}
+	return cm.globalConfigManager.MachineForConnect(machine)
+}
+
+func (cm *ConfigManager) GetMachineGroupDefaults() []MachineGroupDefaults {
+	if cm.globalConfigManager == nil {
+		return []MachineGroupDefaults{}
+	}
+	return cm.globalConfigManager.GetMachineGroupDefaults()
+}
+
+func (cm *ConfigManager) GetMachineGroupDefaultsByName(name string) *MachineGroupDefaults {
+	if cm.globalConfigManager == nil {
+		return nil
+	}
+	return cm.globalConfigManager.GetMachineGroupDefaultsByName(name)
+}
+
+func (cm *ConfigManager) SaveMachineGroupDefaults(def MachineGroupDefaults) error {
+	if cm.globalConfigManager == nil {
+		return fmt.Errorf("全局配置管理器未初始化")
+	}
+	return cm.globalConfigManager.SaveMachineGroupDefaults(def)
+}
+
 // processPathVariables 处理路径变量替换
 func (cm *ConfigManager) processPathVariables(root *define.Root) {
 	for i := range root.Projects {

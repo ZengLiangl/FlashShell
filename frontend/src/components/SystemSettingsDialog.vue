@@ -560,6 +560,14 @@
                 <el-form-item label="密码">
                     <el-input v-model="accountForm.password" type="password" show-password placeholder="SSH 密码" />
                 </el-form-item>
+                <el-form-item label="密钥文件">
+                    <div class="key-file-input">
+                        <el-input v-model="accountForm.keyFile" placeholder="私钥路径" readonly />
+                        <el-button type="primary" circle @click="selectAccountKeyFile">
+                            <el-icon><Folder /></el-icon>
+                        </el-button>
+                    </div>
+                </el-form-item>
             </el-form>
             <template #footer>
                 <div class="dialog-footer icon-actions">
@@ -587,7 +595,7 @@
 import { ref, reactive, watch, computed, onMounted, onUnmounted } from 'vue'
 import { marked } from 'marked'
 import { ElMessage } from 'element-plus'
-import { Edit, Delete, Plus, Close, Check } from '@element-plus/icons-vue'
+import { Edit, Delete, Plus, Close, Check, Folder } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { useTheme } from '../composables/useTheme'
@@ -672,7 +680,7 @@ export default {
         const importingKnownHosts = ref(false)
         const accountEditVisible = ref(false)
         const editingAccountIndex = ref(-1)
-        const accountForm = reactive({ id: '', name: '', user: '', password: '' })
+        const accountForm = reactive({ id: '', name: '', user: '', password: '', keyFile: '' })
         const { applyThemeSettings } = useTheme()
         const settingsTab = ref('system')
         const settingsTabs = [
@@ -1219,6 +1227,7 @@ theme preview · ${theme.foreground}`
             accountForm.name = ''
             accountForm.user = ''
             accountForm.password = ''
+            accountForm.keyFile = ''
         }
 
         const addAccount = () => {
@@ -1234,6 +1243,7 @@ theme preview · ${theme.foreground}`
             accountForm.name = account.name || ''
             accountForm.user = account.user || ''
             accountForm.password = account.password || ''
+            accountForm.keyFile = account.keyFile || ''
             accountEditVisible.value = true
         }
 
@@ -1257,6 +1267,15 @@ theme preview · ${theme.foreground}`
             }
         }
 
+        const selectAccountKeyFile = async () => {
+            try {
+                const filePath = await App.SelectKeyFile()
+                if (filePath) accountForm.keyFile = filePath
+            } catch (e) {
+                ElMessage.error('选择密钥文件失败: ' + e)
+            }
+        }
+
         const confirmAccount = async () => {
             if (!accountForm.name.trim() || !accountForm.user.trim()) {
                 ElMessage.warning('请填写帐号名称和用户名')
@@ -1266,7 +1285,8 @@ theme preview · ${theme.foreground}`
                 id: accountForm.id || crypto.randomUUID(),
                 name: accountForm.name.trim(),
                 user: accountForm.user.trim(),
-                password: accountForm.password
+                password: accountForm.password,
+                keyFile: accountForm.keyFile || '',
             }
             if (editingAccountIndex.value >= 0) {
                 accounts.value[editingAccountIndex.value] = payload
@@ -1395,6 +1415,7 @@ theme preview · ${theme.foreground}`
             editAccount,
             removeAccount,
             confirmAccount,
+            selectAccountKeyFile,
             save,
         }
     }

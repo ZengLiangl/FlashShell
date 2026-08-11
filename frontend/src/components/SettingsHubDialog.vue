@@ -52,6 +52,10 @@
             v-if="visibleProxy && section === 'proxy'"
             :active="true"
           />
+          <PortForwardPanel
+            v-if="visibleProxy && section === 'portforwards'"
+            :active="true"
+          />
           <ShortcutSettingsPanel
             v-if="visibleProxy && section === 'shortcuts'"
             :active="true"
@@ -64,16 +68,18 @@
 
 <script>
 import { computed, ref, watch } from 'vue'
-import { Monitor, Key, Setting, Operation, Connection } from '@element-plus/icons-vue'
+import { Monitor, Key, Setting, Operation, Connection, Switch } from '@element-plus/icons-vue'
 import MachineConfigDialog from './MachineConfigDialog.vue'
 import WorkPathConfigDialog from './WorkPathConfigDialog.vue'
 import SystemSettingsDialog from './SystemSettingsDialog.vue'
 import ShortcutSettingsPanel from './ShortcutSettingsPanel.vue'
 import ProxySettingsPanel from './ProxySettingsPanel.vue'
+import PortForwardPanel from './PortForwardPanel.vue'
 
 const NAV_ITEMS = [
   { id: 'machines', label: '机器配置', icon: Monitor },
   { id: 'env', label: '环境变量', icon: Key },
+  { id: 'portforwards', label: '端口转发', icon: Switch },
   { id: 'general', label: '系统设置', icon: Setting },
   { id: 'proxy', label: 'HTTP 代理', icon: Connection },
   { id: 'shortcuts', label: '快捷键', icon: Operation },
@@ -87,11 +93,13 @@ export default {
     SystemSettingsDialog,
     ShortcutSettingsPanel,
     ProxySettingsPanel,
+    PortForwardPanel,
     Monitor,
     Key,
     Setting,
     Operation,
     Connection,
+    Switch,
   },
   props: {
     modelValue: { type: Boolean, default: false },

@@ -206,6 +206,14 @@ export function GetMachineGroups() {
   return window['go']['app']['App']['GetMachineGroups']();
 }
 
+export function GetMachineGroupDefaults() {
+  return window['go']['app']['App']['GetMachineGroupDefaults']();
+}
+
+export function GetPortForwardStatus(arg1) {
+  return window['go']['app']['App']['GetPortForwardStatus'](arg1);
+}
+
 export function GetMachineSensitiveData(arg1) {
   return window['go']['app']['App']['GetMachineSensitiveData'](arg1);
 }
@@ -310,6 +318,14 @@ export function ImportMachineTemplate(arg1, arg2) {
   return window['go']['app']['App']['ImportMachineTemplate'](arg1, arg2);
 }
 
+export function ImportMachinesCSVPick() {
+  return window['go']['app']['App']['ImportMachinesCSVPick']();
+}
+
+export function ImportOpenSSHConfigPick(arg1, arg2) {
+  return window['go']['app']['App']['ImportOpenSSHConfigPick'](arg1, arg2);
+}
+
 export function ImportMachineTemplateFromFile(arg1) {
   return window['go']['app']['App']['ImportMachineTemplateFromFile'](arg1);
 }
@@ -348,6 +364,10 @@ export function ListShellFiles(arg1, arg2, arg3) {
 
 export function ListShellTransfers() {
   return window['go']['app']['App']['ListShellTransfers']();
+}
+
+export function ListPortForwards() {
+  return window['go']['app']['App']['ListPortForwards']();
 }
 
 export function ListSystemFonts() {
@@ -506,6 +526,14 @@ export function SaveConfig(arg1) {
   return window['go']['app']['App']['SaveConfig'](arg1);
 }
 
+export function SaveMachineGroupDefaults(arg1) {
+  return window['go']['app']['App']['SaveMachineGroupDefaults'](arg1);
+}
+
+export function SavePortForwards(arg1) {
+  return window['go']['app']['App']['SavePortForwards'](arg1);
+}
+
 export function SaveGlobalAccounts(arg1) {
   return window['go']['app']['App']['SaveGlobalAccounts'](arg1);
 }
@@ -608,6 +636,18 @@ export function StartShellUpload(arg1, arg2, arg3) {
 
 export function StopAllCommands() {
   return window['go']['app']['App']['StopAllCommands']();
+}
+
+export function StartAutoPortForwards() {
+  return window['go']['app']['App']['StartAutoPortForwards']();
+}
+
+export function StartPortForward(arg1) {
+  return window['go']['app']['App']['StartPortForward'](arg1);
+}
+
+export function StopPortForward(arg1) {
+  return window['go']['app']['App']['StopPortForward'](arg1);
 }
 
 export function StopAllSubProjects() {
