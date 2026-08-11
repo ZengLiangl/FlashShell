@@ -287,6 +287,23 @@
               </el-button>
             </div>
 
+            <div v-if="availableTags.length" class="home-tag-filter">
+              <button
+                type="button"
+                class="home-tag-chip"
+                :class="{ active: !selectedTags.length }"
+                @click="selectedTags = []"
+              >全部</button>
+              <button
+                v-for="t in availableTags"
+                :key="t"
+                type="button"
+                class="home-tag-chip"
+                :class="{ active: selectedTags.includes(t) }"
+                @click="toggleTagFilter(t)"
+              >{{ t }}</button>
+            </div>
+
             <div v-if="pinnedMachines.length" class="home-section">
               <div class="home-section-title">置顶</div>
               <MachineConnectList
@@ -359,7 +376,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Refresh, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
-import { machineMatchesKeyword, isMachineConnecting } from '../utils/machineGroups'
+import { machineMatchesKeyword, isMachineConnecting, collectMachineTags, machineMatchesTags } from '../utils/machineGroups'
 import { mergeShortcuts, formatShortcut } from '../utils/shortcuts'
 import { parseQuickConnectTarget, findMachineForQuickConnect } from '../utils/quickConnect'
 import MachineConnectList from './shell/MachineConnectList.vue'
@@ -403,6 +420,7 @@ export default {
   ],
   setup(props, { emit }) {
     const machineKeyword = ref('')
+    const selectedTags = ref([])
     const configFiles = ref([])
     const currentConfig = ref('')
     const shortcuts = ref(mergeShortcuts())
@@ -410,7 +428,18 @@ export default {
     const historyRecords = ref([])
 
     const hasProjects = computed(() => (props.projects || []).length > 0)
+    const availableTags = computed(() => collectMachineTags(props.machines || []))
     const labelOf = (id) => formatShortcut(shortcuts.value[id])
+
+    const toggleTagFilter = (tag) => {
+      const t = String(tag || '').trim()
+      if (!t) return
+      if (selectedTags.value.includes(t)) {
+        selectedTags.value = selectedTags.value.filter((x) => x !== t)
+      } else {
+        selectedTags.value = [...selectedTags.value, t]
+      }
+    }
 
     const openConfigEditor = () => {
       emit('open-config-editor')
@@ -495,8 +524,9 @@ export default {
     const filteredMachines = computed(() => {
       const kw = machineKeyword.value
       const list = props.machines || []
-      if (!String(kw || '').trim()) return list
-      return list.filter((m) => machineMatchesKeyword(m, kw))
+      return list.filter(
+        (m) => machineMatchesKeyword(m, kw) && machineMatchesTags(m, selectedTags.value),
+      )
     })
 
     const pinnedMachines = computed(() =>
@@ -512,7 +542,7 @@ export default {
         if (!name || seen.has(name)) continue
         const m = byName.get(name)
         if (!m) continue
-        if (String(machineKeyword.value || '').trim() && !machineMatchesKeyword(m, machineKeyword.value)) {
+        if (!machineMatchesKeyword(m, machineKeyword.value) || !machineMatchesTags(m, selectedTags.value)) {
           continue
         }
         seen.add(name)
@@ -597,6 +627,9 @@ export default {
     return {
       Refresh,
       machineKeyword,
+      selectedTags,
+      availableTags,
+      toggleTagFilter,
       configFiles,
       currentConfig,
       hasProjects,
@@ -864,6 +897,30 @@ export default {
   font-size: 13px;
   color: var(--app-text, #303133);
   line-height: 1.4;
+}
+
+.home-tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.home-tag-chip {
+  border: 1px solid var(--app-border);
+  background: var(--app-card-bg);
+  color: var(--app-text-secondary);
+  font-size: 11px;
+  line-height: 1;
+  padding: 5px 10px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.home-tag-chip.active {
+  border-color: color-mix(in srgb, var(--app-accent-color) 55%, var(--app-border));
+  color: var(--app-accent-color);
+  background: var(--app-accent-bg);
 }
 
 .item-grid {

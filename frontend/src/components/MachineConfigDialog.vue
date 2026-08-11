@@ -233,6 +233,38 @@
                     </el-select>
                 </el-form-item>
 
+                <el-form-item label="标签">
+                    <el-select
+                        v-model="machineForm.tags"
+                        multiple
+                        filterable
+                        allow-create
+                        default-first-option
+                        collapse-tags
+                        collapse-tags-tooltip
+                        placeholder="输入后回车添加标签"
+                        style="width: 100%"
+                    >
+                        <el-option
+                            v-for="t in knownTagOptions"
+                            :key="t"
+                            :label="t"
+                            :value="t"
+                        />
+                    </el-select>
+                </el-form-item>
+
+                <el-form-item label="备注">
+                    <el-input
+                        v-model="machineForm.notes"
+                        type="textarea"
+                        :rows="3"
+                        placeholder="运维备注（支持检索）"
+                        maxlength="4000"
+                        show-word-limit
+                    />
+                </el-form-item>
+
                 <el-form-item label="全局帐号">
                     <el-select
                         v-model="selectedAccountId"
@@ -506,6 +538,8 @@ import {
     machineMatchesKeyword,
     getMachineGroup,
     formatMachineAddr,
+    normalizeMachineTags,
+    collectMachineTags,
 } from '../utils/machineGroups'
 import { copyMachineRecord } from '../utils/machineCopy'
 import { useMachineContextMenu } from '../composables/useMachineContextMenu'
@@ -600,6 +634,8 @@ export default {
         const machineForm = reactive({
             name: '',
             group: '',
+            tags: [],
+            notes: '',
             key_file: '',
             host: '',
             port: 22,
@@ -623,6 +659,8 @@ export default {
             agentForwarding: false,
             tunnels: [],
         })
+
+        const knownTagOptions = computed(() => collectMachineTags(machines.value))
 
         const emptyTunnel = () => ({
             enabled: true,
@@ -699,6 +737,8 @@ export default {
             selectedAccountId.value = ''
             machineForm.name = machine.name
             machineForm.group = machine.group || ''
+            machineForm.tags = normalizeMachineTags(machine.tags)
+            machineForm.notes = machine.notes || ''
             machineForm.key_file = machine.key_file || ''
             machineForm.proxyJump = machine.proxyJump || ''
             machineForm.jumpChain = Array.isArray(machine.jumpChain) ? [...machine.jumpChain] : []
@@ -768,6 +808,8 @@ export default {
         const resetMachineForm = () => {
             machineForm.name = ''
             machineForm.group = ''
+            machineForm.tags = []
+            machineForm.notes = ''
             machineForm.key_file = ''
             machineForm.host = ''
             machineForm.port = 22
@@ -870,6 +912,8 @@ export default {
                 const machineData = {
                     name: machineForm.name,
                     group: normalizeGroup(machineForm.group),
+                    tags: normalizeMachineTags(machineForm.tags),
+                    notes: String(machineForm.notes || '').trim(),
                     key_file: machineForm.key_file,
                     proxyJump: machineForm.proxyJump?.trim() || '',
                     jumpChain: (machineForm.jumpChain || []).map((s) => String(s).trim()).filter(Boolean),
@@ -1167,6 +1211,7 @@ export default {
             draggingMachineId,
             dragOverGroup,
             groupOptions,
+            knownTagOptions,
             managedGroups,
             machineKeyword,
             globalAccounts,

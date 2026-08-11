@@ -359,6 +359,7 @@ export default {
           paste: { ...shortcuts.paste },
           clearOutput: { ...shortcuts.clearOutput },
           commandPalette: { ...shortcuts.commandPalette },
+          quickSwitcher: { ...shortcuts.quickSwitcher },
           snippets: snippets.value.map((s) => {
             const out = {
               id: s.id,

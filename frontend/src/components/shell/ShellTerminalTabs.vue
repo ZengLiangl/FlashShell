@@ -73,6 +73,15 @@
             </el-icon>
           </el-button>
         </el-tooltip>
+        <el-tooltip v-if="sessions.length"
+          :content="composeEnabled ? '关闭撰写栏' : '开启撰写栏（多行命令）'" placement="bottom">
+          <el-button class="compose-toggle" size="small" text :class="{ active: composeEnabled }"
+            @click="toggleCompose">
+            <el-icon :size="15">
+              <EditPen />
+            </el-icon>
+          </el-button>
+        </el-tooltip>
         <el-tooltip content="命令面板 (历史/片段，默认 Ctrl/⌘+Shift+P)" placement="bottom">
           <el-button v-if="sessions.length" size="small" text title="命令面板"
             @click="$emit('open-command-palette')">
@@ -93,6 +102,15 @@
     <ShellBroadcastBar v-if="sessions.length && broadcastEnabled" :enabled="broadcastEnabled"
       :targets="broadcastTargets" :sessions="sessions" @update:enabled="(v) => $emit('update:broadcast-enabled', v)"
       @update:targets="(v) => $emit('update:broadcast-targets', v)" />
+
+    <ShellComposeBar
+      v-if="sessions.length && composeEnabled"
+      :enabled="composeEnabled"
+      :session-id="activeTab"
+      :broadcast-enabled="broadcastEnabled"
+      :broadcast-targets="broadcastTargets"
+      @update:enabled="(v) => (composeEnabled = v)"
+    />
 
     <div v-if="sessions.length === 0" class="empty-slot">
       <slot name="empty" />
@@ -167,9 +185,10 @@
 
 <script>
 import { ref, reactive, watch, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { ArrowLeft, ArrowDown, Folder, Upload, Plus, Promotion, Memo } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowDown, Folder, Upload, Plus, Promotion, Memo, EditPen } from '@element-plus/icons-vue'
 import ShellTerminal from './ShellTerminal.vue'
 import ShellBroadcastBar from './ShellBroadcastBar.vue'
+import ShellComposeBar from './ShellComposeBar.vue'
 
 const MAX_SPLIT = 4
 const DRAG_REORDER_PX = 4
@@ -230,6 +249,7 @@ export default {
   components: {
     ShellTerminal,
     ShellBroadcastBar,
+    ShellComposeBar,
     ArrowLeft,
     ArrowDown,
     Folder,
@@ -237,6 +257,7 @@ export default {
     Plus,
     Promotion,
     Memo,
+    EditPen,
   },
   props: {
     sessions: { type: Array, default: () => [] },
@@ -521,6 +542,11 @@ export default {
         const ids = (props.sessions || []).filter((s) => s.connected).map((s) => s.machineName)
         emit('update:broadcast-targets', ids)
       }
+    }
+
+    const composeEnabled = ref(false)
+    const toggleCompose = () => {
+      composeEnabled.value = !composeEnabled.value
     }
 
     const splitGridStyle = computed(() => {
@@ -811,6 +837,8 @@ export default {
       removeFromSplit,
       exitSplit,
       toggleBroadcast,
+      composeEnabled,
+      toggleCompose,
       connectedCount,
     }
   },
@@ -1072,6 +1100,21 @@ export default {
 }
 
 .broadcast-toggle.active {
+  background: var(--app-accent-bg);
+  border-radius: var(--app-radius-sm, 6px);
+}
+
+.compose-toggle {
+  flex-shrink: 0;
+  color: var(--app-text-secondary);
+}
+
+.compose-toggle:hover,
+.compose-toggle.active {
+  color: var(--app-accent-color);
+}
+
+.compose-toggle.active {
   background: var(--app-accent-bg);
   border-radius: var(--app-radius-sm, 6px);
 }

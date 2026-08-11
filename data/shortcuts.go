@@ -36,6 +36,7 @@ type ShortcutSettings struct {
 	Paste             ShortcutBinding `json:"paste"`
 	ClearOutput       ShortcutBinding `json:"clearOutput"`
 	CommandPalette    ShortcutBinding `json:"commandPalette"`
+	QuickSwitcher     ShortcutBinding `json:"quickSwitcher"`
 	Snippets          []ShellSnippet  `json:"snippets,omitempty"`
 }
 
@@ -53,6 +54,7 @@ func DefaultShortcutSettings() ShortcutSettings {
 		Paste:             ShortcutBinding{Key: "v", UseMod: true},
 		ClearOutput:       ShortcutBinding{Key: "k", UseMod: true},
 		CommandPalette:    ShortcutBinding{Key: "p", UseMod: true, UseShift: true},
+		QuickSwitcher:     ShortcutBinding{Key: "j", UseMod: true},
 	}
 }
 
@@ -93,6 +95,9 @@ func fillShortcutDefaults(s *ShortcutSettings) {
 	}
 	if s.CommandPalette.Key == "" {
 		s.CommandPalette = def.CommandPalette
+	}
+	if s.QuickSwitcher.Key == "" {
+		s.QuickSwitcher = def.QuickSwitcher
 	}
 }
 

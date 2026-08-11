@@ -93,6 +93,19 @@
     <ConfigEditorDialog v-model="configEditorVisible" @saved="refreshProjectConfig" />
 
     <HostKeyTrustDialog v-model="hostKeyDialogVisible" :host-key-info="pendingHostKey" @trusted="onHostKeyTrusted" />
+    <QuickSwitcher
+      v-model="quickSwitcherVisible"
+      :machines="shellMachines"
+      :sessions="shellSessions"
+      @connect="(name) => connectOrReconnectShell(name)"
+      @open-settings="() => { settingsSection = 'general'; settingsHubVisible = true }"
+      @open-machine-config="() => { settingsSection = 'machines'; settingsHubVisible = true }"
+      @open-shell="() => switchActiveView('shell')"
+      @open-command-palette="() => {
+        switchActiveView('shell')
+        nextTick(() => shellWorkspaceRef.value?.openCommandPalette?.())
+      }"
+    />
   </div>
 </template>
 
@@ -127,10 +140,11 @@ const AboutDialog = defineAsyncComponent(() => import("./components/AboutDialog.
 const ConfigEditorDialog = defineAsyncComponent(() => import("./components/ConfigEditorDialog.vue"));
 const SettingsHubDialog = defineAsyncComponent(() => import("./components/SettingsHubDialog.vue"));
 const HostKeyTrustDialog = defineAsyncComponent(() => import("./components/shell/HostKeyTrustDialog.vue"));
+const QuickSwitcher = defineAsyncComponent(() => import("./components/QuickSwitcher.vue"));
 
 export default {
   name: "App",
-  components: { AppMenuBar, TerminalOutput, StatusBar, ProjectList, HomePage, ShellWorkspace, SubProjectList, TerminalHeader, AboutDialog, ConfigEditorDialog, SettingsHubDialog, HostKeyTrustDialog },
+  components: { AppMenuBar, TerminalOutput, StatusBar, ProjectList, HomePage, ShellWorkspace, SubProjectList, TerminalHeader, AboutDialog, ConfigEditorDialog, SettingsHubDialog, HostKeyTrustDialog, QuickSwitcher },
   setup() {
     const { isDark, themeMode, terminalPreset, loadTheme, applyThemeSettings } = useTheme();
     const projects = ref([]);
@@ -188,6 +202,7 @@ export default {
     const machineEditId = ref('');
     const machines = ref([]);
     const machinesLoading = ref(false);
+    const quickSwitcherVisible = ref(false);
 
     // 关于弹框 / 更新提示
     const aboutVisible = ref(false);
@@ -1064,6 +1079,12 @@ export default {
         }
         return;
       }
+
+      if (matchesShortcut(e, sc.quickSwitcher)) {
+        take();
+        quickSwitcherVisible.value = true;
+        return;
+      }
     };
 
     // 复制选中的文本
@@ -1544,6 +1565,7 @@ export default {
       machines,
       machinesLoading,
       settingsHubVisible,
+      quickSwitcherVisible,
       settingsSection,
       openSettingsHub,
       openMachineConfig,

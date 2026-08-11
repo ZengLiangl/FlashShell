@@ -152,6 +152,11 @@
             </el-dropdown-menu>
           </template>
         </el-dropdown>
+        <el-tooltip content="文件夹同步" placement="top">
+          <el-button size="small" text class="tool-icon-btn" title="文件夹同步" @click="openSyncDialog">
+            <el-icon><Refresh /></el-icon>
+          </el-button>
+        </el-tooltip>
       </div>
       <div class="toolbar-right">
         <el-tooltip content="收起 SFTP" placement="top">
@@ -316,6 +321,32 @@
         <el-button type="primary" :loading="editorSaving" @click="saveEditor">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="syncVisible" title="文件夹同步" width="480px" append-to-body @open="onSyncDialogOpen">
+      <el-form label-width="88px">
+        <el-form-item label="本地目录">
+          <div class="sync-path-row">
+            <el-input v-model="syncForm.localDir" placeholder="选择本地文件夹" clearable />
+            <el-button @click="pickSyncLocalDir">浏览</el-button>
+          </div>
+        </el-form-item>
+        <el-form-item label="远端目录">
+          <el-input v-model="syncForm.remoteDir" placeholder="远端路径" clearable />
+        </el-form-item>
+        <el-form-item label="方向">
+          <el-radio-group v-model="syncForm.direction">
+            <el-radio-button label="upload">本地 → 远端</el-radio-button>
+            <el-radio-button label="download">远端 → 本地</el-radio-button>
+            <el-radio-button label="both">双向</el-radio-button>
+          </el-radio-group>
+        </el-form-item>
+        <p class="sync-hint">按文件名与大小比较差异后传输；进度在传输队列中查看。</p>
+      </el-form>
+      <template #footer>
+        <el-button @click="syncVisible = false">取消</el-button>
+        <el-button type="primary" :loading="syncStarting" @click="startFolderSync">开始同步</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
@@ -388,6 +419,13 @@ export default {
     const ctx = reactive({ visible: false, x: 0, y: 0, row: null })
     const ctxMenuRef = ref(null)
     const editorVisible = ref(false)
+    const syncVisible = ref(false)
+    const syncStarting = ref(false)
+    const syncForm = reactive({
+      localDir: '',
+      remoteDir: '',
+      direction: 'upload',
+    })
     const editorContent = ref('')
     const editorPath = ref('')
     const editorTitle = ref('编辑文件')
@@ -1355,6 +1393,56 @@ export default {
       }
     }
 
+    const openSyncDialog = () => {
+      if (!props.machineName) {
+        ElMessage.warning('请先连接远程会话')
+        return
+      }
+      syncVisible.value = true
+    }
+
+    const onSyncDialogOpen = () => {
+      if (!syncForm.remoteDir) syncForm.remoteDir = cwd.value || '/'
+    }
+
+    const pickSyncLocalDir = async () => {
+      try {
+        const dir = await App.PickShellUploadFolder()
+        if (dir) syncForm.localDir = dir
+      } catch (e) {
+        ElMessage.error('选择目录失败: ' + e)
+      }
+    }
+
+    const startFolderSync = async () => {
+      const localDir = String(syncForm.localDir || '').trim()
+      const remoteDir = String(syncForm.remoteDir || '').trim()
+      if (!localDir || !remoteDir) {
+        ElMessage.warning('请填写本地与远端目录')
+        return
+      }
+      if (!props.machineName) {
+        ElMessage.warning('请先连接远程会话')
+        return
+      }
+      syncStarting.value = true
+      try {
+        await App.StartShellFolderSync(
+          props.machineName,
+          localDir,
+          remoteDir,
+          syncForm.direction || 'upload',
+        )
+        ElMessage.success('已开始文件夹同步')
+        syncVisible.value = false
+        emit('transfer-started', { direction: 'sync', count: 1 })
+      } catch (e) {
+        ElMessage.error('同步失败: ' + e)
+      } finally {
+        syncStarting.value = false
+      }
+    }
+
     const deleteEntry = async () => {
       const row = ctx.row
       if (!row || !props.machineName) return
@@ -1541,6 +1629,13 @@ export default {
       onDragLeave,
       onHtmlDrop,
       onUploadCommand,
+      openSyncDialog,
+      onSyncDialogOpen,
+      pickSyncLocalDir,
+      startFolderSync,
+      syncVisible,
+      syncStarting,
+      syncForm,
     }
   },
 }
@@ -2049,5 +2144,22 @@ export default {
   font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   color: var(--el-text-color-primary, #303133);
   font-size: 12px;
+}
+
+.sync-path-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.sync-path-row .el-input {
+  flex: 1;
+}
+
+.sync-hint {
+  margin: 0 0 0 88px;
+  font-size: 12px;
+  color: var(--app-text-muted);
+  line-height: 1.4;
 }
 </style>

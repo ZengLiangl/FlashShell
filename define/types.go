@@ -81,6 +81,10 @@ type Machine struct {
 	AgentForwarding bool `yaml:"agentForwarding,omitempty" json:"agentForwarding,omitempty"`
 	// Pinned 首页置顶
 	Pinned bool `yaml:"pinned,omitempty" json:"pinned,omitempty"`
+	// Tags 主机标签（检索与筛选）
+	Tags []string `yaml:"tags,omitempty" json:"tags,omitempty"`
+	// Notes 主机备注（纯文本/Markdown）
+	Notes string `yaml:"notes,omitempty" json:"notes,omitempty"`
 	// Tunnels SSH 隧道（本地/远程/动态），连接后自动建立
 	Tunnels []SSHTunnel `yaml:"tunnels,omitempty" json:"tunnels,omitempty"`
 	// ListHost/ListPort/ListUser 列表展示与搜索用（明文；密码等仍在 encrypted_data）

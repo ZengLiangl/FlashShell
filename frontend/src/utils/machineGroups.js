@@ -15,19 +15,59 @@ export function formatMachineAddr(machine) {
   return port === 22 ? auth : `${auth}:${port}`
 }
 
-/** 机器列表关键词匹配：名称、用户、IP/主机、分组、密钥路径 */
+/** 规范化标签列表 */
+export function normalizeMachineTags(tags) {
+  if (!Array.isArray(tags)) return []
+  const seen = new Set()
+  const out = []
+  for (const raw of tags) {
+    const t = String(raw || '').trim()
+    if (!t) continue
+    const key = t.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(t)
+  }
+  return out
+}
+
+/** 机器列表关键词匹配：名称、用户、IP/主机、分组、密钥路径、标签、备注 */
 export function machineMatchesKeyword(machine, keyword) {
   const kw = String(keyword || '').trim().toLowerCase()
   if (!kw) return true
   const host = String(machine?.host || machine?.ip || '').toLowerCase()
+  const tags = normalizeMachineTags(machine?.tags)
+  const tagHit = tags.some((t) => t.toLowerCase().includes(kw))
   return (
     String(machine?.name || '').toLowerCase().includes(kw) ||
     String(machine?.user || '').toLowerCase().includes(kw) ||
     host.includes(kw) ||
     String(machine?.group || '').toLowerCase().includes(kw) ||
     String(machine?.key_file || '').toLowerCase().includes(kw) ||
-    formatMachineAddr(machine).toLowerCase().includes(kw)
+    formatMachineAddr(machine).toLowerCase().includes(kw) ||
+    tagHit ||
+    String(machine?.notes || '').toLowerCase().includes(kw)
   )
+}
+
+/** 从机器列表收集全部标签（去重排序） */
+export function collectMachineTags(machines) {
+  const map = new Map()
+  for (const m of machines || []) {
+    for (const t of normalizeMachineTags(m?.tags)) {
+      const key = t.toLowerCase()
+      if (!map.has(key)) map.set(key, t)
+    }
+  }
+  return [...map.values()].sort((a, b) => a.localeCompare(b, 'zh-CN'))
+}
+
+/** 按选中标签过滤（空选中 = 不过滤；多标签为 OR） */
+export function machineMatchesTags(machine, selectedTags) {
+  const want = normalizeMachineTags(selectedTags)
+  if (!want.length) return true
+  const have = new Set(normalizeMachineTags(machine?.tags).map((t) => t.toLowerCase()))
+  return want.some((t) => have.has(t.toLowerCase()))
 }
 
 /** 机器名称首字母排序：a-z，再 0-9，其它靠后；同前缀按完整名 localeCompare */

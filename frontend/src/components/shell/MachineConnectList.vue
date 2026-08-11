@@ -61,6 +61,9 @@
               </template>
             </div>
             <div class="ml-addr">{{ formatMachineAddr(machine) }}</div>
+            <div v-if="machineTags(machine).length" class="ml-tags">
+              <span v-for="t in machineTags(machine)" :key="t" class="ml-tag">{{ t }}</span>
+            </div>
           </div>
           <div class="ml-side" :class="{ 'ml-side--meta': variant === 'cards' }" @click.stop>
             <template v-if="variant === 'cards'">
@@ -105,7 +108,10 @@
             </template>
           </div>
           <div class="ml-addr">{{ formatMachineAddr(machine) }}</div>
-        </div>
+            <div v-if="machineTags(machine).length" class="ml-tags">
+              <span v-for="t in machineTags(machine)" :key="t" class="ml-tag">{{ t }}</span>
+            </div>
+          </div>
         <div class="ml-side" :class="{ 'ml-side--meta': variant === 'cards' }" @click.stop>
           <template v-if="variant === 'cards'">
             <span v-if="sessionCount(machine.name) > 0" class="ml-card-badge">{{ sessionCount(machine.name) }} 会话</span>
@@ -141,6 +147,7 @@ import {
   isMachineConnected,
   isMachineConnecting,
   countMachineSessions,
+  normalizeMachineTags,
 } from '../../utils/machineGroups'
 import { useMachineContextMenu } from '../../composables/useMachineContextMenu'
 import MachineContextMenu from './MachineContextMenu.vue'
@@ -209,6 +216,7 @@ export default {
     const sessionCount = (name) => countMachineSessions(name, props.sessions)
     const machineConnecting = (name) =>
       isMachineConnecting(name, props.workspaceSessions.length ? props.workspaceSessions : props.sessions)
+    const machineTags = (machine) => normalizeMachineTags(machine?.tags)
 
     const onConnect = (machine) => {
       if (machineConnecting(machine.name)) return
@@ -251,6 +259,7 @@ export default {
       isConnected,
       sessionCount,
       machineConnecting,
+      machineTags,
       formatMachineAddr,
       onConnect,
       onItemContextMenu,

@@ -30,6 +30,16 @@ export async function copyMachineRecord(source, existingMachines) {
     name: copyName,
     group: normalizeGroup(source.group),
     key_file: source.key_file || '',
+    tags: Array.isArray(source.tags) ? [...source.tags] : [],
+    notes: source.notes || '',
+    proxyJump: source.proxyJump || '',
+    jumpChain: Array.isArray(source.jumpChain) ? [...source.jumpChain] : [],
+    legacyAlgorithms: !!source.legacyAlgorithms,
+    skipEcdsaHostKey: !!source.skipEcdsaHostKey,
+    sftpEncoding: source.sftpEncoding || 'auto',
+    sftpFileProtocol: source.sftpFileProtocol || 'auto',
+    startupCommand: source.startupCommand || '',
+    agentForwarding: !!source.agentForwarding,
     tunnels: (source.tunnels || [])
       .filter((t) => t.localPort > 0)
       .map((t) => ({

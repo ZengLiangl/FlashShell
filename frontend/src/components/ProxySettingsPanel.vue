@@ -145,7 +145,7 @@
 <script>
 import { reactive, ref, watch } from 'vue'
 import { Check, Close, Connection } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import * as App from '../../wailsjs/go/app/App'
 
 const defaultForm = () => ({
@@ -215,11 +215,49 @@ export default {
         cfg.proxySettings = proxyPayload()
         await App.SaveSystemSettings(cfg)
         ElMessage.success('代理设置已保存')
+        await maybeReconnectSessions()
       } catch (e) {
         ElMessage.error(`保存失败: ${e}`)
       } finally {
         saving.value = false
       }
+    }
+
+    const maybeReconnectSessions = async () => {
+      let sessions = []
+      try {
+        sessions = ((await App.GetShellSessions()) || []).filter(
+          (s) => s?.machineName && s.kind !== 'local' && !String(s.machineName).startsWith('local'),
+        )
+      } catch {
+        return
+      }
+      if (!sessions.length) return
+      try {
+        await ElMessageBox.confirm(
+          `代理已更新。是否立即重连当前 ${sessions.length} 个远程会话？`,
+          '重连会话',
+          {
+            confirmButtonText: '全部重连',
+            cancelButtonText: '稍后手动',
+            type: 'info',
+          },
+        )
+      } catch {
+        return
+      }
+      let ok = 0
+      let fail = 0
+      for (const s of sessions) {
+        try {
+          await App.ReconnectShell(s.machineName)
+          ok += 1
+        } catch {
+          fail += 1
+        }
+      }
+      if (fail) ElMessage.warning(`已重连 ${ok} 个，失败 ${fail} 个`)
+      else ElMessage.success(`已重连 ${ok} 个远程会话`)
     }
 
     const openTestDialog = () => {

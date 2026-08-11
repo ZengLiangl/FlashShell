@@ -251,6 +251,27 @@
   white-space: nowrap;
 }
 
+.ml-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 4px;
+}
+
+.ml-tag {
+  font-size: 10px;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  color: var(--app-accent-color);
+  background: var(--app-accent-bg);
+  border: 1px solid color-mix(in srgb, var(--app-accent-color) 28%, transparent);
+  max-width: 96px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .ml-side {
   flex-shrink: 0;
   display: flex;
