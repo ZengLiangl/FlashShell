@@ -106,11 +106,9 @@ export function GetKnownHosts():Promise<Array<data.KnownHostRecord>>;
 
 export function GetLocalHomeDir():Promise<string>;
 
-export function GetMachineGroups():Promise<Array<string>>;
-
 export function GetMachineGroupDefaults():Promise<Array<data.MachineGroupDefaults>>;
 
-export function GetPortForwardStatus(arg1:string):Promise<Array<define.SSHTunnelStatus>>;
+export function GetMachineGroups():Promise<Array<string>>;
 
 export function GetMachineSensitiveData(arg1:string):Promise<define.SensitiveData>;
 
@@ -118,11 +116,15 @@ export function GetMachines():Promise<Array<define.Machine>>;
 
 export function GetOutput():Promise<Array<string>>;
 
+export function GetPortForwardStatus(arg1:string):Promise<Array<define.SSHTunnelStatus>>;
+
 export function GetProject(arg1:string):Promise<define.Project>;
 
 export function GetProjectSummaries():Promise<Array<define.ProjectSummary>>;
 
 export function GetSessionInfo():Promise<data.SessionState>;
+
+export function GetShellDiskList(arg1:string):Promise<define.ShellDiskList>;
 
 export function GetShellDownloadDir():Promise<string>;
 
@@ -190,11 +192,11 @@ export function ListAppIconPresets():Promise<Array<app.AppIconPresetInfo>>;
 
 export function ListLocalFiles(arg1:string,arg2:boolean):Promise<Array<define.SftpEntry>>;
 
+export function ListPortForwards():Promise<Array<data.PortForwardRule>>;
+
 export function ListShellFiles(arg1:string,arg2:string,arg3:boolean):Promise<Array<define.SftpEntry>>;
 
 export function ListShellTransfers():Promise<Array<define.SftpTransferRecord>>;
-
-export function ListPortForwards():Promise<Array<data.PortForwardRule>>;
 
 export function ListSystemFonts():Promise<Array<app.SystemFontInfo>>;
 
@@ -278,19 +280,19 @@ export function SaveGlobalAccounts(arg1:Array<data.GlobalAccount>):Promise<void>
 
 export function SaveGlobalAccountsFromDTO(arg1:Array<data.GlobalAccountDTO>):Promise<void>;
 
-export function SaveMachineGroupDefaults(arg1:data.MachineGroupDefaults):Promise<void>;
-
-export function SavePortForwards(arg1:Array<data.PortForwardRule>):Promise<void>;
-
 export function SaveGlobalConfig(arg1:data.GlobalConfig):Promise<void>;
 
 export function SaveKeyMapSettings(arg1:data.KeyMapSettings):Promise<void>;
 
+export function SaveMachineGroupDefaults(arg1:data.MachineGroupDefaults):Promise<void>;
+
+export function SavePortForwards(arg1:Array<data.PortForwardRule>):Promise<void>;
+
 export function SaveShellRemoteFile(arg1:string,arg2:string,arg3:string):Promise<void>;
 
-export function SaveShortcutSettings(arg1:data.ShortcutSettings):Promise<void>;
-
 export function SaveShellSessionRestore(arg1:Array<data.ShellSessionRestoreTab>):Promise<void>;
+
+export function SaveShortcutSettings(arg1:data.ShortcutSettings):Promise<void>;
 
 export function SaveSystemSettings(arg1:data.GlobalConfig):Promise<void>;
 
@@ -324,6 +326,10 @@ export function ShellDirExists(arg1:string,arg2:string):Promise<boolean>;
 
 export function SkipUpdateVersion(arg1:string):Promise<void>;
 
+export function StartAutoPortForwards():Promise<void>;
+
+export function StartPortForward(arg1:string):Promise<void>;
+
 export function StartShellDownload(arg1:string,arg2:string):Promise<string>;
 
 export function StartShellFolderSync(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
@@ -334,13 +340,9 @@ export function StopAllCommands():Promise<void>;
 
 export function StopAllSubProjects():Promise<void>;
 
-export function StartAutoPortForwards():Promise<void>;
-
-export function StartPortForward(arg1:string):Promise<void>;
+export function StopCommand(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function StopPortForward(arg1:string):Promise<void>;
-
-export function StopCommand(arg1:string,arg2:string,arg3:string):Promise<void>;
 
 export function StopShellCommand(arg1:string):Promise<void>;
 

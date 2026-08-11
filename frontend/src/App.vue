@@ -107,7 +107,8 @@
       v-model="quickSwitcherVisible"
       :machines="shellMachines"
       :sessions="shellSessions"
-      @connect="(name) => connectOrReconnectShell(name)"
+      @focus-session="onQuickFocusSession"
+      @connect-machine="onQuickConnectMachine"
       @open-settings="() => { settingsSection = 'general'; settingsHubVisible = true }"
       @open-machine-config="() => { settingsSection = 'machines'; settingsHubVisible = true }"
       @open-shell="() => switchActiveView('shell')"
@@ -612,6 +613,33 @@ export default {
     const openShellAndConnect = async (machineName) => {
       await enterShellMode();
       await connectShell(machineName);
+    };
+
+    /** 快速切换：已有会话 → 聚焦该标签（必要时重连） */
+    const onQuickFocusSession = async (sessionId) => {
+      if (!sessionId) return;
+      await enterShellMode();
+      const tab = workspaceSessions.value.find((s) => s.machineName === sessionId);
+      if (tab?.connected) {
+        activeMachine.value = sessionId;
+        return;
+      }
+      await connectOrReconnectShell(sessionId);
+    };
+
+    /** 快速切换：机器配置 → 新建/打开连接 */
+    const onQuickConnectMachine = async (machineName) => {
+      if (!machineName) return;
+      const existing = workspaceSessions.value.find(
+        (s) =>
+          s.connected &&
+          (s.configName === machineName || s.machineName === machineName || s.tabLabel === machineName),
+      );
+      if (existing) {
+        await onQuickFocusSession(existing.machineName);
+        return;
+      }
+      await openShellAndConnect(machineName);
     };
 
     const onSettingsConnectMachine = async (machineName) => {
@@ -1638,6 +1666,8 @@ export default {
       switchActiveView,
       openConnectionManager,
       openShellAndConnect,
+      onQuickFocusSession,
+      onQuickConnectMachine,
       onSettingsConnectMachine,
       connectShell,
       connectLocalShell,

@@ -257,12 +257,9 @@ type GlobalConfig struct {
 	ShellSessionRestore *bool `yaml:"shellSessionRestore,omitempty" json:"shellSessionRestore"`
 }
 
-// ShellSessionRestoreEnabled 启动时是否恢复 Shell 会话（默认开启）
+// ShellSessionRestoreEnabled 启动时是否恢复 Shell 会话（已关闭，保留字段兼容旧配置）
 func ShellSessionRestoreEnabled(cfg *GlobalConfig) bool {
-	if cfg == nil || cfg.ShellSessionRestore == nil {
-		return true
-	}
-	return *cfg.ShellSessionRestore
+	return false
 }
 
 // NormalizeHomeMinimizedZone 校验首页最小化分区

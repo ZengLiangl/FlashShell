@@ -99,6 +99,25 @@ type ShellSystemInfo struct {
 	Error       string `json:"error,omitempty"`
 }
 
+// ShellDiskMount 磁盘挂载点
+type ShellDiskMount struct {
+	Path      string  `json:"path"`
+	Filesystem string `json:"filesystem,omitempty"`
+	Size      string  `json:"size"`
+	Used      string  `json:"used"`
+	Avail     string  `json:"avail"`
+	UsePct    string  `json:"usePct"`
+	UsePercent float64 `json:"usePercent"`
+}
+
+// ShellDiskList 磁盘列表
+type ShellDiskList struct {
+	MachineName string           `json:"machineName"`
+	Disks       []ShellDiskMount `json:"disks"`
+	Error       string           `json:"error,omitempty"`
+	UpdatedAt   int64            `json:"updatedAt"`
+}
+
 // SftpEntry 远端文件/目录项
 type SftpEntry struct {
 	Name    string `json:"name"`

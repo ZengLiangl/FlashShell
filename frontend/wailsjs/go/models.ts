@@ -154,6 +154,7 @@ export namespace data {
 	    id: string;
 	    name: string;
 	    user: string;
+	    keyFile?: string;
 	    encrypted_password?: string;
 	
 	    static createFrom(source: any = {}) {
@@ -165,6 +166,7 @@ export namespace data {
 	        this.id = source["id"];
 	        this.name = source["name"];
 	        this.user = source["user"];
+	        this.keyFile = source["keyFile"];
 	        this.encrypted_password = source["encrypted_password"];
 	    }
 	}
@@ -186,78 +188,6 @@ export namespace data {
 	        this.user = source["user"];
 	        this.password = source["password"];
 	        this.keyFile = source["keyFile"];
-	    }
-	}
-	export class MachineGroupDefaults {
-	    name: string;
-	    user?: string;
-	    keyFile?: string;
-	    proxyJump?: string;
-	    startupCommand?: string;
-	    sftpEncoding?: string;
-	    tags?: string[];
-	
-	    static createFrom(source: any = {}) {
-	        return new MachineGroupDefaults(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.name = source["name"];
-	        this.user = source["user"];
-	        this.keyFile = source["keyFile"];
-	        this.proxyJump = source["proxyJump"];
-	        this.startupCommand = source["startupCommand"];
-	        this.sftpEncoding = source["sftpEncoding"];
-	        this.tags = source["tags"];
-	    }
-	}
-	export class OpenSSHImportResult {
-	    added: number;
-	    updated: number;
-	    skipped: number;
-	    errors?: string[];
-	
-	    static createFrom(source: any = {}) {
-	        return new OpenSSHImportResult(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.added = source["added"];
-	        this.updated = source["updated"];
-	        this.skipped = source["skipped"];
-	        this.errors = source["errors"];
-	    }
-	}
-	export class PortForwardRule {
-	    id: string;
-	    name: string;
-	    type: string;
-	    localHost?: string;
-	    localPort: number;
-	    remoteHost?: string;
-	    remotePort?: number;
-	    machineName: string;
-	    enabled: boolean;
-	    autoStart: boolean;
-	
-	    static createFrom(source: any = {}) {
-	        return new PortForwardRule(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.id = source["id"];
-	        this.name = source["name"];
-	        this.type = source["type"];
-	        this.localHost = source["localHost"];
-	        this.localPort = source["localPort"];
-	        this.remoteHost = source["remoteHost"];
-	        this.remotePort = source["remotePort"];
-	        this.machineName = source["machineName"];
-	        this.enabled = source["enabled"];
-	        this.autoStart = source["autoStart"];
 	    }
 	}
 	export class ShellLogHighlightCustomKeyword {
@@ -356,6 +286,30 @@ export namespace data {
 	        this.shellAutoReconnect = source["shellAutoReconnect"];
 	    }
 	}
+	export class MachineGroupDefaults {
+	    name: string;
+	    user?: string;
+	    keyFile?: string;
+	    proxyJump?: string;
+	    startupCommand?: string;
+	    sftpEncoding?: string;
+	    tags?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new MachineGroupDefaults(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.user = source["user"];
+	        this.keyFile = source["keyFile"];
+	        this.proxyJump = source["proxyJump"];
+	        this.startupCommand = source["startupCommand"];
+	        this.sftpEncoding = source["sftpEncoding"];
+	        this.tags = source["tags"];
+	    }
+	}
 	export class GlobalConfig {
 	    appId: string;
 	    windowsName: string;
@@ -364,6 +318,7 @@ export namespace data {
 	    workPaths: Record<string, string>;
 	    machines?: define.Machine[];
 	    machineGroups?: string[];
+	    machineGroupDefaults?: MachineGroupDefaults[];
 	    globalAccounts?: GlobalAccount[];
 	    themeSettings: ThemeSettings;
 	    proxySettings: ProxySettings;
@@ -395,6 +350,7 @@ export namespace data {
 	        this.workPaths = source["workPaths"];
 	        this.machines = this.convertValues(source["machines"], define.Machine);
 	        this.machineGroups = source["machineGroups"];
+	        this.machineGroupDefaults = this.convertValues(source["machineGroupDefaults"], MachineGroupDefaults);
 	        this.globalAccounts = this.convertValues(source["globalAccounts"], GlobalAccount);
 	        this.themeSettings = this.convertValues(source["themeSettings"], ThemeSettings);
 	        this.proxySettings = this.convertValues(source["proxySettings"], ProxySettings);
@@ -552,6 +508,7 @@ export namespace data {
 	        this.fingerprint = source["fingerprint"];
 	    }
 	}
+	
 	export class MachineImportResult {
 	    imported: number;
 	    skipped: number;
@@ -566,6 +523,54 @@ export namespace data {
 	        this.imported = source["imported"];
 	        this.skipped = source["skipped"];
 	        this.errors = source["errors"];
+	    }
+	}
+	export class OpenSSHImportResult {
+	    added: number;
+	    updated: number;
+	    skipped: number;
+	    errors?: string[];
+	
+	    static createFrom(source: any = {}) {
+	        return new OpenSSHImportResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.added = source["added"];
+	        this.updated = source["updated"];
+	        this.skipped = source["skipped"];
+	        this.errors = source["errors"];
+	    }
+	}
+	export class PortForwardRule {
+	    id: string;
+	    name: string;
+	    type: string;
+	    localHost?: string;
+	    localPort: number;
+	    remoteHost?: string;
+	    remotePort?: number;
+	    machineName: string;
+	    enabled: boolean;
+	    autoStart: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new PortForwardRule(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.type = source["type"];
+	        this.localHost = source["localHost"];
+	        this.localPort = source["localPort"];
+	        this.remoteHost = source["remoteHost"];
+	        this.remotePort = source["remotePort"];
+	        this.machineName = source["machineName"];
+	        this.enabled = source["enabled"];
+	        this.autoStart = source["autoStart"];
 	    }
 	}
 	
@@ -587,18 +592,19 @@ export namespace data {
 	        this.terminalPreset = source["terminalPreset"];
 	    }
 	}
-
+	
+	
 	export class ShellSessionRestoreTab {
 	    sessionId: string;
 	    configName: string;
 	    kind: string;
 	    tabLabel: string;
 	    lastCwd?: string;
-
+	
 	    static createFrom(source: any = {}) {
 	        return new ShellSessionRestoreTab(source);
 	    }
-
+	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.sessionId = source["sessionId"];
@@ -608,8 +614,6 @@ export namespace data {
 	        this.lastCwd = source["lastCwd"];
 	    }
 	}
-	
-	
 	export class ShellSnippet {
 	    id: string;
 	    name: string;
@@ -680,6 +684,7 @@ export namespace data {
 	    paste: ShortcutBinding;
 	    clearOutput: ShortcutBinding;
 	    commandPalette: ShortcutBinding;
+	    quickSwitcher: ShortcutBinding;
 	    snippets?: ShellSnippet[];
 	
 	    static createFrom(source: any = {}) {
@@ -699,6 +704,7 @@ export namespace data {
 	        this.paste = this.convertValues(source["paste"], ShortcutBinding);
 	        this.clearOutput = this.convertValues(source["clearOutput"], ShortcutBinding);
 	        this.commandPalette = this.convertValues(source["commandPalette"], ShortcutBinding);
+	        this.quickSwitcher = this.convertValues(source["quickSwitcher"], ShortcutBinding);
 	        this.snippets = this.convertValues(source["snippets"], ShellSnippet);
 	    }
 	
@@ -1173,6 +1179,67 @@ export namespace define {
 	        this.finishedAt = source["finishedAt"];
 	    }
 	}
+	export class ShellDiskMount {
+	    path: string;
+	    filesystem?: string;
+	    size: string;
+	    used: string;
+	    avail: string;
+	    usePct: string;
+	    usePercent: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShellDiskMount(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.path = source["path"];
+	        this.filesystem = source["filesystem"];
+	        this.size = source["size"];
+	        this.used = source["used"];
+	        this.avail = source["avail"];
+	        this.usePct = source["usePct"];
+	        this.usePercent = source["usePercent"];
+	    }
+	}
+	export class ShellDiskList {
+	    machineName: string;
+	    disks: ShellDiskMount[];
+	    error?: string;
+	    updatedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShellDiskList(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.machineName = source["machineName"];
+	        this.disks = this.convertValues(source["disks"], ShellDiskMount);
+	        this.error = source["error"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
 	export class ShellHistoryRecord {
 	    machineId: string;
 	    machineName: string;
@@ -1197,6 +1264,64 @@ export namespace define {
 	        this.connectCount = source["connectCount"];
 	    }
 	}
+	export class ShellListenPort {
+	    proto: string;
+	    address: string;
+	    port: string;
+	    pid: string;
+	    process: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShellListenPort(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.proto = source["proto"];
+	        this.address = source["address"];
+	        this.port = source["port"];
+	        this.pid = source["pid"];
+	        this.process = source["process"];
+	    }
+	}
+	export class ShellListenPortList {
+	    machineName: string;
+	    host: string;
+	    ports: ShellListenPort[];
+	    error?: string;
+	    updatedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShellListenPortList(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.machineName = source["machineName"];
+	        this.host = source["host"];
+	        this.ports = this.convertValues(source["ports"], ShellListenPort);
+	        this.error = source["error"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class ShellProcessStat {
 	    pid: string;
 	    user: string;
@@ -1218,102 +1343,6 @@ export namespace define {
 	        this.memRss = source["memRss"];
 	        this.command = source["command"];
 	    }
-	}
-	export class ShellProcessList {
-	    machineName: string;
-	    host: string;
-	    processes: ShellProcessStat[];
-	    error?: string;
-	    updatedAt: number;
-
-	    static createFrom(source: any = {}) {
-	        return new ShellProcessList(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.machineName = source["machineName"];
-	        this.host = source["host"];
-	        this.processes = this.convertValues(source["processes"], ShellProcessStat);
-	        this.error = source["error"];
-	        this.updatedAt = source["updatedAt"];
-	    }
-
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
-	}
-	export class ShellListenPort {
-	    proto: string;
-	    address: string;
-	    port: string;
-	    pid: string;
-	    process: string;
-
-	    static createFrom(source: any = {}) {
-	        return new ShellListenPort(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.proto = source["proto"];
-	        this.address = source["address"];
-	        this.port = source["port"];
-	        this.pid = source["pid"];
-	        this.process = source["process"];
-	    }
-	}
-	export class ShellListenPortList {
-	    machineName: string;
-	    host: string;
-	    ports: ShellListenPort[];
-	    error?: string;
-	    updatedAt: number;
-
-	    static createFrom(source: any = {}) {
-	        return new ShellListenPortList(source);
-	    }
-
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.machineName = source["machineName"];
-	        this.host = source["host"];
-	        this.ports = this.convertValues(source["ports"], ShellListenPort);
-	        this.error = source["error"];
-	        this.updatedAt = source["updatedAt"];
-	    }
-
-		convertValues(a: any, classs: any, asMap: boolean = false): any {
-		    if (!a) {
-		        return a;
-		    }
-		    if (a.slice && a.map) {
-		        return (a as any[]).map(elem => this.convertValues(elem, classs));
-		    } else if ("object" === typeof a) {
-		        if (asMap) {
-		            for (const key of Object.keys(a)) {
-		                a[key] = new classs(a[key]);
-		            }
-		            return a;
-		        }
-		        return new classs(a);
-		    }
-		    return a;
-		}
 	}
 	export class ShellMonitorSnapshot {
 	    machineName: string;
@@ -1361,6 +1390,44 @@ export namespace define {
 	        this.netTxRate = source["netTxRate"];
 	        this.netRxText = source["netRxText"];
 	        this.netTxText = source["netTxText"];
+	        this.error = source["error"];
+	        this.updatedAt = source["updatedAt"];
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ShellProcessList {
+	    machineName: string;
+	    host: string;
+	    processes: ShellProcessStat[];
+	    error?: string;
+	    updatedAt: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShellProcessList(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.machineName = source["machineName"];
+	        this.host = source["host"];
+	        this.processes = this.convertValues(source["processes"], ShellProcessStat);
 	        this.error = source["error"];
 	        this.updatedAt = source["updatedAt"];
 	    }

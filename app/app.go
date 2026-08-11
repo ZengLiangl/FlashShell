@@ -2031,6 +2031,19 @@ func (a *App) GetShellProcessList(machineName string) *define.ShellProcessList {
 	return list
 }
 
+// GetShellDiskList 获取磁盘挂载列表
+func (a *App) GetShellDiskList(machineName string) *define.ShellDiskList {
+	aux, err := a.getShellAux(machineName)
+	if err != nil {
+		return &define.ShellDiskList{
+			MachineName: machineName,
+			Disks:       []define.ShellDiskMount{},
+			Error:       err.Error(),
+		}
+	}
+	return aux.FetchDiskList()
+}
+
 // GetShellListenPorts 获取监听端口列表
 func (a *App) GetShellListenPorts(machineName string) *define.ShellListenPortList {
 	aux, err := a.getShellAux(machineName)

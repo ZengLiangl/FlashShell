@@ -56,7 +56,8 @@ export default {
   },
   emits: [
     'update:modelValue',
-    'connect',
+    'focus-session',
+    'connect-machine',
     'open-settings',
     'open-machine-config',
     'open-shell',
@@ -125,7 +126,7 @@ export default {
           title: s.tabLabel || s.machineName,
           subtitle: s.configName && s.configName !== s.machineName ? s.configName : s.machineName,
           keywords: `${s.tabLabel || ''} ${s.machineName} ${s.configName || ''}`,
-          run: () => emit('connect', s.configName || s.machineName),
+          run: () => emit('focus-session', s.machineName),
         })),
     )
 
@@ -139,7 +140,7 @@ export default {
           title: m.name,
           subtitle: [formatMachineAddr(m), tags.join(' · '), m.notes].filter(Boolean).join(' | '),
           keywords: `${m.name} ${formatMachineAddr(m)} ${tags.join(' ')} ${m.notes || ''} ${m.group || ''}`,
-          run: () => emit('connect', m.name),
+          run: () => emit('connect-machine', m.name),
           machine: m,
         }
       }),

@@ -124,6 +124,27 @@
       <div v-if="displayError" class="error">{{ displayError }}</div>
         </el-tab-pane>
 
+        <el-tab-pane label="磁盘" name="disks">
+          <div class="tab-toolbar">
+            <span class="tab-toolbar-label">磁盘挂载</span>
+            <el-button size="small" text type="primary" :loading="diskLoading" @click="loadDisks">刷新</el-button>
+          </div>
+          <div v-if="diskError" class="error-sm">{{ diskError }}</div>
+          <div v-else-if="diskLoading && !diskList.length" class="empty-sm">加载中…</div>
+          <div v-else-if="!diskList.length" class="empty-sm">暂无数据</div>
+          <div v-else class="data-table-wrap">
+            <div class="data-head disk-head">
+              <span>路径</span><span>可用</span><span>大小</span><span>已用</span>
+            </div>
+            <div v-for="(d, idx) in diskList" :key="d.path + idx" class="data-row disk-row">
+              <span class="data-cmd" :title="d.path">{{ d.path }}</span>
+              <span>{{ d.avail || '-' }}</span>
+              <span>{{ d.size || '-' }}</span>
+              <span :class="{ 'is-danger': isHighUsage(d.usePercent) }">{{ d.usePct || '-' }}</span>
+            </div>
+          </div>
+        </el-tab-pane>
+
         <el-tab-pane label="进程" name="processes">
           <div class="tab-toolbar">
             <span class="tab-toolbar-label">进程列表</span>
@@ -215,6 +236,9 @@ export default {
     const portList = ref([])
     const portsLoading = ref(false)
     const portsError = ref('')
+    const diskList = ref([])
+    const diskLoading = ref(false)
+    const diskError = ref('')
     let timer = null
     const NET_HISTORY_LEN = 24
 
@@ -435,9 +459,36 @@ export default {
       }
     }
 
+    const loadDisks = async () => {
+      if (!props.activeMachine || isIdle()) {
+        diskList.value = []
+        diskError.value = ''
+        return
+      }
+      diskLoading.value = true
+      diskError.value = ''
+      const machineAtStart = props.activeMachine
+      try {
+        const data = await App.GetShellDiskList(props.activeMachine)
+        if (isIdle() || props.activeMachine !== machineAtStart) return
+        if (data?.error && !isAuxMissingError(data.error)) {
+          diskError.value = data.error
+          diskList.value = []
+        } else {
+          diskList.value = data?.disks || []
+        }
+      } catch (e) {
+        if (!isAuxMissingError(e)) diskError.value = String(e)
+        diskList.value = []
+      } finally {
+        diskLoading.value = false
+      }
+    }
+
     const onTabChange = (name) => {
       if (name === 'processes') loadProcesses()
       if (name === 'ports') loadPorts()
+      if (name === 'disks') loadDisks()
     }
 
     const refresh = async () => {
@@ -557,10 +608,13 @@ export default {
         processError.value = ''
         portList.value = []
         portsError.value = ''
+        diskList.value = []
+        diskError.value = ''
         loadSystemInfo()
         startTimer()
         if (monitorTab.value === 'processes') loadProcesses()
         if (monitorTab.value === 'ports') loadPorts()
+        if (monitorTab.value === 'disks') loadDisks()
       },
       { immediate: true },
     )
@@ -602,8 +656,12 @@ export default {
       portList,
       portsLoading,
       portsError,
+      diskList,
+      diskLoading,
+      diskError,
       loadProcesses,
       loadPorts,
+      loadDisks,
       onTabChange,
       onNetIfaceChange,
       netChartMaxText,
@@ -989,6 +1047,11 @@ export default {
 .port-head,
 .port-row {
   grid-template-columns: 44px minmax(0, 1fr) 44px 44px minmax(0, 1fr);
+}
+
+.disk-head,
+.disk-row {
+  grid-template-columns: minmax(0, 1.4fr) 64px 64px 48px;
 }
 
 .data-head {

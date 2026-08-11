@@ -202,16 +202,12 @@ export function GetLocalHomeDir() {
   return window['go']['app']['App']['GetLocalHomeDir']();
 }
 
-export function GetMachineGroups() {
-  return window['go']['app']['App']['GetMachineGroups']();
-}
-
 export function GetMachineGroupDefaults() {
   return window['go']['app']['App']['GetMachineGroupDefaults']();
 }
 
-export function GetPortForwardStatus(arg1) {
-  return window['go']['app']['App']['GetPortForwardStatus'](arg1);
+export function GetMachineGroups() {
+  return window['go']['app']['App']['GetMachineGroups']();
 }
 
 export function GetMachineSensitiveData(arg1) {
@@ -226,6 +222,10 @@ export function GetOutput() {
   return window['go']['app']['App']['GetOutput']();
 }
 
+export function GetPortForwardStatus(arg1) {
+  return window['go']['app']['App']['GetPortForwardStatus'](arg1);
+}
+
 export function GetProject(arg1) {
   return window['go']['app']['App']['GetProject'](arg1);
 }
@@ -236,6 +236,10 @@ export function GetProjectSummaries() {
 
 export function GetSessionInfo() {
   return window['go']['app']['App']['GetSessionInfo']();
+}
+
+export function GetShellDiskList(arg1) {
+  return window['go']['app']['App']['GetShellDiskList'](arg1);
 }
 
 export function GetShellDownloadDir() {
@@ -330,16 +334,16 @@ export function ImportMachineTemplate(arg1, arg2) {
   return window['go']['app']['App']['ImportMachineTemplate'](arg1, arg2);
 }
 
+export function ImportMachineTemplateFromFile(arg1) {
+  return window['go']['app']['App']['ImportMachineTemplateFromFile'](arg1);
+}
+
 export function ImportMachinesCSVPick() {
   return window['go']['app']['App']['ImportMachinesCSVPick']();
 }
 
 export function ImportOpenSSHConfigPick(arg1, arg2) {
   return window['go']['app']['App']['ImportOpenSSHConfigPick'](arg1, arg2);
-}
-
-export function ImportMachineTemplateFromFile(arg1) {
-  return window['go']['app']['App']['ImportMachineTemplateFromFile'](arg1);
 }
 
 export function ImportSystemKnownHosts() {
@@ -370,16 +374,16 @@ export function ListLocalFiles(arg1, arg2) {
   return window['go']['app']['App']['ListLocalFiles'](arg1, arg2);
 }
 
+export function ListPortForwards() {
+  return window['go']['app']['App']['ListPortForwards']();
+}
+
 export function ListShellFiles(arg1, arg2, arg3) {
   return window['go']['app']['App']['ListShellFiles'](arg1, arg2, arg3);
 }
 
 export function ListShellTransfers() {
   return window['go']['app']['App']['ListShellTransfers']();
-}
-
-export function ListPortForwards() {
-  return window['go']['app']['App']['ListPortForwards']();
 }
 
 export function ListSystemFonts() {
@@ -538,14 +542,6 @@ export function SaveConfig(arg1) {
   return window['go']['app']['App']['SaveConfig'](arg1);
 }
 
-export function SaveMachineGroupDefaults(arg1) {
-  return window['go']['app']['App']['SaveMachineGroupDefaults'](arg1);
-}
-
-export function SavePortForwards(arg1) {
-  return window['go']['app']['App']['SavePortForwards'](arg1);
-}
-
 export function SaveGlobalAccounts(arg1) {
   return window['go']['app']['App']['SaveGlobalAccounts'](arg1);
 }
@@ -562,16 +558,24 @@ export function SaveKeyMapSettings(arg1) {
   return window['go']['app']['App']['SaveKeyMapSettings'](arg1);
 }
 
+export function SaveMachineGroupDefaults(arg1) {
+  return window['go']['app']['App']['SaveMachineGroupDefaults'](arg1);
+}
+
+export function SavePortForwards(arg1) {
+  return window['go']['app']['App']['SavePortForwards'](arg1);
+}
+
 export function SaveShellRemoteFile(arg1, arg2, arg3) {
   return window['go']['app']['App']['SaveShellRemoteFile'](arg1, arg2, arg3);
 }
 
-export function SaveShortcutSettings(arg1) {
-  return window['go']['app']['App']['SaveShortcutSettings'](arg1);
-}
-
 export function SaveShellSessionRestore(arg1) {
   return window['go']['app']['App']['SaveShellSessionRestore'](arg1);
+}
+
+export function SaveShortcutSettings(arg1) {
+  return window['go']['app']['App']['SaveShortcutSettings'](arg1);
 }
 
 export function SaveSystemSettings(arg1) {
@@ -638,6 +642,14 @@ export function SkipUpdateVersion(arg1) {
   return window['go']['app']['App']['SkipUpdateVersion'](arg1);
 }
 
+export function StartAutoPortForwards() {
+  return window['go']['app']['App']['StartAutoPortForwards']();
+}
+
+export function StartPortForward(arg1) {
+  return window['go']['app']['App']['StartPortForward'](arg1);
+}
+
 export function StartShellDownload(arg1, arg2) {
   return window['go']['app']['App']['StartShellDownload'](arg1, arg2);
 }
@@ -654,24 +666,16 @@ export function StopAllCommands() {
   return window['go']['app']['App']['StopAllCommands']();
 }
 
-export function StartAutoPortForwards() {
-  return window['go']['app']['App']['StartAutoPortForwards']();
-}
-
-export function StartPortForward(arg1) {
-  return window['go']['app']['App']['StartPortForward'](arg1);
-}
-
-export function StopPortForward(arg1) {
-  return window['go']['app']['App']['StopPortForward'](arg1);
-}
-
 export function StopAllSubProjects() {
   return window['go']['app']['App']['StopAllSubProjects']();
 }
 
 export function StopCommand(arg1, arg2, arg3) {
   return window['go']['app']['App']['StopCommand'](arg1, arg2, arg3);
+}
+
+export function StopPortForward(arg1) {
+  return window['go']['app']['App']['StopPortForward'](arg1);
 }
 
 export function StopShellCommand(arg1) {

@@ -441,6 +441,77 @@ func (a *ShellAuxManager) FetchListenPorts() *define.ShellListenPortList {
 	return out
 }
 
+const shellDiskListScript = `set +e
+echo __DF__
+df -hP 2>/dev/null | awk 'NR==1 || /^\/|^tmpfs|^devtmpfs|^overlay/ {print}'
+`
+
+// FetchDiskList 拉取磁盘挂载点（路径 / 可用 / 大小）
+func (a *ShellAuxManager) FetchDiskList() *define.ShellDiskList {
+	out := &define.ShellDiskList{
+		MachineName: a.machineName,
+		Disks:       []define.ShellDiskMount{},
+		UpdatedAt:   time.Now().Unix(),
+	}
+	if !a.IsConnected() {
+		out.Error = "辅助连接未建立"
+		return out
+	}
+	raw, err := a.execBashPath("/bin/bash", shellDiskListScript)
+	if err != nil && strings.TrimSpace(raw) == "" {
+		raw, err = a.execBashPath("bash", shellDiskListScript)
+	}
+	if err != nil && strings.TrimSpace(raw) == "" {
+		out.Error = err.Error()
+		return out
+	}
+	sections := parseTaggedSections(raw, []string{"__DF__"})
+	out.Disks = parseDfMounts(sections["__DF__"])
+	return out
+}
+
+func parseDfMounts(raw string) []define.ShellDiskMount {
+	lines := strings.Split(strings.TrimSpace(raw), "\n")
+	out := make([]define.ShellDiskMount, 0, len(lines))
+	for i, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if i == 0 && (strings.Contains(line, "Filesystem") || strings.Contains(line, "文件系统")) {
+			continue
+		}
+		fields := strings.Fields(line)
+		if len(fields) < 6 {
+			continue
+		}
+		// Filesystem Size Used Avail Use% Mounted
+		fs := fields[0]
+		size := fields[1]
+		used := fields[2]
+		avail := fields[3]
+		usePct := fields[4]
+		mount := fields[5]
+		if len(fields) > 6 {
+			mount = strings.Join(fields[5:], " ")
+		}
+		pct := 0.0
+		if strings.HasSuffix(usePct, "%") {
+			pct, _ = strconv.ParseFloat(strings.TrimSuffix(usePct, "%"), 64)
+		}
+		out = append(out, define.ShellDiskMount{
+			Path:       mount,
+			Filesystem: fs,
+			Size:       size,
+			Used:       used,
+			Avail:      avail,
+			UsePct:     usePct,
+			UsePercent: pct,
+		})
+	}
+	return out
+}
+
 func parsePsAux(raw string, limit int) []define.ShellProcessStat {
 	if limit <= 0 {
 		limit = 50
