@@ -78,6 +78,21 @@
           :status="progressStatus(snapshot?.memPercent)" :show-text="false" />
       </div>
 
+      <div
+        v-if="hasSwap"
+        class="metric"
+        :class="{ 'is-high': isHighUsage(snapshot?.swapPercent) }"
+      >
+        <div class="metric-head">
+          <span>交换</span>
+          <span class="metric-value" :class="{ 'is-danger': isHighUsage(snapshot?.swapPercent) }">
+            {{ formatPct(snapshot?.swapPercent) }} · {{ snapshot?.swapUsed || '0' }}/{{ snapshot?.swapTotal || '0' }}
+          </span>
+        </div>
+        <el-progress :percentage="clampPct(snapshot?.swapPercent)" :stroke-width="12"
+          :status="progressStatus(snapshot?.swapPercent)" :show-text="false" />
+      </div>
+
       <div class="top-block">
         <div class="label">CPU 占用 TOP5</div>
         <div class="top-head">
@@ -296,6 +311,15 @@ export default {
       const err = snapshot.value?.error
       if (!err || isAuxMissingError(err)) return ''
       return err
+    })
+
+    /** 有交换分区（total>0）才展示；无 Swap 的机器不占位 */
+    const hasSwap = computed(() => {
+      const total = String(snapshot.value?.swapTotal || '').trim()
+      if (!total || total === '0' || total === '0 B' || total === '0B') return false
+      const pct = Number(snapshot.value?.swapPercent)
+      // 后端仅在 swap total>0 时写入；再兜底排除纯零串
+      return Number.isFinite(pct) || /[1-9]/.test(total)
     })
 
     const clampPct = (v) => {
@@ -522,6 +546,9 @@ export default {
             uptimeText: snap?.uptimeText || '0',
             memUsed: snap?.memUsed || '0',
             memTotal: snap?.memTotal || '0',
+            swapPercent: snap?.swapPercent || 0,
+            swapUsed: snap?.swapUsed || '0',
+            swapTotal: snap?.swapTotal || '0',
             topMem: snap?.topMem || [],
             netIface: snap?.netIface || '',
             netIfaces: snap?.netIfaces || [],
@@ -641,6 +668,7 @@ export default {
       snapshot,
       loading,
       displayError,
+      hasSwap,
       netHistory,
       netIfaces,
       selectedNetIface,
