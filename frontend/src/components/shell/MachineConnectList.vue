@@ -150,8 +150,10 @@
   <MachineContextMenu
     v-if="showContextMenu"
     :ctx="ctx"
+    :show-focus="ctxConnected"
     @connect="onConnect"
     @open-window="onOpenWindow"
+    @focus="onFocus"
     @copy="onCopy"
     @edit="onEdit"
     @delete="onDelete"
@@ -169,6 +171,7 @@ import {
   isMachineConnected,
   isMachineConnecting,
   countMachineSessions,
+  findFirstConnectedSession,
   normalizeMachineTags,
 } from '../../utils/machineGroups'
 import { windowMachineList, MACHINE_LIST_VIRTUALIZE_AT, MACHINE_LIST_ROW_H } from '../../utils/machineListWindow'
@@ -196,11 +199,21 @@ export default {
     /** 不按分组名折叠，按传入顺序直接展示机器（如首页最近连接） */
     flat: { type: Boolean, default: false },
   },
-  emits: ['connect', 'open-window', 'edit-machine', 'copy-machine', 'delete-machine', 'toggle-pin'],
+  emits: ['connect', 'open-window', 'edit-machine', 'copy-machine', 'delete-machine', 'toggle-pin', 'focus-session'],
   setup(props, { emit }) {
     const expandedGroups = ref([])
     const scrollTops = reactive({})
     const { ctx, hideContextMenu, onMachineContextMenu, isContextTarget } = useMachineContextMenu()
+
+    const sessionPool = computed(() =>
+      (props.workspaceSessions || []).length ? props.workspaceSessions : (props.sessions || []),
+    )
+
+    const ctxConnected = computed(() => {
+      const name = ctx.machine?.name
+      if (!name || !ctx.visible) return false
+      return isMachineConnected(name, sessionPool.value)
+    })
 
     const machineTree = computed(() => {
       const list = props.machines || []
@@ -263,10 +276,10 @@ export default {
       scrollTops[key] = event?.target?.scrollTop || 0
     }
 
-    const isConnected = (name) => isMachineConnected(name, props.sessions)
-    const sessionCount = (name) => countMachineSessions(name, props.sessions)
+    const isConnected = (name) => isMachineConnected(name, sessionPool.value)
+    const sessionCount = (name) => countMachineSessions(name, sessionPool.value)
     const machineConnecting = (name) =>
-      isMachineConnecting(name, props.workspaceSessions.length ? props.workspaceSessions : props.sessions)
+      isMachineConnecting(name, sessionPool.value)
     const machineTags = (machine) => normalizeMachineTags(machine?.tags)
     const hostIconText = (machine) => resolveHostIcon(machine).text
 
@@ -279,6 +292,15 @@ export default {
       hideContextMenu()
       if (!machine?.name) return
       emit('open-window', machine)
+    }
+
+    const onFocus = (machine) => {
+      hideContextMenu()
+      if (!machine?.name) return
+      const session = findFirstConnectedSession(machine.name, sessionPool.value)
+      const sessionId = session?.machineName
+      if (!sessionId) return
+      emit('focus-session', sessionId)
     }
 
     const onItemContextMenu = (event, machine) => {
@@ -309,6 +331,7 @@ export default {
     return {
       ctx,
       hideContextMenu,
+      ctxConnected,
       customGroups,
       defaultMachines,
       hasTree,
@@ -326,6 +349,7 @@ export default {
       onListScroll,
       onConnect,
       onOpenWindow,
+      onFocus,
       onItemContextMenu,
       isContextTarget,
       onCopy,

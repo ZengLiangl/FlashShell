@@ -9,6 +9,7 @@
       @click.stop
       @mouseleave="$emit('hide')"
     >
+      <li v-if="showFocus" @click="onFocus">点击聚焦</li>
       <li v-if="showConnect" @click="onConnect">连接</li>
       <li v-if="showConnect" @click="onOpenWindow">在新窗口打开</li>
       <li @click="onTogglePin">{{ isPinned ? '取消置顶' : '置顶' }}</li>
@@ -27,8 +28,9 @@ export default {
   props: {
     ctx: { type: Object, required: true },
     showConnect: { type: Boolean, default: true },
+    showFocus: { type: Boolean, default: false },
   },
-  emits: ['connect', 'open-window', 'copy', 'edit', 'delete', 'toggle-pin', 'hide'],
+  emits: ['connect', 'open-window', 'copy', 'edit', 'delete', 'toggle-pin', 'focus', 'hide'],
   setup(props, { emit }) {
     const menuRef = ref(null)
 
@@ -71,8 +73,9 @@ export default {
     const onEdit = () => emit('edit', machine())
     const onDelete = () => emit('delete', machine())
     const onTogglePin = () => emit('toggle-pin', machine())
+    const onFocus = () => emit('focus', machine())
 
-    return { menuRef, isPinned, onConnect, onOpenWindow, onCopy, onEdit, onDelete, onTogglePin }
+    return { menuRef, isPinned, onConnect, onOpenWindow, onCopy, onEdit, onDelete, onTogglePin, onFocus }
   },
 }
 </script>

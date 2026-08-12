@@ -93,10 +93,7 @@
                   <el-dropdown-item v-else disabled>无法加载配置文件</el-dropdown-item>
                   <el-dropdown-item divided command="edit-pipeline">编辑任务流水线</el-dropdown-item>
                   <el-dropdown-item command="reload">刷新</el-dropdown-item>
-                  <el-dropdown-item command="refresh">
-                    <span>刷新配置列表</span>
-                    <span class="menu-shortcut">{{ labelOf('refreshConfig') }}</span>
-                  </el-dropdown-item>
+                  <el-dropdown-item command="refresh">刷新配置列表</el-dropdown-item>
                   <el-dropdown-item command="open-global">打开全局配置</el-dropdown-item>
                   <el-dropdown-item command="open-current">打开当前配置</el-dropdown-item>
                 </el-dropdown-menu>
@@ -198,7 +195,8 @@
                 <MachineConnectList :machines="pinnedMachines" :sessions="sessions"
                   :workspace-sessions="workspaceSessions" :connecting-name="connectingName"
                   :filter-keyword="machineKeyword" layout="grid" variant="cards" show-context-menu empty-text="无匹配机器"
-                  @connect="onConnectMachine" @edit-machine="(m) => $emit('edit-machine', m)"
+                  @connect="onConnectMachine" @focus-session="(id) => $emit('focus-session', id)"
+                  @edit-machine="(m) => $emit('edit-machine', m)"
                   @copy-machine="(m) => $emit('copy-machine', m)" @delete-machine="(m) => $emit('delete-machine', m)"
                   @toggle-pin="onTogglePin" />
               </div>
@@ -213,7 +211,9 @@
                 <MachineConnectList :machines="recentMachines" :sessions="sessions"
                   :workspace-sessions="workspaceSessions" :connecting-name="connectingName"
                   :filter-keyword="machineKeyword" layout="grid" variant="cards" flat show-context-menu
-                  empty-text="无匹配机器" @connect="onConnectMachine" @edit-machine="(m) => $emit('edit-machine', m)"
+                  empty-text="无匹配机器" @connect="onConnectMachine"
+                  @focus-session="(id) => $emit('focus-session', id)"
+                  @edit-machine="(m) => $emit('edit-machine', m)"
                   @copy-machine="(m) => $emit('copy-machine', m)" @delete-machine="(m) => $emit('delete-machine', m)"
                   @toggle-pin="onTogglePin" />
               </div>
@@ -225,7 +225,8 @@
                 <MachineConnectList :machines="filteredMachines" :sessions="sessions"
                   :workspace-sessions="workspaceSessions" :connecting-name="connectingName"
                   :filter-keyword="machineKeyword" layout="grid" variant="cards" show-context-menu empty-text="无匹配机器"
-                  @connect="onConnectMachine" @edit-machine="(m) => $emit('edit-machine', m)"
+                  @connect="onConnectMachine" @focus-session="(id) => $emit('focus-session', id)"
+                  @edit-machine="(m) => $emit('edit-machine', m)"
                   @copy-machine="(m) => $emit('copy-machine', m)" @delete-machine="(m) => $emit('delete-machine', m)"
                   @toggle-pin="onTogglePin" />
               </div>
@@ -243,7 +244,6 @@ import { Clock, StarFilled } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { machineMatchesKeyword, isMachineConnecting, collectMachineTags, machineMatchesTags } from '../utils/machineGroups'
-import { mergeShortcuts, formatShortcut } from '../utils/shortcuts'
 import { parseQuickConnectTarget, findMachineForQuickConnect } from '../utils/quickConnect'
 import MachineConnectList from './shell/MachineConnectList.vue'
 import defaultAppIcon from '../assets/appicon.png'
@@ -288,6 +288,7 @@ export default {
     'resume-task',
     'open-shell',
     'connect-machine',
+    'focus-session',
     'add-machine',
     'edit-machine',
     'copy-machine',
@@ -300,7 +301,6 @@ export default {
     const selectedTags = ref([])
     const configFiles = ref([])
     const currentConfig = ref('')
-    const shortcuts = ref(mergeShortcuts())
     const minimizedZone = ref('')
     const historyRecords = ref([])
     const searchInputRef = ref(null)
@@ -334,7 +334,6 @@ export default {
     const showingShell = computed(() => !showingTask.value)
 
     const availableTags = computed(() => collectMachineTags(props.machines || []))
-    const labelOf = (id) => formatShortcut(shortcuts.value[id])
 
     const searchPlaceholder = computed(() => {
       if (showingTask.value) return '搜索任务项目名称 / 描述…'
@@ -415,14 +414,6 @@ export default {
         currentConfig.value = ''
       }
       loadBrandIcon()
-    }
-
-    const loadShortcuts = async () => {
-      try {
-        shortcuts.value = mergeShortcuts(await App.GetShortcutSettings())
-      } catch {
-        shortcuts.value = mergeShortcuts()
-      }
     }
 
     const onMoreCommand = (cmd) => {
@@ -553,27 +544,22 @@ export default {
     }
 
     let offConfigChanged = null
-    let offShortcutsChanged = null
     let offMinimizedZone = null
 
     onMounted(() => {
       loadConfigMenu()
-      loadShortcuts()
       loadMinimizedZone()
       loadHistory()
       loadBrandIcon()
       // 用 EventsOn 返回的取消函数解绑，避免 EventsOff(事件名) 清掉 App 等同名监听
       offConfigChanged = EventsOn('config:changed', loadConfigMenu)
-      offShortcutsChanged = EventsOn('shortcuts:changed', loadShortcuts)
       offMinimizedZone = EventsOn('home:minimized-zone', onMinimizedZoneChanged)
     })
 
     onUnmounted(() => {
       offConfigChanged?.()
-      offShortcutsChanged?.()
       offMinimizedZone?.()
       offConfigChanged = null
-      offShortcutsChanged = null
       offMinimizedZone = null
     })
 
@@ -597,7 +583,6 @@ export default {
       searchInputRef,
       brandIconUrl,
       basename,
-      labelOf,
       onConfigCommand,
       onMoreCommand,
       openConfigEditor,

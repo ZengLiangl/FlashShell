@@ -154,3 +154,11 @@ export function countMachineSessions(configName, sessions) {
     (s) => s.connected && (s.configName === configName || s.machineName === configName),
   ).length
 }
+
+/** 取该机器已连接会话中的第一个（按传入列表顺序） */
+export function findFirstConnectedSession(configName, sessions) {
+  if (!configName) return null
+  return (sessions || []).find(
+    (s) => s.connected && (s.configName === configName || s.machineName === configName),
+  ) || null
+}
