@@ -1401,15 +1401,26 @@ export default {
         handleOperationEvent(event);
       });
 
-      // 监听配置变更事件
+      // 监听配置变更事件（软刷新项目/机器；勿依赖整页 reload，且勿被其它组件 EventsOff 清掉）
       EventsOn("config:changed", async (data) => {
         console.log("收到 config:changed 事件:", data);
-        // 显示全局加载状态
         isReloading.value = true;
-        // 延迟一下再重新加载，让用户看到加载效果
-        setTimeout(() => {
-          window.location.reload();
-        }, 200);
+        try {
+          await loadConfig();
+          await loadShellMachines();
+          selectedProject.value = null;
+          selectedSubProject.value = null;
+          subProjects.value = [];
+          if (activeView.value === 'task') {
+            activeView.value = 'home';
+          }
+          ElMessage.success("已切换配置");
+        } catch (error) {
+          console.error("切换配置后刷新失败:", error);
+          ElMessage.error("切换配置后刷新失败: " + (error?.message || error));
+        } finally {
+          isReloading.value = false;
+        }
       });
 
       // 监听打开设置相关事件（统一进 Settings Hub）

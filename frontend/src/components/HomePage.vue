@@ -314,7 +314,7 @@
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
 import { Refresh, Clock, StarFilled } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
-import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
+import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { machineMatchesKeyword, isMachineConnecting, collectMachineTags, machineMatchesTags } from '../utils/machineGroups'
 import { mergeShortcuts, formatShortcut } from '../utils/shortcuts'
 import { parseQuickConnectTarget, findMachineForQuickConnect } from '../utils/quickConnect'
@@ -617,21 +617,29 @@ export default {
       minimizedZone.value = normalizeMinimizedZone(zone)
     }
 
+    let offConfigChanged = null
+    let offShortcutsChanged = null
+    let offMinimizedZone = null
+
     onMounted(() => {
       loadConfigMenu()
       loadShortcuts()
       loadMinimizedZone()
       loadHistory()
       loadBrandIcon()
-      EventsOn('config:changed', loadConfigMenu)
-      EventsOn('shortcuts:changed', loadShortcuts)
-      EventsOn('home:minimized-zone', onMinimizedZoneChanged)
+      // 用 EventsOn 返回的取消函数解绑，避免 EventsOff(事件名) 清掉 App 等同名监听
+      offConfigChanged = EventsOn('config:changed', loadConfigMenu)
+      offShortcutsChanged = EventsOn('shortcuts:changed', loadShortcuts)
+      offMinimizedZone = EventsOn('home:minimized-zone', onMinimizedZoneChanged)
     })
 
     onUnmounted(() => {
-      EventsOff('config:changed')
-      EventsOff('shortcuts:changed')
-      EventsOff('home:minimized-zone')
+      offConfigChanged?.()
+      offShortcutsChanged?.()
+      offMinimizedZone?.()
+      offConfigChanged = null
+      offShortcutsChanged = null
+      offMinimizedZone = null
     })
 
     return {

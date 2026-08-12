@@ -1,34 +1,38 @@
 <template>
   <el-drawer
     v-model="visibleProxy"
-    title="全局传输中心"
     direction="rtl"
     size="420px"
     :append-to-body="true"
     class="shell-transfer-drawer"
   >
-    <div class="transfer-toolbar icon-actions">
-      <el-tooltip content="打开下载目录" placement="top">
-        <el-button size="small" text type="primary" @click="openDownloadDir">
-          <el-icon><FolderOpened /></el-icon>
-        </el-button>
-      </el-tooltip>
-      <el-tooltip content="全部暂停" placement="top">
-        <el-button size="small" text type="warning" @click="pauseAll">
-          <el-icon><VideoPause /></el-icon>
-        </el-button>
-      </el-tooltip>
-      <el-tooltip content="全部继续" placement="top">
-        <el-button size="small" text type="primary" @click="resumeAll">
-          <el-icon><VideoPlay /></el-icon>
-        </el-button>
-      </el-tooltip>
-      <el-tooltip content="清除已结束" placement="top">
-        <el-button size="small" text @click="clearFinished">
-          <el-icon><Delete /></el-icon>
-        </el-button>
-      </el-tooltip>
-    </div>
+    <template #header>
+      <div class="transfer-header">
+        <span class="transfer-title">全局传输中心</span>
+        <div class="transfer-toolbar icon-actions">
+          <el-tooltip content="打开下载目录" placement="top">
+            <el-button size="small" text type="primary" @click="openDownloadDir">
+              <el-icon><FolderOpened /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip content="全部暂停" placement="top">
+            <el-button size="small" text type="warning" @click="pauseAll">
+              <el-icon><VideoPause /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip content="全部继续" placement="top">
+            <el-button size="small" text type="primary" @click="resumeAll">
+              <el-icon><VideoPlay /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip content="清除已结束" placement="top">
+            <el-button size="small" text @click="clearFinished">
+              <el-icon><Delete /></el-icon>
+            </el-button>
+          </el-tooltip>
+        </div>
+      </div>
+    </template>
     <div v-if="records.length === 0" class="transfer-empty">暂无传输记录</div>
     <ul v-else class="transfer-list">
       <li v-for="item in records" :key="item.id" class="transfer-item">
@@ -341,12 +345,31 @@ export default {
 </script>
 
 <style scoped>
+.transfer-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+  padding-right: 4px;
+}
+
+.transfer-title {
+  flex-shrink: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--app-text, var(--el-text-color-primary));
+  line-height: 1.2;
+}
+
 .transfer-toolbar {
-  justify-content: flex-end;
-  width: 100%;
-  margin-bottom: 10px;
-  flex-wrap: wrap;
-  gap: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  gap: 0;
+  width: auto;
+  margin: 0;
 }
 
 .status.queued {

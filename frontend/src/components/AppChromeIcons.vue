@@ -36,7 +36,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { Setting, QuestionFilled } from '@element-plus/icons-vue'
 // import { DocumentAdd } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
-import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
+import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { mergeShortcuts, formatShortcut } from '../utils/shortcuts'
 import WindowControls from './WindowControls.vue'
 
@@ -60,14 +60,17 @@ export default {
     const openSettings = () => { App.OpenSystemSettings() }
     const openAbout = () => { App.OpenAbout() }
 
+    let offShortcutsChanged = null
+
     onMounted(() => {
       loadShortcuts()
-      EventsOn('shortcuts:changed', (data) => {
+      offShortcutsChanged = EventsOn('shortcuts:changed', (data) => {
         shortcuts.value = mergeShortcuts(data)
       })
     })
     onUnmounted(() => {
-      EventsOff('shortcuts:changed')
+      offShortcutsChanged?.()
+      offShortcutsChanged = null
     })
 
     return {

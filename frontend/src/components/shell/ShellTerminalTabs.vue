@@ -1054,7 +1054,7 @@ export default {
 .custom-session-tabs {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
   flex: 0 1 auto;
   min-width: 0;
   max-width: 100%;
@@ -1131,35 +1131,35 @@ export default {
   align-items: center;
   box-sizing: border-box;
   gap: 0;
-  height: 26px;
-  padding: 0 8px;
+  height: 28px;
+  padding: 0 10px;
   font-size: 12px;
   font-weight: 500;
   line-height: 1;
-  color: var(--app-text-secondary);
+  color: var(--app-text-muted);
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: 5px;
+  border: none;
+  border-radius: 7px;
   cursor: grab;
   user-select: none;
   flex-shrink: 0;
-  max-width: 180px;
+  max-width: 200px;
   position: relative;
-  transition: border-color 0.15s ease, color 0.15s ease;
+  transition: color 0.15s ease;
 }
 
 .session-tab:hover::before {
   content: '';
   position: absolute;
-  inset: 1px 1px;
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--app-text) 6%, transparent);
+  inset: 0;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--app-text) 7%, transparent);
   pointer-events: none;
   z-index: 0;
 }
 
 .session-tab:hover {
-  border-color: transparent;
+  color: var(--app-text-secondary);
 }
 
 .session-tab:active {
@@ -1167,20 +1167,34 @@ export default {
 }
 
 .session-tab.active {
-  color: var(--app-accent-color);
-  background: transparent;
-  border-color: transparent;
+  color: var(--app-text);
   font-weight: 600;
 }
 
 .session-tab.active::before {
   content: '';
   position: absolute;
-  inset: 1px 1px;
-  border-radius: 5px;
-  background: color-mix(in srgb, var(--app-accent-color) 14%, transparent);
+  inset: 0;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--app-text) 9%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--app-text) 8%, transparent);
   pointer-events: none;
   z-index: 0;
+}
+
+/* 选中指示：底边短线，和连接状态点解耦 */
+.session-tab.active::after {
+  content: '';
+  position: absolute;
+  left: 10px;
+  right: 10px;
+  bottom: 2px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--app-accent-color);
+  opacity: 0.9;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .session-tab-main,
@@ -1189,8 +1203,8 @@ export default {
   z-index: 1;
 }
 
-.session-tab.in-split {
-  box-shadow: inset 0 -2px 0 var(--app-accent-color);
+.session-tab.in-split:not(.active) {
+  box-shadow: inset 0 -2px 0 color-mix(in srgb, var(--app-accent-color) 70%, transparent);
 }
 
 .session-tab-main {
@@ -1205,21 +1219,32 @@ export default {
   flex-shrink: 0;
   width: 6px;
   height: 6px;
-  margin-right: 6px;
+  margin-right: 7px;
   border-radius: 50%;
   background: var(--app-text-muted);
 }
 
 .session-tab-status.is-connecting {
   background: var(--app-text-muted);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-text-muted) 22%, transparent);
+  animation: shell-tab-status-pulse 1.2s ease-in-out infinite;
 }
 
 .session-tab-status.is-disconnected {
   background: var(--app-danger-color, var(--el-color-danger, #f56c6c));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-danger-color, #f56c6c) 18%, transparent);
 }
 
 .session-tab-status.is-connected {
-  background: var(--app-accent-color);
+  background: var(--app-success-color, #67c23a);
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--app-success-color, #67c23a) 22%, transparent),
+    0 0 6px color-mix(in srgb, var(--app-success-color, #67c23a) 35%, transparent);
+}
+
+@keyframes shell-tab-status-pulse {
+  0%, 100% { opacity: 0.45; }
+  50% { opacity: 1; }
 }
 
 .session-tab-label {
