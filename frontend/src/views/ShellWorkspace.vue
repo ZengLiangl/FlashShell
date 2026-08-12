@@ -97,6 +97,7 @@
           @reorder-tabs="(payload) => $emit('reorder-tabs', payload)"
           @change-view="(v) => $emit('change-view', v)"
           @select-project="(p) => $emit('select-project', p)"
+          @focus-session="(id) => $emit('focus-session', id)"
         >
           <template #empty>
             <div v-if="connectingName" class="app-empty shell-connecting">

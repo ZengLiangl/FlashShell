@@ -55,7 +55,7 @@
                 <template v-if="showChrome">
                     <span class="chrome-sep" aria-hidden="true" />
                     <ModeSwitcher
-                        v-if="hasTask"
+                        v-if="hasProjects || hasTask"
                         compact
                         float-align="end"
                         :model-value="activeView"
@@ -66,8 +66,11 @@
                         :connected-count="connectedCount"
                         :projects="projects"
                         :selected-project-name="selectedProjectName"
+                        :sessions="sessions"
+                        :active-session-id="activeSessionId"
                         @change="(v) => $emit('change-view', v)"
                         @select-project="(p) => $emit('select-project', p)"
+                        @focus-session="(id) => $emit('focus-session', id)"
                     />
                     <AppChromeIcons />
                 </template>
@@ -101,10 +104,12 @@ export default {
         projects: { type: Array, default: () => [] },
         selectedProjectName: { type: String, default: '' },
         activeView: { type: String, default: 'task' },
+        sessions: { type: Array, default: () => [] },
+        activeSessionId: { type: String, default: '' },
     },
     emits: [
         'clear', 'refresh', 'back', 'toggle-search', 'search-next', 'search-prev', 'close-search', 'update:searchQuery',
-        'change-view', 'select-project',
+        'change-view', 'select-project', 'focus-session',
     ],
     setup(props, { emit }) {
         const localQuery = ref(props.searchQuery)

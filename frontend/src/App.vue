@@ -1,18 +1,11 @@
 <template>
   <div class="app-container" :class="themeClass">
-    <AppMenuBar
-      v-show="activeView === 'home' || activeView === 'task'"
-      :active-view="activeView"
-      :has-projects="projects.length > 0"
-      :has-machines="shellMachines.length > 0"
-      :has-task="!!selectedProject"
-      :task-running="status.isRunning"
-      :connected-count="connectedCount"
-      :projects="projects"
-      :selected-project-name="selectedProject?.name || ''"
-      @change-view="switchActiveView"
-      @select-project="selectProject"
-    />
+    <AppMenuBar v-show="activeView === 'home' || activeView === 'task'" :active-view="activeView"
+      :has-projects="projects.length > 0" :has-machines="shellMachines.length > 0" :has-task="!!selectedProject"
+      :task-running="status.isRunning" :connected-count="connectedCount" :projects="projects"
+      :selected-project-name="selectedProject?.name || ''" :sessions="workspaceSessions"
+      :active-session-id="activeMachine" @change-view="switchActiveView" @select-project="selectProject"
+      @focus-session="onQuickFocusSession" />
 
     <!-- 全局加载遮罩 -->
     <div v-if="isReloading" class="global-loading">
@@ -643,6 +636,10 @@ export default {
       }
       if (view === 'task') {
         if (!selectedProject.value) {
+          if (projects.value.length) {
+            await selectProject(projects.value[0]);
+            return;
+          }
           ElMessage.info('请先在首页选择项目，或悬停「任务」从列表打开');
           return;
         }

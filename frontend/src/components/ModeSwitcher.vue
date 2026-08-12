@@ -4,7 +4,7 @@
     class="mode-switcher-host"
     :class="{
       'is-compact': compact,
-      'is-expanded': showSwitcher,
+      'is-expanded': showPanel,
       'is-float-end': compact && floatAlign === 'end',
     }"
     @mouseenter="onHostEnter"
@@ -15,8 +15,8 @@
       type="button"
       class="mode-trigger"
       :title="triggerTitle"
-      :aria-expanded="showSwitcher"
-      aria-label="展开模块切换"
+      :aria-expanded="showPanel"
+      aria-label="切换任务或 Shell"
     >
       <el-icon class="mode-trigger-icon" :size="13">
         <component :is="activeItem.icon" />
@@ -35,92 +35,72 @@
 
     <Teleport to="body" :disabled="!compact">
       <div
-        v-show="showSwitcher"
-        class="mode-switcher"
+        v-show="showPanel"
+        class="mode-picker"
         :class="{ 'is-floating': compact }"
         :style="compact ? floatStyle : undefined"
-        role="tablist"
-        aria-label="工作模式"
+        role="menu"
+        aria-label="任务与 Shell"
         @mouseenter="onHostEnter"
         @mouseleave="onHostLeave"
       >
-        <template v-for="item in displayItems" :key="item.id">
-          <el-dropdown
-            v-if="item.showProjectPicker"
-            trigger="hover"
-            placement="bottom-end"
-            :show-timeout="compact ? 220 : 160"
-            :hide-timeout="compact ? 180 : 160"
-            :popper-options="taskPopperOptions"
-            popper-class="mode-task-project-popper"
-            @visible-change="onTaskMenuVisible"
-            @command="onPickProject"
-          >
-            <div class="mode-dropdown-trigger">
-              <button
-                type="button"
-                role="tab"
-                class="mode-btn mode-task mode-btn--picker"
-                :class="{ active: modelValue === 'task' }"
-                :aria-selected="modelValue === 'task'"
-                :title="item.title"
-                @click="onTaskClick"
-              >
-                <el-icon class="mode-icon" :size="13">
-                  <component :is="item.icon" />
-                </el-icon>
-                <span class="mode-label">{{ item.label }}</span>
-                <span
-                  v-if="item.dot"
-                  class="mode-dot"
-                  aria-hidden="true"
-                />
-              </button>
-            </div>
-            <template #dropdown>
-              <el-dropdown-menu>
-                <el-dropdown-item
-                  v-for="project in projects"
-                  :key="project.name"
-                  :command="project.name"
-                  :class="{ 'is-current': project.name === selectedProjectName }"
-                >
-                  {{ project.name || '(未命名项目)' }}
-                </el-dropdown-item>
-              </el-dropdown-menu>
-            </template>
-          </el-dropdown>
-
+        <div class="mode-picker-section">
+          <div class="mode-picker-head">
+            <el-icon :size="13"><Folder /></el-icon>
+            <span>任务项目</span>
+            <span v-if="projects.length" class="mode-picker-count">{{ projects.length }}</span>
+          </div>
+          <div v-if="!projects.length" class="mode-picker-empty">暂无任务项目</div>
           <button
-            v-else
+            v-for="project in projects"
+            :key="project.name"
             type="button"
-            role="tab"
-            class="mode-btn"
-            :class="[
-              `mode-${item.id}`,
-              { active: modelValue === item.id, disabled: item.disabled },
-            ]"
-            :aria-selected="modelValue === item.id"
-            :disabled="item.disabled"
-            :title="item.title"
-            @click="onSelect(item)"
+            class="mode-picker-item"
+            :class="{ active: project.name === selectedProjectName && modelValue === 'task' }"
+            role="menuitem"
+            @click="onPickProject(project.name)"
           >
-            <el-icon class="mode-icon" :size="13">
-              <component :is="item.icon" />
-            </el-icon>
-            <span class="mode-label">{{ item.label }}</span>
-            <span
-              v-if="item.badge"
-              class="mode-badge"
-              aria-hidden="true"
-            >{{ item.badge }}</span>
-            <span
-              v-else-if="item.dot"
-              class="mode-dot"
-              aria-hidden="true"
-            />
+            <span class="mode-picker-title">{{ project.name || '(未命名项目)' }}</span>
+            <span v-if="project.name === selectedProjectName && modelValue === 'task'" class="mode-picker-check">✓</span>
           </button>
-        </template>
+        </div>
+
+        <div class="mode-picker-section">
+          <div class="mode-picker-head">
+            <el-icon :size="13"><Monitor /></el-icon>
+            <span>已连接 Shell</span>
+            <span v-if="connectedSessions.length" class="mode-picker-count">{{ connectedSessions.length }}</span>
+          </div>
+          <div v-if="!connectedSessions.length" class="mode-picker-empty">暂无已连接会话</div>
+          <button
+            v-for="session in connectedSessions"
+            :key="session.machineName"
+            type="button"
+            class="mode-picker-item"
+            :class="{ active: session.machineName === activeSessionId && modelValue === 'shell' }"
+            role="menuitem"
+            @click="onPickSession(session.machineName)"
+          >
+            <span class="mode-picker-dot" :class="session.connected ? 'is-on' : 'is-off'" aria-hidden="true" />
+            <span class="mode-picker-main">
+              <span class="mode-picker-title">{{ sessionLabel(session) }}</span>
+              <span v-if="sessionSub(session)" class="mode-picker-sub">{{ sessionSub(session) }}</span>
+            </span>
+            <span
+              v-if="session.machineName === activeSessionId && modelValue === 'shell'"
+              class="mode-picker-check"
+            >✓</span>
+          </button>
+          <button
+            v-if="!connectedSessions.length"
+            type="button"
+            class="mode-picker-item mode-picker-item--action"
+            role="menuitem"
+            @click="onOpenShell"
+          >
+            打开 Shell…
+          </button>
+        </div>
       </div>
     </Teleport>
   </div>
@@ -128,11 +108,14 @@
 
 <script>
 import { computed, ref, onUnmounted, watch, nextTick } from 'vue'
-import { HomeFilled, Folder, Monitor } from '@element-plus/icons-vue'
+import { Folder, Monitor } from '@element-plus/icons-vue'
+
+const isLocalSession = (s) =>
+  s?.kind === 'local' || String(s?.machineName || '').startsWith('local')
 
 export default {
   name: 'ModeSwitcher',
-  components: { HomeFilled, Folder, Monitor },
+  components: { Folder, Monitor },
   props: {
     modelValue: {
       type: String,
@@ -152,17 +135,61 @@ export default {
     connectedCount: { type: Number, default: 0 },
     projects: { type: Array, default: () => [] },
     selectedProjectName: { type: String, default: '' },
+    /** 工作区会话（含未连接），用于挑已连接 Shell */
+    sessions: { type: Array, default: () => [] },
+    activeSessionId: { type: String, default: '' },
   },
-  emits: ['update:modelValue', 'change', 'select-project'],
+  emits: ['update:modelValue', 'change', 'select-project', 'focus-session'],
   setup(props, { emit }) {
     const hostRef = ref(null)
     const hoverOpen = ref(false)
-    const taskMenuOpen = ref(false)
     const pointerInside = ref(false)
     const floatStyle = ref({})
     let leaveTimer = null
 
-    const showSwitcher = computed(() => !props.compact || hoverOpen.value)
+    const showPanel = computed(() => !props.compact || hoverOpen.value)
+
+    const connectedSessions = computed(() =>
+      (props.sessions || []).filter((s) => s?.machineName && s.connected),
+    )
+
+    const sessionLabel = (session) => {
+      if (session?.tabLabel) return session.tabLabel
+      if (isLocalSession(session)) {
+        const n = String(session.machineName || '').replace(/^local-?/, '')
+        return n ? `本机-${n}` : '本机'
+      }
+      return session?.configName || session?.machineName || ''
+    }
+
+    const sessionSub = (session) => {
+      const host = String(session?.host || '').trim()
+      const label = sessionLabel(session)
+      if (host && label && !label.includes(host)) return host
+      return ''
+    }
+
+    const activeItem = computed(() => {
+      if (props.modelValue === 'task') {
+        return {
+          icon: Folder,
+          badge: '',
+          dot: !!props.taskRunning,
+          label: '任务',
+        }
+      }
+      return {
+        icon: Monitor,
+        badge: props.connectedCount > 0 ? String(props.connectedCount) : '',
+        dot: false,
+        label: 'Shell',
+      }
+    })
+
+    const triggerTitle = computed(() => {
+      const label = activeItem.value.label
+      return `当前：${label}（悬停选择项目或已连接 Shell）`
+    })
 
     const updateFloatPosition = () => {
       if (!props.compact || !hostRef.value) return
@@ -185,66 +212,6 @@ export default {
       floatStyle.value = style
     }
 
-    const taskPopperOptions = {
-      modifiers: [
-        {
-          name: 'offset',
-          options: { offset: [0, 6] },
-        },
-      ],
-    }
-
-    const items = computed(() => {
-      const list = [
-        {
-          id: 'home',
-          label: '首页',
-          icon: HomeFilled,
-          title: '返回首页',
-          disabled: false,
-        },
-      ]
-      const canPickProject = props.projects.length > 0
-      if (props.hasTask || props.modelValue === 'task') {
-        list.push({
-          id: 'task',
-          label: '任务',
-          icon: Folder,
-          title: props.taskRunning
-            ? '切换到任务工作台（运行中）· 悬停可换项目'
-            : '切换到任务工作台 · 悬停可换项目',
-          disabled: false,
-          showProjectPicker: canPickProject,
-          dot: props.taskRunning,
-        })
-      }
-      if (props.hasMachines || props.connectedCount > 0 || props.modelValue === 'shell' || props.hasTask || props.modelValue === 'task') {
-        list.push({
-          id: 'shell',
-          label: 'Shell',
-          icon: Monitor,
-          title: props.connectedCount > 0
-            ? `切换到 Shell（${props.connectedCount} 个会话）`
-            : '切换到 Shell 终端',
-          disabled: false,
-          badge: props.connectedCount > 0 ? String(props.connectedCount) : '',
-        })
-      }
-      return list
-    })
-
-    const activeItem = computed(() => {
-      const found = items.value.find((i) => i.id === props.modelValue)
-      return found || items.value[0] || { id: 'home', icon: HomeFilled, label: '首页' }
-    })
-
-    const displayItems = computed(() => items.value)
-
-    const triggerTitle = computed(() => {
-      const label = activeItem.value.label || ''
-      return `当前：${label}（悬停切换模块）`
-    })
-
     const clearLeaveTimer = () => {
       if (leaveTimer) {
         clearTimeout(leaveTimer)
@@ -255,9 +222,7 @@ export default {
     const scheduleClose = (delay = 160) => {
       clearLeaveTimer()
       leaveTimer = setTimeout(() => {
-        if (!taskMenuOpen.value && !pointerInside.value) {
-          hoverOpen.value = false
-        }
+        if (!pointerInside.value) hoverOpen.value = false
       }, delay)
     }
 
@@ -275,30 +240,13 @@ export default {
       if (props.compact) scheduleClose(180)
     }
 
-    const onTaskMenuVisible = (visible) => {
-      taskMenuOpen.value = visible
-      if (visible) {
-        clearLeaveTimer()
-        hoverOpen.value = true
-        nextTick(() => updateFloatPosition())
-        return
-      }
-      if (props.compact) scheduleClose(120)
-    }
-
     const onWinChange = () => {
       if (hoverOpen.value) updateFloatPosition()
     }
 
     watch(() => props.modelValue, () => {
       hoverOpen.value = false
-      taskMenuOpen.value = false
       pointerInside.value = false
-      clearLeaveTimer()
-    })
-
-    watch(() => props.compact, () => {
-      hoverOpen.value = false
       clearLeaveTimer()
     })
 
@@ -319,21 +267,6 @@ export default {
       window.removeEventListener('scroll', onWinChange, true)
     })
 
-    const onSelect = (item) => {
-      if (item.disabled || item.id === props.modelValue) return
-      emit('update:modelValue', item.id)
-      emit('change', item.id)
-      hoverOpen.value = false
-    }
-
-    const onTaskClick = () => {
-      if (!props.hasTask) return
-      if (props.modelValue === 'task') return
-      emit('update:modelValue', 'task')
-      emit('change', 'task')
-      if (props.compact) hoverOpen.value = false
-    }
-
     const onPickProject = (name) => {
       const project = props.projects.find((p) => p.name === name)
       if (!project) return
@@ -341,21 +274,32 @@ export default {
       hoverOpen.value = false
     }
 
+    const onPickSession = (sessionId) => {
+      if (!sessionId) return
+      emit('focus-session', sessionId)
+      hoverOpen.value = false
+    }
+
+    const onOpenShell = () => {
+      emit('update:modelValue', 'shell')
+      emit('change', 'shell')
+      hoverOpen.value = false
+    }
+
     return {
       hostRef,
-      displayItems,
+      showPanel,
+      floatStyle,
       activeItem,
       triggerTitle,
-      showSwitcher,
-      floatStyle,
-      floatAlign: computed(() => props.floatAlign),
-      taskPopperOptions,
+      connectedSessions,
+      sessionLabel,
+      sessionSub,
       onHostEnter,
       onHostLeave,
-      onTaskMenuVisible,
-      onSelect,
-      onTaskClick,
       onPickProject,
+      onPickSession,
+      onOpenShell,
     }
   },
 }
@@ -437,211 +381,133 @@ export default {
 </style>
 
 <style>
-/* Teleport 到 body 后需非 scoped，否则面板样式丢失 */
-.mode-switcher {
-  --mode-track: color-mix(in srgb, var(--app-text) 6%, var(--app-panel-bg));
-  --mode-home: var(--app-text);
-  --mode-task: var(--app-accent-color);
-  --mode-shell: var(--app-accent-color);
-
-  display: inline-grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(108px, 1fr);
-  align-items: stretch;
-  gap: 2px;
-  min-width: min(336px, 52vw);
-  padding: 3px;
-  border-radius: 9px;
-  background: var(--mode-track);
-  border: 1px solid color-mix(in srgb, var(--app-border) 80%, transparent);
-  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 35%, transparent);
-}
-
-.mode-switcher.is-floating {
-  width: max-content;
-  min-width: 336px;
-  background: var(--app-panel-bg);
+/* Teleport 到 body 后需非 scoped */
+.mode-picker {
+  min-width: 220px;
+  max-width: 280px;
+  max-height: min(420px, 70vh);
+  overflow: auto;
+  padding: 6px;
+  border-radius: 10px;
   border: 1px solid var(--app-border);
-  box-shadow:
-    0 8px 24px color-mix(in srgb, var(--app-text) 12%, transparent),
-    0 2px 6px color-mix(in srgb, var(--app-text) 8%, transparent),
-    inset 0 1px 0 color-mix(in srgb, #fff 40%, transparent);
-  animation: mode-float-in 0.14s ease-out;
+  background: var(--app-card-bg, var(--app-panel-bg));
+  box-shadow: 0 10px 28px color-mix(in srgb, #000 28%, transparent);
+  box-sizing: border-box;
 }
 
-.mode-switcher.is-floating::before {
-  content: '';
-  position: absolute;
-  top: -10px;
-  left: 0;
-  right: 0;
-  height: 10px;
+.mode-picker.is-floating {
+  position: fixed;
 }
 
-@keyframes mode-float-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.mode-picker-section + .mode-picker-section {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid color-mix(in srgb, var(--app-border) 80%, transparent);
 }
 
-.mode-switcher .el-dropdown {
-  display: block;
-  min-width: 0;
-  width: 100%;
-  height: 100%;
-}
-
-.mode-switcher .el-dropdown > .el-tooltip__trigger,
-.mode-switcher .el-dropdown > span {
-  display: block !important;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-}
-
-.mode-switcher .mode-dropdown-trigger {
-  display: block;
-  width: 100%;
-  height: 100%;
-  min-width: 0;
-}
-
-.mode-switcher .mode-btn {
-  position: relative;
-  display: inline-flex;
+.mode-picker-head {
+  display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 4px;
-  min-width: 0;
-  width: 100%;
-  height: 26px;
-  padding: 0 8px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--app-text-muted, #909399);
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0.01em;
-  line-height: 1;
-  cursor: pointer;
-  transition:
-    background 0.16s ease,
-    color 0.16s ease,
-    box-shadow 0.16s ease;
-}
-
-.mode-switcher .mode-icon {
-  flex-shrink: 0;
-  opacity: 0.85;
-}
-
-.mode-switcher .mode-label {
-  flex: 0 1 auto;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.mode-switcher .mode-btn:hover:not(.disabled):not(.active) {
-  color: var(--app-accent-color);
-  background: var(--app-accent-bg);
-}
-
-.mode-switcher .mode-btn.active {
-  background: var(--app-card-bg, #fff);
-  color: var(--app-text);
+  gap: 6px;
+  padding: 4px 8px 6px;
+  font-size: 11px;
   font-weight: 600;
-  box-shadow:
-    0 1px 2px color-mix(in srgb, var(--app-text) 8%, transparent),
-    0 0 0 1px color-mix(in srgb, var(--app-border) 75%, transparent);
+  color: var(--app-text-muted);
 }
 
-.mode-switcher .mode-btn.mode-task.active,
-.mode-switcher .mode-btn.mode-shell.active {
-  color: var(--app-accent-color);
-  background: var(--app-card-bg, #fff);
-}
-
-.mode-switcher .mode-btn.active .mode-icon {
-  opacity: 1;
-}
-
-.mode-switcher .mode-btn.disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.mode-switcher .mode-badge {
-  flex-shrink: 0;
-  min-width: 15px;
-  height: 15px;
-  padding: 0 4px;
+.mode-picker-count {
+  margin-left: auto;
+  min-width: 16px;
+  padding: 0 5px;
   border-radius: 8px;
   font-size: 10px;
-  font-weight: 700;
-  line-height: 15px;
+  line-height: 16px;
   text-align: center;
-  color: var(--mode-shell);
-  background: color-mix(in srgb, var(--mode-shell) 16%, transparent);
+  color: var(--app-text-secondary);
+  background: color-mix(in srgb, var(--app-text) 8%, transparent);
 }
 
-.mode-switcher .mode-btn.active .mode-badge {
-  background: color-mix(in srgb, var(--mode-shell) 20%, transparent);
+.mode-picker-empty {
+  padding: 8px 10px;
+  font-size: 12px;
+  color: var(--app-text-muted);
 }
 
-.mode-switcher .mode-dot {
+.mode-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0;
+  padding: 7px 10px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--app-text);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.mode-picker-item:hover {
+  background: color-mix(in srgb, var(--app-text) 7%, transparent);
+}
+
+.mode-picker-item.active {
+  background: var(--app-accent-bg);
+  color: var(--app-accent-color);
+}
+
+.mode-picker-item--action {
+  color: var(--app-accent-color);
+  font-weight: 600;
+}
+
+.mode-picker-dot {
+  flex-shrink: 0;
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  flex-shrink: 0;
-  background: var(--mode-task);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--mode-task) 24%, transparent);
+  background: var(--app-text-muted);
 }
 
-.mode-switcher .el-dropdown-menu__item.is-current {
-  color: var(--app-accent-color);
-  background: var(--app-accent-bg);
-  font-weight: 600;
+.mode-picker-dot.is-on {
+  background: var(--app-success-color, #67c23a);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-success-color, #67c23a) 22%, transparent);
 }
 
-html.dark .mode-switcher {
-  --mode-track: color-mix(in srgb, #000 28%, var(--app-panel-bg));
-  box-shadow: inset 0 1px 0 color-mix(in srgb, #fff 4%, transparent);
+.mode-picker-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
 }
 
-html.dark .mode-switcher.is-floating {
-  background: var(--app-panel-bg);
-  box-shadow:
-    0 10px 28px rgba(0, 0, 0, 0.45),
-    0 2px 8px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 color-mix(in srgb, #fff 5%, transparent);
-}
-
-html.dark .mode-switcher .mode-btn.active {
-  background: color-mix(in srgb, var(--app-card-bg) 92%, #fff);
-  box-shadow:
-    0 1px 3px rgba(0, 0, 0, 0.35),
-    0 0 0 1px color-mix(in srgb, var(--app-border) 80%, transparent);
-}
-
-.mode-task-project-popper.el-popper,
-.mode-task-project-popper {
-  min-width: 0 !important;
-  width: max-content;
-  max-width: 220px;
-}
-
-.mode-task-project-popper .el-dropdown-menu {
-  min-width: 0 !important;
-  padding: 4px;
-}
-
-.mode-task-project-popper .el-dropdown-menu__item {
-  padding: 6px 12px;
-  line-height: 1.3;
-  max-width: 220px;
+.mode-picker-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-weight: 500;
+}
+
+.mode-picker-sub {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--app-text-muted);
+}
+
+.mode-picker-item.active .mode-picker-sub {
+  color: color-mix(in srgb, var(--app-accent-color) 70%, var(--app-text-muted));
+}
+
+.mode-picker-check {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--app-accent-color);
 }
 </style>

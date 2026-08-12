@@ -60,7 +60,7 @@
       </div>
       <div class="tabs-bar-right">
         <ModeSwitcher
-          v-if="hasTask"
+          v-if="hasProjects || hasTask"
           compact
           float-align="end"
           model-value="shell"
@@ -71,8 +71,11 @@
           :connected-count="connectedCount"
           :projects="projects"
           :selected-project-name="selectedProjectName"
+          :sessions="sessions"
+          :active-session-id="activeTab"
           @change="(v) => $emit('change-view', v)"
           @select-project="(p) => $emit('select-project', p)"
+          @focus-session="(id) => $emit('focus-session', id)"
         />
         <AppChromeIcons />
       </div>
@@ -327,7 +330,7 @@ export default {
     'back', 'open-search', 'reconnect', 'search-result', 'open-transfer', 'open-command-palette', 'cwd-sync',
     'update:broadcast-enabled', 'update:broadcast-targets', 'update:split-session-ids',
     'reorder-tabs',
-    'change-view', 'select-project',
+    'change-view', 'select-project', 'focus-session',
   ],
   setup(props, { emit, expose }) {
     const activeTab = ref(props.activeMachine)

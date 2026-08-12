@@ -2,11 +2,13 @@
   <div class="app-menu-bar">
     <div class="menu-side menu-left" aria-hidden="true" />
 
-    <div class="menu-center">
-      <!-- 首页已有左侧「任务/主机」分区，顶栏 ModeSwitcher 暂隐藏 -->
-      <!--
+    <div class="menu-center" />
+
+    <div class="menu-side menu-right">
       <ModeSwitcher
-        v-if="showFullSwitcher"
+        v-if="activeView === 'task' && (hasProjects || hasTask)"
+        compact
+        float-align="end"
         :model-value="activeView"
         :has-projects="hasProjects"
         :has-machines="hasMachines"
@@ -15,27 +17,24 @@
         :connected-count="connectedCount"
         :projects="projects"
         :selected-project-name="selectedProjectName"
+        :sessions="sessions"
+        :active-session-id="activeSessionId"
         @change="$emit('change-view', $event)"
         @select-project="$emit('select-project', $event)"
+        @focus-session="$emit('focus-session', $event)"
       />
-      -->
-    </div>
-
-    <div class="menu-side menu-right">
       <AppChromeIcons />
     </div>
   </div>
 </template>
 
 <script>
-import { computed } from 'vue'
-// import ModeSwitcher from './ModeSwitcher.vue'
+import ModeSwitcher from './ModeSwitcher.vue'
 import AppChromeIcons from './AppChromeIcons.vue'
 
 export default {
   name: 'AppMenuBar',
-  components: { AppChromeIcons },
-  // components: { ModeSwitcher, AppChromeIcons },
+  components: { ModeSwitcher, AppChromeIcons },
   props: {
     activeView: {
       type: String,
@@ -49,18 +48,10 @@ export default {
     connectedCount: { type: Number, default: 0 },
     projects: { type: Array, default: () => [] },
     selectedProjectName: { type: String, default: '' },
+    sessions: { type: Array, default: () => [] },
+    activeSessionId: { type: String, default: '' },
   },
-  emits: ['change-view', 'select-project'],
-  setup(props) {
-    const canSwitchModes = computed(() =>
-      props.hasProjects || props.hasMachines || props.hasTask || props.connectedCount > 0
-        || props.activeView === 'task' || props.activeView === 'shell'
-    )
-
-    const showFullSwitcher = computed(() => canSwitchModes.value)
-
-    return { showFullSwitcher }
-  },
+  emits: ['change-view', 'select-project', 'focus-session'],
 }
 </script>
 
