@@ -1530,6 +1530,11 @@ theme preview · ${theme.foreground}`
     padding-bottom: 0;
 }
 
+.settings-search-bar {
+    flex-shrink: 0;
+    padding: 0 0 10px;
+}
+
 .settings-subnav {
     flex-shrink: 0;
     display: flex;

@@ -3,6 +3,8 @@ package data
 import (
 	"fmt"
 	"strings"
+
+	"FlashDock/define"
 )
 
 // GetMachineGroupDefaults 返回全部分组默认配置
@@ -43,6 +45,14 @@ func (gcm *GlobalConfigManager) SaveMachineGroupDefaults(def MachineGroupDefault
 	}
 	if def.Name == DefaultMachineGroupName {
 		return fmt.Errorf("不能为默认分组设置默认配置")
+	}
+	if def.ProxyOverride != nil {
+		define.NormalizeMachineProxyOverride(def.ProxyOverride)
+		if def.ProxyOverride.Mode == "inherit" {
+			def.ProxyOverride = nil
+		} else if err := def.ProxyOverride.PrepareMachineProxyPasswordForSave(); err != nil {
+			return fmt.Errorf("保存分组代理密码失败: %w", err)
+		}
 	}
 	if gcm.config == nil {
 		if _, err := gcm.LoadGlobalConfig(); err != nil {
