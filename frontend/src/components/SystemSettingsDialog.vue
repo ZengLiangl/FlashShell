@@ -1766,6 +1766,9 @@ theme preview · ${theme.foreground}`
 }
 
 .setting-card--padded {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
     padding: 14px;
 }
 
