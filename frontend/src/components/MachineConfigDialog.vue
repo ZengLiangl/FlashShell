@@ -402,6 +402,12 @@
                 <el-form-item label="Agent 转发">
                     <el-switch v-model="machineForm.agentForwarding" active-text="启用 SSH Agent 转发" />
                 </el-form-item>
+                <el-form-item label="终端配色">
+                    <el-select v-model="machineForm.terminalPreset" clearable placeholder="跟随全局主题" style="width: 100%">
+                        <el-option label="跟随全局" value="" />
+                        <el-option v-for="preset in terminalPresetOptions" :key="preset.id" :label="preset.label" :value="preset.id" />
+                    </el-select>
+                </el-form-item>
 
                 <el-divider content-position="left">SSH 隧道</el-divider>
                 <div class="tunnel-head">
@@ -538,6 +544,36 @@
                         <el-option label="GB18030" value="gb18030" />
                     </el-select>
                 </el-form-item>
+                <el-form-item label="Agent 转发">
+                    <el-switch v-model="groupDefaultsForm.agentForwarding" active-text="启用 SSH Agent 转发" />
+                </el-form-item>
+                <el-form-item label="代理覆盖">
+                    <el-select v-model="groupDefaultsForm.proxyOverride.mode" style="width: 100%">
+                        <el-option label="继承全局" value="inherit" />
+                        <el-option label="直连" value="none" />
+                        <el-option label="独立代理" value="manual" />
+                    </el-select>
+                </el-form-item>
+                <template v-if="groupDefaultsForm.proxyOverride.mode === 'manual'">
+                    <el-form-item label="代理类型">
+                        <el-select v-model="groupDefaultsForm.proxyOverride.type" style="width: 100%">
+                            <el-option label="HTTP" value="http" />
+                            <el-option label="SOCKS" value="socks" />
+                        </el-select>
+                    </el-form-item>
+                    <el-form-item label="代理主机">
+                        <el-input v-model="groupDefaultsForm.proxyOverride.host" placeholder="主机" />
+                    </el-form-item>
+                    <el-form-item label="代理端口">
+                        <el-input-number v-model="groupDefaultsForm.proxyOverride.port" :min="1" :max="65535" />
+                    </el-form-item>
+                    <el-form-item label="代理用户">
+                        <el-input v-model="groupDefaultsForm.proxyOverride.user" clearable />
+                    </el-form-item>
+                    <el-form-item label="代理密码">
+                        <el-input v-model="groupDefaultsForm.proxyOverride.password" type="password" show-password clearable />
+                    </el-form-item>
+                </template>
                 <el-form-item label="默认标签">
                     <el-select
                         v-model="groupDefaultsForm.tags"
@@ -612,6 +648,7 @@ import {
     collectMachineTags,
 } from '../utils/machineGroups'
 import { copyMachineRecord } from '../utils/machineCopy'
+import { TERMINAL_PRESETS } from '../utils/themePresets'
 import { useMachineContextMenu } from '../composables/useMachineContextMenu'
 import MachineContextMenu from './shell/MachineContextMenu.vue'
 import TextOverflowTooltip from './TextOverflowTooltip.vue'
@@ -702,6 +739,15 @@ export default {
             proxyJump: '',
             startupCommand: '',
             sftpEncoding: 'auto',
+            agentForwarding: false,
+            proxyOverride: {
+                mode: 'inherit',
+                type: 'http',
+                host: '',
+                port: 7890,
+                user: '',
+                password: '',
+            },
             tags: [],
         })
         const newGroupName = ref('')
@@ -740,6 +786,7 @@ export default {
             sftpFileProtocol: 'auto',
             startupCommand: '',
             agentForwarding: false,
+            terminalPreset: '',
             tunnels: [],
         })
 
@@ -831,6 +878,18 @@ export default {
             if (defaults.proxyJump) machineForm.proxyJump = defaults.proxyJump
             if (defaults.startupCommand) machineForm.startupCommand = defaults.startupCommand
             if (defaults.sftpEncoding) machineForm.sftpEncoding = defaults.sftpEncoding
+            if (defaults.agentForwarding) machineForm.agentForwarding = true
+            if (defaults.proxyOverride?.mode && defaults.proxyOverride.mode !== 'inherit') {
+                const po = defaults.proxyOverride
+                machineForm.proxyOverride = {
+                    mode: po.mode || 'inherit',
+                    type: po.type || 'http',
+                    host: po.host || '',
+                    port: po.port || 7890,
+                    user: po.user || '',
+                    password: po.password || '',
+                }
+            }
             if (defaults.tags?.length) machineForm.tags = normalizeMachineTags(defaults.tags)
             ElMessage.success('已应用分组默认')
         }
@@ -843,6 +902,16 @@ export default {
             groupDefaultsForm.proxyJump = existing?.proxyJump || ''
             groupDefaultsForm.startupCommand = existing?.startupCommand || ''
             groupDefaultsForm.sftpEncoding = existing?.sftpEncoding || 'auto'
+            groupDefaultsForm.agentForwarding = !!existing?.agentForwarding
+            const po = existing?.proxyOverride || {}
+            groupDefaultsForm.proxyOverride = {
+                mode: po.mode || 'inherit',
+                type: po.type || 'http',
+                host: po.host || '',
+                port: po.port || 7890,
+                user: po.user || '',
+                password: po.password || '',
+            }
             groupDefaultsForm.tags = normalizeMachineTags(existing?.tags || [])
             groupDefaultsVisible.value = true
         }
@@ -859,6 +928,13 @@ export default {
         const saveGroupDefaults = async () => {
             savingGroupDefaults.value = true
             try {
+                const po = { ...groupDefaultsForm.proxyOverride }
+                if (po.mode !== 'manual') {
+                    po.host = ''
+                    po.port = 0
+                    po.user = ''
+                    po.password = ''
+                }
                 await SaveMachineGroupDefaults({
                     name: groupDefaultsForm.name,
                     user: groupDefaultsForm.user?.trim() || '',
@@ -866,6 +942,8 @@ export default {
                     proxyJump: groupDefaultsForm.proxyJump?.trim() || '',
                     startupCommand: groupDefaultsForm.startupCommand?.trim() || '',
                     sftpEncoding: groupDefaultsForm.sftpEncoding || 'auto',
+                    agentForwarding: !!groupDefaultsForm.agentForwarding,
+                    proxyOverride: po.mode === 'inherit' ? null : po,
                     tags: normalizeMachineTags(groupDefaultsForm.tags),
                 })
                 ElMessage.success('分组默认已保存')
@@ -911,6 +989,7 @@ export default {
             machineForm.sftpFileProtocol = machine.sftpFileProtocol || 'auto'
             machineForm.startupCommand = machine.startupCommand || ''
             machineForm.agentForwarding = !!machine.agentForwarding
+            machineForm.terminalPreset = machine.terminalPreset || ''
             machineForm.tunnels = (machine.tunnels || []).map((t) => ({
                 enabled: t.enabled !== false,
                 name: t.name || '',
@@ -986,6 +1065,7 @@ export default {
             machineForm.sftpFileProtocol = 'auto'
             machineForm.startupCommand = ''
             machineForm.agentForwarding = false
+            machineForm.terminalPreset = ''
             machineForm.tunnels = []
         }
 
@@ -1080,6 +1160,7 @@ export default {
                     sftpFileProtocol: machineForm.sftpFileProtocol || 'auto',
                     startupCommand: machineForm.startupCommand?.trim() || '',
                     agentForwarding: machineForm.agentForwarding,
+                    terminalPreset: machineForm.terminalPreset || '',
                     tunnels: (machineForm.tunnels || []).filter((t) => t.localPort > 0),
                 }
                 const sensitiveData = {
@@ -1460,6 +1541,7 @@ export default {
             machineFormRef,
             machineForm,
             machineRules,
+            terminalPresetOptions: TERMINAL_PRESETS,
             addTunnel,
             selectedAccountId,
             importAccountId,

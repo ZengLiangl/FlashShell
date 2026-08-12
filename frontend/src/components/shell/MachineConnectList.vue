@@ -27,14 +27,79 @@
           <ArrowRight />
         </el-icon>
       </button>
-      <ul
+      <div
         v-show="isGroupExpanded(group.name)"
+        class="ml-list-scroll"
+        :class="{ 'is-virtual': needsVirtual(group.machines) }"
+        @scroll="onListScroll($event, group.name)"
+      >
+        <ul
+          class="ml-list"
+          :class="{ 'ml-list--grid': layout === 'grid' }"
+          role="listbox"
+          :style="listPadStyle(group.name, group.machines)"
+        >
+          <li
+            v-for="machine in visibleMachines(group.name, group.machines)"
+            :key="machine.id || machine.name"
+            class="ml-item"
+            :class="{
+              connected: isConnected(machine.name),
+              connecting: machineConnecting(machine.name),
+              'is-context-target': showContextMenu && isContextTarget(machine),
+            }"
+            role="option"
+            tabindex="0"
+            @click="onConnect(machine)"
+            @keydown.enter.prevent="onConnect(machine)"
+            @contextmenu.prevent="onItemContextMenu($event, machine)"
+          >
+            <div class="ml-machine-icon" aria-hidden="true">
+              <el-icon :size="variant === 'cards' ? 18 : 16"><Monitor /></el-icon>
+            </div>
+            <div class="ml-body">
+              <div class="ml-line">
+                <span class="ml-name">{{ machine.name }}</span>
+                <el-icon v-if="machine.pinned" class="ml-pin" :size="12" title="已置顶"><StarFilled /></el-icon>
+                <template v-if="variant !== 'cards'">
+                  <span v-if="sessionCount(machine.name) > 0" class="ml-badge">{{ sessionCount(machine.name) }} 会话</span>
+                  <span v-else-if="machineConnecting(machine.name)" class="ml-badge connecting">连接中</span>
+                </template>
+              </div>
+              <div class="ml-addr">{{ formatMachineAddr(machine) }}</div>
+              <div v-if="machineTags(machine).length" class="ml-tags">
+                <span v-for="t in machineTags(machine)" :key="t" class="ml-tag">{{ t }}</span>
+              </div>
+            </div>
+            <div class="ml-side" :class="{ 'ml-side--meta': variant === 'cards' }" @click.stop>
+              <template v-if="variant === 'cards'">
+                <span v-if="sessionCount(machine.name) > 0" class="ml-card-badge">{{ sessionCount(machine.name) }} 会话</span>
+                <span v-else-if="machineConnecting(machine.name)" class="ml-card-badge is-accent">连接中</span>
+                <span v-else class="ml-card-badge is-muted">未连接</span>
+              </template>
+              <button v-if="showEdit" type="button" class="ml-icon-btn" title="编辑配置" @click="$emit('edit-machine', machine)">
+                <el-icon :size="14"><Setting /></el-icon>
+              </button>
+            </div>
+          </li>
+        </ul>
+      </div>
+    </div>
+
+    <div
+      v-if="defaultMachines.length"
+      class="ml-list-scroll"
+      :class="{ 'is-virtual': needsVirtual(defaultMachines) }"
+      @scroll="onListScroll($event, '__default__')"
+    >
+      <ul
         class="ml-list"
         :class="{ 'ml-list--grid': layout === 'grid' }"
         role="listbox"
+        :style="listPadStyle('__default__', defaultMachines)"
       >
         <li
-          v-for="machine in group.machines"
+          v-for="machine in visibleMachines('__default__', defaultMachines)"
           :key="machine.id || machine.name"
           class="ml-item"
           :class="{
@@ -78,52 +143,6 @@
         </li>
       </ul>
     </div>
-
-    <ul v-if="defaultMachines.length" class="ml-list" :class="{ 'ml-list--grid': layout === 'grid' }" role="listbox">
-      <li
-        v-for="machine in defaultMachines"
-        :key="machine.id || machine.name"
-        class="ml-item"
-        :class="{
-          connected: isConnected(machine.name),
-          connecting: machineConnecting(machine.name),
-          'is-context-target': showContextMenu && isContextTarget(machine),
-        }"
-        role="option"
-        tabindex="0"
-        @click="onConnect(machine)"
-        @keydown.enter.prevent="onConnect(machine)"
-        @contextmenu.prevent="onItemContextMenu($event, machine)"
-      >
-        <div class="ml-machine-icon" aria-hidden="true">
-          <el-icon :size="variant === 'cards' ? 18 : 16"><Monitor /></el-icon>
-        </div>
-        <div class="ml-body">
-          <div class="ml-line">
-            <span class="ml-name">{{ machine.name }}</span>
-            <el-icon v-if="machine.pinned" class="ml-pin" :size="12" title="已置顶"><StarFilled /></el-icon>
-            <template v-if="variant !== 'cards'">
-              <span v-if="sessionCount(machine.name) > 0" class="ml-badge">{{ sessionCount(machine.name) }} 会话</span>
-              <span v-else-if="machineConnecting(machine.name)" class="ml-badge connecting">连接中</span>
-            </template>
-          </div>
-          <div class="ml-addr">{{ formatMachineAddr(machine) }}</div>
-            <div v-if="machineTags(machine).length" class="ml-tags">
-              <span v-for="t in machineTags(machine)" :key="t" class="ml-tag">{{ t }}</span>
-            </div>
-          </div>
-        <div class="ml-side" :class="{ 'ml-side--meta': variant === 'cards' }" @click.stop>
-          <template v-if="variant === 'cards'">
-            <span v-if="sessionCount(machine.name) > 0" class="ml-card-badge">{{ sessionCount(machine.name) }} 会话</span>
-            <span v-else-if="machineConnecting(machine.name)" class="ml-card-badge is-accent">连接中</span>
-            <span v-else class="ml-card-badge is-muted">未连接</span>
-          </template>
-          <button v-if="showEdit" type="button" class="ml-icon-btn" title="编辑配置" @click="$emit('edit-machine', machine)">
-            <el-icon :size="14"><Setting /></el-icon>
-          </button>
-        </div>
-      </li>
-    </ul>
   </div>
 
   <MachineContextMenu
@@ -139,7 +158,7 @@
 </template>
 
 <script>
-import { computed, ref, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { ArrowRight, Setting, Monitor, StarFilled, Folder } from '@element-plus/icons-vue'
 import {
   splitMachineTree,
@@ -149,6 +168,7 @@ import {
   countMachineSessions,
   normalizeMachineTags,
 } from '../../utils/machineGroups'
+import { windowMachineList, MACHINE_LIST_VIRTUALIZE_AT, MACHINE_LIST_ROW_H } from '../../utils/machineListWindow'
 import { useMachineContextMenu } from '../../composables/useMachineContextMenu'
 import MachineContextMenu from './MachineContextMenu.vue'
 
@@ -175,6 +195,7 @@ export default {
   emits: ['connect', 'edit-machine', 'copy-machine', 'delete-machine', 'toggle-pin'],
   setup(props, { emit }) {
     const expandedGroups = ref([])
+    const scrollTops = reactive({})
     const { ctx, hideContextMenu, onMachineContextMenu, isContextTarget } = useMachineContextMenu()
 
     const machineTree = computed(() => {
@@ -211,6 +232,32 @@ export default {
         }
       },
     )
+
+    const needsVirtual = (list) => (list || []).length >= MACHINE_LIST_VIRTUALIZE_AT
+
+    const windowFor = (key, list) => {
+      const scrollTop = scrollTops[key] || 0
+      const cols = props.layout === 'grid' ? 2 : 1
+      return windowMachineList(list, scrollTop, 520, {
+        rowH: props.variant === 'cards' ? MACHINE_LIST_ROW_H : 64,
+        cols,
+      })
+    }
+
+    const visibleMachines = (key, list) => windowFor(key, list).items
+
+    const listPadStyle = (key, list) => {
+      const win = windowFor(key, list)
+      if (!win.virtual) return undefined
+      return {
+        paddingTop: `${win.padTop}px`,
+        paddingBottom: `${win.padBottom}px`,
+      }
+    }
+
+    const onListScroll = (event, key) => {
+      scrollTops[key] = event?.target?.scrollTop || 0
+    }
 
     const isConnected = (name) => isMachineConnected(name, props.sessions)
     const sessionCount = (name) => countMachineSessions(name, props.sessions)
@@ -261,6 +308,10 @@ export default {
       machineConnecting,
       machineTags,
       formatMachineAddr,
+      needsVirtual,
+      visibleMachines,
+      listPadStyle,
+      onListScroll,
       onConnect,
       onItemContextMenu,
       isContextTarget,
@@ -272,3 +323,10 @@ export default {
   },
 }
 </script>
+
+<style scoped>
+.ml-list-scroll.is-virtual {
+  max-height: min(70vh, 720px);
+  overflow: auto;
+}
+</style>

@@ -79,6 +79,8 @@ type Machine struct {
 	StartupCommand string `yaml:"startupCommand,omitempty" json:"startupCommand,omitempty"`
 	// AgentForwarding 启用 SSH Agent 转发
 	AgentForwarding bool `yaml:"agentForwarding,omitempty" json:"agentForwarding,omitempty"`
+	// TerminalPreset 本机终端配色覆盖（空=跟随全局主题）
+	TerminalPreset string `yaml:"terminalPreset,omitempty" json:"terminalPreset,omitempty"`
 	// Pinned 首页置顶
 	Pinned bool `yaml:"pinned,omitempty" json:"pinned,omitempty"`
 	// Tags 主机标签（检索与筛选）

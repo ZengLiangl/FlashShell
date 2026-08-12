@@ -90,6 +90,12 @@
         <el-form-item label="启动命令">
           <el-input v-model="form.startupCommand" placeholder="连接后执行" clearable />
         </el-form-item>
+        <el-form-item label="终端配色">
+          <el-select v-model="form.terminalPreset" clearable placeholder="跟随全局主题" style="width: 100%">
+            <el-option label="跟随全局" value="" />
+            <el-option v-for="preset in terminalPresetOptions" :key="preset.id" :label="preset.label" :value="preset.id" />
+          </el-select>
+        </el-form-item>
       </el-form>
     </div>
 
@@ -122,6 +128,7 @@ import {
   normalizeMachineTags,
   collectMachineTags,
 } from '../utils/machineGroups'
+import { TERMINAL_PRESETS } from '../utils/themePresets'
 
 export default {
   name: 'MachineAsidePanel',
@@ -160,6 +167,7 @@ export default {
       password: '',
       proxyJump: '',
       startupCommand: '',
+      terminalPreset: '',
     })
 
     const rules = {
@@ -201,6 +209,7 @@ export default {
       form.password = ''
       form.proxyJump = ''
       form.startupCommand = ''
+      form.terminalPreset = ''
       selectedAccountId.value = ''
     }
 
@@ -233,6 +242,7 @@ export default {
       form.key_file = machine.key_file || ''
       form.proxyJump = machine.proxyJump || ''
       form.startupCommand = machine.startupCommand || ''
+      form.terminalPreset = machine.terminalPreset || ''
       selectedAccountId.value = form.identityId || ''
       if (machine.id) {
         try {
@@ -270,6 +280,9 @@ export default {
       if (defaults.keyFile) form.key_file = defaults.keyFile
       if (defaults.proxyJump) form.proxyJump = defaults.proxyJump
       if (defaults.startupCommand) form.startupCommand = defaults.startupCommand
+      if (defaults.sftpEncoding) {
+        // aside 表单未展示编码，但保留应用入口一致性
+      }
       if (defaults.tags?.length) form.tags = normalizeMachineTags(defaults.tags)
       ElMessage.success('已应用分组默认')
     }
@@ -284,6 +297,7 @@ export default {
         key_file: form.key_file,
         proxyJump: form.proxyJump?.trim() || '',
         startupCommand: form.startupCommand?.trim() || '',
+        terminalPreset: form.terminalPreset || '',
       }
       const sensitiveData = {
         host: form.host,
@@ -392,6 +406,7 @@ export default {
       applyGlobalAccount,
       applyGroupDefaults,
       selectKeyFile,
+      terminalPresetOptions: TERMINAL_PRESETS,
       save,
       testDraft,
       saveAndConnect,

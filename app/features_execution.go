@@ -104,6 +104,7 @@ func (a *App) scheduleShellAutoReconnect(sessionID string) {
 					"machineName": sessionID,
 					"attempt":     attempt + 1,
 					"maxAttempts": len(shellReconnectDelays),
+					"delaySec":    int(delay / time.Second),
 				})
 			}
 			time.Sleep(delay)

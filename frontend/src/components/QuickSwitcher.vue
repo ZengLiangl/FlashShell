@@ -45,6 +45,7 @@ import {
   formatMachineAddr,
   machineMatchesKeyword,
   normalizeMachineTags,
+  collectMachineTags,
 } from '../utils/machineGroups'
 
 export default {
@@ -58,6 +59,7 @@ export default {
     'update:modelValue',
     'focus-session',
     'connect-machine',
+    'connect-machines',
     'open-settings',
     'open-machine-config',
     'open-shell',
@@ -146,12 +148,67 @@ export default {
       }),
     )
 
+    const batchItems = computed(() => {
+      const kw = String(query.value || '').trim().toLowerCase()
+      const out = []
+      const allTags = collectMachineTags(props.machines || [])
+      const matchedTags = !kw
+        ? []
+        : allTags.filter((t) => t.toLowerCase().includes(kw) || kw.includes(t.toLowerCase()))
+      for (const tag of matchedTags.slice(0, 5)) {
+        const names = (props.machines || [])
+          .filter((m) => normalizeMachineTags(m.tags).includes(tag))
+          .map((m) => m.name)
+          .filter(Boolean)
+        if (names.length < 2) continue
+        out.push({
+          id: `batch-tag-${tag}`,
+          kind: 'batch',
+          kindLabel: '批量',
+          title: `连接标签「${tag}」的机器`,
+          subtitle: `${names.length} 台 · 错峰连接`,
+          keywords: `tag ${tag} 批量 连接`,
+          run: () => emit('connect-machines', names),
+        })
+      }
+      if (!kw || '批量连接最近 recent batch'.includes(kw) || kw.includes('最近') || kw.includes('批量')) {
+        const recent = (props.sessions || [])
+          .map((s) => s.configName || s.tabLabel || s.machineName)
+          .filter(Boolean)
+        const uniq = []
+        const seen = new Set()
+        for (const name of recent) {
+          if (seen.has(name)) continue
+          seen.add(name)
+          if ((props.machines || []).some((m) => m.name === name)) uniq.push(name)
+          if (uniq.length >= 6) break
+        }
+        if (uniq.length >= 2) {
+          out.push({
+            id: 'batch-recent',
+            kind: 'batch',
+            kindLabel: '批量',
+            title: '批量连接最近',
+            subtitle: `${uniq.length} 台 · 错峰连接`,
+            keywords: '批量 最近 recent batch',
+            run: () => emit('connect-machines', uniq),
+          })
+        }
+      }
+      return out
+    })
+
     const items = computed(() => {
       const kw = String(query.value || '').trim().toLowerCase()
-      const pool = [...sessionItems.value, ...machineItems.value, ...actionItems]
+      const pool = [...batchItems.value, ...sessionItems.value, ...machineItems.value, ...actionItems]
       const filtered = !kw
         ? pool
         : pool.filter((item) => {
+            if (item.kind === 'batch') {
+              return String(item.keywords || item.title || '')
+                .toLowerCase()
+                .includes(kw) || item.title.toLowerCase().includes(kw)
+            }
             if (item.machine) return machineMatchesKeyword(item.machine, kw)
             return String(item.keywords || item.title || '')
               .toLowerCase()

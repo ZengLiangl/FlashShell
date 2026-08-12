@@ -104,6 +104,8 @@
   cursor: pointer;
   outline: none;
   transition: background 0.12s ease;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 72px;
 }
 
 .ml-item:hover,

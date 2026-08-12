@@ -60,6 +60,7 @@ declare module 'vue' {
     ProxySettingsPanel: typeof import('./components/ProxySettingsPanel.vue')['default']
     QuickSwitcher: typeof import('./components/QuickSwitcher.vue')['default']
     SettingsHubDialog: typeof import('./components/SettingsHubDialog.vue')['default']
+    SftpConflictDialog: typeof import('./components/shell/SftpConflictDialog.vue')['default']
     ShellBroadcastBar: typeof import('./components/shell/ShellBroadcastBar.vue')['default']
     ShellCommandPalette: typeof import('./components/shell/ShellCommandPalette.vue')['default']
     ShellComposeBar: typeof import('./components/shell/ShellComposeBar.vue')['default']

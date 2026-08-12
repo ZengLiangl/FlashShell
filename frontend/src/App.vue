@@ -109,6 +109,7 @@
       :sessions="shellSessions"
       @focus-session="onQuickFocusSession"
       @connect-machine="onQuickConnectMachine"
+      @connect-machines="onQuickConnectMachines"
       @open-settings="() => { settingsSection = 'general'; settingsHubVisible = true }"
       @open-machine-config="() => { settingsSection = 'machines'; settingsHubVisible = true }"
       @open-shell="() => switchActiveView('shell')"
@@ -644,6 +645,25 @@ export default {
         return;
       }
       await openShellAndConnect(machineName);
+    };
+
+    /** 错峰批量连接（150–300ms 间隔） */
+    const onQuickConnectMachines = async (names) => {
+      const list = Array.isArray(names) ? names.filter(Boolean) : []
+      if (!list.length) return
+      switchActiveView('shell')
+      for (let i = 0; i < list.length; i++) {
+        const name = list[i]
+        try {
+          await connectShell(name)
+        } catch (e) {
+          console.error('批量连接失败:', name, e)
+        }
+        if (i < list.length - 1) {
+          const delay = 150 + Math.floor(Math.random() * 151)
+          await new Promise((r) => setTimeout(r, delay))
+        }
+      }
     };
 
     const onSettingsConnectMachine = async (machineName) => {
@@ -1700,6 +1720,7 @@ export default {
       openShellAndConnect,
       onQuickFocusSession,
       onQuickConnectMachine,
+      onQuickConnectMachines,
       onSettingsConnectMachine,
       connectShell,
       connectLocalShell,
