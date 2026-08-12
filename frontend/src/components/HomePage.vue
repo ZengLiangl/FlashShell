@@ -757,16 +757,18 @@ export default {
   margin-left: auto;
   font-size: 11px;
   font-weight: 600;
-  color: var(--app-text-muted);
   min-width: 1.2em;
-  text-align: right;
+  text-align: center;
+  line-height: 1.4;
+  border-radius: 999px;
+  padding: 1px 7px;
+  color: var(--app-text-muted);
+  background: color-mix(in srgb, var(--app-text) 8%, transparent);
 }
 
 .rail-live {
   color: var(--app-accent-color);
   background: var(--app-accent-bg);
-  border-radius: 999px;
-  padding: 1px 7px;
 }
 
 .rail-footer {

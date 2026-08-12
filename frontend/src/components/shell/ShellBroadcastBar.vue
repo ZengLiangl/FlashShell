@@ -1,6 +1,6 @@
 <template>
   <div v-if="enabled" class="shell-broadcast-bar">
-    <div class="broadcast-toolbar">
+    <div class="broadcast-main">
       <div class="broadcast-meta">
         <span class="broadcast-dot" aria-hidden="true"></span>
         <span class="broadcast-label">广播</span>
@@ -53,24 +53,25 @@
           placeholder="输入命令，Enter 发送"
           @keydown="onKeydown"
         />
-        <el-tooltip content="发送 (Enter)" placement="top">
-          <el-button
-            class="send-btn"
-            circle
-            size="small"
-            type="primary"
-            :disabled="!draft.trim() || !targetCount"
-            @click="send"
-          >
-            <el-icon><Promotion /></el-icon>
-          </el-button>
-        </el-tooltip>
-        <el-tooltip content="关闭广播" placement="top">
-          <el-button class="close-btn" circle size="small" text @click="close">
-            <el-icon><Close /></el-icon>
-          </el-button>
-        </el-tooltip>
       </div>
+    </div>
+
+    <div class="aux-bar-actions">
+      <el-tooltip content="发送 (Enter)" placement="top">
+        <button
+          type="button"
+          class="aux-action-btn is-send"
+          :disabled="!draft.trim() || !targetCount"
+          @click="send"
+        >
+          <el-icon :size="14"><Promotion /></el-icon>
+        </button>
+      </el-tooltip>
+      <el-tooltip content="关闭广播" placement="top">
+        <button type="button" class="aux-action-btn is-close" @click="close">
+          <el-icon :size="14"><Close /></el-icon>
+        </button>
+      </el-tooltip>
     </div>
   </div>
 </template>
@@ -206,12 +207,18 @@ export default {
 <style scoped>
 .shell-broadcast-bar {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   border-bottom: 1px solid var(--app-border);
-  background: var(--app-card-bg);
+  background: transparent;
   padding: 6px 10px;
+  box-sizing: border-box;
 }
 
-.broadcast-toolbar {
+.broadcast-main {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -272,7 +279,7 @@ export default {
   padding: 5px 10px;
   border-radius: 999px;
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s, background 0.15s;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
 }
 
 .target-chip.selected {
@@ -293,6 +300,13 @@ export default {
   font-size: 11px;
   cursor: pointer;
   padding: 4px 6px;
+  border-radius: 4px;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.target-action:hover {
+  color: var(--app-accent-color);
+  background: color-mix(in srgb, var(--app-accent-color) 10%, transparent);
 }
 
 .target-more {
@@ -308,12 +322,14 @@ export default {
   align-items: center;
   gap: 6px;
   flex: 1;
-  min-width: 160px;
+  min-width: 140px;
   margin-left: auto;
-  padding: 2px 4px 2px 10px;
+  padding: 0 10px;
   border: 1px solid var(--app-border);
   border-radius: var(--app-radius-md, 8px);
   background: var(--terminal-bg);
+  height: 32px;
+  box-sizing: border-box;
 }
 
 .cmd-prompt {
@@ -331,7 +347,7 @@ export default {
   color: var(--terminal-fg, var(--app-text));
   font-family: var(--app-font-family-mono, Consolas, monospace);
   font-size: 13px;
-  height: 28px;
+  height: 100%;
 }
 
 .cmd-input:focus {
@@ -342,12 +358,50 @@ export default {
   color: var(--app-text-muted);
 }
 
-.send-btn {
+.aux-bar-actions {
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  width: 60px;
+  justify-content: flex-end;
 }
 
-.close-btn {
-  flex-shrink: 0;
+.aux-action-btn {
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
   color: var(--app-text-muted);
+  background: transparent;
+  transition: color 0.15s ease, background 0.15s ease;
+}
+
+.aux-action-btn.is-send {
+  color: #fff;
+  background: var(--app-accent-color);
+}
+
+.aux-action-btn.is-send:hover:not(:disabled) {
+  filter: brightness(1.08);
+  background: var(--app-accent-color);
+}
+
+.aux-action-btn.is-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+  filter: none;
+}
+
+.aux-action-btn.is-close:hover {
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-text) 10%, transparent);
 }
 </style>

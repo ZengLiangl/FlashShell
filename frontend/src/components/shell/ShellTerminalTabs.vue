@@ -78,24 +78,31 @@
       </div>
     </div>
 
-    <ShellBroadcastBar v-if="sessions.length && broadcastEnabled" :enabled="broadcastEnabled"
-      :targets="broadcastTargets" :sessions="sessions" @update:enabled="(v) => $emit('update:broadcast-enabled', v)"
-      @update:targets="(v) => $emit('update:broadcast-targets', v)" />
-
-    <ShellComposeBar
-      v-if="sessions.length && composeEnabled"
-      :enabled="composeEnabled"
-      :session-id="activeTab"
-      :broadcast-enabled="broadcastEnabled"
-      :broadcast-targets="broadcastTargets"
-      @update:enabled="(v) => (composeEnabled = v)"
-    />
-
     <div v-if="sessions.length === 0" class="empty-slot">
       <slot name="empty" />
     </div>
     <template v-else>
-      <div class="terminal-body">
+      <div class="terminal-body" :class="{ 'has-aux-bars': broadcastEnabled || composeEnabled }">
+        <!-- 浮层：不占文档流，避免挤压终端高度触发 fit 抖动 -->
+        <div v-if="broadcastEnabled || composeEnabled" class="shell-aux-bars">
+          <ShellBroadcastBar
+            v-if="broadcastEnabled"
+            :enabled="broadcastEnabled"
+            :targets="broadcastTargets"
+            :sessions="sessions"
+            @update:enabled="(v) => $emit('update:broadcast-enabled', v)"
+            @update:targets="(v) => $emit('update:broadcast-targets', v)"
+          />
+          <ShellComposeBar
+            v-if="composeEnabled"
+            :enabled="composeEnabled"
+            :session-id="activeTab"
+            :broadcast-enabled="broadcastEnabled"
+            :broadcast-targets="broadcastTargets"
+            @update:enabled="(v) => (composeEnabled = v)"
+          />
+        </div>
+
         <div v-if="sessions.length" class="terminal-inline-actions">
           <el-tooltip v-if="connectedCount >= 1"
             :content="broadcastEnabled ? '关闭命令广播 (Esc)' : '开启命令广播'" placement="bottom">
@@ -190,7 +197,6 @@
             :proxy-jump="sessionMeta(session).proxyJump"
             :terminal-preset-override="sessionMeta(session).terminalPreset"
             :active="isTerminalActive(session.machineName)" :view-visible="viewVisible" :search-query="searchQuery"
-            :broadcast-enabled="broadcastEnabled"
             :in-split="splitViewVisible && splitSessionIds.includes(session.machineName)"
             @open-search="(text) => $emit('open-search', text)" @reconnect="(name) => $emit('reconnect', name)"
             @clear-cache="(name) => $emit('clear', name)" @search-result="(payload) => $emit('search-result', payload)"
@@ -1010,6 +1016,7 @@ export default {
 
 <style scoped>
 .shell-terminal-tabs {
+  position: relative;
   flex: 1;
   min-height: 0;
   width: 100%;
@@ -1362,6 +1369,46 @@ export default {
   flex-direction: column;
   position: relative;
   overflow: hidden;
+}
+
+/* 广播 / 撰写：浮在终端上方，不改变 xterm 容器尺寸 */
+.shell-aux-bars {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  right: 118px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  pointer-events: none;
+  box-sizing: border-box;
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--app-card-bg);
+  border: 1px solid var(--app-border);
+  box-shadow: 0 8px 24px color-mix(in srgb, #000 28%, transparent);
+}
+
+.shell-aux-bars > * {
+  pointer-events: auto;
+}
+
+.shell-aux-bars :deep(.shell-broadcast-bar),
+.shell-aux-bars :deep(.shell-compose-bar) {
+  background: transparent;
+  backdrop-filter: none;
+  border-bottom-color: color-mix(in srgb, var(--app-border) 80%, transparent);
+}
+
+.shell-aux-bars :deep(.shell-compose-bar:last-child),
+.shell-aux-bars :deep(.shell-broadcast-bar:last-child) {
+  border-bottom: none;
+}
+
+.terminal-body.has-aux-bars .terminal-inline-actions {
+  /* 避开浮层右侧，避免与关闭/发送按钮叠在一起 */
+  top: 8px;
+  z-index: 7;
 }
 
 .terminal-inline-actions {

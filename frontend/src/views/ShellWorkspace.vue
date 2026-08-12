@@ -721,8 +721,11 @@ export default {
     }
 
     const onFilePanelLayout = async () => {
+      // 等一帧再 fit，合并展开瞬间的多次布局变化
       await nextTick()
-      tabsRef.value?.fitActive?.()
+      requestAnimationFrame(() => {
+        tabsRef.value?.fitActive?.()
+      })
     }
 
     watch(() => props.activeMachine, async (name) => {

@@ -6,6 +6,8 @@
     @mousedown="onPaneFocus"
   >
     <div ref="terminalRef" class="terminal-host"></div>
+    <!-- 与底部状态栏 / SFTP 面板留出空隙，避免提示符贴边 -->
+    <div class="terminal-bottom-gap" aria-hidden="true" />
     <ShellConnectionOverlay
       :status="overlayStatus"
       :machine-name="displayName"
@@ -114,8 +116,6 @@ export default {
     jumpChain: { type: Array, default: () => [] },
     proxyJump: { type: String, default: '' },
     searchQuery: { type: String, default: '' },
-    broadcastEnabled: { type: Boolean, default: false },
-    broadcastTargets: { type: Array, default: () => [] },
     /** 当前是否处于分屏窗格中 */
     inSplit: { type: Boolean, default: false },
     /** 是否曾成功连接过（用于区分「尚未连上」与「已断开」） */
@@ -208,6 +208,13 @@ export default {
 
     let resizeObserver = null
     let fitTimers = []
+    let fitDebounceTimer = null
+    let fitRaf1 = 0
+    let fitRaf2 = 0
+    let lastFitCols = 0
+    let lastFitRows = 0
+    let fitQuietUntil = 0
+    let suppressRoUntil = 0
     let initialized = false
     let unregisterWriter = null
     let inputListener = null
@@ -764,6 +771,18 @@ export default {
     const clearFitTimers = () => {
       fitTimers.forEach((id) => clearTimeout(id))
       fitTimers = []
+      if (fitDebounceTimer) {
+        clearTimeout(fitDebounceTimer)
+        fitDebounceTimer = null
+      }
+      if (fitRaf1) {
+        cancelAnimationFrame(fitRaf1)
+        fitRaf1 = 0
+      }
+      if (fitRaf2) {
+        cancelAnimationFrame(fitRaf2)
+        fitRaf2 = 0
+      }
     }
 
     const canFit = () => {
@@ -776,31 +795,56 @@ export default {
       return true
     }
 
-    const scheduleFit = () => {
-      clearFitTimers()
-      const run = () => {
-        if (!canFit()) return
-        try {
-          fitAddon.value.fit()
-          if (!props.connected) return
-          const { cols, rows } = term.value
-          // 拒绝异常尺寸，避免把远端 PTY 缩成几列
-          if (!cols || !rows || cols < 20 || rows < 5) return
-          App.ResizeShell(props.machineName, cols, rows).catch(() => {})
-        } catch {
-          // ignore
+    const runFit = ({ syncPty = true } = {}) => {
+      if (!canFit()) return
+      try {
+        fitAddon.value.fit()
+        const { cols, rows } = term.value
+        // 拒绝异常尺寸，避免把远端 PTY 缩成几列
+        if (!cols || !rows || cols < 20 || rows < 5) return
+        // 行列未变：只压制后续 RO，避免滚动条显隐导致 fit 振荡抖动
+        if (cols === lastFitCols && rows === lastFitRows) {
+          fitQuietUntil = Date.now() + 160
+          suppressRoUntil = Date.now() + 160
+          return
         }
+        lastFitCols = cols
+        lastFitRows = rows
+        fitQuietUntil = Date.now() + 220
+        suppressRoUntil = Date.now() + 220
+        // 必须与本地 fit 同步通知远端，否则行列短暂不一致会导致光标跑飞、提示符碎片
+        if (!syncPty || !props.connected) return
+        App.ResizeShell(props.machineName, cols, rows).catch(() => {})
+      } catch {
+        // ignore
       }
-      requestAnimationFrame(() => {
-        requestAnimationFrame(run)
-      })
-      ;[0, 80, 200, 500].forEach((delay) => {
-        fitTimers.push(setTimeout(run, delay))
-      })
     }
 
-    const fitAndResize = () => {
-      scheduleFit()
+    /** 合并短时间多次布局变化，避免连打 fit 造成页面闪烁 */
+    const scheduleFit = (opts = {}) => {
+      if (fitDebounceTimer) clearTimeout(fitDebounceTimer)
+      const delay = opts.immediate ? 0 : 64
+      fitDebounceTimer = setTimeout(() => {
+        fitDebounceTimer = null
+        if (!opts.force && Date.now() < fitQuietUntil) return
+        if (fitRaf1) cancelAnimationFrame(fitRaf1)
+        fitRaf1 = requestAnimationFrame(() => {
+          fitRaf1 = 0
+          fitRaf2 = requestAnimationFrame(() => {
+            fitRaf2 = 0
+            runFit(opts)
+          })
+        })
+      }, delay)
+    }
+
+    const fitAndResize = (opts = {}) => {
+      fitQuietUntil = 0
+      scheduleFit({
+        immediate: true,
+        force: true,
+        syncPty: opts.syncPty !== false,
+      })
     }
 
     const applyTerminalAppearance = () => {
@@ -985,6 +1029,10 @@ export default {
         fitAddon.value = null
       }
       initialized = false
+      lastFitCols = 0
+      lastFitRows = 0
+      fitQuietUntil = 0
+      suppressRoUntil = 0
       lastSearchResults = { resultIndex: -1, resultCount: 0, capped: false }
     }
 
@@ -1197,7 +1245,6 @@ export default {
           }
           return
         }
-        if (props.broadcastEnabled) return
         trackInputLine(data)
         App.SendShellInput(props.machineName, data).catch(() => {})
       })
@@ -1254,7 +1301,10 @@ export default {
       if (resizeObserver) return
       const target = containerRef.value || terminalRef.value
       if (target && window.ResizeObserver) {
-        resizeObserver = new ResizeObserver(() => scheduleFit())
+        resizeObserver = new ResizeObserver(() => {
+          if (Date.now() < fitQuietUntil || Date.now() < suppressRoUntil) return
+          scheduleFit()
+        })
         resizeObserver.observe(target)
       }
       window.addEventListener('resize', scheduleFit)
@@ -1481,9 +1531,15 @@ export default {
   flex: 1;
   min-height: 0;
   width: 100%;
-  height: 100%;
   padding: 4px 8px;
   box-sizing: border-box;
+  overflow: hidden;
+}
+
+.terminal-bottom-gap {
+  flex-shrink: 0;
+  height: 16px;
+  background: inherit;
 }
 
 .terminal-host :deep(.xterm),
@@ -1495,6 +1551,8 @@ export default {
 
 .terminal-host :deep(.xterm-viewport) {
   overflow-y: auto;
+  /* 预留滚动条槽，避免显隐导致可用宽度来回变、触发 fit 振荡 */
+  scrollbar-gutter: stable;
 }
 
 .shell-password-assist {

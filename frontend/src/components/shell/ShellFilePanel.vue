@@ -1,5 +1,6 @@
 <template>
   <div
+    ref="panelRef"
     class="shell-file-panel"
     :class="{
       collapsed: !expanded,
@@ -526,6 +527,7 @@ export default {
     const expanded = ref(false)
     /** 按机器记住 SFTP 展开状态，切换会话互不影响 */
     const expandedByMachine = reactive({})
+    const panelRef = ref(null)
     const showHidden = ref(false)
     const followCwd = ref(true)
     const bookmarksVersion = ref(0)
@@ -673,7 +675,7 @@ export default {
         await nextTick()
         searchInputRef.value?.focus?.()
       }
-      notifyLayout()
+      // 搜索浮层不改终端尺寸，避免 fit / ResizeShell 造成闪烁
     })
 
     watch(expanded, (v) => {
@@ -1418,15 +1420,14 @@ export default {
             didOpen = true
             expanded.value = true
             bodyHeight.value = delta
-            void bootstrapExpand().then(() => notifyLayout())
+            void bootstrapExpand()
           } else {
             bodyHeight.value = Math.min(maxH, Math.max(0, delta))
           }
-          notifyLayout()
+          // 拖拽中不 fit，松手后再通知，避免连续抖动
           return
         }
         bodyHeight.value = Math.min(maxH, Math.max(MIN_BODY_HEIGHT, startH + delta))
-        notifyLayout()
       }
 
       const onUp = () => {
@@ -2267,6 +2268,7 @@ export default {
     })
 
     return {
+      panelRef,
       expanded,
       showHidden,
       followCwd,
@@ -2416,8 +2418,31 @@ export default {
   box-shadow: none;
 }
 
+/* 仅搜索：浮在终端底部；展开的 SFTP 仍占文档流，避免 inset↔fit 反馈抖动 */
+.shell-file-panel.has-search.collapsed {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 8px;
+  z-index: 5;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid var(--app-border);
+  background: var(--app-card-bg);
+  box-shadow: 0 8px 24px color-mix(in srgb, #000 28%, transparent);
+}
+
+.shell-file-panel.has-search.collapsed .height-handle {
+  display: none;
+}
+
+.shell-file-panel.has-search.collapsed .search-bar {
+  border-bottom: none;
+  padding: 8px 12px;
+}
+
 .height-handle {
-  height: 5px;
+  height: 10px;
   cursor: row-resize;
   flex-shrink: 0;
   background: transparent;
@@ -2442,7 +2467,7 @@ export default {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  padding: 4px 8px 4px 10px;
+  padding: 6px 8px 6px 10px;
   min-height: 32px;
   flex-shrink: 0;
 }
