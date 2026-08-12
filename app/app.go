@@ -1399,9 +1399,17 @@ func (a *App) GetSystemSettings() (*data.GlobalConfig, error) {
 			v := true
 			cfg.ShellAsciiInput = &v
 		}
+		if cfg.ShellPasswordAssist == nil {
+			v := true
+			cfg.ShellPasswordAssist = &v
+		}
 		if cfg.ShellSessionRestore == nil {
 			v := true
 			cfg.ShellSessionRestore = &v
+		}
+		if cfg.ThemeSettings.ShellTabHibernate == nil {
+			v := true
+			cfg.ThemeSettings.ShellTabHibernate = &v
 		}
 	}
 	return cfg, nil
@@ -1496,6 +1504,9 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 			"shellSessionRestore":       data.ShellSessionRestoreEnabled(config),
 			"shellCursorLineHighlight":  data.ShellCursorLineHighlightEnabled(config),
 			"shellLineTimestamps":       data.ShellLineTimestampsEnabled(config),
+			"shellPasswordAssist":       data.ShellPasswordAssistEnabled(config),
+			"shellUseWebgl":             config.ThemeSettings.ShellUseWebgl,
+			"shellTabHibernate":         data.ShellTabHibernateEnabled(config),
 			"proxySettings":             config.ProxySettings,
 			"windowsName":               config.WindowsName,
 			"appIconPreset":             config.AppIconPreset,

@@ -25,6 +25,10 @@ type ThemeSettings struct {
 	ShellMemorySaver bool `yaml:"shellMemorySaver" json:"shellMemorySaver"`
 	// ShellAutoReconnect Shell 意外断开时自动重连（默认关闭）
 	ShellAutoReconnect bool `yaml:"shellAutoReconnect" json:"shellAutoReconnect"`
+	// ShellUseWebgl 终端使用 WebGL 渲染器（失败时回退 canvas；默认关闭）
+	ShellUseWebgl bool `yaml:"shellUseWebgl" json:"shellUseWebgl"`
+	// ShellTabHibernate 非活动且非分屏标签休眠（停 fit/卸载 xterm，缓冲保留回放；nil 表示默认开启）
+	ShellTabHibernate *bool `yaml:"shellTabHibernate,omitempty" json:"shellTabHibernate"`
 }
 
 // ProxySettings HTTP/SOCKS 代理
@@ -203,13 +207,15 @@ func isHexColor(s string) bool {
 
 // MachineGroupDefaults 分组级默认连接配置
 type MachineGroupDefaults struct {
-	Name           string   `yaml:"name" json:"name"`
-	User           string   `yaml:"user,omitempty" json:"user,omitempty"`
-	KeyFile        string   `yaml:"keyFile,omitempty" json:"keyFile,omitempty"`
-	ProxyJump      string   `yaml:"proxyJump,omitempty" json:"proxyJump,omitempty"`
-	StartupCommand string   `yaml:"startupCommand,omitempty" json:"startupCommand,omitempty"`
-	SftpEncoding   string   `yaml:"sftpEncoding,omitempty" json:"sftpEncoding,omitempty"`
-	Tags           []string `yaml:"tags,omitempty" json:"tags,omitempty"`
+	Name            string                       `yaml:"name" json:"name"`
+	User            string                       `yaml:"user,omitempty" json:"user,omitempty"`
+	KeyFile         string                       `yaml:"keyFile,omitempty" json:"keyFile,omitempty"`
+	ProxyJump       string                       `yaml:"proxyJump,omitempty" json:"proxyJump,omitempty"`
+	StartupCommand  string                       `yaml:"startupCommand,omitempty" json:"startupCommand,omitempty"`
+	SftpEncoding    string                       `yaml:"sftpEncoding,omitempty" json:"sftpEncoding,omitempty"`
+	AgentForwarding bool                         `yaml:"agentForwarding,omitempty" json:"agentForwarding,omitempty"`
+	ProxyOverride   *define.MachineProxyOverride `yaml:"proxyOverride,omitempty" json:"proxyOverride,omitempty"`
+	Tags            []string                     `yaml:"tags,omitempty" json:"tags,omitempty"`
 }
 
 // GlobalConfig 全局配置结构
@@ -261,6 +267,8 @@ type GlobalConfig struct {
 	ShellCursorLineHighlight *bool `yaml:"shellCursorLineHighlight,omitempty" json:"shellCursorLineHighlight"`
 	// ShellLineTimestamps 新输出行前缀时间戳；nil/缺省表示关闭
 	ShellLineTimestamps *bool `yaml:"shellLineTimestamps,omitempty" json:"shellLineTimestamps"`
+	// ShellPasswordAssist 检测到 Password:/密码 提示时显示终端底部输入条；nil 表示默认开启
+	ShellPasswordAssist *bool `yaml:"shellPasswordAssist,omitempty" json:"shellPasswordAssist"`
 }
 
 // ShellSessionRestoreEnabled 启动时是否恢复 Shell 会话（已关闭，保留字段兼容旧配置）
@@ -596,6 +604,30 @@ func ShellLineTimestampsEnabled(cfg *GlobalConfig) bool {
 		return false
 	}
 	return *cfg.ShellLineTimestamps
+}
+
+// ShellTabHibernateEnabled 非活动标签是否休眠（缺省 true）
+func ShellTabHibernateEnabled(cfg *GlobalConfig) bool {
+	if cfg == nil || cfg.ThemeSettings.ShellTabHibernate == nil {
+		return true
+	}
+	return *cfg.ThemeSettings.ShellTabHibernate
+}
+
+// ThemeShellTabHibernateEnabled 主题设置中的标签休眠开关（缺省 true）
+func ThemeShellTabHibernateEnabled(ts ThemeSettings) bool {
+	if ts.ShellTabHibernate == nil {
+		return true
+	}
+	return *ts.ShellTabHibernate
+}
+
+// ShellPasswordAssistEnabled 密码提示辅助输入是否开启（缺省 true）
+func ShellPasswordAssistEnabled(cfg *GlobalConfig) bool {
+	if cfg == nil || cfg.ShellPasswordAssist == nil {
+		return true
+	}
+	return *cfg.ShellPasswordAssist
 }
 
 // AddMachine 添加或更新机器配置（按 ID）

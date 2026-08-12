@@ -267,6 +267,8 @@ export namespace data {
 	    shellLineHeight: number;
 	    shellMemorySaver: boolean;
 	    shellAutoReconnect: boolean;
+	    shellUseWebgl: boolean;
+	    shellTabHibernate?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ThemeSettings(source);
@@ -284,6 +286,8 @@ export namespace data {
 	        this.shellLineHeight = source["shellLineHeight"];
 	        this.shellMemorySaver = source["shellMemorySaver"];
 	        this.shellAutoReconnect = source["shellAutoReconnect"];
+	        this.shellUseWebgl = source["shellUseWebgl"];
+	        this.shellTabHibernate = source["shellTabHibernate"];
 	    }
 	}
 	export class MachineGroupDefaults {

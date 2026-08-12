@@ -797,8 +797,15 @@ export function useShell() {
       if (tab) {
         tab.connecting = true
         tab.reconnecting = true
+        tab.reconnectAttempt = payload.attempt || 1
+        tab.reconnectMax = payload.maxAttempts || 3
+        tab.reconnectDelaySec = payload.delaySec || 0
       }
-      pushShellOutput(name, 'line', `正在重连…（${payload.attempt || 1}/${payload.maxAttempts || 3}）`)
+      const n = payload.attempt || 1
+      const max = payload.maxAttempts || 3
+      const delay = payload.delaySec || 0
+      const delayHint = delay > 0 ? `，退避 ${delay}s` : ''
+      pushShellOutput(name, 'line', `正在重连…（第 ${n}/${max} 次${delayHint}）`)
     })
     offShellReconnected = EventsOn('shell:reconnected', (payload) => {
       const name = payload?.machineName
@@ -809,6 +816,8 @@ export function useShell() {
         tab.reconnecting = false
         tab.connected = true
         tab.everConnected = true
+        tab.reconnectAttempt = 0
+        tab.reconnectDelaySec = 0
       }
       pushShellOutput(name, 'line', '重连成功')
       syncSessions()
@@ -821,6 +830,8 @@ export function useShell() {
         tab.connecting = false
         tab.reconnecting = false
         tab.connected = false
+        tab.reconnectAttempt = 0
+        tab.reconnectDelaySec = 0
       }
       pushShellOutput(name, 'line', '自动重连失败，按 Enter 手动重连')
     })

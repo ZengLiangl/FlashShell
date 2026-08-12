@@ -12,6 +12,23 @@ const writers = new Map()
 /** @type {Set<string>} */
 const activeSessions = new Set()
 
+/**
+ * 每会话写队列：同一帧内合并 chunk，避免高速率 shell:data 连续打满 rAF/xterm.write。
+ * @type {Map<string, {
+ *   items: Array<{ type: string, content: string | Uint8Array }>,
+ *   raf: number,
+ *   flushing: boolean,
+ *   pendingBytes: number,
+ * }>}
+ */
+const writeQueues = new Map()
+
+/** 写队列积压字节上限：超过则丢掉最旧的待写项（持久缓冲仍由 trimBuffer 管） */
+const WRITE_QUEUE_PENDING_MAX_BYTES = 512 * 1024
+
+/** 写队列积压条目上限（辅助背压） */
+const WRITE_QUEUE_PENDING_MAX_ITEMS = 64
+
 function getMaxBufferBytes(machineName) {
   return activeSessions.has(machineName)
     ? SHELL_OUTPUT_BUFFER_ACTIVE_MAX
@@ -84,6 +101,123 @@ function concatUint8(chunks) {
   return out
 }
 
+function getWriteQueue(machineName) {
+  let q = writeQueues.get(machineName)
+  if (!q) {
+    q = { items: [], raf: 0, flushing: false, pendingBytes: 0 }
+    writeQueues.set(machineName, q)
+  }
+  return q
+}
+
+function clearWriteQueue(machineName) {
+  const q = writeQueues.get(machineName)
+  if (!q) return
+  if (q.raf) {
+    cancelAnimationFrame(q.raf)
+    q.raf = 0
+  }
+  q.items = []
+  q.pendingBytes = 0
+  q.flushing = false
+  writeQueues.delete(machineName)
+}
+
+/** 背压：丢弃写队列最旧项，优先合并后的大块仍会整块丢弃 */
+function trimWriteQueue(q) {
+  while (
+    (q.pendingBytes > WRITE_QUEUE_PENDING_MAX_BYTES || q.items.length > WRITE_QUEUE_PENDING_MAX_ITEMS)
+    && q.items.length > 0
+  ) {
+    const removed = q.items.shift()
+    q.pendingBytes -= estimateSize(removed.type, removed.content)
+    if (q.pendingBytes < 0) q.pendingBytes = 0
+  }
+}
+
+/**
+ * 将队列中连续 data 合并为单次 write，status line 穿插处打断。
+ * @returns {Array<{ type: string, content: string | Uint8Array }>}
+ */
+function coalesceQueueItems(items) {
+  if (!items.length) return []
+  /** @type {Array<{ type: string, content: string | Uint8Array }>} */
+  const out = []
+  /** @type {Uint8Array[]} */
+  let dataBatch = []
+  const flushData = () => {
+    if (!dataBatch.length) return
+    const merged = dataBatch.length === 1 ? dataBatch[0] : concatUint8(dataBatch)
+    dataBatch = []
+    out.push({ type: 'data', content: merged })
+  }
+  for (const item of items) {
+    if (item.type === 'data' && item.content instanceof Uint8Array) {
+      dataBatch.push(item.content)
+      continue
+    }
+    flushData()
+    out.push(item)
+  }
+  flushData()
+  return out
+}
+
+async function flushWriteQueue(machineName) {
+  const q = writeQueues.get(machineName)
+  if (!q) return
+  q.raf = 0
+  if (q.flushing) {
+    // 上一帧还在写：本帧再排一次，避免丢后续 chunk
+    q.raf = requestAnimationFrame(() => {
+      flushWriteQueue(machineName).catch(() => {})
+    })
+    return
+  }
+  const writer = writers.get(machineName)
+  if (!writer || !q.items.length) {
+    q.items = []
+    q.pendingBytes = 0
+    return
+  }
+
+  const batch = q.items
+  q.items = []
+  q.pendingBytes = 0
+  q.flushing = true
+  try {
+    const coalesced = coalesceQueueItems(batch)
+    for (const item of coalesced) {
+      // 写过程中 writer 可能被 hibernate/detach
+      if (writers.get(machineName) !== writer) break
+      await writeBufferItem(writer, item)
+    }
+  } catch {
+    // ignore write errors
+  } finally {
+    q.flushing = false
+    if (q.items.length && writers.get(machineName) === writer) {
+      q.raf = requestAnimationFrame(() => {
+        flushWriteQueue(machineName).catch(() => {})
+      })
+    }
+  }
+}
+
+function enqueueWriterOutput(machineName, type, content) {
+  const writer = writers.get(machineName)
+  if (!writer) return
+  const q = getWriteQueue(machineName)
+  q.items.push({ type, content })
+  q.pendingBytes += estimateSize(type, content)
+  trimWriteQueue(q)
+  if (!q.raf) {
+    q.raf = requestAnimationFrame(() => {
+      flushWriteQueue(machineName).catch(() => {})
+    })
+  }
+}
+
 /** 回放缓冲；合并连续 data 块以减少中间滚动闪烁 */
 async function replayBufferItems(buf, writer, fromIndex = 0) {
   const start = Math.max(0, fromIndex)
@@ -120,18 +254,20 @@ export function pushShellOutput(machineName, type, content) {
 
   const writer = writers.get(machineName)
   if (!writer) return
-  if (type === 'data') writer.writeData(normalized)
-  else writer.writeLine(normalized)
+  // 有 writer 时入队合并写；标记已「交给终端侧」，避免 wake 时重复回放
+  enqueueWriterOutput(machineName, type, normalized)
   buf.replayedCount = buf.items.length
 }
 
 export function clearShellOutput(machineName) {
   buffers.delete(machineName)
+  clearWriteQueue(machineName)
   writers.get(machineName)?.clear()
 }
 
 export function removeShellOutput(machineName) {
   buffers.delete(machineName)
+  clearWriteQueue(machineName)
   writers.delete(machineName)
   activeSessions.delete(machineName)
 }
@@ -139,6 +275,7 @@ export function removeShellOutput(machineName) {
 /** 丢弃缓冲但不清空终端画面（软断开后重连时避免回放重复输出） */
 export function discardShellOutputBuffer(machineName) {
   buffers.delete(machineName)
+  clearWriteQueue(machineName)
 }
 
 /** 将某会话的输出缓冲迁移到新会话 ID（连接占位 tab 替换为真实 ID） */
@@ -161,6 +298,7 @@ export function migrateShellOutput(fromName, toName) {
     buffers.delete(fromName)
   }
 
+  clearWriteQueue(fromName)
   // writer 绑定具体 xterm 实例，不随 ID 迁移；新终端挂载时会重新 register
   writers.delete(fromName)
 
@@ -187,6 +325,7 @@ export function finalizeShellOutputMigration(fromName, toName) {
       trimBuffer(toBuf, toName)
     }
     buffers.delete(fromName)
+    clearWriteQueue(fromName)
     writers.delete(fromName)
     activeSessions.delete(fromName)
     return
@@ -203,9 +342,13 @@ export function finalizeShellOutputMigration(fromName, toName) {
  */
 export function registerShellWriter(machineName, writer, options = {}) {
   const { replay = true, aroundReplay } = options
+  clearWriteQueue(machineName)
   writers.set(machineName, writer)
   const unregister = () => {
-    if (writers.get(machineName) === writer) writers.delete(machineName)
+    if (writers.get(machineName) === writer) {
+      clearWriteQueue(machineName)
+      writers.delete(machineName)
+    }
   }
   const buf = buffers.get(machineName)
   if (!buf || !replay) {
@@ -228,4 +371,5 @@ export function registerShellWriter(machineName, writer, options = {}) {
 export function resetShellWriterReplay(machineName) {
   const buf = buffers.get(machineName)
   if (buf) buf.replayedCount = 0
+  clearWriteQueue(machineName)
 }

@@ -165,11 +165,16 @@
             :config-name="session.configName || ''"
             :connected="!!session.connected" :connecting="!!session.connecting"
             :ever-connected="!!session.everConnected"
+            :reconnecting="!!session.reconnecting"
+            :reconnect-attempt="session.reconnectAttempt || 0"
+            :reconnect-max="session.reconnectMax || 0"
+            :reconnect-delay-sec="session.reconnectDelaySec || 0"
             :tab-label="session.tabLabel || ''"
             :host="sessionMeta(session).host"
             :user="sessionMeta(session).user"
             :jump-chain="sessionMeta(session).jumpChain"
             :proxy-jump="sessionMeta(session).proxyJump"
+            :terminal-preset-override="sessionMeta(session).terminalPreset"
             :active="isTerminalActive(session.machineName)" :view-visible="viewVisible" :search-query="searchQuery"
             :broadcast-enabled="broadcastEnabled"
             :in-split="splitViewVisible && splitSessionIds.includes(session.machineName)"
@@ -317,6 +322,7 @@ export default {
         user: session?.user || m?.user || m?.list_user || '',
         jumpChain: Array.isArray(m?.jumpChain) ? m.jumpChain : [],
         proxyJump: m?.proxyJump || '',
+        terminalPreset: m?.terminalPreset || '',
       }
     }
 

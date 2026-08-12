@@ -13,8 +13,29 @@
       :user="user"
       :jump-chain="jumpChain"
       :proxy-jump="proxyJump"
+      :reconnect-attempt="reconnectAttempt"
+      :reconnect-max="reconnectMax"
+      :reconnect-delay-sec="reconnectDelaySec"
       @reconnect="$emit('reconnect', machineName)"
     />
+    <div v-if="passwordAssistVisible" class="shell-password-assist" @mousedown.stop @click.stop>
+      <span class="shell-password-assist-label">密码</span>
+      <input
+        ref="passwordAssistInputRef"
+        v-model="passwordAssistValue"
+        class="shell-password-assist-input"
+        type="password"
+        autocomplete="off"
+        autocorrect="off"
+        autocapitalize="off"
+        spellcheck="false"
+        placeholder="输入后回车发送（不记日志）"
+        @keydown.enter.prevent="sendPasswordAssist"
+        @keydown.esc.prevent="dismissPasswordAssist"
+      />
+      <button type="button" class="shell-password-assist-send" @click="sendPasswordAssist">发送</button>
+      <button type="button" class="shell-password-assist-dismiss" title="关闭" @click="dismissPasswordAssist">×</button>
+    </div>
     <Teleport to="body">
       <ul
         v-if="ctx.visible"
@@ -42,6 +63,7 @@
 import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick } from 'vue'
 import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
+import { WebglAddon } from 'xterm-addon-webgl'
 import { getTerminalSelectionText } from '../../utils/shellSelection'
 import { findInTerminalBuffer, selectTerminalMatch, highlightViewportMatches, clearSearchDecorations, lineToSearchModel, charRangeToCells, indexOfSearchMatch } from '../../utils/shellTerminalSearch'
 import 'xterm/css/xterm.css'
@@ -70,6 +92,8 @@ import {
 import {
   decodeOsc52ClipboardPayload,
   prefixLineTimestamps,
+  looksLikePasswordPrompt,
+  stripAnsiForPromptDetect,
 } from '../../utils/shellTerminalUx'
 import { ClipboardSetText } from '../../../wailsjs/runtime/runtime'
 import ShellConnectionOverlay from './ShellConnectionOverlay.vue'
@@ -97,6 +121,13 @@ export default {
     inSplit: { type: Boolean, default: false },
     /** 是否曾成功连接过（用于区分「尚未连上」与「已断开」） */
     everConnected: { type: Boolean, default: false },
+    /** 自动重连中 */
+    reconnecting: { type: Boolean, default: false },
+    reconnectAttempt: { type: Number, default: 0 },
+    reconnectMax: { type: Number, default: 0 },
+    reconnectDelaySec: { type: Number, default: 0 },
+    /** 本机终端配色覆盖；空则跟随全局 */
+    terminalPresetOverride: { type: String, default: '' },
   },
   emits: [
     'open-search', 'clear-cache', 'reconnect', 'search-result', 'cwd-sync',
@@ -111,11 +142,22 @@ export default {
     const ctx = reactive({ visible: false, x: 0, y: 0, selection: '' })
     const { shellFontSize, shellLineHeight, terminalPreset, shellFontFamily } = useTheme()
     const displayName = computed(() => props.tabLabel || props.machineName || '')
+    const effectiveTerminalPreset = computed(() => {
+      const override = String(props.terminalPresetOverride || '').trim()
+      return override || terminalPreset.value
+    })
     const overlayStatus = computed(() => {
+      if (props.reconnecting) return 'reconnecting'
       if (props.connecting) return 'connecting'
       if (!props.connected && props.everConnected) return 'disconnected'
       return ''
     })
+    const passwordAssistVisible = ref(false)
+    const passwordAssistValue = ref('')
+    const passwordAssistInputRef = ref(null)
+    let passwordAssistEnabled = true
+    let passwordDetectTail = ''
+    let passwordAssistDismissedUntil = 0
     let resizeObserver = null
     let fitTimers = []
     let initialized = false
@@ -132,6 +174,14 @@ export default {
     let scrollbackLines = SHELL_TERMINAL_SCROLLBACK
     let cursorLineHighlightEnabled = false
     let lineTimestampsEnabled = false
+    /** WebGL 渲染（默认关闭；失败回退 canvas） */
+    let shellUseWebgl = false
+    /** 非活动且非分屏时休眠（默认开启） */
+    let shellTabHibernate = true
+    let webglAddon = null
+    let hibernateTimer = null
+    /** 休眠后延迟销毁 xterm DOM（毫秒）；0 表示立即销毁 */
+    const HIBERNATE_DISPOSE_DELAY_MS = 0
     /** 行时间戳：是否处于行首（跳过回放时由 aroundReplay 重置） */
     const lineTsState = { atLineStart: true }
     let cursorLineDecoration = null
@@ -562,6 +612,9 @@ export default {
         setShellAsciiInputEnabled(cfg?.shellAsciiInput !== false)
         cursorLineHighlightEnabled = !!cfg?.shellCursorLineHighlight
         lineTimestampsEnabled = !!cfg?.shellLineTimestamps
+        passwordAssistEnabled = cfg?.shellPasswordAssist !== false
+        shellUseWebgl = !!cfg?.themeSettings?.shellUseWebgl
+        shellTabHibernate = cfg?.themeSettings?.shellTabHibernate !== false
         if (term.value) {
           term.value.options.scrollback = scrollbackLines
           refreshCursorLineHighlight()
@@ -571,6 +624,9 @@ export default {
         setShellAsciiInputEnabled(true)
         cursorLineHighlightEnabled = false
         lineTimestampsEnabled = false
+        passwordAssistEnabled = true
+        shellUseWebgl = false
+        shellTabHibernate = true
       }
     }
 
@@ -632,6 +688,28 @@ export default {
           lineTsState.atLineStart = true
         }
       }
+      if (Object.prototype.hasOwnProperty.call(payload, 'shellPasswordAssist')) {
+        passwordAssistEnabled = payload.shellPasswordAssist !== false
+        if (!passwordAssistEnabled) dismissPasswordAssist()
+      }
+      if (Object.prototype.hasOwnProperty.call(payload, 'shellUseWebgl')) {
+        const next = !!payload.shellUseWebgl
+        if (next !== shellUseWebgl) {
+          shellUseWebgl = next
+          if (initialized && props.active && props.viewVisible) {
+            destroyTerminal()
+            wakeTerminal()
+          }
+        }
+      }
+      if (Object.prototype.hasOwnProperty.call(payload, 'shellTabHibernate')) {
+        shellTabHibernate = payload.shellTabHibernate !== false
+        if (!shellTabHibernate) {
+          clearHibernateTimer()
+        } else if (!props.active && !props.inSplit) {
+          scheduleHibernate()
+        }
+      }
     }
 
     const clearFitTimers = () => {
@@ -681,12 +759,88 @@ export default {
       term.value.options.fontSize = shellFontSize.value || 13
       term.value.options.lineHeight = shellLineHeight.value || 1.2
       term.value.options.fontFamily = getTerminalFont(shellFontFamily.value).value
-      term.value.options.theme = terminalThemeForPreset(terminalPreset.value)
+      term.value.options.theme = terminalThemeForPreset(effectiveTerminalPreset.value)
       scheduleFit()
+    }
+
+    const disposeWebglAddon = () => {
+      try {
+        webglAddon?.dispose?.()
+      } catch {
+        // ignore
+      }
+      webglAddon = null
+    }
+
+    /** 尝试启用 WebGL；失败则保持默认 canvas 渲染 */
+    const tryEnableWebgl = (terminal) => {
+      disposeWebglAddon()
+      if (!shellUseWebgl || !terminal) return
+      try {
+        const addon = new WebglAddon()
+        addon.onContextLoss?.(() => {
+          try {
+            addon.dispose()
+          } catch {
+            // ignore
+          }
+          if (webglAddon === addon) webglAddon = null
+        })
+        terminal.loadAddon(addon)
+        webglAddon = addon
+      } catch (err) {
+        console.warn('[shell] WebGL 渲染不可用，已回退 canvas:', err)
+        disposeWebglAddon()
+      }
+    }
+
+    const teardownObservers = () => {
+      if (resizeObserver) {
+        resizeObserver.disconnect()
+        resizeObserver = null
+      }
+      window.removeEventListener('resize', scheduleFit)
+    }
+
+    const clearHibernateTimer = () => {
+      if (hibernateTimer) {
+        clearTimeout(hibernateTimer)
+        hibernateTimer = null
+      }
+    }
+
+    const shouldHibernate = () =>
+      shellTabHibernate && !props.active && !props.inSplit
+
+    /** 轻量休眠：停 fit / 卸 writer；可选销毁 xterm，缓冲保留供 wake 回放 */
+    const enterHibernateLight = () => {
+      clearFitTimers()
+      clearCwdSyncTimer()
+      teardownObservers()
+      detachWriter()
+      notifyShellTerminalBlur()
+    }
+
+    const scheduleHibernate = () => {
+      clearHibernateTimer()
+      if (!shouldHibernate()) return
+      const disposeNow = () => {
+        if (!shouldHibernate()) return
+        if (initialized) destroyTerminal()
+        else enterHibernateLight()
+      }
+      if (HIBERNATE_DISPOSE_DELAY_MS <= 0) {
+        disposeNow()
+        return
+      }
+      // 延迟销毁前先停 fit / writer，降低后台开销
+      enterHibernateLight()
+      hibernateTimer = setTimeout(disposeNow, HIBERNATE_DISPOSE_DELAY_MS)
     }
 
     const initTerminal = async () => {
       if (initialized || !props.active || !props.viewVisible) return
+      clearHibernateTimer()
       for (let i = 0; i < 4; i++) {
         await nextTick()
         if (initialized || !props.active || !props.viewVisible) return
@@ -699,7 +853,7 @@ export default {
         fontSize: shellFontSize.value || 13,
         lineHeight: shellLineHeight.value || 1.2,
         fontFamily: getTerminalFont(shellFontFamily.value).value,
-        theme: terminalThemeForPreset(terminalPreset.value),
+        theme: terminalThemeForPreset(effectiveTerminalPreset.value),
         // 视口内搜索高亮依赖 proposed decoration API
         allowProposedApi: true,
         overviewRulerWidth: 10,
@@ -707,6 +861,7 @@ export default {
       const fit = new FitAddon()
       terminal.loadAddon(fit)
       terminal.open(terminalRef.value)
+      tryEnableWebgl(terminal)
 
       // 拦截原生复制：Ctrl/Cmd+C、系统菜单复制也会走 xterm 默认选区（含 less 视觉换行）
       const host = terminal.element || terminalRef.value
@@ -746,6 +901,7 @@ export default {
     }
 
     const destroyTerminal = () => {
+      clearHibernateTimer()
       clearFitTimers()
       clearCwdSyncTimer()
       cancelAsyncMatchCount()
@@ -765,12 +921,10 @@ export default {
       resetShellWriterReplay(props.machineName)
       tuiModeDepth = 0
       lineTsState.atLineStart = true
-      if (resizeObserver) {
-        resizeObserver.disconnect()
-        resizeObserver = null
-      }
+      teardownObservers()
       inputListener?.dispose?.()
       inputListener = null
+      disposeWebglAddon()
       if (term.value) {
         unbindAsciiInputListeners(term.value)
         notifyShellTerminalBlur()
@@ -1063,6 +1217,7 @@ export default {
     }
 
     const wakeTerminal = async () => {
+      clearHibernateTimer()
       if (!props.active || !props.viewVisible) return
       if (!initialized) await initTerminal()
       if (!term.value) {
@@ -1070,6 +1225,7 @@ export default {
         await initTerminal()
       }
       if (props.connected || props.connecting) ensureWriter()
+      setupObservers()
       scheduleFit()
       await nextTick()
       term.value?.focus()
@@ -1100,20 +1256,38 @@ export default {
         await wakeTerminal()
         return
       }
-      // 切换 Tab 时保留 xterm，避免销毁后整缓冲回放造成「从第一行滚到末行」
       clearFitTimers()
       clearCwdSyncTimer()
       notifyShellTerminalBlur()
+      if (shellTabHibernate && !props.inSplit) {
+        scheduleHibernate()
+      }
+    })
+
+    watch(() => props.inSplit, (inSplit) => {
+      if (inSplit) {
+        clearHibernateTimer()
+        return
+      }
+      if (!props.active && shellTabHibernate) {
+        scheduleHibernate()
+      }
     })
 
     watch(() => props.viewVisible, async (visible) => {
       if (!visible) {
         // 仅隐藏：保留 xterm，避免回首页/任务模式时销毁→回放把协议应答灌进输入
+        // （省内存模式会卸载整个工作区；此处不做 hibernate dispose）
+        clearHibernateTimer()
         clearFitTimers()
+        teardownObservers()
         notifyShellTerminalBlur()
         return
       }
-      if (!props.active) return
+      if (!props.active) {
+        if (shellTabHibernate && !props.inSplit) scheduleHibernate()
+        return
+      }
       await wakeTerminal()
     })
 
@@ -1124,7 +1298,15 @@ export default {
       // 查找与匹配计数由工作区触发（findNext/findPrevious），避免重复前进
     })
 
-    watch([shellFontSize, shellLineHeight, terminalPreset, shellFontFamily], () => {
+    watch([shellFontSize, shellLineHeight, terminalPreset, shellFontFamily, effectiveTerminalPreset], () => {
+      applyTerminalAppearance()
+    })
+
+    watch(() => props.connected, (ok) => {
+      if (!ok) dismissPasswordAssist()
+    })
+
+    watch(() => props.terminalPresetOverride, () => {
       applyTerminalAppearance()
     })
 
@@ -1171,6 +1353,11 @@ export default {
       ctx,
       displayName,
       overlayStatus,
+      passwordAssistVisible,
+      passwordAssistValue,
+      passwordAssistInputRef,
+      sendPasswordAssist,
+      dismissPasswordAssist,
       hideContextMenu,
       onContextMenu,
       onCopy,
@@ -1259,5 +1446,69 @@ export default {
 
 .terminal-host :deep(.xterm-viewport) {
   overflow-y: auto;
+}
+
+.shell-password-assist {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 25;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--app-card-bg, #1e1e1e) 92%, transparent);
+  border: 1px solid var(--app-border, #333);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+}
+
+.shell-password-assist-label {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--app-text-muted, #909399);
+}
+
+.shell-password-assist-input {
+  flex: 1;
+  min-width: 0;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 6px;
+  border: 1px solid var(--app-border, #444);
+  background: var(--app-panel-bg, #121212);
+  color: var(--app-text, #e6e6e6);
+  font-size: 13px;
+  outline: none;
+}
+
+.shell-password-assist-input:focus {
+  border-color: var(--app-accent-color, #409eff);
+}
+
+.shell-password-assist-send {
+  flex-shrink: 0;
+  height: 28px;
+  padding: 0 12px;
+  border: none;
+  border-radius: 6px;
+  background: var(--app-accent-color, #409eff);
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.shell-password-assist-dismiss {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--app-text-muted, #909399);
+  font-size: 18px;
+  line-height: 1;
+  cursor: pointer;
 }
 </style>

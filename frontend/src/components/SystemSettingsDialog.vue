@@ -1,5 +1,13 @@
 <template>
     <div class="general-settings-panel" :class="{ embedded }">
+        <div class="settings-search-bar">
+            <el-input
+                v-model="settingsSearch"
+                clearable
+                size="small"
+                placeholder="搜索设置（标签 / 说明）…"
+            />
+        </div>
         <div class="settings-subnav">
             <button v-for="tab in settingsTabs" :key="tab.id" type="button" class="subnav-item"
                 :class="{ active: settingsTab === tab.id }" @click="settingsTab = tab.id">
@@ -7,7 +15,7 @@
             </button>
         </div>
 
-        <div class="panel-scroll">
+        <div ref="panelScrollRef" class="panel-scroll">
             <!-- 系统设置 -->
             <section v-show="settingsTab === 'system'" class="settings-section system-section">
                 <div class="system-editor">
@@ -145,6 +153,15 @@
                                 </div>
                                 <div class="system-setting-control">
                                     <el-switch v-model="form.shellLineTimestamps" size="small" />
+                                </div>
+                            </div>
+                            <div class="system-setting-row">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">密码提示辅助</span>
+                                    <span class="system-setting-hint">检测到 Password: / 密码 提示时，在终端底部显示密码输入条（不记日志）；默认开启</span>
+                                </div>
+                                <div class="system-setting-control">
+                                    <el-switch v-model="form.shellPasswordAssist" size="small" />
                                 </div>
                             </div>
                             <div class="system-setting-row">
@@ -318,6 +335,14 @@
                                 <div class="appear-field memory-saver-row">
                                     <span class="memory-saver-label">离开 Shell 时卸载终端界面（省内存，会话保持）</span>
                                     <el-switch v-model="form.themeSettings.shellMemorySaver" size="small" />
+                                </div>
+                                <div class="appear-field memory-saver-row">
+                                    <span class="memory-saver-label">非活动标签休眠（停刷新并释放终端画面，切回时回放缓冲）</span>
+                                    <el-switch v-model="form.themeSettings.shellTabHibernate" size="small" />
+                                </div>
+                                <div class="appear-field memory-saver-row">
+                                    <span class="memory-saver-label">使用 WebGL 加速渲染（失败时自动回退）</span>
+                                    <el-switch v-model="form.themeSettings.shellUseWebgl" size="small" />
                                 </div>
                                 <div class="appear-field memory-saver-row">
                                     <span class="memory-saver-label">Shell 意外断开时自动重连</span>
@@ -619,7 +644,7 @@
 </template>
 
 <script>
-import { ref, reactive, watch, computed, onMounted, onUnmounted } from 'vue'
+import { ref, reactive, watch, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { marked } from 'marked'
 import { ElMessage } from 'element-plus'
 import { Edit, Delete, Plus, Close, Check, Folder } from '@element-plus/icons-vue'
@@ -689,6 +714,8 @@ export default {
     setup(props, { emit }) {
         const saving = ref(false)
         const savingAccount = ref(false)
+        const settingsSearch = ref('')
+        const panelScrollRef = ref(null)
         const sessionId = ref('')
         const appVersion = ref('')
         const checkingUpdate = ref(false)
@@ -743,6 +770,8 @@ export default {
                 shellLineHeight: 1.2,
                 shellMemorySaver: false,
                 shellAutoReconnect: false,
+                shellUseWebgl: false,
+                shellTabHibernate: true,
             },
             shellMonitorIntervalMs: 1000,
             sshHandshakeTimeoutSec: 30,
@@ -754,6 +783,7 @@ export default {
             shellAsciiInput: true,
             shellCursorLineHighlight: false,
             shellLineTimestamps: false,
+            shellPasswordAssist: true,
             sftpUseCompressedUpload: true,
             shellLogHighlightColors: { ...DEFAULT_SHELL_LOG_COLORS },
             shellLogHighlightRules: mergeLogHighlightRules([]),
@@ -965,6 +995,8 @@ theme preview · ${theme.foreground}`
                 shellLineHeight: config.themeSettings?.shellLineHeight > 0 ? config.themeSettings.shellLineHeight : 1.2,
                 shellMemorySaver: !!config.themeSettings?.shellMemorySaver,
                 shellAutoReconnect: !!config.themeSettings?.shellAutoReconnect,
+                shellUseWebgl: !!config.themeSettings?.shellUseWebgl,
+                shellTabHibernate: config.themeSettings?.shellTabHibernate !== false,
             }
             if (isCustomUiAccent(form.themeSettings.uiAccent)) {
                 lastCustomAccent.value = form.themeSettings.uiAccent
@@ -985,6 +1017,7 @@ theme preview · ${theme.foreground}`
             form.shellAsciiInput = config.shellAsciiInput !== false
             form.shellCursorLineHighlight = !!config.shellCursorLineHighlight
             form.shellLineTimestamps = !!config.shellLineTimestamps
+            form.shellPasswordAssist = config.shellPasswordAssist !== false
             form.sftpUseCompressedUpload = config.sftpUseCompressedUpload !== false
             Object.assign(
                 form.shellLogHighlightColors,
@@ -1257,6 +1290,26 @@ theme preview · ${theme.foreground}`
             offDownloadProgress = null
         })
 
+        const applySettingsSearch = () => {
+            const root = panelScrollRef.value
+            if (!root) return
+            const q = String(settingsSearch.value || '').trim().toLowerCase()
+            const rows = root.querySelectorAll('.system-setting-row, .appear-field, .memory-saver-row, .section-head')
+            rows.forEach((el) => {
+                if (!q) {
+                    el.style.display = ''
+                    return
+                }
+                const label = el.querySelector?.('.system-setting-label, .appear-field-label, .memory-saver-label')
+                const hint = el.querySelector?.('.system-setting-hint')
+                const text = `${label?.textContent || ''} ${hint?.textContent || ''} ${el.textContent || ''}`.toLowerCase()
+                el.style.display = text.includes(q) ? '' : 'none'
+            })
+        }
+
+        watch(settingsSearch, () => nextTick(applySettingsSearch))
+        watch([settingsTab, systemPanel, themePanel], () => nextTick(applySettingsSearch))
+
         const resetAccountForm = () => {
             accountForm.id = crypto.randomUUID()
             accountForm.name = ''
@@ -1355,6 +1408,7 @@ theme preview · ${theme.foreground}`
                 config.shellAsciiInput = !!form.shellAsciiInput
                 config.shellCursorLineHighlight = !!form.shellCursorLineHighlight
                 config.shellLineTimestamps = !!form.shellLineTimestamps
+                config.shellPasswordAssist = !!form.shellPasswordAssist
                 config.sftpUseCompressedUpload = !!form.sftpUseCompressedUpload
                 config.shellLogHighlightColors = mergeLogHighlightColors(form.shellLogHighlightColors)
                 config.shellLogHighlightDisabled = rulesToDisabled(form.shellLogHighlightRules)
@@ -1381,6 +1435,8 @@ theme preview · ${theme.foreground}`
 
         return {
             embedded: computed(() => props.embedded),
+            settingsSearch,
+            panelScrollRef,
             settingsTab,
             settingsTabs,
             systemPanel,

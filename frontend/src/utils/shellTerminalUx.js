@@ -51,6 +51,25 @@ export function formatLineTimestamp(date = new Date()) {
   return `${pad2(date.getHours())}:${pad2(date.getMinutes())}:${pad2(date.getSeconds())}`
 }
 
+/** 去掉常见 ANSI / OSC，便于识别 Password: 等可见提示 */
+export function stripAnsiForPromptDetect(text) {
+  return String(text || '')
+    .replace(/\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g, '')
+    .replace(/\x1b\[[0-9;?]*[ -/]*[@-~]/g, '')
+    .replace(/\x1b./g, '')
+}
+
+/**
+ * 终端输出是否像密码 / sudo 提示（末尾附近）。
+ * 匹配 Password: / password: / 密码： / 密码:
+ */
+export function looksLikePasswordPrompt(text) {
+  const plain = stripAnsiForPromptDetect(text)
+  if (!plain) return false
+  const tail = plain.slice(-240)
+  return /(?:^|[\r\n\s])(?:\[sudo\]\s*)?(?:password|passwd|密码)\s*[:：]\s*$/im.test(tail)
+}
+
 /**
  * 在新行起始处注入灰色时间戳前缀。跳过纯 CSI/OSC 控制块开头。
  * @param {string} text

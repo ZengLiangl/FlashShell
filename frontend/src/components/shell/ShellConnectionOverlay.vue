@@ -2,14 +2,14 @@
   <div v-if="visible" class="shell-conn-overlay" :class="statusClass">
     <div class="conn-card">
       <div class="conn-icon" aria-hidden="true">
-        <el-icon v-if="status === 'connecting'" class="is-loading" :size="28"><Loading /></el-icon>
+        <el-icon v-if="status === 'connecting' || status === 'reconnecting'" class="is-loading" :size="28"><Loading /></el-icon>
         <el-icon v-else-if="status === 'disconnected'" :size="28"><WarningFilled /></el-icon>
         <el-icon v-else :size="28"><Monitor /></el-icon>
       </div>
       <div class="conn-title">{{ title }}</div>
       <div v-if="subtitle" class="conn-sub">{{ subtitle }}</div>
       <div v-if="jumpHint" class="conn-jump">{{ jumpHint }}</div>
-      <div v-if="status === 'connecting'" class="conn-progress">
+      <div v-if="status === 'connecting' || status === 'reconnecting'" class="conn-progress">
         <div class="conn-progress-bar" />
       </div>
       <div v-if="status === 'disconnected'" class="conn-actions">
@@ -28,26 +28,41 @@ export default {
   name: 'ShellConnectionOverlay',
   components: { Loading, WarningFilled, Monitor },
   props: {
-    status: { type: String, default: '' }, // connecting | disconnected | ''
+    status: { type: String, default: '' }, // connecting | reconnecting | disconnected | ''
     machineName: { type: String, default: '' },
     host: { type: String, default: '' },
     user: { type: String, default: '' },
     jumpChain: { type: Array, default: () => [] },
     proxyJump: { type: String, default: '' },
+    reconnectAttempt: { type: Number, default: 0 },
+    reconnectMax: { type: Number, default: 0 },
+    reconnectDelaySec: { type: Number, default: 0 },
   },
   emits: ['reconnect'],
   setup(props) {
-    const visible = computed(() => props.status === 'connecting' || props.status === 'disconnected')
+    const visible = computed(() =>
+      props.status === 'connecting' ||
+      props.status === 'reconnecting' ||
+      props.status === 'disconnected',
+    )
     const statusClass = computed(() => ({
-      'is-connecting': props.status === 'connecting',
+      'is-connecting': props.status === 'connecting' || props.status === 'reconnecting',
       'is-disconnected': props.status === 'disconnected',
     }))
     const title = computed(() => {
+      if (props.status === 'reconnecting') {
+        const n = props.reconnectAttempt || 1
+        const max = props.reconnectMax || 3
+        return `重连中 第 ${n}/${max} 次`
+      }
       if (props.status === 'connecting') return `正在连接 ${props.machineName || ''}`.trim()
       if (props.status === 'disconnected') return `已断开 ${props.machineName || ''}`.trim()
       return ''
     })
     const subtitle = computed(() => {
+      if (props.status === 'reconnecting' && props.reconnectDelaySec > 0) {
+        return `退避等待 ${props.reconnectDelaySec} 秒后重试`
+      }
       const parts = []
       if (props.user) parts.push(props.user)
       if (props.host) parts.push(props.host)
