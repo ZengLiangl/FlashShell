@@ -335,6 +335,7 @@ export namespace data {
 	    shellLogHighlightDisabled: string[];
 	    shellLogHighlightKeywords: ShellLogHighlightCustomKeyword[];
 	    shellAsciiInput?: boolean;
+	    sftpUseCompressedUpload?: boolean;
 	    shellSessionRestore?: boolean;
 	
 	    static createFrom(source: any = {}) {
@@ -367,6 +368,7 @@ export namespace data {
 	        this.shellLogHighlightDisabled = source["shellLogHighlightDisabled"];
 	        this.shellLogHighlightKeywords = this.convertValues(source["shellLogHighlightKeywords"], ShellLogHighlightCustomKeyword);
 	        this.shellAsciiInput = source["shellAsciiInput"];
+	        this.sftpUseCompressedUpload = source["sftpUseCompressedUpload"];
 	        this.shellSessionRestore = source["shellSessionRestore"];
 	    }
 	
@@ -1143,6 +1145,9 @@ export namespace define {
 	    localPath: string;
 	    remotePath: string;
 	    isDir: boolean;
+	    useCompress: boolean;
+	    conflictAction: string;
+	    phase?: string;
 	    status: string;
 	    priority: number;
 	    total: number;
@@ -1167,6 +1172,9 @@ export namespace define {
 	        this.localPath = source["localPath"];
 	        this.remotePath = source["remotePath"];
 	        this.isDir = source["isDir"];
+	        this.useCompress = source["useCompress"];
+	        this.conflictAction = source["conflictAction"];
+	        this.phase = source["phase"];
 	        this.status = source["status"];
 	        this.priority = source["priority"];
 	        this.total = source["total"];
@@ -1601,6 +1609,8 @@ export namespace machine {
 	    remoteSize: number;
 	    remoteMtime: number;
 	    isDir: boolean;
+	    localIsDir: boolean;
+	    existingType: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SftpUploadConflict(source);
@@ -1613,6 +1623,8 @@ export namespace machine {
 	        this.remoteSize = source["remoteSize"];
 	        this.remoteMtime = source["remoteMtime"];
 	        this.isDir = source["isDir"];
+	        this.localIsDir = source["localIsDir"];
+	        this.existingType = source["existingType"];
 	    }
 	}
 

@@ -253,6 +253,8 @@ type GlobalConfig struct {
 	ShellLogHighlightKeywords []ShellLogHighlightCustomKeyword `yaml:"shellLogHighlightKeywords,omitempty" json:"shellLogHighlightKeywords"`
 	// ShellAsciiInput Shell 终端获得焦点时临时关闭中文组词（失焦/离开 Shell 后恢复）；nil 表示默认开启
 	ShellAsciiInput *bool `yaml:"shellAsciiInput,omitempty" json:"shellAsciiInput"`
+	// SftpUseCompressedUpload 目录上传默认走压缩包（zip）再远端解压；nil 表示默认开启
+	SftpUseCompressedUpload *bool `yaml:"sftpUseCompressedUpload,omitempty" json:"sftpUseCompressedUpload"`
 	// ShellSessionRestore 启动时恢复上次打开的 Shell 标签页；nil 表示默认开启
 	ShellSessionRestore *bool `yaml:"shellSessionRestore,omitempty" json:"shellSessionRestore"`
 }
@@ -544,6 +546,7 @@ func (gcm *GlobalConfigManager) createDefaultGlobalConfig() error {
 		ShellLogHighlight:       boolPtr(true),
 		ShellLogHighlightColors: DefaultShellLogHighlightColors(),
 		ShellAsciiInput:         boolPtr(true),
+		SftpUseCompressedUpload: boolPtr(true),
 	}
 
 	return gcm.SaveGlobalConfig(defaultConfig)
@@ -565,6 +568,14 @@ func ShellAsciiInputEnabled(cfg *GlobalConfig) bool {
 		return true
 	}
 	return *cfg.ShellAsciiInput
+}
+
+// SftpUseCompressedUploadEnabled 目录上传是否默认压缩（缺省 true）
+func SftpUseCompressedUploadEnabled(cfg *GlobalConfig) bool {
+	if cfg == nil || cfg.SftpUseCompressedUpload == nil {
+		return true
+	}
+	return *cfg.SftpUseCompressedUpload
 }
 
 // AddMachine 添加或更新机器配置（按 ID）

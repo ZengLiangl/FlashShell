@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"FlashDock/data"
 	"FlashDock/define"
 	"FlashDock/machine"
 
@@ -88,6 +89,25 @@ func (a *App) updateTransferProgress(id string, transferred, total int64, speedB
 	cp := *rec
 	store.mu.Unlock()
 	// 异步推送进度，避免 Wails IPC 阻塞传输热路径
+	go a.emitTransfer(&cp)
+}
+
+func (a *App) setTransferPhase(id, phase string) {
+	store := a.ensureTransferStore()
+	store.mu.Lock()
+	rec, ok := store.items[id]
+	if !ok || rec.Status == "paused" {
+		store.mu.Unlock()
+		return
+	}
+	if rec.Phase == phase {
+		store.mu.Unlock()
+		return
+	}
+	rec.Phase = phase
+	rec.UpdatedAt = time.Now().Unix()
+	cp := *rec
+	store.mu.Unlock()
 	go a.emitTransfer(&cp)
 }
 
@@ -402,7 +422,23 @@ func (a *App) startTransferWorker(cp *define.SftpTransferRecord) {
 		} else {
 			if cp.IsDir {
 				remoteParent := path.Dir(cp.RemotePath)
-				transferErr = aux.UploadDirectoryZip(ctx, cp.LocalPath, remoteParent, progress)
+				if strings.EqualFold(cp.ConflictAction, "replace") {
+					_ = aux.RemovePath(cp.RemotePath)
+				}
+				if cp.UseCompress {
+					a.setTransferPhase(cp.ID, "compressing")
+					transferErr = aux.UploadDirectoryZip(ctx, cp.LocalPath, remoteParent, func(transferred, total int64, speedBPS float64) {
+						if transferred > 0 || total > 0 {
+							a.setTransferPhase(cp.ID, "uploading")
+						}
+						progress(transferred, total, speedBPS)
+					})
+					if transferErr == nil {
+						a.setTransferPhase(cp.ID, "extracting")
+					}
+				} else {
+					transferErr = aux.UploadDirectoryRecursive(ctx, cp.LocalPath, cp.RemotePath, progress)
+				}
 			} else {
 				transferErr = aux.UploadFile(ctx, cp.LocalPath, cp.RemotePath, progress)
 			}
@@ -541,10 +577,20 @@ func (a *App) StartShellDownload(machineName, remotePath string) (string, error)
 	return id, nil
 }
 
-// StartShellUpload 上传本地路径到远端目录（异步）；目录以 zip 上传后解压
-func (a *App) StartShellUpload(machineName, localPath, remoteDir string) (string, error) {
+// StartShellUpload 上传本地路径到远端目录（异步）。
+// conflictAction: replace | duplicate | merge | ""(默认 replace)；目录默认压缩上传（可在设置关闭）。
+func (a *App) StartShellUpload(machineName, localPath, remoteDir, conflictAction string) (string, error) {
 	localPath = strings.TrimSpace(localPath)
 	remoteDir = strings.TrimSpace(remoteDir)
+	conflictAction = strings.ToLower(strings.TrimSpace(conflictAction))
+	if conflictAction == "" {
+		conflictAction = "replace"
+	}
+	switch conflictAction {
+	case "replace", "duplicate", "merge":
+	default:
+		return "", fmt.Errorf("不支持的冲突策略: %s", conflictAction)
+	}
 	if machineName == "" || localPath == "" {
 		return "", fmt.Errorf("参数无效")
 	}
@@ -555,26 +601,49 @@ func (a *App) StartShellUpload(machineName, localPath, remoteDir string) (string
 	if err != nil {
 		return "", fmt.Errorf("本地路径不存在: %w", err)
 	}
-	if _, err := a.shellAuxPool.Get(machineName); err != nil {
+	aux, err := a.shellAuxPool.Get(machineName)
+	if err != nil {
 		return "", err
 	}
 
 	name := info.Name()
 	remotePath := path.Join(remoteDir, name)
+	if conflictAction == "duplicate" {
+		unique, err := aux.AllocateUniqueRemotePath(remotePath)
+		if err != nil {
+			return "", err
+		}
+		remotePath = unique
+		name = path.Base(remotePath)
+	}
+	if conflictAction == "merge" && !info.IsDir() {
+		return "", fmt.Errorf("合并仅适用于目录")
+	}
+
+	useCompress := true
+	if cfg, err := a.GetGlobalConfig(); err == nil {
+		useCompress = data.SftpUseCompressedUploadEnabled(cfg)
+	}
+	if !info.IsDir() {
+		useCompress = false
+	}
+
 	id := uuid.NewString()
 	now := time.Now().Unix()
 	rec := &define.SftpTransferRecord{
-		ID:          id,
-		MachineName: machineName,
-		Direction:   "upload",
-		Name:        name,
-		LocalPath:   localPath,
-		RemotePath:  remotePath,
-		IsDir:       info.IsDir(),
-		Status:      "pending",
-		Total:       0,
-		StartedAt:   now,
-		UpdatedAt:   now,
+		ID:             id,
+		MachineName:    machineName,
+		Direction:      "upload",
+		Name:           name,
+		LocalPath:      localPath,
+		RemotePath:     remotePath,
+		IsDir:          info.IsDir(),
+		UseCompress:    useCompress,
+		ConflictAction: conflictAction,
+		Status:         "pending",
+		Total:          0,
+		StartedAt:      now,
+		UpdatedAt:      now,
 	}
 	if !info.IsDir() {
 		rec.Total = info.Size()

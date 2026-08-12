@@ -274,6 +274,8 @@ export function ResumeAllShellTransfers():Promise<number>;
 
 export function ResumeShellTransfer(arg1:string):Promise<void>;
 
+export function SaveClipboardImageForUpload(arg1:string):Promise<string>;
+
 export function SaveConfig(arg1:define.Root):Promise<void>;
 
 export function SaveGlobalAccounts(arg1:Array<data.GlobalAccount>):Promise<void>;
@@ -334,7 +336,7 @@ export function StartShellDownload(arg1:string,arg2:string):Promise<string>;
 
 export function StartShellFolderSync(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
 
-export function StartShellUpload(arg1:string,arg2:string,arg3:string):Promise<string>;
+export function StartShellUpload(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;
 
 export function StopAllCommands():Promise<void>;
 

@@ -397,6 +397,11 @@ func (a *ShellAuxManager) extractRemoteZip(remoteZip, targetDir string) error {
 	return lastErr
 }
 
+// UploadDirectoryRecursive 通过 SFTP 递归上传本地目录（不压缩）
+func (a *ShellAuxManager) UploadDirectoryRecursive(ctx context.Context, localDir, remoteDir string, onProgress TransferProgressFunc) error {
+	return a.uploadDirectoryRecursive(ctx, localDir, remoteDir, onProgress)
+}
+
 // uploadDirectoryRecursive 通过 SFTP 递归上传本地目录到远端目标路径
 func (a *ShellAuxManager) uploadDirectoryRecursive(ctx context.Context, localDir, remoteDir string, onProgress TransferProgressFunc) error {
 	if err := ctxErr(ctx); err != nil {

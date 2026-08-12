@@ -538,6 +538,10 @@ export function ResumeShellTransfer(arg1) {
   return window['go']['app']['App']['ResumeShellTransfer'](arg1);
 }
 
+export function SaveClipboardImageForUpload(arg1) {
+  return window['go']['app']['App']['SaveClipboardImageForUpload'](arg1);
+}
+
 export function SaveConfig(arg1) {
   return window['go']['app']['App']['SaveConfig'](arg1);
 }
@@ -658,8 +662,8 @@ export function StartShellFolderSync(arg1, arg2, arg3, arg4) {
   return window['go']['app']['App']['StartShellFolderSync'](arg1, arg2, arg3, arg4);
 }
 
-export function StartShellUpload(arg1, arg2, arg3) {
-  return window['go']['app']['App']['StartShellUpload'](arg1, arg2, arg3);
+export function StartShellUpload(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['StartShellUpload'](arg1, arg2, arg3, arg4);
 }
 
 export function StopAllCommands() {

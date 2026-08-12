@@ -347,6 +347,14 @@
         <el-button type="primary" :loading="syncStarting" @click="startFolderSync">开始同步</el-button>
       </template>
     </el-dialog>
+
+    <SftpConflictDialog
+      :visible="conflictVisible"
+      :item="conflictItem"
+      :apply-to-all-count="conflictApplyCount"
+      :format-size="formatSize"
+      @resolve="onConflictResolve"
+    />
   </div>
 </template>
 
@@ -356,6 +364,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import * as App from '../../../wailsjs/go/app/App'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import { OnFileDrop, OnFileDropOff } from '../../../wailsjs/runtime/runtime'
+import SftpConflictDialog from './SftpConflictDialog.vue'
 import {
   mergedBookmarks,
   isPathBookmarked,
@@ -370,6 +379,7 @@ import {
 
 export default {
   name: 'ShellFilePanel',
+  components: { SftpConflictDialog },
   props: {
     machineName: { type: String, default: '' },
     cwdHint: { type: String, default: '' },
@@ -1277,33 +1287,25 @@ export default {
       }
     }
 
-    const uploadWithConflictCheck = async (localPath) => {
-      const baseName = localPath.replace(/\\/g, '/').split('/').pop()
-      const remotePath = joinRemote(cwd.value, baseName)
-      try {
-        const conflict = await App.CheckShellUploadConflict(props.machineName, localPath, remotePath)
-        if (conflict) {
-          const remoteSize = conflict.isDir ? '目录' : formatSize(conflict.remoteSize)
-          const localSize = conflict.isDir ? '目录' : formatSize(conflict.localSize)
-          const mtime = conflict.remoteMtime
-            ? new Date(conflict.remoteMtime * 1000).toLocaleString()
-            : '-'
-          await ElMessageBox.confirm(
-            `远端已存在「${baseName}」\n本地：${localSize}\n远端：${remoteSize}\n远端修改时间：${mtime}\n\n是否覆盖？`,
-            '上传冲突',
-            {
-              type: 'warning',
-              confirmButtonText: '覆盖',
-              cancelButtonText: '跳过',
-              distinguishCancelAndClose: true,
-            },
-          )
-        }
-      } catch (e) {
-        if (e === 'cancel') return false
-      }
-      await App.StartShellUpload(props.machineName, localPath, cwd.value)
-      return true
+    const conflictVisible = ref(false)
+    const conflictItem = ref(null)
+    const conflictApplyCount = ref(1)
+    let conflictResolver = null
+
+    const askUploadConflict = (item) => new Promise((resolve) => {
+      conflictItem.value = item
+      conflictApplyCount.value = Math.max(1, Number(item.applyToAllCount) || 1)
+      conflictVisible.value = true
+      conflictResolver = resolve
+    })
+
+    const onConflictResolve = ({ action, applyToAll }) => {
+      conflictVisible.value = false
+      const item = conflictItem.value
+      conflictItem.value = null
+      const fn = conflictResolver
+      conflictResolver = null
+      fn?.({ action: action || 'skip', applyToAll: !!applyToAll, typeKey: item?.typeKey })
     }
 
     const startUploads = async (paths) => {
@@ -1314,10 +1316,59 @@ export default {
       const list = (paths || []).filter(Boolean)
       if (!list.length) return
       let started = 0
+      let remembered = null
+      const pendingConflicts = []
+      for (const localPath of list) {
+        const baseName = localPath.replace(/\\/g, '/').split('/').pop()
+        const remotePath = joinRemote(cwd.value, baseName)
+        try {
+          const conflict = await App.CheckShellUploadConflict(props.machineName, localPath, remotePath)
+          if (conflict) {
+            pendingConflicts.push({
+              localPath,
+              typeKey: `${conflict.localIsDir ? 'dir' : 'file'}:${conflict.existingType || (conflict.isDir ? 'directory' : 'file')}`,
+            })
+          }
+        } catch { /* ignore */ }
+      }
       for (const localPath of list) {
         try {
-          const ok = await uploadWithConflictCheck(localPath)
-          if (ok) started++
+          const baseName = localPath.replace(/\\/g, '/').split('/').pop()
+          const remotePath = joinRemote(cwd.value, baseName)
+          let conflict = null
+          try {
+            conflict = await App.CheckShellUploadConflict(props.machineName, localPath, remotePath)
+          } catch { /* ignore */ }
+          if (conflict) {
+            const typeKey = `${conflict.localIsDir ? 'dir' : 'file'}:${conflict.existingType || (conflict.isDir ? 'directory' : 'file')}`
+            const sameTypeLeft = pendingConflicts.filter((c) => c.typeKey === typeKey).length
+            const idx = pendingConflicts.findIndex((c) => c.localPath === localPath)
+            if (idx >= 0) pendingConflicts.splice(idx, 1)
+            let action = 'replace'
+            if (remembered?.typeKey === typeKey && remembered?.action) {
+              action = remembered.action
+            } else {
+              const decision = await askUploadConflict({
+                fileName: baseName,
+                localSize: conflict.localSize,
+                remoteSize: conflict.remoteSize,
+                remoteMtime: conflict.remoteMtime,
+                isDir: !!conflict.isDir,
+                localIsDir: !!conflict.localIsDir,
+                existingType: conflict.existingType || (conflict.isDir ? 'directory' : 'file'),
+                typeKey,
+                applyToAllCount: sameTypeLeft,
+              })
+              action = decision.action
+              if (decision.applyToAll) remembered = { action, typeKey }
+            }
+            if (action === 'skip') continue
+            await App.StartShellUpload(props.machineName, localPath, cwd.value, action)
+            started++
+          } else {
+            await App.StartShellUpload(props.machineName, localPath, cwd.value, 'replace')
+            started++
+          }
         } catch (e) {
           ElMessage.error(`上传失败 (${localPath}): ${e}`)
         }
@@ -1326,6 +1377,32 @@ export default {
         ElMessage.success(`已开始上传 ${started} 项`)
         emit('transfer-started', { direction: 'upload', count: started })
         setTimeout(() => reload(), 1200)
+      }
+    }
+
+    const onClipboardPaste = async (e) => {
+      if (!expanded.value || !props.machineName || !cwd.value) return
+      const items = e?.clipboardData?.items
+      if (!items?.length) return
+      let imageFile = null
+      for (const it of items) {
+        if (it.type?.startsWith('image/')) {
+          imageFile = it.getAsFile()
+          break
+        }
+      }
+      if (!imageFile) return
+      e.preventDefault()
+      try {
+        const buf = await imageFile.arrayBuffer()
+        const bytes = new Uint8Array(buf)
+        let binary = ''
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+        const dataUrl = `data:${imageFile.type || 'image/png'};base64,${btoa(binary)}`
+        const localPath = await App.SaveClipboardImageForUpload(dataUrl)
+        await startUploads([localPath])
+      } catch (err) {
+        ElMessage.error(`粘贴图片上传失败: ${err}`)
       }
     }
 
@@ -1518,6 +1595,7 @@ export default {
 
     onMounted(() => {
       bindFileDrop()
+      window.addEventListener('paste', onClipboardPaste)
       offExternalEdit = EventsOn('shell:external-edit', (payload) => {
         if (!payload || payload.machineName !== props.machineName) return
         if (payload.status === 'uploaded') {
@@ -1530,6 +1608,7 @@ export default {
       stopPwdTimer()
       closeMenu()
       unbindFileDrop()
+      window.removeEventListener('paste', onClipboardPaste)
       offExternalEdit?.()
       offExternalEdit = null
     })
@@ -1574,6 +1653,10 @@ export default {
       dragOver,
       localSearchQuery,
       searchInputRef,
+      conflictVisible,
+      conflictItem,
+      conflictApplyCount,
+      onConflictResolve,
       searchVisible: computed(() => props.searchVisible),
       matchSummary: computed(() => props.matchSummary),
       emit,

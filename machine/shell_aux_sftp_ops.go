@@ -1,6 +1,7 @@
 package machine
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"path"
@@ -162,11 +163,13 @@ func ioCopy(dst io.Writer, src io.Reader) (int64, error) {
 
 // SftpUploadConflict 上传冲突信息
 type SftpUploadConflict struct {
-	RemotePath string `json:"remotePath"`
-	LocalSize  int64  `json:"localSize"`
-	RemoteSize int64  `json:"remoteSize"`
-	RemoteMtime int64 `json:"remoteMtime"`
-	IsDir      bool   `json:"isDir"`
+	RemotePath   string `json:"remotePath"`
+	LocalSize    int64  `json:"localSize"`
+	RemoteSize   int64  `json:"remoteSize"`
+	RemoteMtime  int64  `json:"remoteMtime"`
+	IsDir        bool   `json:"isDir"`        // 远端是否为目录
+	LocalIsDir   bool   `json:"localIsDir"`   // 本地是否为目录
+	ExistingType string `json:"existingType"` // file | directory
 }
 
 // CheckUploadConflict 检测上传目标是否已存在且与本地不同
@@ -183,12 +186,18 @@ func (a *ShellAuxManager) CheckUploadConflict(localPath, remotePath string) (*Sf
 	if err != nil {
 		return nil, nil // 不存在则无冲突
 	}
+	existingType := "file"
+	if remoteInfo.IsDir() {
+		existingType = "directory"
+	}
 	conflict := &SftpUploadConflict{
-		RemotePath: remotePath,
-		LocalSize:  localInfo.Size(),
-		RemoteSize: remoteInfo.Size(),
-		RemoteMtime: remoteInfo.ModTime().Unix(),
-		IsDir:      remoteInfo.IsDir(),
+		RemotePath:   remotePath,
+		LocalSize:    localInfo.Size(),
+		RemoteSize:   remoteInfo.Size(),
+		RemoteMtime:  remoteInfo.ModTime().Unix(),
+		IsDir:        remoteInfo.IsDir(),
+		LocalIsDir:   localInfo.IsDir(),
+		ExistingType: existingType,
 	}
 	if localInfo.IsDir() != remoteInfo.IsDir() {
 		return conflict, nil
@@ -197,4 +206,30 @@ func (a *ShellAuxManager) CheckUploadConflict(localPath, remotePath string) (*Sf
 		return nil, nil
 	}
 	return conflict, nil
+}
+
+// AllocateUniqueRemotePath 在同目录下分配不冲突的远端路径（name、name (1)、name (2)…）
+func (a *ShellAuxManager) AllocateUniqueRemotePath(remotePath string) (string, error) {
+	c, err := a.sftpClient()
+	if err != nil {
+		return "", err
+	}
+	remotePath = path.Clean(strings.TrimSpace(remotePath))
+	if remotePath == "" || remotePath == "." {
+		return "", fmt.Errorf("远端路径无效")
+	}
+	if _, err := c.Stat(remotePath); err != nil {
+		return remotePath, nil
+	}
+	dir := path.Dir(remotePath)
+	base := path.Base(remotePath)
+	ext := path.Ext(base)
+	stem := strings.TrimSuffix(base, ext)
+	for i := 1; i < 10000; i++ {
+		candidate := path.Join(dir, fmt.Sprintf("%s (%d)%s", stem, i, ext))
+		if _, err := c.Stat(candidate); err != nil {
+			return candidate, nil
+		}
+	}
+	return "", fmt.Errorf("无法为 %s 分配唯一文件名", base)
 }

@@ -35,7 +35,7 @@
         <div class="transfer-head">
           <span class="dir-tag" :class="item.direction">{{ item.direction === 'download' ? '下载' : '上传' }}</span>
           <span class="name" :title="item.name">{{ item.name }}</span>
-          <span class="status" :class="item.status">{{ statusLabel(item.status) }}</span>
+          <span class="status" :class="item.status">{{ statusLabel(item) }}</span>
         </div>
         <div class="meta" :title="item.remotePath">
           {{ item.machineName }} · {{ item.isDir ? '目录' : '文件' }}
@@ -275,10 +275,17 @@ export default {
       return item.speedBps > 0 ? item.speedBps : 0
     }
 
-    const statusLabel = (s) => {
+    const statusLabel = (item) => {
+      const s = typeof item === 'string' ? item : item?.status
       if (s === 'queued') return '排队'
       if (s === 'pending') return '等待'
-      if (s === 'running') return '进行中'
+      if (s === 'running') {
+        const phase = typeof item === 'object' ? item?.phase : ''
+        if (phase === 'compressing') return '压缩中'
+        if (phase === 'uploading') return '上传中'
+        if (phase === 'extracting') return '解压中'
+        return '进行中'
+      }
       if (s === 'done') return '完成'
       if (s === 'error') return '失败'
       if (s === 'paused') return '已暂停'

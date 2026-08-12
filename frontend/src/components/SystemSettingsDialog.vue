@@ -129,6 +129,15 @@
                                     <el-switch v-model="form.shellAsciiInput" size="small" />
                                 </div>
                             </div>
+                            <div class="system-setting-row">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">SFTP 目录压缩上传</span>
+                                    <span class="system-setting-hint">目录默认先打 zip 再远端解压；关闭则逐文件上传。文件面板可粘贴剪贴板图片直接上传</span>
+                                </div>
+                                <div class="system-setting-control">
+                                    <el-switch v-model="form.sftpUseCompressedUpload" size="small" />
+                                </div>
+                            </div>
                         </div>
 
                         <!-- 主机密钥 -->
@@ -725,6 +734,7 @@ export default {
             shellSessionRestore: true,
             shellLogHighlight: true,
             shellAsciiInput: true,
+            sftpUseCompressedUpload: true,
             shellLogHighlightColors: { ...DEFAULT_SHELL_LOG_COLORS },
             shellLogHighlightRules: mergeLogHighlightRules([]),
             shellLogHighlightKeywords: [],
@@ -953,6 +963,7 @@ theme preview · ${theme.foreground}`
             form.shellSessionRestore = false
             form.shellLogHighlight = config.shellLogHighlight !== false
             form.shellAsciiInput = config.shellAsciiInput !== false
+            form.sftpUseCompressedUpload = config.sftpUseCompressedUpload !== false
             Object.assign(
                 form.shellLogHighlightColors,
                 mergeLogHighlightColors(config.shellLogHighlightColors),
@@ -1320,6 +1331,7 @@ theme preview · ${theme.foreground}`
                 config.shellSessionRestore = false
                 config.shellLogHighlight = !!form.shellLogHighlight
                 config.shellAsciiInput = !!form.shellAsciiInput
+                config.sftpUseCompressedUpload = !!form.sftpUseCompressedUpload
                 config.shellLogHighlightColors = mergeLogHighlightColors(form.shellLogHighlightColors)
                 config.shellLogHighlightDisabled = rulesToDisabled(form.shellLogHighlightRules)
                 config.shellLogHighlightKeywords = normalizeCustomKeywords(form.shellLogHighlightKeywords)
