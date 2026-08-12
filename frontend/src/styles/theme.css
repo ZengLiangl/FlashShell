@@ -487,3 +487,78 @@ html.fd-hide-hover-tooltips .el-popper.is-pure.is-light {
   visibility: hidden !important;
   pointer-events: none !important;
 }
+
+/* macOS TitleBarHidden：顶栏与红绿灯同排，去掉独立「FlashDock」标题行 */
+html.is-mac-hidden-titlebar {
+  /* 红绿灯 x=12 + 三颗按钮宽度，留给内容的左侧安全区 */
+  --mac-traffic-inset: 76px;
+}
+
+html.is-mac-hidden-titlebar .app-menu-bar,
+html.is-mac-hidden-titlebar .shell-terminal-tabs .tabs-bar,
+html.is-mac-hidden-titlebar .terminal-header {
+  padding-left: max(8px, var(--mac-traffic-inset));
+  --wails-draggable: drag;
+}
+
+/* 侧栏展开时红绿灯落在左侧面板顶区，tabs 不再重复留 76px 空位 */
+html.is-mac-hidden-titlebar .shell-workspace.has-left-chrome .shell-terminal-tabs .tabs-bar {
+  padding-left: 4px;
+}
+
+html.is-mac-hidden-titlebar .shell-workspace.has-left-chrome .shell-left-traffic-spacer {
+  display: block;
+  --wails-draggable: drag;
+}
+
+/* Windows 无边框：顶栏可拖拽，右侧留给窗口按钮 */
+html.is-windows-frameless .app-menu-bar,
+html.is-windows-frameless .shell-terminal-tabs .tabs-bar,
+html.is-windows-frameless .terminal-header {
+  --wails-draggable: drag;
+  padding-right: 0;
+}
+
+html.is-mac-hidden-titlebar .app-menu-bar button,
+html.is-mac-hidden-titlebar .app-menu-bar a,
+html.is-mac-hidden-titlebar .app-menu-bar input,
+html.is-mac-hidden-titlebar .app-menu-bar .el-dropdown,
+html.is-mac-hidden-titlebar .app-menu-bar .mode-switcher-host,
+html.is-mac-hidden-titlebar .app-menu-bar .app-chrome-icons,
+html.is-mac-hidden-titlebar .shell-terminal-tabs .tabs-bar button,
+html.is-mac-hidden-titlebar .shell-terminal-tabs .tabs-bar a,
+html.is-mac-hidden-titlebar .shell-terminal-tabs .tabs-bar input,
+html.is-mac-hidden-titlebar .shell-terminal-tabs .tabs-bar .el-dropdown,
+html.is-mac-hidden-titlebar .shell-terminal-tabs .tabs-bar .session-tab,
+html.is-mac-hidden-titlebar .shell-terminal-tabs .tabs-bar .mode-switcher-host,
+html.is-mac-hidden-titlebar .shell-terminal-tabs .tabs-bar .app-chrome-icons,
+html.is-mac-hidden-titlebar .terminal-header button,
+html.is-mac-hidden-titlebar .terminal-header a,
+html.is-mac-hidden-titlebar .terminal-header input,
+html.is-mac-hidden-titlebar .terminal-header .el-dropdown,
+html.is-mac-hidden-titlebar .terminal-header .mode-switcher-host,
+html.is-mac-hidden-titlebar .terminal-header .app-chrome-icons,
+html.is-mac-hidden-titlebar .terminal-header .icon-actions,
+html.is-windows-frameless .app-menu-bar button,
+html.is-windows-frameless .app-menu-bar a,
+html.is-windows-frameless .app-menu-bar input,
+html.is-windows-frameless .app-menu-bar .el-dropdown,
+html.is-windows-frameless .app-menu-bar .mode-switcher-host,
+html.is-windows-frameless .app-menu-bar .app-chrome-icons,
+html.is-windows-frameless .shell-terminal-tabs .tabs-bar button,
+html.is-windows-frameless .shell-terminal-tabs .tabs-bar a,
+html.is-windows-frameless .shell-terminal-tabs .tabs-bar input,
+html.is-windows-frameless .shell-terminal-tabs .tabs-bar .el-dropdown,
+html.is-windows-frameless .shell-terminal-tabs .tabs-bar .session-tab,
+html.is-windows-frameless .shell-terminal-tabs .tabs-bar .mode-switcher-host,
+html.is-windows-frameless .shell-terminal-tabs .tabs-bar .app-chrome-icons,
+html.is-windows-frameless .terminal-header button,
+html.is-windows-frameless .terminal-header a,
+html.is-windows-frameless .terminal-header input,
+html.is-windows-frameless .terminal-header .el-dropdown,
+html.is-windows-frameless .terminal-header .mode-switcher-host,
+html.is-windows-frameless .terminal-header .app-chrome-icons,
+html.is-windows-frameless .terminal-header .icon-actions,
+html.is-windows-frameless .window-controls {
+  --wails-draggable: no-drag;
+}

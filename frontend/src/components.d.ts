@@ -12,6 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AboutDialog: typeof import('./components/AboutDialog.vue')['default']
+    AppChromeIcons: typeof import('./components/AppChromeIcons.vue')['default']
     AppMenuBar: typeof import('./components/AppMenuBar.vue')['default']
     ConfigEditorDialog: typeof import('./components/ConfigEditorDialog.vue')['default']
     ElAside: typeof import('element-plus/es')['ElAside']
@@ -87,6 +88,7 @@ declare module 'vue' {
     TerminalHeader: typeof import('./components/TerminalHeader.vue')['default']
     TerminalOutput: typeof import('./components/TerminalOutput.vue')['default']
     TextOverflowTooltip: typeof import('./components/TextOverflowTooltip.vue')['default']
+    WindowControls: typeof import('./components/WindowControls.vue')['default']
     WorkPathConfigDialog: typeof import('./components/WorkPathConfigDialog.vue')['default']
   }
   export interface GlobalDirectives {

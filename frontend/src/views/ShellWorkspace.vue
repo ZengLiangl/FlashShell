@@ -1,5 +1,5 @@
 <template>
-  <div class="shell-workspace">
+  <div class="shell-workspace" :class="{ 'has-left-chrome': showLeftPanel && !leftCollapsed }">
     <el-container class="shell-body main-container">
       <el-aside
         v-if="showLeftPanel"
@@ -7,6 +7,8 @@
         class="left-panel shell-left-panel"
         :class="{ collapsed: leftCollapsed, resizing: isResizing }"
       >
+        <!-- macOS 红绿灯占位：侧栏展开时顶栏安全区改到左侧，避免挡住内容、tabs 不再重复留白 -->
+        <div v-if="!leftCollapsed" class="shell-left-traffic-spacer" aria-hidden="true" />
         <ShellMonitorPanel
           v-if="monitorSession && !leftCollapsed"
           :active-machine="monitorMachineName"
@@ -70,6 +72,12 @@
           :broadcast-enabled="broadcastEnabled"
           :broadcast-targets="broadcastTargets"
           :split-session-ids="splitSessionIds"
+          :has-task="hasTask"
+          :has-projects="hasProjects"
+          :has-machines="hasMachines"
+          :task-running="taskRunning"
+          :projects="projects"
+          :selected-project-name="selectedProjectName"
           @update:active-machine="(name) => $emit('update:activeMachine', name)"
           @update:broadcast-enabled="(v) => $emit('update:broadcast-enabled', v)"
           @update:broadcast-targets="(v) => $emit('update:broadcast-targets', v)"
@@ -87,6 +95,8 @@
           @open-command-palette="commandPaletteVisible = true"
           @cwd-sync="onCwdSync"
           @reorder-tabs="(payload) => $emit('reorder-tabs', payload)"
+          @change-view="(v) => $emit('change-view', v)"
+          @select-project="(p) => $emit('select-project', p)"
         >
           <template #empty>
             <div v-if="connectingName" class="app-empty shell-connecting">
@@ -245,6 +255,12 @@ export default {
     splitSessionIds: { type: Array, default: () => [] },
     /** 系统设置等上层弹层打开时，禁用片段快捷键 */
     blockShortcuts: { type: Boolean, default: false },
+    hasTask: { type: Boolean, default: false },
+    hasProjects: { type: Boolean, default: false },
+    hasMachines: { type: Boolean, default: false },
+    taskRunning: { type: Boolean, default: false },
+    projects: { type: Array, default: () => [] },
+    selectedProjectName: { type: String, default: '' },
   },
   emits: [
     'back', 'connect', 'disconnect', 'close-session', 'close-sessions', 'reconnect', 'test', 'add-machine', 'edit-machine',
@@ -253,6 +269,7 @@ export default {
     'update:broadcast-enabled', 'update:broadcast-targets', 'update:split-session-ids',
     'reorder-tabs', 'machines-changed', 'cwd-sync',
     'focus-session', 'connect-machines',
+    'change-view', 'select-project',
   ],
   setup(props, { emit }) {
     const tabsRef = ref(null)
@@ -1071,15 +1088,28 @@ export default {
   flex-shrink: 0;
   border-right: 1px solid var(--app-border);
   background-color: var(--app-panel-bg);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.shell-left-traffic-spacer {
+  display: none;
+  flex-shrink: 0;
+  height: 36px;
+  box-sizing: border-box;
 }
 
 .shell-left-panel.resizing {
   transition: none;
 }
 
-.shell-left-panel :deep(.shell-monitor) {
+.shell-left-panel :deep(.shell-monitor),
+.shell-left-panel :deep(.local-file-tree) {
   overflow: auto;
-  height: 100%;
+  height: auto;
+  flex: 1;
+  min-height: 0;
 }
 
 .shell-left-panel.collapsed {

@@ -119,6 +119,8 @@ func (a *App) Startup(ctx context.Context) {
 // DomReady is called after front-end resources have been loaded
 func (a *App) DomReady(ctx context.Context) {
 	a.StartAutoPortForwards()
+	// 与常见 hiddenInset 顶栏一致：红绿灯相对窗口顶边 (12, 12)，与 36px 顶栏内容垂直居中对齐
+	setTrafficLightPosition(12, 12)
 }
 
 // BeforeClose 关闭窗口前触发；首次拦截并弹框确认，确认后再次关闭才真正退出。

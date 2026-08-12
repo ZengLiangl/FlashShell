@@ -12,10 +12,19 @@ import './styles/scrollbar-hover.css'
 import App from './App.vue'
 import { installPopperAutoClose } from './utils/popperAutoClose'
 import { registerAppIcons } from './utils/registerIcons'
+import { isMacPlatform, isWindowsPlatform } from './utils/platform'
 
 // 按钮点击获得焦点后，Enter/Space 会再次 toggle tooltip；图标按钮场景关闭该行为
 if (ElTooltip?.props?.triggerKeys) {
   ElTooltip.props.triggerKeys.default = () => []
+}
+
+// macOS 隐藏标题栏 / Windows 无边框：顶栏让位系统按钮并启用拖拽
+if (isMacPlatform()) {
+  document.documentElement.classList.add('is-mac-hidden-titlebar')
+}
+if (isWindowsPlatform()) {
+  document.documentElement.classList.add('is-windows-frameless')
 }
 
 const app = createApp(App)

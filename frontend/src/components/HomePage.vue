@@ -1,30 +1,82 @@
 <template>
-  <div class="home-page">
-    <header class="home-hero">
-      <div class="hero-copy">
-        <h2 class="hero-title">FlashDock</h2>
+  <div class="home-page" :class="{ 'has-rail': hasProjects }">
+    <!-- 有任务配置时：左侧分区导航（对标 Netcatty Vault sidebar） -->
+    <aside v-if="hasProjects" class="home-rail" aria-label="首页分区">
+      <div class="rail-brand">
+        <img
+          class="rail-brand-mark"
+          :src="brandIconUrl"
+          alt=""
+          aria-hidden="true"
+        />
+        <span class="rail-brand-text">FlashDock</span>
       </div>
-      <div class="hero-actions">
-        <template v-if="!hasProjects">
+      <nav class="rail-nav">
+        <button
+          type="button"
+          class="rail-item"
+          :class="{ active: homeSection === 'task' }"
+          @click="setHomeSection('task')"
+        >
+          <el-icon :size="16"><Folder /></el-icon>
+          <span>任务</span>
+          <span class="rail-count">{{ projects.length }}</span>
+        </button>
+        <button
+          type="button"
+          class="rail-item"
+          :class="{ active: homeSection === 'shell' }"
+          @click="setHomeSection('shell')"
+        >
+          <el-icon :size="16"><Monitor /></el-icon>
+          <span>主机</span>
+          <span v-if="connectedCount > 0" class="rail-live">{{ connectedCount }}</span>
+          <span v-else class="rail-count">{{ (machines || []).length }}</span>
+        </button>
+      </nav>
+      <div class="rail-footer">
+        <button type="button" class="rail-item rail-settings" @click="$emit('open-system-settings')">
+          <el-icon :size="16"><Setting /></el-icon>
+          <span>设置</span>
+        </button>
+      </div>
+    </aside>
+
+    <div class="home-stage">
+      <div class="home-surface">
+        <!-- 顶栏：搜索 + 主操作（对标 VaultPageHeader） -->
+        <header class="home-header">
           <el-input
+            ref="searchInputRef"
             v-model="machineKeyword"
             clearable
-            size="small"
-            placeholder="搜索名称 / IP"
-            class="app-toolbar-search compact machine-search hero-machine-search"
+            size="large"
+            class="home-search"
+            :placeholder="searchPlaceholder"
+            @keydown.enter.exact.prevent="onSearchEnter"
           >
             <template #prefix>
               <el-icon><Search /></el-icon>
             </template>
           </el-input>
-          <div class="icon-actions icon-actions--sm">
+
+          <div class="home-header-actions">
+            <el-button
+              v-if="showingShell"
+              class="home-btn-secondary"
+              :disabled="!quickConnectHint"
+              @click="onQuickConnect"
+            >
+              连接
+            </el-button>
+
             <el-dropdown
               trigger="hover"
               :show-timeout="120"
               :hide-timeout="160"
               @command="onConfigCommand"
             >
-              <el-button circle title="配置文件">
+              <el-button class="home-btn-icon" title="配置文件">
                 <el-icon><FolderOpened /></el-icon>
               </el-button>
               <template #dropdown>
@@ -52,334 +104,222 @@
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
-            <el-tooltip content="编辑任务流水线" placement="top">
-              <el-button circle title="编辑任务流水线" @click="openConfigEditor">
+
+            <el-tooltip content="编辑任务流水线" placement="bottom">
+              <el-button class="home-btn-icon" @click="openConfigEditor">
                 <el-icon><Edit /></el-icon>
               </el-button>
             </el-tooltip>
-            <el-tooltip content="添加机器" placement="top">
-              <el-button circle @click="$emit('add-machine')">
-                <el-icon><Plus /></el-icon>
-              </el-button>
-            </el-tooltip>
-            <el-tooltip content="进入终端" placement="top">
-              <el-button circle @click="$emit('open-shell')">
-                <el-icon><Monitor /></el-icon>
-              </el-button>
-            </el-tooltip>
-            <el-button :icon="Refresh" circle title="刷新" @click="handleRefresh" />
-          </div>
-        </template>
-        <el-button v-else :icon="Refresh" circle title="刷新" @click="handleRefresh" />
-      </div>
-    </header>
 
-    <div
-      class="home-zones"
-      :class="{
-        'shell-only': !hasProjects,
-        'task-minimized': hasProjects && minimizedZone === 'task',
-        'shell-minimized': hasProjects && minimizedZone === 'shell',
-        'is-focus': hasProjects && !!minimizedZone,
-      }"
-    >
-      <section
-        v-if="hasProjects"
-        class="zone zone-task"
-        :class="{ 'is-minimized': minimizedZone === 'task' }"
-        aria-labelledby="zone-task-title"
-      >
-        <div
-          class="zone-head"
-          :class="{ 'is-clickable': minimizedZone === 'task' }"
-          @click="minimizedZone === 'task' && toggleMinimize('task')"
-        >
-          <div class="zone-label">
-            <span class="zone-dot task-dot" aria-hidden="true"></span>
-            <div>
-              <h3 id="zone-task-title">任务模式</h3>
-            </div>
-            <span v-if="minimizedZone === 'task'" class="zone-mini-hint">点击展开</span>
-          </div>
-          <div class="zone-actions" @click.stop>
-            <template v-if="minimizedZone !== 'task'">
-              <div class="zone-action-btns icon-actions icon-actions--sm">
-                <el-dropdown
-                  trigger="hover"
-                  :show-timeout="120"
-                  :hide-timeout="160"
-                  @command="onConfigCommand"
-                >
-                  <el-button size="small" circle title="配置文件">
-                    <el-icon><FolderOpened /></el-icon>
-                  </el-button>
-                  <template #dropdown>
-                    <el-dropdown-menu>
-                      <template v-if="configFiles.length">
-                        <el-dropdown-item
-                          v-for="file in configFiles"
-                          :key="file"
-                          :command="`switch:${file}`"
-                        >
-                          <span class="config-item">
-                            <el-icon v-if="file === currentConfig" class="config-check"><Check /></el-icon>
-                            <span>{{ basename(file) }}</span>
-                          </span>
-                        </el-dropdown-item>
-                      </template>
-                      <el-dropdown-item v-else disabled>无法加载配置文件</el-dropdown-item>
-                      <el-dropdown-item divided command="edit-pipeline">编辑任务流水线</el-dropdown-item>
-                      <el-dropdown-item command="refresh">
-                        <span>刷新配置列表</span>
-                        <span class="menu-shortcut">{{ labelOf('refreshConfig') }}</span>
-                      </el-dropdown-item>
-                      <el-dropdown-item command="open-global">打开全局配置</el-dropdown-item>
-                      <el-dropdown-item command="open-current">打开当前配置</el-dropdown-item>
-                    </el-dropdown-menu>
-                  </template>
-                </el-dropdown>
-                <el-tooltip content="编辑任务流水线" placement="top">
-                  <el-button size="small" circle title="编辑任务流水线" @click="openConfigEditor">
-                    <el-icon><Edit /></el-icon>
-                  </el-button>
-                </el-tooltip>
-                <el-tooltip
-                  :content="minimizedZone === 'shell' ? '恢复双栏' : '收起任务，展开机器列表'"
-                  placement="top"
-                >
-                  <el-button
-                    size="small"
-                    circle
-                    :title="minimizedZone === 'shell' ? '恢复双栏' : '收起任务'"
-                    @click="toggleMinimize('task')"
-                  >
-                    <el-icon>
-                      <ArrowDown v-if="minimizedZone === 'shell'" />
-                      <ArrowUp v-else />
-                    </el-icon>
-                  </el-button>
-                </el-tooltip>
-              </div>
-            </template>
-            <el-tooltip v-else content="展开任务列表" placement="top">
-              <el-button size="small" circle title="展开任务列表" @click="toggleMinimize('task')">
-                <el-icon><ArrowDown /></el-icon>
-              </el-button>
+            <el-tooltip content="刷新" placement="bottom">
+              <el-button class="home-btn-icon" :icon="Refresh" @click="handleRefresh" />
             </el-tooltip>
-          </div>
-        </div>
 
-        <div v-show="minimizedZone !== 'task'" class="zone-body">
-          <div class="item-grid">
-            <button
-              v-for="project in projects"
-              :key="project.name"
-              type="button"
-              class="item-card"
-              @click="$emit('select-project', project)"
-            >
-              <div class="item-icon task-icon">
-                <el-icon :size="18"><Folder /></el-icon>
-              </div>
-              <div class="item-meta">
-                <span class="item-name">{{ project.name }}</span>
-                <span class="item-desc">{{ project.description || '暂无描述' }}</span>
-              </div>
-              <span class="item-badge">{{ (project.subprojects || []).length }} 子项目</span>
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <section
-        class="zone zone-shell"
-        :class="{ 'is-minimized': hasProjects && minimizedZone === 'shell' }"
-        :aria-label="hasProjects ? undefined : '机器列表'"
-        :aria-labelledby="hasProjects ? 'zone-shell-title' : undefined"
-      >
-        <div
-          v-if="hasProjects"
-          class="zone-head"
-          :class="{ 'is-clickable': minimizedZone === 'shell' }"
-          @click="minimizedZone === 'shell' && toggleMinimize('shell')"
-        >
-          <div class="zone-label">
-            <span class="zone-dot shell-dot" aria-hidden="true"></span>
-            <div>
-              <h3 id="zone-shell-title">
-                Shell 模式
-                <el-tag
-                  v-if="connectedCount > 0"
-                  size="small"
-                  type="primary"
-                  effect="plain"
-                  class="session-tag"
-                >
-                  {{ connectedCount }} 会话进行中
-                </el-tag>
-              </h3>
-            </div>
-            <span v-if="minimizedZone === 'shell'" class="zone-mini-hint">点击展开</span>
-          </div>
-          <div class="zone-actions" @click.stop>
-            <template v-if="minimizedZone !== 'shell'">
-              <el-input
-                v-model="machineKeyword"
-                clearable
-                size="small"
-                placeholder="搜索名称 / IP"
-                class="app-toolbar-search compact machine-search"
+            <div class="home-btn-group">
+              <el-button
+                v-if="showingShell"
+                type="primary"
+                class="home-btn-primary"
+                @click="$emit('add-machine')"
               >
-                <template #prefix>
-                  <el-icon><Search /></el-icon>
-                </template>
-              </el-input>
-              <div class="zone-action-btns icon-actions icon-actions--sm">
-                <el-tooltip content="添加机器" placement="top">
-                  <el-button size="small" circle @click="$emit('add-machine')">
-                    <el-icon><Plus /></el-icon>
-                  </el-button>
-                </el-tooltip>
-                <el-tooltip content="进入终端" placement="top">
-                  <el-button size="small" circle @click="$emit('open-shell')">
-                    <el-icon><Monitor /></el-icon>
-                  </el-button>
-                </el-tooltip>
-                <el-tooltip
-                  :content="minimizedZone === 'task' ? '恢复双栏' : '收起 Shell，展开任务列表'"
-                  placement="top"
-                >
-                  <el-button
-                    size="small"
-                    circle
-                    :title="minimizedZone === 'task' ? '恢复双栏' : '收起 Shell'"
-                    @click="toggleMinimize('shell')"
-                  >
-                    <el-icon>
-                      <ArrowUp v-if="minimizedZone === 'task'" />
-                      <ArrowDown v-else />
-                    </el-icon>
-                  </el-button>
-                </el-tooltip>
+                <el-icon><Plus /></el-icon>
+                新建主机
+              </el-button>
+              <el-button
+                v-else
+                type="primary"
+                class="home-btn-primary"
+                @click="openConfigEditor"
+              >
+                <el-icon><Edit /></el-icon>
+                编辑流水线
+              </el-button>
+              <el-button class="home-btn-secondary home-btn-terminal" @click="$emit('open-shell')">
+                <el-icon><Monitor /></el-icon>
+                终端
+              </el-button>
+            </div>
+          </div>
+        </header>
+
+        <div class="home-scroll">
+          <!-- 任务分区 -->
+          <template v-if="showingTask">
+            <div class="home-crumb">
+              <span class="crumb-active">全部任务</span>
+              <span v-if="filteredProjects.length" class="crumb-meta">{{ filteredProjects.length }} 个项目</span>
+            </div>
+
+            <div v-if="!filteredProjects.length" class="home-empty">
+              <div class="home-empty-icon" aria-hidden="true">
+                <el-icon :size="28"><Folder /></el-icon>
               </div>
-            </template>
-            <el-tooltip v-else content="展开机器列表" placement="top">
-              <el-button size="small" circle title="展开机器列表" @click="toggleMinimize('shell')">
-                <el-icon><ArrowUp /></el-icon>
+              <p class="home-empty-title">{{ machineKeyword.trim() ? '无匹配任务' : '暂无任务项目' }}</p>
+              <p class="home-empty-desc">
+                {{ machineKeyword.trim() ? '试试其他关键词' : '在配置中添加项目后，可在此快速进入任务模式' }}
+              </p>
+            </div>
+
+            <div v-else class="home-section">
+              <div class="item-grid">
+                <button
+                  v-for="project in filteredProjects"
+                  :key="project.name"
+                  type="button"
+                  class="item-card"
+                  @click="$emit('select-project', project)"
+                >
+                  <div class="item-icon task-icon">
+                    <el-icon :size="18"><Folder /></el-icon>
+                  </div>
+                  <div class="item-meta">
+                    <span class="item-name">{{ project.name }}</span>
+                    <span class="item-desc">{{ project.description || '暂无描述' }}</span>
+                  </div>
+                  <span class="item-badge">{{ (project.subprojects || []).length }} 子项目</span>
+                </button>
+              </div>
+            </div>
+          </template>
+
+          <!-- 主机分区 -->
+          <template v-else>
+            <div class="home-crumb">
+              <span class="crumb-active">全部主机</span>
+              <el-tag
+                v-if="connectedCount > 0"
+                size="small"
+                type="primary"
+                effect="plain"
+                class="session-tag"
+              >
+                {{ connectedCount }} 会话进行中
+              </el-tag>
+            </div>
+
+            <div v-if="!(machines || []).length" class="home-empty">
+              <div class="home-empty-icon" aria-hidden="true">
+                <el-icon :size="28"><Monitor /></el-icon>
+              </div>
+              <p class="home-empty-title">配置你的主机</p>
+              <p class="home-empty-desc">保存主机后可快速连接到服务器、虚拟机与容器</p>
+              <el-button type="primary" @click="$emit('add-machine')">
+                <el-icon><Plus /></el-icon>
+                新建主机
               </el-button>
-            </el-tooltip>
-          </div>
+            </div>
+
+            <div v-else class="zone-list-wrap">
+              <div v-if="quickConnectHint" class="quick-connect-bar">
+                <span class="quick-connect-text">{{ quickConnectHint.text }}</span>
+                <el-button size="small" type="primary" @click="onQuickConnect">
+                  {{ quickConnectHint.action }}
+                </el-button>
+              </div>
+
+              <div v-if="availableTags.length" class="home-tag-filter">
+                <button
+                  type="button"
+                  class="home-tag-chip"
+                  :class="{ active: !selectedTags.length }"
+                  @click="selectedTags = []"
+                >全部</button>
+                <button
+                  v-for="t in availableTags"
+                  :key="t"
+                  type="button"
+                  class="home-tag-chip"
+                  :class="{ active: selectedTags.includes(t) }"
+                  @click="toggleTagFilter(t)"
+                >{{ t }}</button>
+              </div>
+
+              <div v-if="pinnedMachines.length" class="home-section">
+                <div class="home-section-title">
+                  <el-icon :size="13"><StarFilled /></el-icon>
+                  置顶
+                </div>
+                <MachineConnectList
+                  :machines="pinnedMachines"
+                  :sessions="sessions"
+                  :workspace-sessions="workspaceSessions"
+                  :connecting-name="connectingName"
+                  :filter-keyword="machineKeyword"
+                  layout="grid"
+                  variant="cards"
+                  show-context-menu
+                  empty-text="无匹配机器"
+                  @connect="onConnectMachine"
+                  @edit-machine="(m) => $emit('edit-machine', m)"
+                  @copy-machine="(m) => $emit('copy-machine', m)"
+                  @delete-machine="(m) => $emit('delete-machine', m)"
+                  @toggle-pin="onTogglePin"
+                />
+              </div>
+
+              <div v-if="recentMachines.length" class="home-section">
+                <div class="home-section-title">
+                  <el-icon :size="13"><Clock /></el-icon>
+                  最近连接
+                </div>
+                <MachineConnectList
+                  :machines="recentMachines"
+                  :sessions="sessions"
+                  :workspace-sessions="workspaceSessions"
+                  :connecting-name="connectingName"
+                  :filter-keyword="machineKeyword"
+                  layout="grid"
+                  variant="cards"
+                  flat
+                  show-context-menu
+                  empty-text="无匹配机器"
+                  @connect="onConnectMachine"
+                  @edit-machine="(m) => $emit('edit-machine', m)"
+                  @copy-machine="(m) => $emit('copy-machine', m)"
+                  @delete-machine="(m) => $emit('delete-machine', m)"
+                  @toggle-pin="onTogglePin"
+                />
+              </div>
+
+              <div class="home-section">
+                <div v-if="pinnedMachines.length || recentMachines.length" class="home-section-title">
+                  全部主机
+                </div>
+                <MachineConnectList
+                  :machines="filteredMachines"
+                  :sessions="sessions"
+                  :workspace-sessions="workspaceSessions"
+                  :connecting-name="connectingName"
+                  :filter-keyword="machineKeyword"
+                  layout="grid"
+                  variant="cards"
+                  show-context-menu
+                  empty-text="无匹配机器"
+                  @connect="onConnectMachine"
+                  @edit-machine="(m) => $emit('edit-machine', m)"
+                  @copy-machine="(m) => $emit('copy-machine', m)"
+                  @delete-machine="(m) => $emit('delete-machine', m)"
+                  @toggle-pin="onTogglePin"
+                />
+              </div>
+            </div>
+          </template>
         </div>
-
-        <div
-          v-show="!hasProjects || minimizedZone !== 'shell'"
-          class="zone-body"
-        >
-          <div v-if="!(machines || []).length" class="app-empty">
-            <p class="app-empty-title">暂无机器</p>
-            <p class="app-empty-desc">点击右上角 + 添加机器</p>
-          </div>
-          <div v-else class="zone-list-wrap">
-            <div v-if="quickConnectHint" class="quick-connect-bar">
-              <span class="quick-connect-text">{{ quickConnectHint.text }}</span>
-              <el-button size="small" type="primary" @click="onQuickConnect">
-                {{ quickConnectHint.action }}
-              </el-button>
-            </div>
-
-            <div v-if="availableTags.length" class="home-tag-filter">
-              <button
-                type="button"
-                class="home-tag-chip"
-                :class="{ active: !selectedTags.length }"
-                @click="selectedTags = []"
-              >全部</button>
-              <button
-                v-for="t in availableTags"
-                :key="t"
-                type="button"
-                class="home-tag-chip"
-                :class="{ active: selectedTags.includes(t) }"
-                @click="toggleTagFilter(t)"
-              >{{ t }}</button>
-            </div>
-
-            <div v-if="pinnedMachines.length" class="home-section">
-              <div class="home-section-title">置顶</div>
-              <MachineConnectList
-                :machines="pinnedMachines"
-                :sessions="sessions"
-                :workspace-sessions="workspaceSessions"
-                :connecting-name="connectingName"
-                :filter-keyword="machineKeyword"
-                layout="grid"
-                variant="cards"
-                show-context-menu
-                empty-text="无匹配机器"
-                @connect="onConnectMachine"
-                @edit-machine="(m) => $emit('edit-machine', m)"
-                @copy-machine="(m) => $emit('copy-machine', m)"
-                @delete-machine="(m) => $emit('delete-machine', m)"
-                @toggle-pin="onTogglePin"
-              />
-            </div>
-
-            <div v-if="recentMachines.length" class="home-section">
-              <div class="home-section-title">最近连接</div>
-              <MachineConnectList
-                :machines="recentMachines"
-                :sessions="sessions"
-                :workspace-sessions="workspaceSessions"
-                :connecting-name="connectingName"
-                :filter-keyword="machineKeyword"
-                layout="grid"
-                variant="cards"
-                flat
-                show-context-menu
-                empty-text="无匹配机器"
-                @connect="onConnectMachine"
-                @edit-machine="(m) => $emit('edit-machine', m)"
-                @copy-machine="(m) => $emit('copy-machine', m)"
-                @delete-machine="(m) => $emit('delete-machine', m)"
-                @toggle-pin="onTogglePin"
-              />
-            </div>
-
-            <div class="home-section">
-              <div v-if="pinnedMachines.length || recentMachines.length" class="home-section-title">全部机器</div>
-              <MachineConnectList
-                :machines="filteredMachines"
-                :sessions="sessions"
-                :workspace-sessions="workspaceSessions"
-                :connecting-name="connectingName"
-                :filter-keyword="machineKeyword"
-                layout="grid"
-                variant="cards"
-                show-context-menu
-                empty-text="无匹配机器"
-                @connect="onConnectMachine"
-                @edit-machine="(m) => $emit('edit-machine', m)"
-                @copy-machine="(m) => $emit('copy-machine', m)"
-                @delete-machine="(m) => $emit('delete-machine', m)"
-                @toggle-pin="onTogglePin"
-              />
-            </div>
-          </div>
-        </div>
-      </section>
+      </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { Refresh, ArrowUp, ArrowDown } from '@element-plus/icons-vue'
+import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
+import { Refresh, Clock, StarFilled } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import { machineMatchesKeyword, isMachineConnecting, collectMachineTags, machineMatchesTags } from '../utils/machineGroups'
 import { mergeShortcuts, formatShortcut } from '../utils/shortcuts'
 import { parseQuickConnectTarget, findMachineForQuickConnect } from '../utils/quickConnect'
 import MachineConnectList from './shell/MachineConnectList.vue'
+import defaultAppIcon from '../assets/appicon.png'
 
 function basename(filePath) {
   if (!filePath) return ''
@@ -392,9 +332,19 @@ function normalizeMinimizedZone(zone) {
   return zone === 'task' || zone === 'shell' ? zone : ''
 }
 
+/** 旧双栏 minimizedZone → 新侧栏分区 */
+function zoneToSection(zone) {
+  // shell 被收起 → 看任务；其余默认主机（贴近 Netcatty 主机首页）
+  return zone === 'shell' ? 'task' : 'shell'
+}
+
+function sectionToZone(section) {
+  return section === 'task' ? 'shell' : 'task'
+}
+
 export default {
   name: 'HomePage',
-  components: { MachineConnectList, ArrowUp, ArrowDown },
+  components: { MachineConnectList, Clock, StarFilled },
   props: {
     projects: { type: Array, required: true },
     machines: { type: Array, default: () => [] },
@@ -426,10 +376,54 @@ export default {
     const shortcuts = ref(mergeShortcuts())
     const minimizedZone = ref('')
     const historyRecords = ref([])
+    const searchInputRef = ref(null)
+    const brandIconUrl = ref(defaultAppIcon)
+
+    const focusSearchInput = async () => {
+      await nextTick()
+      searchInputRef.value?.focus?.()
+    }
+
+    const loadBrandIcon = async () => {
+      try {
+        const [cfg, presets] = await Promise.all([
+          App.GetGlobalConfig(),
+          App.ListAppIconPresets(),
+        ])
+        const presetId = cfg?.appIconPreset || 'default'
+        const found = (presets || []).find((p) => p?.id === presetId)
+        brandIconUrl.value = found?.preview || defaultAppIcon
+      } catch {
+        brandIconUrl.value = defaultAppIcon
+      }
+    }
 
     const hasProjects = computed(() => (props.projects || []).length > 0)
+    const homeSection = computed(() => {
+      if (!hasProjects.value) return 'shell'
+      return zoneToSection(minimizedZone.value)
+    })
+    const showingTask = computed(() => hasProjects.value && homeSection.value === 'task')
+    const showingShell = computed(() => !showingTask.value)
+
     const availableTags = computed(() => collectMachineTags(props.machines || []))
     const labelOf = (id) => formatShortcut(shortcuts.value[id])
+
+    const searchPlaceholder = computed(() => {
+      if (showingTask.value) return '搜索任务项目名称 / 描述…'
+      return '查找主机或输入 user@host / user@host:2222…'
+    })
+
+    const filteredProjects = computed(() => {
+      const kw = machineKeyword.value.trim().toLowerCase()
+      const list = props.projects || []
+      if (!kw) return list
+      return list.filter((p) => {
+        const name = String(p?.name || '').toLowerCase()
+        const desc = String(p?.description || '').toLowerCase()
+        return name.includes(kw) || desc.includes(kw)
+      })
+    })
 
     const toggleTagFilter = (tag) => {
       const t = String(tag || '').trim()
@@ -461,17 +455,24 @@ export default {
       }
     }
 
-    const toggleMinimize = async (zone) => {
+    const setHomeSection = async (section) => {
       if (!hasProjects.value) return
-      const next = minimizedZone.value === zone ? '' : zone
+      if (section !== 'task' && section !== 'shell') return
+      if (homeSection.value === section) {
+        await focusSearchInput()
+        return
+      }
+      const nextZone = sectionToZone(section)
       const prev = minimizedZone.value
-      minimizedZone.value = next
+      minimizedZone.value = nextZone
       try {
-        await App.SetHomeMinimizedZone(next)
+        await App.SetHomeMinimizedZone(nextZone)
       } catch (e) {
         minimizedZone.value = prev
-        console.error('保存首页布局失败:', e)
+        console.error('保存首页分区失败:', e)
+        return
       }
+      await focusSearchInput()
     }
 
     const loadConfigMenu = async () => {
@@ -486,6 +487,7 @@ export default {
         configFiles.value = []
         currentConfig.value = ''
       }
+      loadBrandIcon()
     }
 
     const loadShortcuts = async () => {
@@ -557,6 +559,7 @@ export default {
       findMachineForQuickConnect(props.machines || [], quickTarget.value),
     )
     const quickConnectHint = computed(() => {
+      if (!showingShell.value) return null
       const t = quickTarget.value
       if (!t) return null
       if (quickMatched.value) {
@@ -588,6 +591,12 @@ export default {
       emit('add-machine')
     }
 
+    const onSearchEnter = () => {
+      if (showingShell.value && quickConnectHint.value) {
+        onQuickConnect()
+      }
+    }
+
     const onTogglePin = async (machine) => {
       if (!machine) return
       const key = machine.id || machine.name
@@ -613,6 +622,7 @@ export default {
       loadShortcuts()
       loadMinimizedZone()
       loadHistory()
+      loadBrandIcon()
       EventsOn('config:changed', loadConfigMenu)
       EventsOn('shortcuts:changed', loadShortcuts)
       EventsOn('home:minimized-zone', onMinimizedZoneChanged)
@@ -633,20 +643,27 @@ export default {
       configFiles,
       currentConfig,
       hasProjects,
+      homeSection,
+      showingTask,
+      showingShell,
+      filteredProjects,
       filteredMachines,
       pinnedMachines,
       recentMachines,
       quickConnectHint,
-      minimizedZone,
+      searchPlaceholder,
+      searchInputRef,
+      brandIconUrl,
       basename,
       labelOf,
       onConfigCommand,
       openConfigEditor,
       onConnectMachine,
       onQuickConnect,
+      onSearchEnter,
       onTogglePin,
       handleRefresh,
-      toggleMinimize,
+      setHomeSection,
     }
   },
 }
@@ -657,228 +674,265 @@ export default {
   flex: 1;
   min-height: 0;
   display: flex;
-  flex-direction: column;
   overflow: hidden;
-  padding: var(--app-space-page, 28px 32px 24px);
-  background: var(--app-bg);
+  background: var(--app-inset-bg, var(--app-bg));
 }
 
-.home-hero {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
+.home-rail {
+  width: 188px;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 10px 10px;
+  box-sizing: border-box;
+  border-right: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent);
+  background: var(--app-inset-bg, var(--app-bg));
 }
 
-.hero-title {
-  margin: 0 0 6px;
-  font-size: 26px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--app-text);
-  line-height: 1.2;
-}
-
-.hero-actions {
+.rail-brand {
   display: flex;
   align-items: center;
   gap: 10px;
+  padding: 6px 8px 14px;
+  margin-bottom: 4px;
+}
+
+.rail-brand-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  object-fit: cover;
   flex-shrink: 0;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  display: block;
+  background: transparent;
+  border: none;
 }
 
-.hero-machine-search {
-  width: min(240px, 42vw);
+.rail-brand-text {
+  font-size: 13px;
+  font-weight: 650;
+  color: var(--app-text);
 }
 
-.home-zones {
+.rail-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   flex: 1;
   min-height: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  align-items: stretch;
 }
 
-.home-zones.shell-only {
-  grid-template-columns: 1fr;
-  grid-template-rows: minmax(0, 1fr);
-  gap: 0;
-}
-
-/* 收起后改为上下布局：窄横条 + 全宽内容区 */
-.home-zones.task-minimized,
-.home-zones.shell-minimized {
-  grid-template-columns: 1fr;
+.rail-item {
+  display: flex;
+  align-items: center;
   gap: 10px;
+  width: 100%;
+  height: 40px;
+  padding: 0 10px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--app-text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  box-sizing: border-box;
+  text-align: left;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.home-zones.task-minimized {
-  grid-template-rows: auto minmax(0, 1fr);
+.rail-item:hover {
+  background: color-mix(in srgb, var(--app-text) 6%, transparent);
+  color: var(--app-text);
 }
 
-.home-zones.shell-minimized {
-  grid-template-rows: minmax(0, 1fr) auto;
+.rail-item.active {
+  background: color-mix(in srgb, var(--app-text) 10%, transparent);
+  border-color: color-mix(in srgb, var(--app-border) 80%, transparent);
+  color: var(--app-text);
 }
 
-.zone {
+.rail-count,
+.rail-live {
+  margin-left: auto;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--app-text-muted);
+  min-width: 1.2em;
+  text-align: right;
+}
+
+.rail-live {
+  color: var(--app-accent-color);
+  background: var(--app-accent-bg);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+.rail-footer {
+  padding-top: 8px;
+  border-top: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent);
+}
+
+.rail-settings {
+  color: var(--app-text-muted);
+}
+
+.home-stage {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  padding: 0 10px 10px 0;
+  box-sizing: border-box;
+}
+
+.home-page:not(.has-rail) .home-stage {
+  padding: 10px;
+}
+
+.home-surface {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  min-width: 0;
-  border: 1px solid var(--app-border);
+  border: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent);
   border-radius: var(--app-radius-panel, 14px);
   background: var(--app-panel-bg);
-  box-shadow: var(--app-surface-shadow, none);
+  box-shadow: var(--app-surface-shadow, 0 4px 12px rgba(0, 0, 0, 0.06));
   overflow: hidden;
 }
 
-.zone-task {
-  border-top: 2px solid color-mix(in srgb, var(--app-accent-color) 45%, var(--app-border));
-}
-
-.zone-shell {
-  border-top: 2px solid color-mix(in srgb, var(--app-accent-color) 45%, var(--app-border));
-}
-
-.zone.is-minimized {
-  flex: 0 0 auto;
-  max-height: none;
-  border-top: 1px solid var(--app-border);
-}
-
-.zone.is-minimized .zone-head {
-  padding: 8px 14px;
-  border-bottom: none;
-  min-height: 44px;
-  background: color-mix(in srgb, var(--app-text-muted) 5%, var(--app-panel-bg));
-}
-
-.zone.is-minimized .zone-head.is-clickable {
-  cursor: pointer;
-}
-
-.zone.is-minimized .zone-head.is-clickable:hover {
-  background: color-mix(in srgb, var(--app-accent-color) 8%, var(--app-panel-bg));
-}
-
-.zone.is-minimized .zone-label {
+.home-header {
+  flex-shrink: 0;
+  display: flex;
   align-items: center;
+  gap: 10px;
+  min-height: 56px;
+  padding: 10px 16px;
+  box-sizing: border-box;
+  border-bottom: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent);
+  background: color-mix(in srgb, var(--app-panel-bg) 92%, transparent);
 }
 
-.zone.is-minimized .zone-label h3 {
-  font-size: 13px;
+.home-search {
+  flex: 1;
+  min-width: 0;
+}
+
+.home-search :deep(.el-input__wrapper) {
+  min-height: 40px;
+  border-radius: 10px;
+  background: var(--app-inset-bg, var(--app-bg));
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-border) 80%, transparent) inset;
+}
+
+.home-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.home-btn-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+}
+
+.home-btn-primary {
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 8px;
   font-weight: 600;
 }
 
-.zone.is-minimized .zone-dot {
-  margin-top: 0;
+.home-btn-secondary {
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--app-text) 5%, transparent);
+  border-color: color-mix(in srgb, var(--app-border) 80%, transparent);
+  color: var(--app-text);
 }
 
-.zone-mini-hint {
-  margin-left: 4px;
-  font-size: 12px;
-  color: var(--app-text-muted);
-  white-space: nowrap;
+.home-btn-secondary:hover {
+  background: color-mix(in srgb, var(--app-text) 9%, transparent);
+  color: var(--app-text);
 }
 
-.zone-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: var(--app-space-panel-head, 16px 18px 12px);
-  border-bottom: 1px solid var(--app-border);
-  flex-shrink: 0;
+.home-btn-terminal {
+  gap: 6px;
 }
 
-.zone-label {
+.home-btn-icon {
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--app-text) 5%, transparent);
+  border-color: color-mix(in srgb, var(--app-border) 80%, transparent);
+  color: var(--app-text-secondary);
+}
+
+.home-btn-icon:hover {
+  color: var(--app-accent-color);
+  background: var(--app-accent-bg);
+  border-color: color-mix(in srgb, var(--app-accent-color) 35%, var(--app-border));
+}
+
+.home-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 14px 16px 18px;
+  box-sizing: border-box;
+  scrollbar-gutter: stable;
+}
+
+.home-crumb {
   display: flex;
   align-items: center;
   gap: 10px;
-  min-width: 0;
+  margin-bottom: 12px;
+  padding: 0 2px;
 }
 
-.zone-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.task-dot {
-  background: var(--app-accent-color);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-accent-color) 16%, transparent);
-}
-
-.shell-dot {
-  background: var(--app-accent-color);
-  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-accent-color) 16%, transparent);
-}
-
-.zone-label h3 {
-  margin: 0;
-  font-size: 16px;
+.crumb-active {
+  font-size: 14px;
   font-weight: 650;
-  color: var(--app-text);
-  line-height: 1.35;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  color: var(--app-accent-color);
+}
+
+.crumb-meta {
+  font-size: 12px;
+  color: var(--app-text-muted);
 }
 
 .session-tag {
   vertical-align: middle;
 }
 
-.zone-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+.home-section {
+  margin-bottom: 18px;
 }
 
-.zone-action-btns {
-  flex-shrink: 0;
+.home-section-title {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-}
-
-.machine-search {
-  width: 160px;
-}
-
-.zone-body {
-  flex: 1;
-  min-height: 0;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: var(--app-space-panel-body, 14px 16px 18px);
-  background: var(--app-inset-bg);
-  scrollbar-gutter: stable;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--app-text-muted);
+  margin: 0 0 10px 2px;
+  letter-spacing: 0.02em;
 }
 
 .zone-list-wrap {
   width: 100%;
-}
-
-.home-section {
-  margin-bottom: 16px;
-}
-
-.home-section-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--app-text-muted, #909399);
-  margin: 0 0 8px 2px;
-  letter-spacing: 0.02em;
 }
 
 .quick-connect-bar {
@@ -887,15 +941,15 @@ export default {
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 12px;
-  padding: 8px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--app-border, #e4e7ed);
-  background: color-mix(in srgb, var(--app-accent-color, #409eff) 8%, var(--app-card-bg, #fff));
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--app-accent-color) 30%, var(--app-border));
+  background: color-mix(in srgb, var(--app-accent-color) 10%, var(--app-card-bg));
 }
 
 .quick-connect-text {
   font-size: 13px;
-  color: var(--app-text, #303133);
+  color: var(--app-text);
   line-height: 1.4;
 }
 
@@ -903,7 +957,7 @@ export default {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 
 .home-tag-chip {
@@ -923,25 +977,65 @@ export default {
   background: var(--app-accent-bg);
 }
 
+.home-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 8px;
+  min-height: 280px;
+  padding: 48px 16px;
+  color: var(--app-text-muted);
+}
+
+.home-empty-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 6px;
+  background: color-mix(in srgb, var(--app-text) 6%, transparent);
+  color: var(--app-text-secondary);
+  opacity: 0.85;
+}
+
+.home-empty-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 650;
+  color: var(--app-text);
+}
+
+.home-empty-desc {
+  margin: 0 0 8px;
+  font-size: 13px;
+  line-height: 1.45;
+  max-width: 320px;
+  color: var(--app-text-muted);
+}
+
 .item-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 12px;
   align-content: start;
 }
 
 .item-card {
   display: grid;
-  grid-template-columns: 36px minmax(0, 1fr) auto;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
   align-items: center;
   gap: 12px;
   width: 100%;
-  min-height: 60px;
-  padding: 12px;
-  border: 1px solid var(--app-card-border);
-  border-radius: 10px;
+  height: 68px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--app-card-border, var(--app-border)) 85%, transparent);
+  border-radius: 12px;
   background: var(--app-card-bg);
-  box-shadow: var(--app-surface-shadow, none);
+  box-shadow: 0 4px 12px color-mix(in srgb, var(--app-text) 4%, transparent);
   color: inherit;
   text-align: left;
   cursor: pointer;
@@ -951,14 +1045,15 @@ export default {
 
 .item-card:hover {
   border-color: var(--app-accent-color);
-  background: var(--app-card-active-bg);
-  transform: translateY(-1px);
+  background: var(--app-card-active-bg, var(--app-accent-bg));
+  transform: translateY(-2px);
+  box-shadow: 0 8px 18px color-mix(in srgb, var(--app-text) 8%, transparent);
 }
 
 .item-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
+  width: 40px;
+  height: 40px;
+  border-radius: 11px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -978,7 +1073,7 @@ export default {
 }
 
 .item-name {
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 600;
   color: var(--app-text);
   overflow: hidden;
@@ -987,11 +1082,12 @@ export default {
 }
 
 .item-desc {
-  font-size: 12px;
+  font-size: 11px;
   color: var(--app-text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 .item-badge {
@@ -1021,45 +1117,65 @@ export default {
 }
 
 @media (max-width: 960px) {
-  .home-page {
-    padding: 20px 16px 20px;
-  }
-
-  .home-hero {
+  .home-page.has-rail {
     flex-direction: column;
   }
 
-  .home-zones,
-  .home-zones.shell-only {
-    grid-template-columns: 1fr;
-    overflow-y: auto;
+  .home-rail {
+    width: 100%;
+    flex-direction: row;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 10px;
+    border-right: none;
+    border-bottom: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent);
   }
 
-  .home-zones:not(.shell-only) {
-    grid-auto-rows: minmax(220px, 1fr);
+  .rail-brand {
+    padding: 0 8px 0 0;
+    margin: 0;
   }
 
-  .home-zones.shell-only {
-    grid-template-rows: minmax(220px, 1fr);
-    grid-auto-rows: unset;
+  .rail-brand-text {
+    display: none;
   }
 
-  .home-zones.task-minimized,
-  .home-zones.shell-minimized {
-    grid-template-columns: 1fr;
-    grid-auto-rows: auto;
+  .rail-nav {
+    flex-direction: row;
+    flex: 1;
   }
 
-  .home-zones.task-minimized {
-    grid-template-rows: auto minmax(220px, 1fr);
+  .rail-footer {
+    border-top: none;
+    padding-top: 0;
   }
 
-  .home-zones.shell-minimized {
-    grid-template-rows: minmax(220px, 1fr) auto;
+  .rail-item {
+    width: auto;
+    padding: 0 12px;
   }
 
-  .zone:not(.is-minimized) {
-    max-height: min(520px, 60vh);
+  .rail-count {
+    display: none;
+  }
+
+  .home-stage,
+  .home-page:not(.has-rail) .home-stage {
+    padding: 0 8px 8px;
+  }
+
+  .home-header {
+    flex-wrap: wrap;
+  }
+
+  .home-search {
+    flex: 1 1 100%;
+  }
+
+  .home-header-actions {
+    width: 100%;
+    justify-content: flex-end;
+    flex-wrap: wrap;
   }
 }
 </style>

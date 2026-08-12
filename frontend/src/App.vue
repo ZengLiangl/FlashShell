@@ -1,9 +1,18 @@
 <template>
   <div class="app-container" :class="themeClass">
-    <AppMenuBar :active-view="activeView" :has-projects="projects.length > 0" :has-machines="shellMachines.length > 0"
-      :has-task="!!selectedProject" :task-running="status.isRunning" :connected-count="connectedCount"
-      :projects="projects" :selected-project-name="selectedProject?.name || ''"
-      @change-view="switchActiveView" @select-project="selectProject" />
+    <AppMenuBar
+      v-show="activeView === 'home' || activeView === 'task'"
+      :active-view="activeView"
+      :has-projects="projects.length > 0"
+      :has-machines="shellMachines.length > 0"
+      :has-task="!!selectedProject"
+      :task-running="status.isRunning"
+      :connected-count="connectedCount"
+      :projects="projects"
+      :selected-project-name="selectedProject?.name || ''"
+      @change-view="switchActiveView"
+      @select-project="selectProject"
+    />
 
     <!-- 全局加载遮罩 -->
     <div v-if="isReloading" class="global-loading">
@@ -37,13 +46,19 @@
         <!-- 右侧终端输出 -->
         <el-main class="terminal-container">
           <TerminalHeader :show-back="false" :search-visible="terminalSearchVisible"
-            v-model:search-query="terminalSearchQuery" :match-summary="terminalMatchSummary" @clear="clearOutput"
-            @refresh="refreshOutput" @toggle-search="toggleTerminalSearch" @search-next="gotoNextSearchMatch"
+            v-model:search-query="terminalSearchQuery" :match-summary="terminalMatchSummary"
+            :show-chrome="false"
+            :show-search-toggle="false"
+            :show-inline-actions="false"
+            active-view="task"
+            @toggle-search="toggleTerminalSearch" @search-next="gotoNextSearchMatch"
             @search-prev="gotoPrevSearchMatch" @close-search="closeTerminalSearch" />
           <TerminalOutput ref="terminalOutputRef" :status="status" :output-lines="outputLines"
             :progress-percentage="progressPercentage" :progress-status="progressStatus"
             :search-query="terminalSearchQuery" :active-match-index="terminalActiveMatchIndex"
             :remote-failure="lastRemoteFailure"
+            :show-inline-actions="true"
+            @clear="clearOutput" @refresh="refreshOutput"
             @search-matches="handleSearchMatches" @open-failure-shell="openFailureShell" />
         </el-main>
       </el-container>
@@ -62,6 +77,12 @@
         :workspace-sessions="workspaceSessions" :connected-count="connectedCount" :open-session-count="openSessionCount"
         v-model:active-machine="activeMachine" :connecting-name="connectingName" :testing-name="testingName"
         :broadcast-enabled="broadcastEnabled" :broadcast-targets="broadcastTargets" :split-session-ids="splitSessionIds"
+        :has-task="!!selectedProject"
+        :has-projects="projects.length > 0"
+        :has-machines="shellMachines.length > 0"
+        :task-running="status.isRunning"
+        :projects="projects"
+        :selected-project-name="selectedProject?.name || ''"
         @back="leaveShellMode" @connect="(name) => connectShell(name)" @disconnect="disconnectShell"
         @close-session="closeShellSession" @close-sessions="closeShellSessions"
         @reconnect="(name) => connectOrReconnectShell(name)"
@@ -74,7 +95,8 @@
         @update:split-session-ids="(v) => (splitSessionIds = v)" @reorder-tabs="({ from, to }) => reorderTabs(from, to)"
         @cwd-sync="({ machineName, cwd }) => updateTabLastCwd(machineName, cwd)"
         @add-machine="openShellMachineDialog" @edit-machine="openShellMachineEdit" @copy-machine="copyShellMachine"
-        @delete-machine="deleteShellMachine" @start-resize="startResize" @machines-changed="onMachinesChanged" />
+        @delete-machine="deleteShellMachine" @start-resize="startResize" @machines-changed="onMachinesChanged"
+        @change-view="switchActiveView" @select-project="selectProject" />
     </div>
 
     <!-- 首页：任务模式 + Shell 模式入口 -->

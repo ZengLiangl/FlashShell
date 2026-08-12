@@ -30,7 +30,7 @@
                 </div>
             </div>
             <div class="actions-right icon-actions">
-                <el-tooltip content="搜索" placement="top">
+                <el-tooltip v-if="showSearchToggle" content="搜索" placement="top">
                     <el-button size="small" circle @click="$emit('toggle-search')">
                         <el-icon><Search /></el-icon>
                     </el-button>
@@ -40,16 +40,37 @@
                         <el-icon><ArrowLeft /></el-icon>
                     </el-button>
                 </el-tooltip>
-                <el-tooltip content="清空" placement="top">
-                    <el-button size="small" circle @click="$emit('clear')">
-                        <el-icon><Delete /></el-icon>
-                    </el-button>
-                </el-tooltip>
-                <el-tooltip content="刷新" placement="top">
-                    <el-button size="small" circle @click="$emit('refresh')">
-                        <el-icon><Refresh /></el-icon>
-                    </el-button>
-                </el-tooltip>
+                <template v-if="showInlineActions">
+                    <el-tooltip content="清空" placement="top">
+                        <el-button size="small" circle @click="$emit('clear')">
+                            <el-icon><Delete /></el-icon>
+                        </el-button>
+                    </el-tooltip>
+                    <el-tooltip content="刷新" placement="top">
+                        <el-button size="small" circle @click="$emit('refresh')">
+                            <el-icon><Refresh /></el-icon>
+                        </el-button>
+                    </el-tooltip>
+                </template>
+                <template v-if="showChrome">
+                    <span class="chrome-sep" aria-hidden="true" />
+                    <ModeSwitcher
+                        v-if="hasTask"
+                        compact
+                        float-align="end"
+                        :model-value="activeView"
+                        :has-projects="hasProjects"
+                        :has-machines="hasMachines"
+                        :has-task="hasTask"
+                        :task-running="taskRunning"
+                        :connected-count="connectedCount"
+                        :projects="projects"
+                        :selected-project-name="selectedProjectName"
+                        @change="(v) => $emit('change-view', v)"
+                        @select-project="(p) => $emit('select-project', p)"
+                    />
+                    <AppChromeIcons />
+                </template>
             </div>
         </div>
     </div>
@@ -57,17 +78,34 @@
 
 <script>
 import { ref, watch, nextTick } from 'vue'
+import ModeSwitcher from './ModeSwitcher.vue'
+import AppChromeIcons from './AppChromeIcons.vue'
 
 export default {
     name: 'TerminalHeader',
+    components: { ModeSwitcher, AppChromeIcons },
     props: {
         title: { type: String, default: '终端输出' },
         showBack: { type: Boolean, default: false },
         searchVisible: { type: Boolean, default: false },
         searchQuery: { type: String, default: '' },
-        matchSummary: { type: String, default: '' }
+        matchSummary: { type: String, default: '' },
+        showChrome: { type: Boolean, default: false },
+        showSearchToggle: { type: Boolean, default: true },
+        showInlineActions: { type: Boolean, default: true },
+        hasTask: { type: Boolean, default: false },
+        hasProjects: { type: Boolean, default: false },
+        hasMachines: { type: Boolean, default: false },
+        taskRunning: { type: Boolean, default: false },
+        connectedCount: { type: Number, default: 0 },
+        projects: { type: Array, default: () => [] },
+        selectedProjectName: { type: String, default: '' },
+        activeView: { type: String, default: 'task' },
     },
-    emits: ['clear', 'refresh', 'back', 'toggle-search', 'search-next', 'search-prev', 'close-search', 'update:searchQuery'],
+    emits: [
+        'clear', 'refresh', 'back', 'toggle-search', 'search-next', 'search-prev', 'close-search', 'update:searchQuery',
+        'change-view', 'select-project',
+    ],
     setup(props, { emit }) {
         const localQuery = ref(props.searchQuery)
         const searchInputRef = ref(null)
@@ -89,14 +127,19 @@ export default {
 <style scoped>
 .terminal-header {
     flex-shrink: 0;
-    overflow-y: hidden;
+    overflow: visible;
+    position: relative;
+    z-index: 20;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px;
+    padding: 4px 10px;
+    min-height: 36px;
+    height: 36px;
+    box-sizing: border-box;
     border-bottom: 1px solid var(--app-border, #e4e7ed);
     background: var(--app-panel-bg, #f5f7fa);
-    gap: 12px;
+    gap: 8px;
 }
 
 .terminal-header h3 {
@@ -119,6 +162,21 @@ export default {
 .actions-left {
     flex: 1;
     min-width: 0;
+}
+
+.actions-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+
+.chrome-sep {
+    width: 1px;
+    height: 14px;
+    margin: 0 2px 0 4px;
+    background: color-mix(in srgb, var(--app-text-muted, #909399) 35%, transparent);
+    flex-shrink: 0;
 }
 
 .search-bar {

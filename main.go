@@ -99,14 +99,19 @@ func main() {
 		OnShutdown:       appInstance.Shutdown,
 		Fullscreen:       false,
 		WindowStartState: options.Normal,
-		MinWidth:         1200,
-		MinHeight:        768,
+		// Windows 无边框，顶栏与内容合一；macOS 用 TitleBarHidden，勿开 Frameless
+		Frameless: runtime.GOOS == "windows",
+		MinWidth:   1200,
+		MinHeight:  768,
 		Menu:             nil,
 		Mac: &mac.Options{
-			TitleBar:   mac.TitleBarDefault(),
-			Appearance: macAppearance,
+			// 隐藏系统标题文字行，内容顶到窗口最上沿；红绿灯垂直位置由 setTrafficLightPosition 对齐顶栏
+			TitleBar:             mac.TitleBarHidden(),
+			Appearance:           macAppearance,
+			WebviewIsTransparent: true,
 		},
 		Windows: &windows.Options{
+			WebviewIsTransparent: true,
 			Theme: func() windows.Theme {
 				if err == nil && globalConfig != nil && globalConfig.ThemeSettings.Mode == "dark" {
 					return windows.Dark

@@ -79,6 +79,8 @@ export function useShell() {
   const splitSessionIds = ref(Array.isArray(savedLayout.splitSessionIds) ? savedLayout.splitSessionIds : [])
   /** 待信任的主机密钥（连接失败时弹出对话框） */
   const pendingHostKey = ref(null)
+  /** 正在关闭的会话：避免 shell:status 在 Disconnect 完成前又把 tab 加回来 */
+  const closingSessionIds = new Set()
 
   const updateTabLastCwd = (machineName, cwd) => {
     if (!machineName || !cwd) return
@@ -376,10 +378,12 @@ export function useShell() {
     const liveMap = new Map(
       backend
         .filter((s) => s?.machineName && (s.connected || s.connecting))
+        .filter((s) => !closingSessionIds.has(s.machineName))
         .map((s) => [s.machineName, s]),
     )
 
     openTabs.value = openTabs.value
+      .filter((tab) => !closingSessionIds.has(tab.machineName))
       .filter((tab) => !isPendingSession(tab.machineName) || !tab.connected)
       .map((tab) => {
         if (isPendingSession(tab.machineName)) return tab
@@ -403,6 +407,7 @@ export function useShell() {
       })
 
     for (const [sessionID, live] of liveMap) {
+      if (closingSessionIds.has(sessionID)) continue
       if (openTabs.value.some((t) => t.machineName === sessionID)) {
         applyLiveToTab(sessionID, live)
         continue
@@ -706,37 +711,56 @@ export function useShell() {
     }
   }
 
-  /** 关闭 tab：断开连接并移除 */
+  /** 关闭 tab：先从 UI 移除，再后台断开，避免等 Disconnect 才消失 */
   const closeSession = async (machineName) => {
     if (!machineName) return
-    if (!isPendingSession(machineName)) {
-      try {
-        await App.DisconnectShell(machineName)
-      } catch {
-        // ignore
-      }
-    }
+    closingSessionIds.add(machineName)
     removeShellOutput(machineName)
     openTabs.value = openTabs.value.filter((t) => t.machineName !== machineName)
     removeTabOrder(machineName)
-    const nextCwds = { ...tabLastCwds.value }
-    delete nextCwds[machineName]
-    tabLastCwds.value = nextCwds
-    persistSessionRestore()
     sessions.value = (sessions.value || []).filter((s) => s.machineName !== machineName)
     broadcastTargets.value = broadcastTargets.value.filter((id) => id !== machineName)
     splitSessionIds.value = splitSessionIds.value.filter((id) => id !== machineName)
     if (activeMachine.value === machineName) {
       activeMachine.value = workspaceSessions.value[0]?.machineName || ''
     }
+    try {
+      if (!isPendingSession(machineName)) {
+        await App.DisconnectShell(machineName)
+      }
+    } catch {
+      // ignore
+    } finally {
+      closingSessionIds.delete(machineName)
+    }
   }
 
-  /** 批量关闭 tab（均断开连接） */
+  /** 批量关闭 tab：先清空 UI，再并行断开 */
   const closeSessions = async (machineNames) => {
     const names = [...new Set((machineNames || []).filter(Boolean))]
-    for (const name of names) {
-      await closeSession(name)
+    if (!names.length) return
+    const nameSet = new Set(names)
+    for (const name of names) closingSessionIds.add(name)
+    for (const name of names) removeShellOutput(name)
+    openTabs.value = openTabs.value.filter((t) => !nameSet.has(t.machineName))
+    tabOrder.value = tabOrder.value.filter((id) => !nameSet.has(id))
+    sessions.value = (sessions.value || []).filter((s) => !nameSet.has(s.machineName))
+    broadcastTargets.value = broadcastTargets.value.filter((id) => !nameSet.has(id))
+    splitSessionIds.value = splitSessionIds.value.filter((id) => !nameSet.has(id))
+    if (nameSet.has(activeMachine.value)) {
+      activeMachine.value = workspaceSessions.value[0]?.machineName || ''
     }
+    await Promise.all(
+      names.map(async (name) => {
+        try {
+          if (!isPendingSession(name)) await App.DisconnectShell(name)
+        } catch (e) {
+          console.error('关闭会话失败:', name, e)
+        } finally {
+          closingSessionIds.delete(name)
+        }
+      }),
+    )
   }
 
   const testMachine = async (machineName) => {

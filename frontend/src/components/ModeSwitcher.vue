@@ -1,5 +1,6 @@
 <template>
   <div
+    ref="hostRef"
     class="mode-switcher-host"
     :class="{
       'is-compact': compact,
@@ -17,114 +18,128 @@
       :aria-expanded="showSwitcher"
       aria-label="展开模块切换"
     >
-      <el-icon class="mode-trigger-icon" :size="12"><Grid /></el-icon>
+      <el-icon class="mode-trigger-icon" :size="13">
+        <component :is="activeItem.icon" />
+      </el-icon>
+      <span
+        v-if="activeItem.badge"
+        class="mode-trigger-badge"
+        aria-hidden="true"
+      >{{ activeItem.badge }}</span>
+      <span
+        v-else-if="activeItem.dot"
+        class="mode-trigger-dot"
+        aria-hidden="true"
+      />
     </button>
 
-    <div
-      v-show="showSwitcher"
-      class="mode-switcher"
-      :class="{ 'is-floating': compact }"
-      role="tablist"
-      aria-label="工作模式"
-    >
-      <template v-for="item in displayItems" :key="item.id">
-        <el-dropdown
-          v-if="item.showProjectPicker"
-          trigger="hover"
-          placement="bottom-end"
-          :show-timeout="compact ? 220 : 160"
-          :hide-timeout="compact ? 180 : 160"
-          :popper-options="taskPopperOptions"
-          popper-class="mode-task-project-popper"
-          @visible-change="onTaskMenuVisible"
-          @command="onPickProject"
-        >
+    <Teleport to="body" :disabled="!compact">
+      <div
+        v-show="showSwitcher"
+        class="mode-switcher"
+        :class="{ 'is-floating': compact }"
+        :style="compact ? floatStyle : undefined"
+        role="tablist"
+        aria-label="工作模式"
+        @mouseenter="onHostEnter"
+        @mouseleave="onHostLeave"
+      >
+        <template v-for="item in displayItems" :key="item.id">
+          <el-dropdown
+            v-if="item.showProjectPicker"
+            trigger="hover"
+            placement="bottom-end"
+            :show-timeout="compact ? 220 : 160"
+            :hide-timeout="compact ? 180 : 160"
+            :popper-options="taskPopperOptions"
+            popper-class="mode-task-project-popper"
+            @visible-change="onTaskMenuVisible"
+            @command="onPickProject"
+          >
+            <div class="mode-dropdown-trigger">
+              <button
+                type="button"
+                role="tab"
+                class="mode-btn mode-task mode-btn--picker"
+                :class="{ active: modelValue === 'task' }"
+                :aria-selected="modelValue === 'task'"
+                :title="item.title"
+                @click="onTaskClick"
+              >
+                <el-icon class="mode-icon" :size="13">
+                  <component :is="item.icon" />
+                </el-icon>
+                <span class="mode-label">{{ item.label }}</span>
+                <span
+                  v-if="item.dot"
+                  class="mode-dot"
+                  aria-hidden="true"
+                />
+              </button>
+            </div>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item
+                  v-for="project in projects"
+                  :key="project.name"
+                  :command="project.name"
+                  :class="{ 'is-current': project.name === selectedProjectName }"
+                >
+                  {{ project.name || '(未命名项目)' }}
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+
           <button
+            v-else
             type="button"
             role="tab"
-            class="mode-btn mode-task mode-btn--picker"
-            :class="{ active: modelValue === 'task' }"
-            :aria-selected="modelValue === 'task'"
+            class="mode-btn"
+            :class="[
+              `mode-${item.id}`,
+              { active: modelValue === item.id, disabled: item.disabled },
+            ]"
+            :aria-selected="modelValue === item.id"
+            :disabled="item.disabled"
             :title="item.title"
-            @click="onTaskClick"
+            @click="onSelect(item)"
           >
             <el-icon class="mode-icon" :size="13">
               <component :is="item.icon" />
             </el-icon>
             <span class="mode-label">{{ item.label }}</span>
             <span
-              v-if="item.dot"
+              v-if="item.badge"
+              class="mode-badge"
+              aria-hidden="true"
+            >{{ item.badge }}</span>
+            <span
+              v-else-if="item.dot"
               class="mode-dot"
               aria-hidden="true"
             />
           </button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item
-                v-for="project in projects"
-                :key="project.name"
-                :command="project.name"
-                :class="{ 'is-current': project.name === selectedProjectName }"
-              >
-                <span class="project-item">
-                  <span class="project-name">{{ project.name || '(未命名项目)' }}</span>
-                  <span v-if="project.description" class="project-desc">{{ project.description }}</span>
-                </span>
-              </el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
-
-        <button
-          v-else
-          type="button"
-          role="tab"
-          class="mode-btn"
-          :class="[
-            `mode-${item.id}`,
-            { active: modelValue === item.id, disabled: item.disabled },
-          ]"
-          :aria-selected="modelValue === item.id"
-          :disabled="item.disabled"
-          :title="item.title"
-          @click="onSelect(item)"
-        >
-          <el-icon class="mode-icon" :size="13">
-            <component :is="item.icon" />
-          </el-icon>
-          <span class="mode-label">{{ item.label }}</span>
-          <span
-            v-if="item.badge"
-            class="mode-badge"
-            aria-hidden="true"
-          >{{ item.badge }}</span>
-          <span
-            v-else-if="item.dot"
-            class="mode-dot"
-            aria-hidden="true"
-          />
-        </button>
-      </template>
-    </div>
+        </template>
+      </div>
+    </Teleport>
   </div>
 </template>
 
 <script>
-import { computed, ref, onUnmounted, watch } from 'vue'
-import { HomeFilled, Folder, Monitor, Grid } from '@element-plus/icons-vue'
+import { computed, ref, onUnmounted, watch, nextTick } from 'vue'
+import { HomeFilled, Folder, Monitor } from '@element-plus/icons-vue'
 
 export default {
   name: 'ModeSwitcher',
-  components: { HomeFilled, Folder, Monitor, Grid },
+  components: { HomeFilled, Folder, Monitor },
   props: {
     modelValue: {
       type: String,
       default: 'home',
       validator: (v) => ['home', 'task', 'shell'].includes(v),
     },
-    /** 收起为触发器，悬停展开（任务 / Shell 顶栏） */
     compact: { type: Boolean, default: false },
-    /** compact 展开时对齐：center | end（靠右，避免冲出窗口） */
     floatAlign: {
       type: String,
       default: 'center',
@@ -140,12 +155,35 @@ export default {
   },
   emits: ['update:modelValue', 'change', 'select-project'],
   setup(props, { emit }) {
+    const hostRef = ref(null)
     const hoverOpen = ref(false)
     const taskMenuOpen = ref(false)
     const pointerInside = ref(false)
+    const floatStyle = ref({})
     let leaveTimer = null
 
     const showSwitcher = computed(() => !props.compact || hoverOpen.value)
+
+    const updateFloatPosition = () => {
+      if (!props.compact || !hostRef.value) return
+      const rect = hostRef.value.getBoundingClientRect()
+      const gap = 6
+      const style = {
+        position: 'fixed',
+        top: `${Math.round(rect.bottom + gap)}px`,
+        zIndex: 4000,
+      }
+      if (props.floatAlign === 'end') {
+        style.right = `${Math.round(Math.max(8, window.innerWidth - rect.right))}px`
+        style.left = 'auto'
+        style.transform = 'none'
+      } else {
+        style.left = `${Math.round(rect.left + rect.width / 2)}px`
+        style.right = 'auto'
+        style.transform = 'translateX(-50%)'
+      }
+      floatStyle.value = style
+    }
 
     const taskPopperOptions = {
       modifiers: [
@@ -167,7 +205,6 @@ export default {
         },
       ]
       const canPickProject = props.projects.length > 0
-      // 仅在已进入任务（有选中项目）时展示「任务」，与首页一致；勿在纯 Shell 时露出灰态 Tab
       if (props.hasTask || props.modelValue === 'task') {
         list.push({
           id: 'task',
@@ -201,16 +238,7 @@ export default {
       return found || items.value[0] || { id: 'home', icon: HomeFilled, label: '首页' }
     })
 
-    /** 非 compact：固定 首页 → 任务 → Shell；compact 悬浮时仍把当前项居中 */
-    const displayItems = computed(() => {
-      const list = items.value
-      if (!props.compact || list.length < 3) return list
-      const current = list.find((i) => i.id === props.modelValue)
-      if (!current) return list
-      const others = list.filter((i) => i.id !== props.modelValue)
-      const mid = Math.floor(others.length / 2)
-      return [...others.slice(0, mid), current, others.slice(mid)]
-    })
+    const displayItems = computed(() => items.value)
 
     const triggerTitle = computed(() => {
       const label = activeItem.value.label || ''
@@ -236,7 +264,10 @@ export default {
     const onHostEnter = () => {
       pointerInside.value = true
       clearLeaveTimer()
-      if (props.compact) hoverOpen.value = true
+      if (props.compact) {
+        hoverOpen.value = true
+        nextTick(() => updateFloatPosition())
+      }
     }
 
     const onHostLeave = () => {
@@ -249,9 +280,14 @@ export default {
       if (visible) {
         clearLeaveTimer()
         hoverOpen.value = true
+        nextTick(() => updateFloatPosition())
         return
       }
       if (props.compact) scheduleClose(120)
+    }
+
+    const onWinChange = () => {
+      if (hoverOpen.value) updateFloatPosition()
     }
 
     watch(() => props.modelValue, () => {
@@ -266,8 +302,21 @@ export default {
       clearLeaveTimer()
     })
 
+    watch(hoverOpen, (open) => {
+      if (open && props.compact) {
+        nextTick(() => updateFloatPosition())
+        window.addEventListener('resize', onWinChange)
+        window.addEventListener('scroll', onWinChange, true)
+      } else {
+        window.removeEventListener('resize', onWinChange)
+        window.removeEventListener('scroll', onWinChange, true)
+      }
+    })
+
     onUnmounted(() => {
       clearLeaveTimer()
+      window.removeEventListener('resize', onWinChange)
+      window.removeEventListener('scroll', onWinChange, true)
     })
 
     const onSelect = (item) => {
@@ -293,11 +342,12 @@ export default {
     }
 
     return {
-      items,
+      hostRef,
       displayItems,
       activeItem,
       triggerTitle,
       showSwitcher,
+      floatStyle,
       floatAlign: computed(() => props.floatAlign),
       taskPopperOptions,
       onHostEnter,
@@ -317,16 +367,8 @@ export default {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-height: 22px;
-}
-
-.mode-switcher-host.is-compact.is-expanded {
-  z-index: 50;
-}
-
-.mode-switcher-host.is-compact.is-float-end.is-expanded {
-  /* 保持占位，面板向下展开，避免横向盖住旁侧按钮 */
-  position: relative;
+  min-height: 26px;
+  overflow: visible;
 }
 
 .mode-trigger {
@@ -334,16 +376,16 @@ export default {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 22px;
-  height: 22px;
-  min-width: 22px;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
   padding: 0;
   border: 1px solid color-mix(in srgb, var(--app-border) 65%, transparent);
-  border-radius: 6px;
+  border-radius: 7px;
   background: color-mix(in srgb, var(--app-panel-bg) 82%, transparent);
-  color: var(--app-text-muted);
+  color: var(--app-accent-color);
   cursor: pointer;
-  opacity: 0.72;
+  opacity: 0.88;
   box-shadow: 0 1px 2px color-mix(in srgb, var(--app-text) 5%, transparent);
   transition:
     background 0.16s ease,
@@ -351,6 +393,34 @@ export default {
     color 0.16s ease,
     opacity 0.12s ease,
     box-shadow 0.16s ease;
+}
+
+.mode-trigger-badge {
+  position: absolute;
+  top: -4px;
+  right: -5px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: 7px;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 14px;
+  text-align: center;
+  color: var(--app-accent-color);
+  background: color-mix(in srgb, var(--app-accent-color) 18%, var(--app-panel-bg));
+  border: 1px solid color-mix(in srgb, var(--app-accent-color) 28%, var(--app-border));
+}
+
+.mode-trigger-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--app-accent-color);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--app-accent-color) 20%, transparent);
 }
 
 .mode-trigger:hover,
@@ -361,19 +431,13 @@ export default {
   border-color: color-mix(in srgb, var(--app-accent-color) 35%, var(--app-border));
 }
 
-.mode-switcher-host.is-compact.is-expanded .mode-trigger {
-  opacity: 1;
-  pointer-events: auto;
-  position: relative;
-  color: var(--app-accent-color);
-  background: var(--app-accent-bg);
-  border-color: color-mix(in srgb, var(--app-accent-color) 35%, var(--app-border));
-}
-
 .mode-trigger-icon {
   flex-shrink: 0;
 }
+</style>
 
+<style>
+/* Teleport 到 body 后需非 scoped，否则面板样式丢失 */
 .mode-switcher {
   --mode-track: color-mix(in srgb, var(--app-text) 6%, var(--app-panel-bg));
   --mode-home: var(--app-text);
@@ -394,10 +458,6 @@ export default {
 }
 
 .mode-switcher.is-floating {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  z-index: 60;
   width: max-content;
   min-width: 336px;
   background: var(--app-panel-bg);
@@ -409,7 +469,6 @@ export default {
   animation: mode-float-in 0.14s ease-out;
 }
 
-/* 触发器与下拉面板之间的悬停桥，避免移入时提前收起 */
 .mode-switcher.is-floating::before {
   content: '';
   position: absolute;
@@ -420,22 +479,33 @@ export default {
 }
 
 @keyframes mode-float-in {
-  from {
-    opacity: 0;
-    transform: translateY(-4px) scale(0.98);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-.mode-switcher :deep(.el-dropdown) {
+.mode-switcher .el-dropdown {
+  display: block;
   min-width: 0;
   width: 100%;
+  height: 100%;
 }
 
-.mode-btn {
+.mode-switcher .el-dropdown > .el-tooltip__trigger,
+.mode-switcher .el-dropdown > span {
+  display: block !important;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+}
+
+.mode-switcher .mode-dropdown-trigger {
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+}
+
+.mode-switcher .mode-btn {
   position: relative;
   display: inline-flex;
   align-items: center;
@@ -457,28 +527,27 @@ export default {
   transition:
     background 0.16s ease,
     color 0.16s ease,
-    box-shadow 0.16s ease,
-    transform 0.16s ease;
+    box-shadow 0.16s ease;
 }
 
-.mode-icon {
+.mode-switcher .mode-icon {
   flex-shrink: 0;
   opacity: 0.85;
 }
 
-.mode-label {
+.mode-switcher .mode-label {
   flex: 0 1 auto;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.mode-btn:hover:not(.disabled):not(.active) {
+.mode-switcher .mode-btn:hover:not(.disabled):not(.active) {
   color: var(--app-accent-color);
   background: var(--app-accent-bg);
 }
 
-.mode-btn.active {
+.mode-switcher .mode-btn.active {
   background: var(--app-card-bg, #fff);
   color: var(--app-text);
   font-weight: 600;
@@ -487,22 +556,22 @@ export default {
     0 0 0 1px color-mix(in srgb, var(--app-border) 75%, transparent);
 }
 
-.mode-btn.mode-task.active,
-.mode-btn.mode-shell.active {
+.mode-switcher .mode-btn.mode-task.active,
+.mode-switcher .mode-btn.mode-shell.active {
   color: var(--app-accent-color);
   background: var(--app-card-bg, #fff);
 }
 
-.mode-btn.active .mode-icon {
+.mode-switcher .mode-btn.active .mode-icon {
   opacity: 1;
 }
 
-.mode-btn.disabled {
+.mode-switcher .mode-btn.disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.mode-badge {
+.mode-switcher .mode-badge {
   flex-shrink: 0;
   min-width: 15px;
   height: 15px;
@@ -516,11 +585,11 @@ export default {
   background: color-mix(in srgb, var(--mode-shell) 16%, transparent);
 }
 
-.mode-btn.active .mode-badge {
+.mode-switcher .mode-btn.active .mode-badge {
   background: color-mix(in srgb, var(--mode-shell) 20%, transparent);
 }
 
-.mode-dot {
+.mode-switcher .mode-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
@@ -529,33 +598,7 @@ export default {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--mode-task) 24%, transparent);
 }
 
-.project-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-  max-width: 148px;
-}
-
-.project-name {
-  font-size: 12px;
-  color: var(--app-text);
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.project-desc {
-  font-size: 11px;
-  color: var(--app-text-muted);
-  line-height: 1.3;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-:deep(.el-dropdown-menu__item.is-current) {
+.mode-switcher .el-dropdown-menu__item.is-current {
   color: var(--app-accent-color);
   background: var(--app-accent-bg);
   font-weight: 600;
@@ -574,26 +617,18 @@ html.dark .mode-switcher.is-floating {
     inset 0 1px 0 color-mix(in srgb, #fff 5%, transparent);
 }
 
-html.dark .mode-btn.active {
+html.dark .mode-switcher .mode-btn.active {
   background: color-mix(in srgb, var(--app-card-bg) 92%, #fff);
   box-shadow:
     0 1px 3px rgba(0, 0, 0, 0.35),
     0 0 0 1px color-mix(in srgb, var(--app-border) 80%, transparent);
 }
 
-html.dark .mode-trigger {
-  background: color-mix(in srgb, var(--app-panel-bg) 70%, transparent);
-  opacity: 0.8;
-}
-</style>
-
-<style>
-/* 下拉挂到 body，需非 scoped；收窄任务项目菜单 */
 .mode-task-project-popper.el-popper,
 .mode-task-project-popper {
   min-width: 0 !important;
   width: max-content;
-  max-width: 168px;
+  max-width: 220px;
 }
 
 .mode-task-project-popper .el-dropdown-menu {
@@ -602,7 +637,11 @@ html.dark .mode-trigger {
 }
 
 .mode-task-project-popper .el-dropdown-menu__item {
-  padding: 6px 10px;
+  padding: 6px 12px;
   line-height: 1.3;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

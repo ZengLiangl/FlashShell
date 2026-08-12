@@ -1,5 +1,18 @@
 <template>
     <div class="terminal-wrapper">
+        <div v-if="showInlineActions" class="terminal-inline-actions icon-actions icon-actions--sm">
+            <el-tooltip content="清空" placement="bottom">
+                <el-button size="small" circle @click="$emit('clear')">
+                    <el-icon><Delete /></el-icon>
+                </el-button>
+            </el-tooltip>
+            <el-tooltip content="刷新" placement="bottom">
+                <el-button size="small" circle @click="$emit('refresh')">
+                    <el-icon><Refresh /></el-icon>
+                </el-button>
+            </el-tooltip>
+        </div>
+
         <transition name="progress-slide" appear>
             <div v-if="remoteFailure && !status.isRunning" class="failure-banner">
                 <span class="failure-text">远程任务失败：{{ remoteFailure.machineName }}</span>
@@ -66,9 +79,10 @@ export default {
         progressStatus: { type: String, required: true },
         remoteFailure: { type: Object, default: null },
         searchQuery: { type: String, default: '' },
-        activeMatchIndex: { type: Number, default: -1 }
+        activeMatchIndex: { type: Number, default: -1 },
+        showInlineActions: { type: Boolean, default: false },
     },
-    emits: ['search-matches', 'open-failure-shell'],
+    emits: ['search-matches', 'open-failure-shell', 'clear', 'refresh'],
     setup(props, { expose, emit }) {
         const terminalOutputRef = ref(null)
         const bottomMarker = ref(null)
@@ -260,6 +274,19 @@ export default {
     min-height: 0;
     overflow: hidden;
     background: var(--app-panel-bg);
+    position: relative;
+}
+
+.terminal-inline-actions {
+    position: absolute;
+    top: 10px;
+    right: 22px;
+    z-index: 5;
+    padding: 2px;
+    border-radius: 8px;
+    background: color-mix(in srgb, var(--app-panel-bg, #1e1e1e) 78%, transparent);
+    backdrop-filter: blur(8px);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
 }
 
 .failure-banner {

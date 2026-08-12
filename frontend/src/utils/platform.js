@@ -6,6 +6,14 @@ export function isMacPlatform() {
   return /Mac|iPhone|iPad|iPod/i.test(platform) || /Mac OS X/i.test(ua)
 }
 
+/** 当前是否为 Windows */
+export function isWindowsPlatform() {
+  if (typeof navigator === 'undefined') return false
+  const platform = navigator.platform || ''
+  const ua = navigator.userAgent || ''
+  return /Win/i.test(platform) || /Windows/i.test(ua)
+}
+
 /** 修饰键展示文案：Mac = Command，Windows/Linux = Ctrl */
 export function modKeyLabel(isMac = isMacPlatform()) {
   return isMac ? 'Command' : 'Ctrl'

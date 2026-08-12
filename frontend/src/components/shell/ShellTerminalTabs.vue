@@ -11,11 +11,6 @@
           <ArrowLeft />
         </el-icon>
       </el-button>
-      <el-button class="folder-btn" size="small" text title="连接 / 快速切换（Ctrl+E）" @click="$emit('open-picker')">
-        <el-icon :size="16">
-          <Folder />
-        </el-icon>
-      </el-button>
 
       <div class="tabs-bar-left">
         <div v-if="sessions.length" class="custom-session-tabs">
@@ -64,38 +59,22 @@
         <span v-if="draggingSplitPane" class="unsplit-hint">拖到此处移出分屏</span>
       </div>
       <div class="tabs-bar-right">
-        <el-tooltip v-if="sessions.length && connectedCount >= 1"
-          :content="broadcastEnabled ? '关闭命令广播 (Esc)' : '开启命令广播'" placement="bottom">
-          <el-button class="broadcast-toggle" size="small" text :class="{ active: broadcastEnabled }"
-            @click="toggleBroadcast">
-            <el-icon :size="15">
-              <Promotion />
-            </el-icon>
-          </el-button>
-        </el-tooltip>
-        <el-tooltip v-if="sessions.length"
-          :content="composeEnabled ? '关闭撰写栏' : '开启撰写栏（多行命令）'" placement="bottom">
-          <el-button class="compose-toggle" size="small" text :class="{ active: composeEnabled }"
-            @click="toggleCompose">
-            <el-icon :size="15">
-              <EditPen />
-            </el-icon>
-          </el-button>
-        </el-tooltip>
-        <el-tooltip content="命令面板 (历史/片段，默认 Ctrl/⌘+Shift+P)" placement="bottom">
-          <el-button v-if="sessions.length" size="small" text title="命令面板"
-            @click="$emit('open-command-palette')">
-            <el-icon :size="15"><Memo /></el-icon>
-          </el-button>
-        </el-tooltip>
-        <el-button v-if="sessions.length && !isLocalSession(activeTab)" class="transfer-btn" size="small" text
-          title="文件传输" @click="$emit('open-transfer')">
-          <el-badge :value="transferActiveCount" :hidden="!transferActiveCount" :max="99">
-            <el-icon :size="15">
-              <Upload />
-            </el-icon>
-          </el-badge>
-        </el-button>
+        <ModeSwitcher
+          v-if="hasTask"
+          compact
+          float-align="end"
+          model-value="shell"
+          :has-projects="hasProjects"
+          :has-machines="hasMachines"
+          :has-task="hasTask"
+          :task-running="taskRunning"
+          :connected-count="connectedCount"
+          :projects="projects"
+          :selected-project-name="selectedProjectName"
+          @change="(v) => $emit('change-view', v)"
+          @select-project="(p) => $emit('select-project', p)"
+        />
+        <AppChromeIcons />
       </div>
     </div>
 
@@ -116,7 +95,42 @@
       <slot name="empty" />
     </div>
     <template v-else>
-      <div class="terminal-stack"
+      <div class="terminal-body">
+        <div v-if="sessions.length" class="terminal-inline-actions">
+          <el-tooltip v-if="connectedCount >= 1"
+            :content="broadcastEnabled ? '关闭命令广播 (Esc)' : '开启命令广播'" placement="bottom">
+            <el-button class="broadcast-toggle" size="small" text :class="{ active: broadcastEnabled }"
+              @click="toggleBroadcast">
+              <el-icon :size="15">
+                <Promotion />
+              </el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip :content="composeEnabled ? '关闭撰写栏' : '开启撰写栏（多行命令）'" placement="bottom">
+            <el-button class="compose-toggle" size="small" text :class="{ active: composeEnabled }"
+              @click="toggleCompose">
+              <el-icon :size="15">
+                <EditPen />
+              </el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-tooltip content="命令面板 (历史/片段，默认 Ctrl/⌘+Shift+P)" placement="bottom">
+            <el-button size="small" text title="命令面板"
+              @click="$emit('open-command-palette')">
+              <el-icon :size="15"><Memo /></el-icon>
+            </el-button>
+          </el-tooltip>
+          <el-button v-if="!isLocalSession(activeTab)" class="transfer-btn" size="small" text
+            title="文件传输" @click="$emit('open-transfer')">
+            <el-badge :value="transferActiveCount" :hidden="!transferActiveCount" :max="99">
+              <el-icon :size="15">
+                <Upload />
+              </el-icon>
+            </el-badge>
+          </el-button>
+        </div>
+
+        <div class="terminal-stack"
         :class="{
           'is-split': splitViewVisible,
           'is-drag-over': !!draggingTab && !draggingSplitPane,
@@ -184,19 +198,20 @@
             @exit-split="exitSplit" @focus-session="onFocusSession" />
         </div>
       </div>
+      </div>
 
       <ul v-if="tabMenu.visible" class="pane-ctx-menu" :style="{ left: tabMenu.x + 'px', top: tabMenu.y + 'px' }"
-        @click.stop @mouseleave="hideTabMenu">
-        <li @click="onTabMenuClose">关闭</li>
-        <li :class="{ disabled: !tabMenuHasRight }" @click="onTabMenuCloseRight">关闭右侧</li>
-        <li @click="onTabMenuCloseAll">全部关闭</li>
+        @mousedown.stop @click.stop>
+        <li @mousedown.prevent="onTabMenuClose">关闭</li>
+        <li :class="{ disabled: !tabMenuHasRight }" @mousedown.prevent="onTabMenuCloseRight">关闭右侧</li>
+        <li @mousedown.prevent="onTabMenuCloseAll">全部关闭</li>
       </ul>
 
       <ul v-if="paneMenu.visible" class="pane-ctx-menu" :style="{ left: paneMenu.x + 'px', top: paneMenu.y + 'px' }"
-        @click.stop @mouseleave="hidePaneMenu">
-        <li @click="onPaneMenuZoom">{{ zoomedSessionId === paneMenu.sessionId ? '还原分屏' : '最大化窗格' }}</li>
-        <li @click="onPaneMenuRemove">移出分屏</li>
-        <li @click="onPaneMenuExit">取消全部分屏</li>
+        @mousedown.stop @click.stop>
+        <li @mousedown.prevent="onPaneMenuZoom">{{ zoomedSessionId === paneMenu.sessionId ? '还原分屏' : '最大化窗格' }}</li>
+        <li @mousedown.prevent="onPaneMenuRemove">移出分屏</li>
+        <li @mousedown.prevent="onPaneMenuExit">取消全部分屏</li>
       </ul>
 
       <slot name="footer" :active-machine="activeTab" />
@@ -206,10 +221,12 @@
 
 <script>
 import { ref, reactive, watch, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { ArrowLeft, ArrowDown, Folder, Upload, Plus, Promotion, Memo, EditPen } from '@element-plus/icons-vue'
+import { ArrowLeft, ArrowDown, Upload, Plus, Promotion, Memo, EditPen } from '@element-plus/icons-vue'
 import ShellTerminal from './ShellTerminal.vue'
 import ShellBroadcastBar from './ShellBroadcastBar.vue'
 import ShellComposeBar from './ShellComposeBar.vue'
+import ModeSwitcher from '../ModeSwitcher.vue'
+import AppChromeIcons from '../AppChromeIcons.vue'
 import { cwdBasename } from '../../utils/shellTerminalUx'
 
 const MAX_SPLIT = 4
@@ -272,9 +289,10 @@ export default {
     ShellTerminal,
     ShellBroadcastBar,
     ShellComposeBar,
+    ModeSwitcher,
+    AppChromeIcons,
     ArrowLeft,
     ArrowDown,
-    Folder,
     Upload,
     Plus,
     Promotion,
@@ -291,12 +309,19 @@ export default {
     broadcastEnabled: { type: Boolean, default: false },
     broadcastTargets: { type: Array, default: () => [] },
     splitSessionIds: { type: Array, default: () => [] },
+    hasTask: { type: Boolean, default: false },
+    hasProjects: { type: Boolean, default: false },
+    hasMachines: { type: Boolean, default: false },
+    taskRunning: { type: Boolean, default: false },
+    projects: { type: Array, default: () => [] },
+    selectedProjectName: { type: String, default: '' },
   },
   emits: [
     'update:activeMachine', 'close-session', 'close-sessions', 'clear', 'open-picker', 'add-local',
     'back', 'open-search', 'reconnect', 'search-result', 'open-transfer', 'open-command-palette', 'cwd-sync',
     'update:broadcast-enabled', 'update:broadcast-targets', 'update:split-session-ids',
     'reorder-tabs',
+    'change-view', 'select-project',
   ],
   setup(props, { emit, expose }) {
     const activeTab = ref(props.activeMachine)
@@ -435,10 +460,13 @@ export default {
       hideTabMenu()
     }
 
-    const onDocClick = () => hideAllCtxMenus()
-    onMounted(() => document.addEventListener('click', onDocClick))
+    const onDocPointerDown = (e) => {
+      if (e.target?.closest?.('.pane-ctx-menu')) return
+      hideAllCtxMenus()
+    }
+    onMounted(() => document.addEventListener('mousedown', onDocPointerDown, true))
     onUnmounted(() => {
-      document.removeEventListener('click', onDocClick)
+      document.removeEventListener('mousedown', onDocPointerDown, true)
       document.body.classList.remove('tab-drag-active', 'tab-reorder-active')
     })
 
@@ -573,18 +601,19 @@ export default {
     }
 
     const onTabMenuCloseRight = () => {
+      if (!tabMenuHasRight.value) return
       const id = tabMenu.sessionId
+      const ids = orderedSessions.value.map((s) => s.machineName)
       hideTabMenu()
       if (!id) return
-      const ids = orderedSessions.value.map((s) => s.machineName)
       const idx = ids.indexOf(id)
       if (idx < 0 || idx >= ids.length - 1) return
       emit('close-sessions', ids.slice(idx + 1))
     }
 
     const onTabMenuCloseAll = () => {
-      hideTabMenu()
       const ids = orderedSessions.value.map((s) => s.machineName)
+      hideTabMenu()
       if (ids.length) emit('close-sessions', ids)
     }
 
@@ -993,12 +1022,14 @@ export default {
 .tabs-bar {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 2px;
   flex-shrink: 0;
   background: var(--app-panel-bg);
   border-bottom: 1px solid var(--app-border);
-  padding: 0 4px 0 4px;
-  min-height: 40px;
+  padding: 0 6px 0 4px;
+  min-height: 36px;
+  height: 36px;
+  box-sizing: border-box;
 }
 
 .tabs-bar.is-drop-unsplit {
@@ -1015,7 +1046,7 @@ export default {
 
 .custom-session-tabs {
   display: flex;
-  align-items: flex-end;
+  align-items: center;
   gap: 2px;
   flex: 0 1 auto;
   min-width: 0;
@@ -1039,6 +1070,14 @@ export default {
   gap: 2px;
 }
 
+.tabs-chrome-sep {
+  width: 1px;
+  height: 14px;
+  margin: 0 4px 0 6px;
+  background: color-mix(in srgb, var(--app-text-muted, #909399) 35%, transparent);
+  flex-shrink: 0;
+}
+
 .tabs-bar-right :deep(.el-tooltip__trigger),
 .tabs-bar-right :deep(.el-badge) {
   display: inline-flex;
@@ -1048,10 +1087,10 @@ export default {
 
 .tabs-bar-right :deep(.el-button) {
   box-sizing: border-box;
-  width: 28px;
-  height: 28px;
-  min-width: 28px;
-  min-height: 28px;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
   padding: 0;
   margin: 0;
   display: inline-flex;
@@ -1082,29 +1121,38 @@ export default {
 
 .session-tab {
   display: inline-flex;
-  align-items: stretch;
+  align-items: center;
   box-sizing: border-box;
   gap: 0;
-  height: 34px;
-  padding: 0 10px;
+  height: 26px;
+  padding: 0 8px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 500;
   line-height: 1;
   color: var(--app-text-secondary);
-  background: color-mix(in srgb, var(--app-panel-bg) 88%, var(--app-card-bg));
-  border: 1px solid var(--app-border);
-  border-bottom: none;
-  border-radius: 6px 6px 0 0;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 5px;
   cursor: grab;
   user-select: none;
   flex-shrink: 0;
-  max-width: 200px;
-  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+  max-width: 180px;
+  position: relative;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.session-tab:hover::before {
+  content: '';
+  position: absolute;
+  inset: 1px 1px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--app-text) 6%, transparent);
+  pointer-events: none;
+  z-index: 0;
 }
 
 .session-tab:hover {
-  background: var(--app-card-bg);
-  border-color: color-mix(in srgb, var(--app-border) 55%, var(--app-text-muted));
+  border-color: transparent;
 }
 
 .session-tab:active {
@@ -1113,8 +1161,25 @@ export default {
 
 .session-tab.active {
   color: var(--app-accent-color);
-  background: var(--app-card-bg);
-  border-color: color-mix(in srgb, var(--app-accent-color) 35%, var(--app-border));
+  background: transparent;
+  border-color: transparent;
+  font-weight: 600;
+}
+
+.session-tab.active::before {
+  content: '';
+  position: absolute;
+  inset: 1px 1px;
+  border-radius: 5px;
+  background: color-mix(in srgb, var(--app-accent-color) 14%, transparent);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.session-tab-main,
+.session-tab-close {
+  position: relative;
+  z-index: 1;
 }
 
 .session-tab.in-split {
@@ -1188,11 +1253,6 @@ export default {
   color: var(--app-danger-color, #f56c6c);
 }
 
-.folder-btn {
-  flex-shrink: 0;
-  margin: 0 2px;
-}
-
 .add-session-wrap {
   flex-shrink: 0;
   display: inline-flex;
@@ -1202,12 +1262,18 @@ export default {
 
 .add-session-btn {
   color: var(--app-text-secondary);
-  padding: 4px 6px;
+  padding: 2px 4px !important;
+  width: 26px !important;
+  height: 26px !important;
+  min-width: 26px !important;
 }
 
 .add-session-more {
   color: var(--app-text-secondary);
-  padding: 4px 4px;
+  padding: 2px 2px !important;
+  width: 18px !important;
+  height: 26px !important;
+  min-width: 18px !important;
   margin-left: -2px;
 }
 
@@ -1220,7 +1286,10 @@ export default {
   flex-shrink: 0;
   margin-left: 0;
   color: var(--app-text-secondary);
-  padding: 4px 10px;
+  padding: 2px 6px !important;
+  width: 26px !important;
+  height: 26px !important;
+  min-width: 26px !important;
 }
 
 .broadcast-toggle {
@@ -1284,6 +1353,57 @@ export default {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.terminal-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  overflow: hidden;
+}
+
+.terminal-inline-actions {
+  position: absolute;
+  top: 8px;
+  right: 12px;
+  z-index: 6;
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  padding: 2px;
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--app-panel-bg, #1e1e1e) 72%, transparent);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.terminal-inline-actions :deep(.el-tooltip__trigger),
+.terminal-inline-actions :deep(.el-badge) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.terminal-inline-actions :deep(.el-button) {
+  box-sizing: border-box;
+  width: 26px;
+  height: 26px;
+  min-width: 26px;
+  min-height: 26px;
+  padding: 0;
+  margin: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--app-text-secondary);
+}
+
+.terminal-inline-actions :deep(.el-button:hover),
+.terminal-inline-actions :deep(.el-button.active) {
+  color: var(--app-accent-color);
+  background: color-mix(in srgb, var(--app-accent-color) 14%, transparent);
 }
 
 .terminal-stack {

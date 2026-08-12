@@ -1,16 +1,12 @@
 <template>
-  <div
-    class="app-menu-bar"
-    :class="{
-      'is-task-top': activeView === 'task',
-      'is-shell-top': activeView === 'shell',
-    }"
-  >
+  <div class="app-menu-bar">
     <div class="menu-side menu-left" aria-hidden="true" />
 
     <div class="menu-center">
+      <!-- 首页已有左侧「任务/主机」分区，顶栏 ModeSwitcher 暂隐藏 -->
+      <!--
       <ModeSwitcher
-        v-if="canSwitchModes"
+        v-if="showFullSwitcher"
         :model-value="activeView"
         :has-projects="hasProjects"
         :has-machines="hasMachines"
@@ -22,47 +18,24 @@
         @change="$emit('change-view', $event)"
         @select-project="$emit('select-project', $event)"
       />
+      -->
     </div>
 
     <div class="menu-side menu-right">
-      <div class="menu-icons">
-        <button
-          type="button"
-          class="icon-btn"
-          :title="`新建窗口 ${labelOf('newWindow')}`"
-          @click="newWindow"
-        >
-          <el-icon :size="16"><DocumentAdd /></el-icon>
-        </button>
-
-        <button
-          type="button"
-          class="icon-btn"
-          title="系统设置"
-          @click="openSettings"
-        >
-          <el-icon :size="16"><Setting /></el-icon>
-        </button>
-
-        <button type="button" class="icon-btn" title="帮助" @click="onHelpCommand('about')">
-          <el-icon :size="16"><QuestionFilled /></el-icon>
-        </button>
-      </div>
+      <AppChromeIcons />
     </div>
   </div>
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { DocumentAdd, Setting, QuestionFilled } from '@element-plus/icons-vue'
-import * as App from '../../wailsjs/go/app/App'
-import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
-import { mergeShortcuts, formatShortcut } from '../utils/shortcuts'
-import ModeSwitcher from './ModeSwitcher.vue'
+import { computed } from 'vue'
+// import ModeSwitcher from './ModeSwitcher.vue'
+import AppChromeIcons from './AppChromeIcons.vue'
 
 export default {
   name: 'AppMenuBar',
-  components: { DocumentAdd, Setting, QuestionFilled, ModeSwitcher },
+  components: { AppChromeIcons },
+  // components: { ModeSwitcher, AppChromeIcons },
   props: {
     activeView: {
       type: String,
@@ -84,48 +57,9 @@ export default {
         || props.activeView === 'task' || props.activeView === 'shell'
     )
 
-    const shortcuts = ref(mergeShortcuts())
+    const showFullSwitcher = computed(() => canSwitchModes.value)
 
-    const labelOf = (id) => formatShortcut(shortcuts.value[id])
-
-    const loadShortcuts = async () => {
-      try {
-        shortcuts.value = mergeShortcuts(await App.GetShortcutSettings())
-      } catch {
-        shortcuts.value = mergeShortcuts()
-      }
-    }
-
-    const newWindow = () => {
-      App.NewWindow()
-    }
-
-    const openSettings = () => {
-      App.OpenSystemSettings()
-    }
-
-    const onHelpCommand = (cmd) => {
-      if (cmd === 'about') App.OpenAbout()
-    }
-
-    onMounted(() => {
-      loadShortcuts()
-      EventsOn('shortcuts:changed', (data) => {
-        shortcuts.value = mergeShortcuts(data)
-      })
-    })
-
-    onUnmounted(() => {
-      EventsOff('shortcuts:changed')
-    })
-
-    return {
-      canSwitchModes,
-      labelOf,
-      newWindow,
-      openSettings,
-      onHelpCommand,
-    }
+    return { showFullSwitcher }
   },
 }
 </script>
@@ -137,18 +71,14 @@ export default {
   border-bottom: 1px solid var(--app-border);
   background: var(--app-panel-bg);
   color: var(--app-text);
-  height: 40px;
+  height: 36px;
   display: grid;
   grid-template-columns: minmax(96px, 1fr) auto minmax(96px, 1fr);
   align-items: center;
-  padding: 0 10px;
-  gap: 12px;
+  padding: 0 8px;
+  gap: 8px;
   z-index: 30;
-}
-
-.app-menu-bar.is-task-top,
-.app-menu-bar.is-shell-top {
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  box-sizing: border-box;
 }
 
 .menu-side {
@@ -171,31 +101,5 @@ export default {
   align-items: center;
   justify-content: center;
   min-width: 0;
-}
-
-.menu-icons {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.icon-btn {
-  width: 30px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--app-text-secondary, var(--app-text));
-  cursor: pointer;
-  padding: 0;
-  transition: background 0.15s ease, color 0.15s ease;
-}
-
-.icon-btn:hover {
-  background: var(--app-accent-bg);
-  color: var(--app-accent-color);
 }
 </style>
