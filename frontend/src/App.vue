@@ -1167,12 +1167,6 @@ export default {
         return;
       }
 
-      if (matchesShortcut(e, sc.refreshConfig)) {
-        take();
-        App.RefreshConfigMenuWithEvent();
-        return;
-      }
-
       if (matchesShortcut(e, sc.systemSettings)) {
         take();
         App.OpenSystemSettings();

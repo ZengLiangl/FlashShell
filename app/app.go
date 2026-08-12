@@ -1032,7 +1032,7 @@ func (a *App) CreateApplicationMenu() *menu.Menu {
 	configFiles, err := a.GetConfigFiles()
 	if err != nil {
 		// 为每个配置文件添加菜单项
-		configFileMenu.AddText("刷新配置列表", keys.CmdOrCtrl("r"), func(_ *menu.CallbackData) {
+		configFileMenu.AddText("刷新配置列表", nil, func(_ *menu.CallbackData) {
 			a.RefreshConfigMenuWithEvent()
 		})
 	} else {
@@ -1056,7 +1056,7 @@ func (a *App) CreateApplicationMenu() *menu.Menu {
 
 		// 记录错误但不阻止切换
 		configFileMenu.AddSeparator()
-		configFileMenu.AddText("刷新配置列表", keys.CmdOrCtrl("r"), func(_ *menu.CallbackData) {
+		configFileMenu.AddText("刷新配置列表", nil, func(_ *menu.CallbackData) {
 			a.RefreshConfigMenuWithEvent()
 		})
 		configFileMenu.AddText("打开全局配置", nil, func(_ *menu.CallbackData) {

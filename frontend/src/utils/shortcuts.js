@@ -12,7 +12,8 @@ export const DEFAULT_SHORTCUTS = {
   connectionManager: { key: 'e', useMod: true },
   envVars: { key: 'u', useMod: true },
   systemSettings: { key: ',', useMod: true },
-  refreshConfig: { key: 'r', useMod: true },
+  // refreshConfig：已取消默认 Ctrl/Cmd+R，保留字段兼容旧配置，默认无绑定
+  refreshConfig: { key: '', useMod: true },
   find: { key: 'f', useMod: true },
   copy: { key: 'c', useMod: true },
   paste: { key: 'v', useMod: true },
@@ -64,7 +65,7 @@ export const SHORTCUT_GROUPS = [
   },
   {
     title: '编辑与输出',
-    ids: ['find', 'copy', 'paste', 'clearOutput', 'refreshConfig'],
+    ids: ['find', 'copy', 'paste', 'clearOutput'],
   },
   {
     title: 'Shell 标签与分屏',
@@ -88,6 +89,17 @@ export function mergeShortcuts(partial) {
   const result = {}
   for (const [id, def] of Object.entries(DEFAULT_SHORTCUTS)) {
     const cur = partial?.[id]
+    // 旧版默认 Mod+R 刷新配置：升级后丢弃，避免残留绑定
+    if (id === 'refreshConfig') {
+      const key = cur?.key != null ? String(cur.key) : def.key
+      const useMod = cur?.useMod !== undefined ? !!cur.useMod : !!def.useMod
+      const useShift = cur?.useShift !== undefined ? !!cur.useShift : !!def.useShift
+      const useAlt = cur?.useAlt !== undefined ? !!cur.useAlt : !!def.useAlt
+      if (key.toLowerCase() === 'r' && useMod && !useShift && !useAlt) {
+        result[id] = { key: '', useMod: true, useShift: false, useAlt: false }
+        continue
+      }
+    }
     result[id] = {
       key: (cur?.key != null && String(cur.key).length > 0) ? String(cur.key) : def.key,
       useMod: cur?.useMod !== undefined ? !!cur.useMod : !!def.useMod,

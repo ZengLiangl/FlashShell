@@ -63,7 +63,7 @@ func DefaultShortcutSettings() ShortcutSettings {
 		ConnectionManager: ShortcutBinding{Key: "e", UseMod: true},
 		EnvVars:           ShortcutBinding{Key: "u", UseMod: true},
 		SystemSettings:    ShortcutBinding{Key: ",", UseMod: true},
-		RefreshConfig:     ShortcutBinding{Key: "r", UseMod: true},
+		RefreshConfig:     ShortcutBinding{}, // 已取消 Ctrl/Cmd+R
 		Find:              ShortcutBinding{Key: "f", UseMod: true},
 		Copy:              ShortcutBinding{Key: "c", UseMod: true},
 		Paste:             ShortcutBinding{Key: "v", UseMod: true},
@@ -103,8 +103,9 @@ func fillShortcutDefaults(s *ShortcutSettings) {
 	if s.SystemSettings.Key == "" {
 		s.SystemSettings = def.SystemSettings
 	}
-	if s.RefreshConfig.Key == "" {
-		s.RefreshConfig = def.RefreshConfig
+	// 旧版默认 Mod+R 刷新配置；升级后取消该快捷键
+	if s.RefreshConfig.Key == "r" && s.RefreshConfig.UseMod && !s.RefreshConfig.UseShift && !s.RefreshConfig.UseAlt {
+		s.RefreshConfig = ShortcutBinding{}
 	}
 	if s.Find.Key == "" {
 		s.Find = def.Find
