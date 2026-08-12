@@ -412,6 +412,8 @@ export namespace data {
 	    shellLogHighlightKeywords: ShellLogHighlightCustomKeyword[];
 	    shellAsciiInput?: boolean;
 	    sftpUseCompressedUpload?: boolean;
+	    sftpSkipUnchanged?: boolean;
+	    sftpTransferMaxConcurrent?: number;
 	    shellSessionRestore?: boolean;
 	    shellCursorLineHighlight?: boolean;
 	    shellLineTimestamps?: boolean;
@@ -454,6 +456,8 @@ export namespace data {
 	        this.shellLogHighlightKeywords = this.convertValues(source["shellLogHighlightKeywords"], ShellLogHighlightCustomKeyword);
 	        this.shellAsciiInput = source["shellAsciiInput"];
 	        this.sftpUseCompressedUpload = source["sftpUseCompressedUpload"];
+	        this.sftpSkipUnchanged = source["sftpSkipUnchanged"];
+	        this.sftpTransferMaxConcurrent = source["sftpTransferMaxConcurrent"];
 	        this.shellSessionRestore = source["shellSessionRestore"];
 	        this.shellCursorLineHighlight = source["shellCursorLineHighlight"];
 	        this.shellLineTimestamps = source["shellLineTimestamps"];
@@ -990,6 +994,7 @@ export namespace define {
 	    skipEcdsaHostKey?: boolean;
 	    sftpEncoding?: string;
 	    sftpFileProtocol?: string;
+	    sftpSudo?: boolean;
 	    startupCommand?: string;
 	    agentForwarding?: boolean;
 	    terminalPreset?: string;
@@ -1025,6 +1030,7 @@ export namespace define {
 	        this.skipEcdsaHostKey = source["skipEcdsaHostKey"];
 	        this.sftpEncoding = source["sftpEncoding"];
 	        this.sftpFileProtocol = source["sftpFileProtocol"];
+	        this.sftpSudo = source["sftpSudo"];
 	        this.startupCommand = source["startupCommand"];
 	        this.agentForwarding = source["agentForwarding"];
 	        this.terminalPreset = source["terminalPreset"];

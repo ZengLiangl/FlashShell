@@ -44,9 +44,37 @@ func (a *ShellAuxManager) EnsureFileBackend() error {
 		return nil
 	}
 
+	cfg := resolveMachine(a.machineName)
 	proto := "auto"
-	if cfg := resolveMachine(a.machineName); cfg != nil {
+	sudo := false
+	if cfg != nil {
 		proto = normalizeFileProtocol(cfg.SftpFileProtocol)
+		sudo = cfg.SftpSudo
+	}
+	if sudo && proto == "scp" {
+		return fmt.Errorf("Sudo SFTP 与「仅 SCP」互斥，请改用仅 SFTP 或自动")
+	}
+
+	openBrowseSFTP := func() error {
+		rm := client.remoteMachine
+		if rm.SFTPClient != nil {
+			return nil
+		}
+		if !sudo {
+			return rm.EnsureSFTP()
+		}
+		password := ""
+		if cfg != nil {
+			if sensitive, err := cfg.GetSensitiveData(); err == nil && sensitive != nil {
+				password = sensitive.Password
+			}
+		}
+		sftpClient, err := OpenSFTPClient(rm.SSHClient, true, password)
+		if err != nil {
+			return err
+		}
+		rm.SetSFTPClient(sftpClient)
+		return nil
 	}
 
 	switch proto {
@@ -56,25 +84,46 @@ func (a *ShellAuxManager) EnsureFileBackend() error {
 		a.mu.Unlock()
 		return nil
 	case "sftp":
-		if err := client.remoteMachine.EnsureSFTP(); err != nil {
+		if err := openBrowseSFTP(); err != nil {
 			return err
 		}
+		a.initTransferPoolLocked(client, sudo, cfg)
 		a.mu.Lock()
 		a.fileBackend = fileBackendSFTP
 		a.mu.Unlock()
 		return nil
 	default:
-		if err := client.remoteMachine.EnsureSFTP(); err != nil {
+		if err := openBrowseSFTP(); err != nil {
+			if sudo {
+				return err
+			}
 			a.mu.Lock()
 			a.fileBackend = fileBackendSCP
 			a.mu.Unlock()
 			return nil
 		}
+		a.initTransferPoolLocked(client, sudo, cfg)
 		a.mu.Lock()
 		a.fileBackend = fileBackendSFTP
 		a.mu.Unlock()
 		return nil
 	}
+}
+
+func (a *ShellAuxManager) initTransferPoolLocked(client *SSHClient, sudo bool, cfg *define.Machine) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if a.transferPool != nil || client == nil || client.remoteMachine == nil || client.remoteMachine.SSHClient == nil {
+		return
+	}
+	password := ""
+	if sudo && cfg != nil {
+		if sensitive, err := cfg.GetSensitiveData(); err == nil && sensitive != nil {
+			password = sensitive.Password
+		}
+	}
+	a.transferPool = newSFTPTransferPool(client.remoteMachine.SSHClient, sudo, password)
+	a.sftpSudo = sudo
 }
 
 func (a *ShellAuxManager) isSCPBackend() bool {
@@ -101,6 +150,11 @@ func (a *ShellAuxManager) sshClient() (*ssh.Client, error) {
 
 func shellQuotePath(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'"'"'`) + "'"
+}
+
+// ShellQuotePath 导出给 app 层构造 shell 命令（如 cd）
+func ShellQuotePath(s string) string {
+	return shellQuotePath(s)
 }
 
 func (a *ShellAuxManager) listDirSCP(dirPath string, showHidden bool) ([]define.SftpEntry, error) {

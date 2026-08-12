@@ -1495,6 +1495,7 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 		config.SftpDefaultOpener = "ask"
 	}
 	config.SftpFileAssociations = data.NormalizeSftpFileAssociations(config.SftpFileAssociations)
+	config.SftpTransferMaxConcurrent = data.NormalizeSftpTransferMaxConcurrent(config.SftpTransferMaxConcurrent)
 	if err := a.configManager.SaveGlobalConfig(config); err != nil {
 		return err
 	}
@@ -1531,6 +1532,8 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 			"shellTabHibernate":         data.ShellTabHibernateEnabled(config),
 			"sftpUseCompressedUpload":   data.SftpUseCompressedUploadEnabled(config),
 			"sftpAutoSync":              data.SftpAutoSyncEnabled(config),
+			"sftpSkipUnchanged":         data.SftpSkipUnchangedEnabled(config),
+			"sftpTransferMaxConcurrent": data.SftpTransferMaxConcurrentValue(config),
 			"sftpDefaultOpener":         config.SftpDefaultOpener,
 			"sftpDefaultSystemApp":      config.SftpDefaultSystemApp,
 			"sftpFileAssociations":      config.SftpFileAssociations,

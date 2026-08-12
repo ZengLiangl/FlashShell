@@ -61,6 +61,7 @@ declare module 'vue' {
     SettingsHubDialog: typeof import('./components/SettingsHubDialog.vue')['default']
     SftpConflictDialog: typeof import('./components/shell/SftpConflictDialog.vue')['default']
     SftpFileOpenerDialog: typeof import('./components/shell/SftpFileOpenerDialog.vue')['default']
+    SftpMonacoEditor: typeof import('./components/shell/SftpMonacoEditor.vue')['default']
     ShellBroadcastBar: typeof import('./components/shell/ShellBroadcastBar.vue')['default']
     ShellCommandPalette: typeof import('./components/shell/ShellCommandPalette.vue')['default']
     ShellComposeBar: typeof import('./components/shell/ShellComposeBar.vue')['default']

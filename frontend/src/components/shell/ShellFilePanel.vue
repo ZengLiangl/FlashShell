@@ -130,6 +130,11 @@
             <el-icon><RefreshRight /></el-icon>
           </el-button>
         </el-tooltip>
+        <el-tooltip content="转到终端当前目录" placement="top">
+          <el-button size="small" text class="tool-icon-btn" title="转到终端当前目录" @click="goToTerminalCwd">
+            <el-icon><Monitor /></el-icon>
+          </el-button>
+        </el-tooltip>
         <el-tooltip content="新建文件夹" placement="top">
           <el-button size="small" text class="tool-icon-btn" @click="promptMkdir">
             <el-icon><Folder /></el-icon>
@@ -183,6 +188,13 @@
         </el-dropdown>
       </div>
       <div class="toolbar-right">
+        <el-input
+          v-model="nameFilter"
+          size="small"
+          clearable
+          placeholder="筛选文件名"
+          class="name-filter"
+        />
         <el-tooltip content="收起 SFTP" placement="top">
           <el-button size="small" text class="tool-icon-btn" @click="toggle">
             <el-icon><ArrowDown /></el-icon>
@@ -233,17 +245,26 @@
         <div v-if="error" class="error">{{ error }}</div>
         <el-table
           v-else
-          :data="entries"
+          :data="displayEntries"
           size="small"
           height="100%"
           v-loading="loading"
           empty-text="空目录（可拖拽文件/文件夹到此处上传）"
           tabindex="0"
+          highlight-current-row
+          @row-click="onRowClick"
+          @current-change="onCurrentChange"
           @row-dblclick="onOpen"
           @row-contextmenu="onContextMenu"
           @keydown="onTableKeydown"
         >
-          <el-table-column prop="name" label="文件名" min-width="160" show-overflow-tooltip>
+          <el-table-column prop="name" min-width="160" show-overflow-tooltip>
+            <template #header>
+              <span class="sortable-th" @click.stop="toggleSort('name')">
+                文件名
+                <span v-if="sortKey === 'name'" class="sort-ind">{{ sortAsc ? '↑' : '↓' }}</span>
+              </span>
+            </template>
             <template #default="{ row }">
               <span class="name-cell">
                 <el-icon class="icon">
@@ -256,13 +277,25 @@
               </span>
             </template>
           </el-table-column>
-          <el-table-column v-if="colVisible.size" label="大小" width="90" align="right">
+          <el-table-column v-if="colVisible.size" width="90" align="right">
+            <template #header>
+              <span class="sortable-th" @click.stop="toggleSort('size')">
+                大小
+                <span v-if="sortKey === 'size'" class="sort-ind">{{ sortAsc ? '↑' : '↓' }}</span>
+              </span>
+            </template>
             <template #default="{ row }">
               {{ row.isDir ? '-' : formatSize(row.size) }}
             </template>
           </el-table-column>
           <el-table-column v-if="colVisible.type" prop="type" label="类型" width="70" />
-          <el-table-column v-if="colVisible.mtime" label="修改时间" width="150">
+          <el-table-column v-if="colVisible.mtime" width="150">
+            <template #header>
+              <span class="sortable-th" @click.stop="toggleSort('mtime')">
+                修改时间
+                <span v-if="sortKey === 'mtime'" class="sort-ind">{{ sortAsc ? '↑' : '↓' }}</span>
+              </span>
+            </template>
             <template #default="{ row }">
               {{ formatTime(row.modTime) }}
             </template>
@@ -286,21 +319,43 @@
         @click.stop
         @mouseleave="closeMenu"
       >
-        <li v-if="!ctx.row" @click="reloadFromMenu">刷新</li>
-        <li @click="promptMkdir">新建文件夹</li>
-        <li @click="promptNewFile">新建文件</li>
-        <li v-if="!ctx.row" @click="uploadFilesFromMenu">上传文件</li>
-        <li v-if="!ctx.row" @click="uploadFolderFromMenu">上传文件夹</li>
-        <li v-if="ctx.row" @click="promptRename">重命名</li>
-        <li v-if="ctx.row" @click="promptChmod">修改权限</li>
-        <li v-if="ctx.row && ctx.row.isDir" @click="copyDirHere">复制到当前目录</li>
-        <li v-if="ctx.row && !ctx.row.isDir" @click="openEntry">打开</li>
-        <li v-if="ctx.row && !ctx.row.isDir" @click="openWithSystemDefaultEntry">系统默认程序打开</li>
-        <li v-if="ctx.row && !ctx.row.isDir" @click="openWithEntry">打开方式...</li>
-        <li v-if="ctx.row && !ctx.row.isDir && !isBinaryRow(ctx.row)" @click="editEntry">编辑</li>
-        <li v-if="ctx.row" @click="downloadEntry">下载</li>
-        <li v-if="ctx.row" @click="copyPath">复制路径</li>
-        <li v-if="ctx.row" class="danger" @click="deleteEntry">删除</li>
+        <template v-if="!ctx.row">
+          <li @click="reloadFromMenu">刷新</li>
+          <li @click="promptMkdir">新建文件夹</li>
+          <li @click="promptNewFile">新建文件</li>
+          <li @click="uploadFilesFromMenu">上传文件</li>
+          <li @click="uploadFolderFromMenu">上传文件夹</li>
+          <li v-if="canPaste" class="ctx-sep" aria-hidden="true"></li>
+          <li v-if="canPaste" @click="pasteEntry">粘贴</li>
+        </template>
+        <template v-else>
+          <li @click="promptMkdir">新建文件夹</li>
+          <li @click="promptNewFile">新建文件</li>
+          <li class="ctx-sep" aria-hidden="true"></li>
+          <li @click="openRowFromMenu">打开</li>
+          <li class="ctx-sep" aria-hidden="true"></li>
+          <li @click="copyEntry">复制</li>
+          <li @click="cutEntry">剪切</li>
+          <li v-if="canPaste" @click="pasteEntry">粘贴</li>
+          <li @click="copyHere">复制到此处</li>
+          <li @click="moveToParent">移动到上级目录</li>
+          <li @click="moveToPrompt">移动到…</li>
+          <li class="ctx-sep" aria-hidden="true"></li>
+          <li @click="promptRename">重命名</li>
+          <li @click="promptChmod">修改权限</li>
+          <template v-if="!ctx.row.isDir">
+            <li class="ctx-sep" aria-hidden="true"></li>
+            <li @click="openWithSystemDefaultEntry">系统默认</li>
+            <li @click="openWithEntry">打开方式</li>
+            <li v-if="!isBinaryRow(ctx.row)" @click="editEntry">编辑</li>
+          </template>
+          <li class="ctx-sep" aria-hidden="true"></li>
+          <li @click="downloadEntry">下载</li>
+          <li @click="copyPath">复制路径</li>
+          <li @click="openInTerminal">在终端打开目录</li>
+          <li class="ctx-sep" aria-hidden="true"></li>
+          <li class="danger" @click="deleteEntry">删除</li>
+        </template>
       </ul>
     </Teleport>
 
@@ -347,8 +402,16 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="editorVisible" :title="editorTitle" width="640px" append-to-body>
-      <el-input v-model="editorContent" type="textarea" :rows="18" class="editor-area" />
+    <el-dialog
+      v-model="editorVisible"
+      :title="editorTitle"
+      width="80vw"
+      top="6vh"
+      append-to-body
+      destroy-on-close
+      class="sftp-editor-dialog"
+    >
+      <SftpMonacoEditor v-model="editorContent" :path="editorPath" />
       <template #footer>
         <el-button @click="editorVisible = false">取消</el-button>
         <el-button type="primary" :loading="editorSaving" @click="saveEditor">保存</el-button>
@@ -373,7 +436,7 @@
             <el-radio-button label="both">双向</el-radio-button>
           </el-radio-group>
         </el-form-item>
-        <p class="sync-hint">按文件名与大小比较差异后传输；进度在传输队列中查看。</p>
+        <p class="sync-hint">递归同步子目录；按文件名与大小比较差异后传输；进度在传输队列中查看。</p>
       </el-form>
       <template #footer>
         <el-button @click="syncVisible = false">取消</el-button>
@@ -405,6 +468,7 @@ import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import { OnFileDrop, OnFileDropOff } from '../../../wailsjs/runtime/runtime'
 import SftpConflictDialog from './SftpConflictDialog.vue'
 import SftpFileOpenerDialog from './SftpFileOpenerDialog.vue'
+import SftpMonacoEditor from './SftpMonacoEditor.vue'
 import {
   mergedBookmarks,
   isPathBookmarked,
@@ -421,10 +485,17 @@ import {
   getOpenerForFile,
   isKnownBinaryFile,
 } from '../../utils/sftpFileOpen'
+import {
+  setSftpClipboard,
+  getSftpClipboard,
+  hasSftpClipboardFor,
+  clearSftpClipboard,
+  extractClipboardLocalPaths,
+} from '../../utils/sftpClipboard'
 
 export default {
   name: 'ShellFilePanel',
-  components: { SftpConflictDialog, SftpFileOpenerDialog },
+  components: { SftpConflictDialog, SftpFileOpenerDialog, SftpMonacoEditor },
   props: {
     machineName: { type: String, default: '' },
     cwdHint: { type: String, default: '' },
@@ -463,6 +534,10 @@ export default {
     const cwd = ref('')
     const pathDraft = ref('')
     const entries = ref([])
+    const nameFilter = ref('')
+    const sortKey = ref('name')
+    const sortAsc = ref(true)
+    const selectedRow = ref(null)
     const COL_KEY = 'shell.sftpColumns'
     const defaultCols = () => ({ size: true, type: true, mtime: true, mode: true, owner: true })
     const loadCols = () => {
@@ -692,6 +767,57 @@ export default {
       })
     }
 
+    const compareEntries = (a, b, key, asc) => {
+      if (!!a.isDir !== !!b.isDir) return a.isDir ? -1 : 1
+      let cmp = 0
+      if (key === 'size') {
+        cmp = (Number(a.size) || 0) - (Number(b.size) || 0)
+      } else if (key === 'mtime') {
+        cmp = (Number(a.modTime) || 0) - (Number(b.modTime) || 0)
+      } else {
+        cmp = String(a.name || '').localeCompare(String(b.name || ''), undefined, {
+          sensitivity: 'base',
+          numeric: true,
+        })
+      }
+      return asc ? cmp : -cmp
+    }
+
+    const displayEntries = computed(() => {
+      let list = entries.value || []
+      const q = String(nameFilter.value || '').trim().toLowerCase()
+      if (q) {
+        list = list.filter((e) => String(e.name || '').toLowerCase().includes(q))
+      }
+      const key = sortKey.value || 'name'
+      const asc = !!sortAsc.value
+      return list.slice().sort((a, b) => compareEntries(a, b, key, asc))
+    })
+
+    const clipboardTick = ref(0)
+    const canPaste = computed(() => {
+      clipboardTick.value
+      return hasSftpClipboardFor(props.machineName)
+    })
+    const bumpClipboard = () => { clipboardTick.value += 1 }
+
+    const toggleSort = (key) => {
+      if (sortKey.value === key) {
+        sortAsc.value = !sortAsc.value
+      } else {
+        sortKey.value = key
+        sortAsc.value = true
+      }
+    }
+
+    const onRowClick = (row) => {
+      selectedRow.value = row || null
+    }
+
+    const onCurrentChange = (row) => {
+      selectedRow.value = row || null
+    }
+
     const listDir = async (dir) => {
       if (!props.machineName) return []
       const list = await App.ListShellFiles(props.machineName, dir, showHidden.value) || []
@@ -772,9 +898,14 @@ export default {
       error.value = ''
       try {
         entries.value = await listDir(cwd.value)
+        if (selectedRow.value?.path) {
+          const keep = entries.value.find((e) => e.path === selectedRow.value.path)
+          selectedRow.value = keep || null
+        }
       } catch (e) {
         setPanelError(e)
         entries.value = []
+        selectedRow.value = null
       } finally {
         loading.value = false
       }
@@ -784,6 +915,7 @@ export default {
       const abs = normalizeAbs(next)
       cwd.value = abs
       pathDraft.value = abs
+      selectedRow.value = null
       emit('cwd-change', abs)
       if (props.machineName) pushPathHistory(props.machineName, abs)
       await reloadList()
@@ -1172,6 +1304,12 @@ export default {
       await openFileByPolicy(row)
     }
 
+    const openRowFromMenu = async () => {
+      const row = ctx.row
+      closeMenu()
+      await onOpen(row)
+    }
+
     const openWithEntry = () => {
       const row = ctx.row
       closeMenu()
@@ -1188,6 +1326,21 @@ export default {
     const goParent = async () => {
       if (!canGoUp.value) return
       await navigateTo('..')
+    }
+
+    const goToTerminalCwd = async () => {
+      if (!props.machineName || !expanded.value) return
+      try {
+        const remote = await App.GetShellPtyCwd(props.machineName)
+        const abs = normalizeAbs(remote)
+        if (!abs) {
+          ElMessage.warning('无法获取终端当前目录')
+          return
+        }
+        await navigateTo(abs, { alreadyAbsolute: true })
+      } catch (e) {
+        ElMessage.error('获取终端目录失败: ' + e)
+      }
     }
 
     const reload = async () => {
@@ -1341,6 +1494,7 @@ export default {
       event.preventDefault()
       event.stopPropagation()
       ctx.row = row
+      selectedRow.value = row || null
       ctx.x = event.clientX
       ctx.y = event.clientY
       ctx.visible = true
@@ -1522,15 +1676,157 @@ export default {
       }
     }
 
-    const copyDirHere = async () => {
+    const uniqueCopyName = (baseName) => {
+      const names = new Set((entries.value || []).map((e) => e.name))
+      if (!names.has(baseName)) return baseName
+      let candidate = `${baseName}_copy`
+      let i = 2
+      while (names.has(candidate)) {
+        candidate = `${baseName}_copy${i}`
+        i += 1
+      }
+      return candidate
+    }
+
+    const parentDirOf = (abs) => {
+      const s = normalizeAbs(abs)
+      if (!s || s === '/') return '/'
+      const i = s.lastIndexOf('/')
+      if (i <= 0) return '/'
+      return s.slice(0, i) || '/'
+    }
+
+    const copyEntry = () => {
+      const row = ctx.row || selectedRow.value
+      closeMenu()
+      if (!row?.path || !props.machineName) return
+      setSftpClipboard('copy', props.machineName, row)
+      bumpClipboard()
+      ElMessage.success(`已复制：${row.name}`)
+    }
+
+    const cutEntry = () => {
+      const row = ctx.row || selectedRow.value
+      closeMenu()
+      if (!row?.path || !props.machineName) return
+      setSftpClipboard('cut', props.machineName, row)
+      bumpClipboard()
+      ElMessage.success(`已剪切：${row.name}`)
+    }
+
+    const pasteEntry = async () => {
+      closeMenu()
+      if (!props.machineName || !cwd.value) return
+      const clip = getSftpClipboard()
+      if (!clip || clip.machineName !== props.machineName || !clip.entry?.path) {
+        ElMessage.warning('剪贴板为空')
+        return
+      }
+      const src = clip.entry
+      const srcPath = normalizeAbs(src.path)
+      let destName = src.name
+      const destExists = (entries.value || []).some((e) => e.name === destName)
+      if (destExists) {
+        if (clip.mode === 'cut' && joinRemote(cwd.value, destName) === srcPath) {
+          clearSftpClipboard()
+          bumpClipboard()
+          return
+        }
+        destName = uniqueCopyName(src.name)
+      }
+      const dst = joinRemote(cwd.value, destName)
+      try {
+        if (clip.mode === 'cut') {
+          await App.MoveShellRemotePath(props.machineName, srcPath, dst)
+          clearSftpClipboard()
+          bumpClipboard()
+          ElMessage.success('已移动到当前目录')
+        } else {
+          await App.CopyShellRemotePath(props.machineName, srcPath, dst)
+          ElMessage.success('已粘贴到当前目录')
+        }
+        await reload()
+      } catch (e) {
+        ElMessage.error(String(e))
+      }
+    }
+
+    const copyHere = async () => {
       const row = ctx.row
       closeMenu()
-      if (!row?.path || !row.isDir || !props.machineName || !cwd.value) return
-      const dst = joinRemote(cwd.value, row.name + '_copy')
+      if (!row?.path || !props.machineName || !cwd.value) return
+      const dst = joinRemote(cwd.value, `${row.name}_copy`)
       try {
         await App.CopyShellRemotePath(props.machineName, row.path, dst)
-        ElMessage.success('已复制到当前目录')
-        reload()
+        ElMessage.success('已复制到此处')
+        await reload()
+      } catch (e) {
+        ElMessage.error(String(e))
+      }
+    }
+
+    const moveToParent = async () => {
+      const row = ctx.row
+      closeMenu()
+      if (!row?.path || !props.machineName || !cwd.value) return
+      if (!canGoUp.value) {
+        ElMessage.warning('已在根目录，无法移动到上级')
+        return
+      }
+      const parent = parentDirOf(cwd.value)
+      const dst = joinRemote(parent, row.name)
+      if (normalizeAbs(dst) === normalizeAbs(row.path)) {
+        ElMessage.warning('目标与当前位置相同')
+        return
+      }
+      try {
+        await App.MoveShellRemotePath(props.machineName, row.path, dst)
+        ElMessage.success('已移动到上级目录')
+        await reload()
+      } catch (e) {
+        ElMessage.error(String(e))
+      }
+    }
+
+    const moveToPrompt = async () => {
+      const row = ctx.row
+      closeMenu()
+      if (!row?.path || !props.machineName) return
+      try {
+        const { value } = await ElMessageBox.prompt('输入目标绝对路径（目录）', '移动到…', {
+          confirmButtonText: '移动',
+          cancelButtonText: '取消',
+          inputValue: parentDirOf(row.path),
+          inputPattern: /^\/.*/,
+          inputErrorMessage: '请输入绝对路径',
+        })
+        const destDir = normalizeAbs(value)
+        if (!destDir) {
+          ElMessage.warning('路径无效')
+          return
+        }
+        const dst = joinRemote(destDir, row.name)
+        if (normalizeAbs(dst) === normalizeAbs(row.path)) {
+          ElMessage.warning('目标与当前位置相同')
+          return
+        }
+        await App.MoveShellRemotePath(props.machineName, row.path, dst)
+        ElMessage.success('已移动')
+        await reload()
+      } catch (e) {
+        if (e === 'cancel') return
+        ElMessage.error(String(e))
+      }
+    }
+
+    const openInTerminal = async () => {
+      const row = ctx.row
+      closeMenu()
+      if (!row?.path || !props.machineName) return
+      const dir = row.isDir ? normalizeAbs(row.path) : parentDirOf(row.path)
+      try {
+        await App.SendShellCd(props.machineName, dir)
+        ElMessage.success(`已在终端打开：${dir}`)
       } catch (e) {
         ElMessage.error(String(e))
       }
@@ -1632,26 +1928,54 @@ export default {
     const onClipboardPaste = async (e) => {
       if (!expanded.value || !props.machineName || !cwd.value) return
       const items = e?.clipboardData?.items
-      if (!items?.length) return
       let imageFile = null
-      for (const it of items) {
-        if (it.type?.startsWith('image/')) {
-          imageFile = it.getAsFile()
-          break
+      if (items?.length) {
+        for (const it of items) {
+          if (it.type?.startsWith('image/')) {
+            imageFile = it.getAsFile()
+            break
+          }
         }
       }
-      if (!imageFile) return
-      e.preventDefault()
-      try {
-        const buf = await imageFile.arrayBuffer()
-        const bytes = new Uint8Array(buf)
-        let binary = ''
-        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
-        const dataUrl = `data:${imageFile.type || 'image/png'};base64,${btoa(binary)}`
-        const localPath = await App.SaveClipboardImageForUpload(dataUrl)
-        await startUploads([localPath])
-      } catch (err) {
-        ElMessage.error(`粘贴图片上传失败: ${err}`)
+      if (imageFile) {
+        e.preventDefault()
+        try {
+          const buf = await imageFile.arrayBuffer()
+          const bytes = new Uint8Array(buf)
+          let binary = ''
+          for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+          const dataUrl = `data:${imageFile.type || 'image/png'};base64,${btoa(binary)}`
+          const localPath = await App.SaveClipboardImageForUpload(dataUrl)
+          await startUploads([localPath])
+        } catch (err) {
+          ElMessage.error(`粘贴图片上传失败: ${err}`)
+        }
+        return
+      }
+
+      const localPaths = extractClipboardLocalPaths(e?.clipboardData)
+      if (localPaths.length) {
+        e.preventDefault()
+        try {
+          await ElMessageBox.confirm(
+            `将上传 ${localPaths.length} 个本地路径到当前目录？`,
+            '粘贴上传',
+            {
+              confirmButtonText: '上传',
+              cancelButtonText: '取消',
+              type: 'info',
+            },
+          )
+        } catch {
+          return
+        }
+        await startUploads(localPaths)
+        return
+      }
+
+      if (hasSftpClipboardFor(props.machineName)) {
+        e.preventDefault()
+        await pasteEntry()
       }
     }
 
@@ -1770,7 +2094,7 @@ export default {
     }
 
     const deleteEntry = async () => {
-      const row = ctx.row
+      const row = ctx.row || selectedRow.value
       if (!row || !props.machineName) return
       // 先关菜单再弹确认，避免被右键菜单挡住
       closeMenu()
@@ -1794,6 +2118,7 @@ export default {
       try {
         await App.DeleteShellFile(props.machineName, row.path)
         ElMessage.success('已删除')
+        if (selectedRow.value?.path === row.path) selectedRow.value = null
         await reload()
       } catch (e) {
         ElMessage.error('删除失败: ' + e)
@@ -1801,14 +2126,45 @@ export default {
     }
 
     const renamePrimary = async () => {
-      const row = ctx.row
+      const row = ctx.row || selectedRow.value
       if (!row) return
+      ctx.row = row
       await promptRename()
     }
     const onTableKeydown = (e) => {
       const tag = String(e.target?.tagName || '').toLowerCase()
       if (tag === 'input' || tag === 'textarea') return
       const mod = e.ctrlKey || e.metaKey
+      if (mod && !e.shiftKey && !e.altKey && (e.key === 'c' || e.key === 'C')) {
+        e.preventDefault()
+        void copyEntry()
+        return
+      }
+      if (mod && !e.shiftKey && !e.altKey && (e.key === 'x' || e.key === 'X')) {
+        e.preventDefault()
+        void cutEntry()
+        return
+      }
+      if (mod && !e.shiftKey && !e.altKey && (e.key === 'v' || e.key === 'V')) {
+        e.preventDefault()
+        void pasteEntry()
+        return
+      }
+      if (e.key === 'F5' || (mod && !e.shiftKey && !e.altKey && (e.key === 'r' || e.key === 'R'))) {
+        e.preventDefault()
+        void reload()
+        return
+      }
+      if (mod && e.shiftKey && !e.altKey && (e.key === 'n' || e.key === 'N')) {
+        e.preventDefault()
+        void promptMkdir()
+        return
+      }
+      if (e.key === 'Enter' && !mod && !e.altKey) {
+        e.preventDefault()
+        if (selectedRow.value) void onOpen(selectedRow.value)
+        return
+      }
       if (e.key === 'F2') {
         e.preventDefault()
         void renamePrimary()
@@ -1829,6 +2185,8 @@ export default {
       cwd.value = ''
       pathDraft.value = ''
       entries.value = []
+      selectedRow.value = null
+      nameFilter.value = ''
       treeRoot.value = []
       expandedKeys.value = ['/']
       closeMenu()
@@ -1897,6 +2255,7 @@ export default {
     expose({
       toggle,
       applyCwdHint,
+      startUploads,
       focusSearch: async () => {
         await nextTick()
         const input = searchInputRef.value
@@ -1920,6 +2279,15 @@ export default {
       cwd,
       pathDraft,
       entries,
+      displayEntries,
+      nameFilter,
+      sortKey,
+      sortAsc,
+      toggleSort,
+      selectedRow,
+      onRowClick,
+      onCurrentChange,
+      canPaste,
       colVisible,
       onTableKeydown,
       loading,
@@ -1953,6 +2321,7 @@ export default {
       onNodeExpand,
       onOpen,
       goParent,
+      goToTerminalCwd,
       submitPathDraft,
       syncPathDraftFromCwd,
       onPathDraftInput,
@@ -1974,6 +2343,7 @@ export default {
       editEntry,
       saveEditor,
       openEntry,
+      openRowFromMenu,
       openWithEntry,
       openWithSystemDefaultEntry,
       isBinaryRow,
@@ -1992,7 +2362,13 @@ export default {
       promptRename,
       promptChmod,
       submitChmod,
-      copyDirHere,
+      copyEntry,
+      cutEntry,
+      pasteEntry,
+      copyHere,
+      moveToParent,
+      moveToPrompt,
+      openInTerminal,
       chmodVisible,
       chmodName,
       chmodPerms,
@@ -2085,6 +2461,34 @@ export default {
   gap: 2px;
   flex-shrink: 0;
   margin-left: 4px;
+}
+
+.name-filter {
+  width: 140px;
+  margin-right: 4px;
+}
+
+.name-filter :deep(.el-input__wrapper) {
+  min-height: 26px;
+  height: 26px;
+  font-size: 12px;
+}
+
+.sortable-th {
+  cursor: pointer;
+  user-select: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sortable-th:hover {
+  color: var(--app-accent-color, #409eff);
+}
+
+.sort-ind {
+  font-size: 11px;
+  opacity: 0.85;
 }
 
 .tool-icon-btn {
@@ -2425,6 +2829,20 @@ export default {
 .ctx-menu li.danger:hover {
   background: rgba(245, 108, 108, 0.12);
   color: var(--terminal-error);
+}
+
+.ctx-menu li.ctx-sep {
+  height: 1px;
+  margin: 4px 8px;
+  padding: 0;
+  background: var(--app-border, #e4e7ed);
+  pointer-events: none;
+  cursor: default;
+}
+
+.ctx-menu li.ctx-sep:hover {
+  background: var(--app-border, #e4e7ed);
+  color: inherit;
 }
 </style>
 

@@ -31,6 +31,8 @@ type ShellAuxManager struct {
 	lastNetTx    uint64
 	lastNetIface string
 	fileBackend  string // sftp | scp | ""
+	transferPool *sftpTransferPool
+	sftpSudo     bool
 }
 
 // NewShellAuxManager 创建辅助连接管理器
@@ -56,8 +58,8 @@ func (a *ShellAuxManager) Connect(machine *define.Machine, workVars map[string]s
 		_ = client.Close()
 		return err
 	}
-	// SFTP 初始化可能较慢，不持有 a.mu
-	if rm := client.remoteMachine; rm != nil {
+	// SFTP 初始化可能较慢，不持有 a.mu；sudo 模式留给 EnsureFileBackend 提权打开
+	if rm := client.remoteMachine; rm != nil && !machine.SftpSudo {
 		_ = rm.EnsureSFTP()
 	}
 
@@ -82,7 +84,8 @@ func (a *ShellAuxManager) Attach(client *SSHClient, machineName, host string) er
 	if client == nil || !client.IsConnected() {
 		return fmt.Errorf("共享 SSH 未连接")
 	}
-	if rm := client.remoteMachine; rm != nil {
+	cfg := resolveMachine(machineName)
+	if rm := client.remoteMachine; rm != nil && (cfg == nil || !cfg.SftpSudo) {
 		_ = rm.EnsureSFTP()
 	}
 
@@ -114,6 +117,11 @@ func (a *ShellAuxManager) Close() error {
 }
 
 func (a *ShellAuxManager) releaseLocked() error {
+	if a.transferPool != nil {
+		a.transferPool.Close()
+		a.transferPool = nil
+	}
+	a.sftpSudo = false
 	if a.client == nil {
 		return nil
 	}

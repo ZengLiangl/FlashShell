@@ -16,6 +16,7 @@
         />
         <LocalFileTreePanel
           v-else-if="localFileSession && !leftCollapsed"
+          @path-change="onLocalPathChange"
         />
         <!-- 右边框：拖拽改宽 + 悬停显示收起 -->
         <div
@@ -533,6 +534,15 @@ export default {
       }
     })
 
+    /** 本机文件树点击目录 → 同步到本地会话的文件面板路径 */
+    const onLocalPathChange = async (path) => {
+      const p = String(path || '').trim()
+      if (!p) return
+      if (!localFileSession.value) return
+      await nextTick()
+      filePanelRef.value?.applyCwdHint?.(p)
+    }
+
     /** 终端 cd 后同步 SFTP（直接驱动面板，不依赖 shell:cwd 事件） */
     const onCwdSync = async (payload) => {
       const machineName = payload?.machineName
@@ -882,6 +892,7 @@ export default {
       tabsRef,
       filePanelRef,
       filePanelExpanded,
+      onLocalPathChange,
       leftCollapsed,
       edgeHover,
       searchVisible,

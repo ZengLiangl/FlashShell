@@ -134,7 +134,53 @@ func (a *ShellAuxManager) sftpClient() (*sftp.Client, error) {
 	return a.client.remoteMachine.SFTPClient, nil
 }
 
-// DownloadFile 下载远端文件到本地路径（支持断点续传：本地已有部分文件时从偏移继续）
+// withTransferSFTP 租用传输专用 SFTP 通道（与浏览通道分离）；失败时回退浏览通道。
+func (a *ShellAuxManager) withTransferSFTP(fn func(*sftp.Client) error) error {
+	if err := a.EnsureFileBackend(); err != nil {
+		return err
+	}
+	if a.isSCPBackend() {
+		return fmt.Errorf("当前为 SCP 模式，不支持该 SFTP 操作")
+	}
+	a.mu.Lock()
+	pool := a.transferPool
+	a.mu.Unlock()
+	if pool == nil {
+		c, err := a.sftpClient()
+		if err != nil {
+			return err
+		}
+		return fn(c)
+	}
+	c, err := pool.Acquire()
+	if err != nil {
+		c, err = a.sftpClient()
+		if err != nil {
+			return err
+		}
+		return fn(c)
+	}
+	err = fn(c)
+	pool.Release(c)
+	return err
+}
+
+const downloadPartSuffix = ".flashdock.part"
+
+func downloadPartPath(localPath string) string {
+	return localPath + downloadPartSuffix
+}
+
+func uploadPartPath(remotePath string) string {
+	dir := path.Dir(remotePath)
+	base := path.Base(remotePath)
+	if dir == "" || dir == "." {
+		return "." + base + downloadPartSuffix
+	}
+	return path.Join(dir, "."+base+downloadPartSuffix)
+}
+
+// DownloadFile 下载远端文件到本地路径（写入 .flashdock.part，成功后原子改名；支持暂停后续传）
 func (a *ShellAuxManager) DownloadFile(ctx context.Context, remotePath, localPath string, onProgress TransferProgressFunc) error {
 	if err := ctxErr(ctx); err != nil {
 		return err
@@ -145,71 +191,94 @@ func (a *ShellAuxManager) DownloadFile(ctx context.Context, remotePath, localPat
 	if a.isSCPBackend() {
 		return a.DownloadFileSCP(ctx, remotePath, localPath, onProgress)
 	}
-	sftpClient, err := a.sftpClient()
-	if err != nil {
-		return err
-	}
-	src, err := sftpClient.Open(remotePath)
-	if err != nil {
-		return fmt.Errorf("打开远端文件失败: %w", err)
-	}
-	defer src.Close()
+	return a.withTransferSFTP(func(sftpClient *sftp.Client) error {
+		src, err := sftpClient.Open(remotePath)
+		if err != nil {
+			return fmt.Errorf("打开远端文件失败: %w", err)
+		}
+		defer src.Close()
 
-	info, err := src.Stat()
-	if err != nil {
-		return fmt.Errorf("获取远端文件信息失败: %w", err)
-	}
-	total := info.Size()
-	if err := os.MkdirAll(filepath.Dir(localPath), 0o755); err != nil {
-		return err
-	}
+		info, err := src.Stat()
+		if err != nil {
+			return fmt.Errorf("获取远端文件信息失败: %w", err)
+		}
+		total := info.Size()
+		if err := os.MkdirAll(filepath.Dir(localPath), 0o755); err != nil {
+			return err
+		}
 
-	var offset int64
-	if st, err := os.Stat(localPath); err == nil && st.Size() > 0 {
-		if st.Size() >= total && total > 0 {
-			if onProgress != nil {
-				onProgress(total, total, 0)
+		partPath := downloadPartPath(localPath)
+		var offset int64
+		// 优先续传 .part；兼容旧版直接写目标文件的半成品
+		if st, err := os.Stat(partPath); err == nil && st.Size() > 0 {
+			if st.Size() >= total && total > 0 {
+				if err := os.Rename(partPath, localPath); err != nil {
+					return fmt.Errorf("完成下载改名失败: %w", err)
+				}
+				if onProgress != nil {
+					onProgress(total, total, 0)
+				}
+				return nil
 			}
-			return nil
+			if st.Size() < total {
+				offset = st.Size()
+			}
+		} else if st, err := os.Stat(localPath); err == nil && st.Size() > 0 {
+			if st.Size() >= total && total > 0 {
+				if onProgress != nil {
+					onProgress(total, total, 0)
+				}
+				return nil
+			}
+			if st.Size() < total {
+				// 迁移旧半成品到 .part
+				if renErr := os.Rename(localPath, partPath); renErr == nil {
+					offset = st.Size()
+				}
+			}
 		}
-		if st.Size() < total {
-			offset = st.Size()
-		}
-	}
 
-	var dst *os.File
-	if offset > 0 {
-		if _, err := src.Seek(offset, io.SeekStart); err != nil {
-			return fmt.Errorf("远端定位失败: %w", err)
+		var dst *os.File
+		if offset > 0 {
+			if _, err := src.Seek(offset, io.SeekStart); err != nil {
+				return fmt.Errorf("远端定位失败: %w", err)
+			}
+			dst, err = os.OpenFile(partPath, os.O_WRONLY, 0o644)
+			if err != nil {
+				return fmt.Errorf("打开本地临时文件失败: %w", err)
+			}
+			if _, err := dst.Seek(offset, io.SeekStart); err != nil {
+				dst.Close()
+				return fmt.Errorf("本地定位失败: %w", err)
+			}
+		} else {
+			dst, err = os.Create(partPath)
+			if err != nil {
+				return fmt.Errorf("创建本地临时文件失败: %w", err)
+			}
 		}
-		dst, err = os.OpenFile(localPath, os.O_WRONLY, 0o644)
-		if err != nil {
-			return fmt.Errorf("打开本地文件失败: %w", err)
-		}
-		if _, err := dst.Seek(offset, io.SeekStart); err != nil {
-			dst.Close()
-			return fmt.Errorf("本地定位失败: %w", err)
-		}
-	} else {
-		dst, err = os.Create(localPath)
-		if err != nil {
-			return fmt.Errorf("创建本地文件失败: %w", err)
-		}
-	}
-	defer dst.Close()
+		defer dst.Close()
 
-	writer := &countingWriter{ctx: ctx, w: dst, total: total, transferred: offset, onProgress: onProgress}
-	if onProgress != nil && offset > 0 {
-		onProgress(offset, total, 0)
-	}
-	// 进度挂在本地 Writer，保留 *sftp.File.WriteTo 并发读
-	if _, err := utils.CopySFTPDownload(writer, src); err != nil {
-		return fmt.Errorf("下载失败: %w", err)
-	}
-	if onProgress != nil {
-		onProgress(writer.transferred, total, writer.speedBPS)
-	}
-	return nil
+		writer := &countingWriter{ctx: ctx, w: dst, total: total, transferred: offset, onProgress: onProgress}
+		if onProgress != nil && offset > 0 {
+			onProgress(offset, total, 0)
+		}
+		if _, err := utils.CopySFTPDownload(writer, src); err != nil {
+			return fmt.Errorf("下载失败: %w", err)
+		}
+		if err := dst.Sync(); err != nil {
+			return fmt.Errorf("刷写本地文件失败: %w", err)
+		}
+		_ = dst.Close()
+		_ = os.Remove(localPath)
+		if err := os.Rename(partPath, localPath); err != nil {
+			return fmt.Errorf("完成下载改名失败: %w", err)
+		}
+		if onProgress != nil {
+			onProgress(writer.transferred, total, writer.speedBPS)
+		}
+		return nil
+	})
 }
 
 // UploadFile 上传本地文件到远端路径（支持断点续传；SCP 模式不支持续传）
@@ -223,89 +292,107 @@ func (a *ShellAuxManager) UploadFile(ctx context.Context, localPath, remotePath 
 	if a.isSCPBackend() {
 		return a.UploadFileSCP(ctx, localPath, remotePath, onProgress)
 	}
-	sftpClient, err := a.sftpClient()
-	if err != nil {
-		return err
-	}
-	src, err := os.Open(localPath)
-	if err != nil {
-		return fmt.Errorf("打开本地文件失败: %w", err)
-	}
-	defer src.Close()
+	return a.withTransferSFTP(func(sftpClient *sftp.Client) error {
+		src, err := os.Open(localPath)
+		if err != nil {
+			return fmt.Errorf("打开本地文件失败: %w", err)
+		}
+		defer src.Close()
 
-	info, err := src.Stat()
-	if err != nil {
-		return fmt.Errorf("获取本地文件信息失败: %w", err)
-	}
-	total := info.Size()
+		info, err := src.Stat()
+		if err != nil {
+			return fmt.Errorf("获取本地文件信息失败: %w", err)
+		}
+		total := info.Size()
 
-	remoteDir := path.Dir(remotePath)
-	if remoteDir != "" && remoteDir != "." && remoteDir != "/" {
-		_ = sftpClient.MkdirAll(remoteDir)
-	}
+		remoteDir := path.Dir(remotePath)
+		if remoteDir != "" && remoteDir != "." && remoteDir != "/" {
+			_ = sftpClient.MkdirAll(remoteDir)
+		}
 
-	var offset int64
-	useAtomic := total > 0
-	if rst, err := sftpClient.Stat(remotePath); err == nil && rst.Size() > 0 {
-		if rst.Size() >= total && total > 0 {
-			if onProgress != nil {
-				onProgress(total, total, 0)
+		var offset int64
+		useAtomic := total > 0
+		partRemote := uploadPartPath(remotePath)
+		// 优先续传远端隐藏 .part；兼容旧版直接写目标文件
+		if rst, err := sftpClient.Stat(partRemote); err == nil && rst.Size() > 0 {
+			if rst.Size() >= total && total > 0 {
+				_ = sftpClient.Remove(remotePath)
+				if err := sftpClient.Rename(partRemote, remotePath); err != nil {
+					return fmt.Errorf("完成上传改名失败: %w", err)
+				}
+				if onProgress != nil {
+					onProgress(total, total, 0)
+				}
+				return nil
 			}
-			return nil
+			if rst.Size() < total {
+				offset = rst.Size()
+				useAtomic = false
+			}
+		} else if rst, err := sftpClient.Stat(remotePath); err == nil && rst.Size() > 0 {
+			if rst.Size() >= total && total > 0 {
+				if onProgress != nil {
+					onProgress(total, total, 0)
+				}
+				return nil
+			}
+			if rst.Size() < total {
+				offset = rst.Size()
+				useAtomic = false
+			}
 		}
-		if rst.Size() < total {
-			offset = rst.Size()
-			useAtomic = false
-		}
-	}
-	stagingPath := remotePath
-	if useAtomic {
-		stagingPath = remotePath + ".flashdock-upload-" + fmt.Sprintf("%d", time.Now().UnixNano())
-	}
-
-	var dst *sftp.File
-	targetWrite := stagingPath
-	if offset > 0 {
-		if _, err := src.Seek(offset, io.SeekStart); err != nil {
-			return fmt.Errorf("本地定位失败: %w", err)
-		}
-		dst, err = sftpClient.OpenFile(targetWrite, os.O_WRONLY)
-		if err != nil {
-			return fmt.Errorf("打开远端文件失败: %w", err)
-		}
-		if _, err := dst.Seek(offset, io.SeekStart); err != nil {
-			dst.Close()
-			return fmt.Errorf("远端定位失败: %w", err)
-		}
-	} else {
-		dst, err = sftpClient.Create(targetWrite)
-		if err != nil {
-			return fmt.Errorf("创建远端文件失败: %w", err)
-		}
-	}
-	defer dst.Close()
-
-	reader := &countingReader{ctx: ctx, r: src, total: total, transferred: offset, onProgress: onProgress}
-	if onProgress != nil && offset > 0 {
-		onProgress(offset, total, 0)
-	}
-	// 走 *sftp.File.ReadFromWithConcurrency，避免 Writer 包装导致串行 FXP_WRITE
-	if _, err := utils.CopySFTPUpload(dst, reader); err != nil {
+		stagingPath := remotePath
 		if useAtomic {
-			_ = sftpClient.Remove(stagingPath)
+			stagingPath = partRemote
+		} else if offset > 0 {
+			// 若在 .part 上续传
+			if _, err := sftpClient.Stat(partRemote); err == nil {
+				stagingPath = partRemote
+			}
 		}
-		return fmt.Errorf("上传失败: %w", err)
-	}
-	if useAtomic {
-		_ = sftpClient.Remove(remotePath)
-		if err := sftpClient.Rename(stagingPath, remotePath); err != nil {
-			return fmt.Errorf("原子替换失败: %w", err)
+
+		var dst *sftp.File
+		targetWrite := stagingPath
+		if offset > 0 {
+			if _, err := src.Seek(offset, io.SeekStart); err != nil {
+				return fmt.Errorf("本地定位失败: %w", err)
+			}
+			dst, err = sftpClient.OpenFile(targetWrite, os.O_WRONLY)
+			if err != nil {
+				return fmt.Errorf("打开远端文件失败: %w", err)
+			}
+			if _, err := dst.Seek(offset, io.SeekStart); err != nil {
+				dst.Close()
+				return fmt.Errorf("远端定位失败: %w", err)
+			}
+		} else {
+			dst, err = sftpClient.Create(targetWrite)
+			if err != nil {
+				return fmt.Errorf("创建远端文件失败: %w", err)
+			}
 		}
-	}
-	if onProgress != nil {
-		onProgress(reader.transferred, total, reader.speedBPS)
-	}
-	return nil
+		defer dst.Close()
+
+		reader := &countingReader{ctx: ctx, r: src, total: total, transferred: offset, onProgress: onProgress}
+		if onProgress != nil && offset > 0 {
+			onProgress(offset, total, 0)
+		}
+		if _, err := utils.CopySFTPUpload(dst, reader); err != nil {
+			return fmt.Errorf("上传失败: %w", err)
+		}
+		_ = dst.Close()
+		finalStaging := targetWrite
+		if finalStaging != remotePath {
+			_ = sftpClient.Remove(remotePath)
+			if err := sftpClient.Rename(finalStaging, remotePath); err != nil {
+				return fmt.Errorf("原子替换失败: %w", err)
+			}
+		}
+		if onProgress != nil {
+			onProgress(reader.transferred, total, reader.speedBPS)
+		}
+		return nil
+	})
 }
 
 // UploadDirectoryZip 将本地目录打成 zip 上传后解压到 remoteTarget（完整远端目录路径）。

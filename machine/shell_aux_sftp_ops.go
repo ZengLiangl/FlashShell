@@ -100,6 +100,41 @@ func (a *ShellAuxManager) CopyRemotePath(srcPath, dstPath string) error {
 	return copyRemoteFile(c, srcPath, dstPath)
 }
 
+// MoveRemotePath 同机移动：优先 Rename，失败则复制后删除
+func (a *ShellAuxManager) MoveRemotePath(srcPath, dstPath string) error {
+	srcPath = strings.TrimSpace(srcPath)
+	dstPath = strings.TrimSpace(dstPath)
+	if srcPath == "" || dstPath == "" {
+		return fmt.Errorf("路径为空")
+	}
+	if srcPath == dstPath {
+		return nil
+	}
+	if err := a.EnsureFileBackend(); err != nil {
+		return err
+	}
+	if a.isSCPBackend() {
+		if err := a.renameSCP(srcPath, dstPath); err == nil {
+			return nil
+		}
+		if err := a.copyRemoteSCP(srcPath, dstPath); err != nil {
+			return err
+		}
+		return a.RemovePath(srcPath)
+	}
+	c, err := a.sftpClient()
+	if err != nil {
+		return err
+	}
+	if err := c.Rename(srcPath, dstPath); err == nil {
+		return nil
+	}
+	if err := a.CopyRemotePath(srcPath, dstPath); err != nil {
+		return err
+	}
+	return a.RemovePath(srcPath)
+}
+
 func copyRemoteFile(c *sftp.Client, src, dst string) error {
 	in, err := c.Open(src)
 	if err != nil {
@@ -202,8 +237,15 @@ func (a *ShellAuxManager) CheckUploadConflict(localPath, remotePath string) (*Sf
 	if localInfo.IsDir() != remoteInfo.IsDir() {
 		return conflict, nil
 	}
-	if !localInfo.IsDir() && localInfo.Size() == remoteInfo.Size() {
+	// 大小+修改时间一致则视为未变更，不当作冲突
+	if !localInfo.IsDir() &&
+		localInfo.Size() == remoteInfo.Size() &&
+		localInfo.ModTime().Unix() == remoteInfo.ModTime().Unix() {
 		return nil, nil
+	}
+	if !localInfo.IsDir() && localInfo.Size() == remoteInfo.Size() {
+		// 仅大小相同仍提示冲突（mtime 不同可能内容不同）
+		return conflict, nil
 	}
 	return conflict, nil
 }

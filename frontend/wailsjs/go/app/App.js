@@ -426,6 +426,10 @@ export function MkdirShellRemotePath(arg1, arg2) {
   return window['go']['app']['App']['MkdirShellRemotePath'](arg1, arg2);
 }
 
+export function MoveShellRemotePath(arg1, arg2, arg3) {
+  return window['go']['app']['App']['MoveShellRemotePath'](arg1, arg2, arg3);
+}
+
 export function NewWindow() {
   return window['go']['app']['App']['NewWindow']();
 }
@@ -652,6 +656,10 @@ export function SelectXshellFile() {
 
 export function SelectXshellFolder() {
   return window['go']['app']['App']['SelectXshellFolder']();
+}
+
+export function SendShellCd(arg1, arg2) {
+  return window['go']['app']['App']['SendShellCd'](arg1, arg2);
 }
 
 export function SendShellInput(arg1, arg2) {

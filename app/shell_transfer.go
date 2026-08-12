@@ -359,6 +359,9 @@ func (a *App) pumpTransferQueue() {
 	for {
 		store.mu.Lock()
 		max := define.TransferMaxConcurrent
+		if cfg, err := a.GetGlobalConfig(); err == nil {
+			max = data.SftpTransferMaxConcurrentValue(cfg)
+		}
 		if store.activeRunning >= max {
 			store.mu.Unlock()
 			return
@@ -418,7 +421,20 @@ func (a *App) startTransferWorker(cp *define.SftpTransferRecord) {
 					store.mu.Unlock()
 				}
 			} else {
-				transferErr = aux.DownloadFile(ctx, cp.RemotePath, cp.LocalPath, progress)
+				skip := false
+				if cfg, err := a.GetGlobalConfig(); err == nil && data.SftpSkipUnchangedEnabled(cfg) {
+					if ok, _ := aux.ShouldSkipUnchangedDownload(cp.RemotePath, cp.LocalPath); ok {
+						skip = true
+					}
+				}
+				if skip {
+					if info, err := os.Stat(cp.LocalPath); err == nil {
+						a.updateTransferProgress(cp.ID, info.Size(), info.Size(), 0)
+					}
+					transferErr = nil
+				} else {
+					transferErr = aux.DownloadFile(ctx, cp.RemotePath, cp.LocalPath, progress)
+				}
 			}
 		} else {
 			if cp.IsDir {
@@ -440,7 +456,25 @@ func (a *App) startTransferWorker(cp *define.SftpTransferRecord) {
 					transferErr = aux.UploadDirectoryRecursive(ctx, cp.LocalPath, cp.RemotePath, progress)
 				}
 			} else {
-				transferErr = aux.UploadFile(ctx, cp.LocalPath, cp.RemotePath, progress)
+				skip := false
+				if cfg, err := a.GetGlobalConfig(); err == nil && data.SftpSkipUnchangedEnabled(cfg) {
+					if ok, _ := aux.ShouldSkipUnchangedUpload(cp.LocalPath, cp.RemotePath); ok {
+						skip = true
+					}
+				}
+				if skip {
+					if info, err := os.Stat(cp.LocalPath); err == nil {
+						a.updateTransferProgress(cp.ID, info.Size(), info.Size(), 0)
+					}
+					transferErr = nil
+				} else {
+					transferErr = aux.UploadFile(ctx, cp.LocalPath, cp.RemotePath, progress)
+					if transferErr == nil {
+						if info, err := os.Stat(cp.LocalPath); err == nil {
+							aux.PreserveRemoteMtime(cp.RemotePath, info.ModTime())
+						}
+					}
+				}
 			}
 		}
 		a.finishTransfer(cp.ID, transferErr)

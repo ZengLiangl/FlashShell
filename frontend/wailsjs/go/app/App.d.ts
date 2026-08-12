@@ -218,6 +218,8 @@ export function ListSystemFonts():Promise<Array<app.SystemFontInfo>>;
 
 export function MkdirShellRemotePath(arg1:string,arg2:string):Promise<void>;
 
+export function MoveShellRemotePath(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function NewWindow():Promise<void>;
 
 export function OpenAbout():Promise<void>;
@@ -331,6 +333,8 @@ export function SelectSystemApplication():Promise<data.SftpSystemApp>;
 export function SelectXshellFile():Promise<string>;
 
 export function SelectXshellFolder():Promise<string>;
+
+export function SendShellCd(arg1:string,arg2:string):Promise<void>;
 
 export function SendShellInput(arg1:string,arg2:string):Promise<void>;
 

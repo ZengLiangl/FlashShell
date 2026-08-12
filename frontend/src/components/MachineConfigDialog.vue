@@ -426,6 +426,14 @@
                     </el-select>
                     <p class="field-hint">远端无 SFTP 子系统时可用 SCP 回退完成浏览与传输</p>
                 </el-form-item>
+                <el-form-item label="Sudo SFTP">
+                    <el-switch
+                        v-model="machineForm.sftpSudo"
+                        :disabled="machineForm.sftpFileProtocol === 'scp'"
+                        active-text="以 sudo 提权打开 SFTP"
+                    />
+                    <p class="field-hint">需密码认证与远端 sudo 权限；与「仅 SCP」互斥。用于读写 /etc 等受保护路径</p>
+                </el-form-item>
                 <el-form-item label="启动命令">
                     <el-input v-model="machineForm.startupCommand" placeholder="连接后自动执行（单行）" clearable />
                 </el-form-item>
@@ -818,6 +826,7 @@ export default {
             skipEcdsaHostKey: false,
             sftpEncoding: 'auto',
             sftpFileProtocol: 'auto',
+            sftpSudo: false,
             startupCommand: '',
             agentForwarding: false,
             terminalPreset: '',
@@ -1042,6 +1051,7 @@ export default {
             machineForm.skipEcdsaHostKey = !!machine.skipEcdsaHostKey
             machineForm.sftpEncoding = machine.sftpEncoding || 'auto'
             machineForm.sftpFileProtocol = machine.sftpFileProtocol || 'auto'
+            machineForm.sftpSudo = !!machine.sftpSudo
             machineForm.startupCommand = machine.startupCommand || ''
             machineForm.agentForwarding = !!machine.agentForwarding
             machineForm.terminalPreset = machine.terminalPreset || ''
@@ -1120,6 +1130,7 @@ export default {
             machineForm.skipEcdsaHostKey = false
             machineForm.sftpEncoding = 'auto'
             machineForm.sftpFileProtocol = 'auto'
+            machineForm.sftpSudo = false
             machineForm.startupCommand = ''
             machineForm.agentForwarding = false
             machineForm.terminalPreset = ''
@@ -1216,6 +1227,7 @@ export default {
                     skipEcdsaHostKey: machineForm.skipEcdsaHostKey,
                     sftpEncoding: machineForm.sftpEncoding || 'auto',
                     sftpFileProtocol: machineForm.sftpFileProtocol || 'auto',
+                    sftpSudo: !!machineForm.sftpSudo && machineForm.sftpFileProtocol !== 'scp',
                     startupCommand: machineForm.startupCommand?.trim() || '',
                     agentForwarding: machineForm.agentForwarding,
                     terminalPreset: machineForm.terminalPreset || '',

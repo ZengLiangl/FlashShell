@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -20,7 +21,7 @@ import (
 )
 
 const (
-	shellRemoteEditMaxSize = 512 * 1024 // 512KB 内置编辑上限
+	shellRemoteEditMaxSize = 10 * 1024 * 1024 // 10MB 内置编辑上限
 )
 
 // SearchShellCommandHistory 搜索跨会话命令历史
@@ -125,7 +126,7 @@ func (a *App) ReadShellRemoteFile(machineName, remotePath string) (string, error
 		return "", fmt.Errorf("不能编辑目录")
 	}
 	if info.Size > shellRemoteEditMaxSize {
-		return "", fmt.Errorf("文件超过 %dKB，请用系统应用打开", shellRemoteEditMaxSize/1024)
+		return "", fmt.Errorf("文件超过 %dMB，请用系统应用打开", shellRemoteEditMaxSize/(1024*1024))
 	}
 	f, err := aux.OpenFile(remotePath)
 	if err != nil {
@@ -359,7 +360,7 @@ func openWithSystemDefault(path string) error {
 	}
 }
 
-// StartShellFolderSync 文件夹双向同步（简单 diff：按文件名+大小比较）
+// StartShellFolderSync 文件夹同步（递归；按大小+修改时间跳过未变更）
 func (a *App) StartShellFolderSync(machineName, localDir, remoteDir, direction string) (string, error) {
 	localDir = strings.TrimSpace(localDir)
 	remoteDir = strings.TrimSpace(remoteDir)
@@ -373,6 +374,13 @@ func (a *App) StartShellFolderSync(machineName, localDir, remoteDir, direction s
 	id := uuid.NewString()
 	go a.runFolderSync(id, machineName, localDir, remoteDir, direction)
 	return id, nil
+}
+
+type syncFileJob struct {
+	rel        string
+	localPath  string
+	remotePath string
+	action     string // upload | download
 }
 
 func (a *App) runFolderSync(id, machineName, localDir, remoteDir, direction string) {
@@ -399,92 +407,91 @@ func (a *App) runFolderSync(id, machineName, localDir, remoteDir, direction stri
 		return
 	}
 
-	localEntries, err := a.ListLocalFiles(localDir, false)
-	if err != nil {
+	skipUnchanged := true
+	if cfg, err := a.GetGlobalConfig(); err == nil {
+		skipUnchanged = data.SftpSkipUnchangedEnabled(cfg)
+	}
+
+	localFiles := map[string]define.LocalFileEntry{}
+	if err := a.walkLocalFiles(localDir, "", localFiles); err != nil {
 		rec.Status = "error"
 		rec.Error = err.Error()
 		rec.FinishedAt = time.Now().Unix()
 		a.upsertTransfer(rec)
 		return
 	}
-	remoteEntries, err := aux.ListDir(remoteDir, false)
-	if err != nil {
-		rec.Status = "error"
-		rec.Error = err.Error()
-		rec.FinishedAt = time.Now().Unix()
-		a.upsertTransfer(rec)
-		return
-	}
-
-	remoteMap := make(map[string]define.SftpEntry)
-	for _, e := range remoteEntries {
-		if !e.IsDir {
-			remoteMap[e.Name] = e
+	remoteFiles := map[string]define.SftpEntry{}
+	if err := a.walkRemoteFiles(aux, remoteDir, "", remoteFiles); err != nil {
+		// 远端目录不存在时视为空树（上传场景）
+		if direction == "download" || direction == "both" {
+			rec.Status = "error"
+			rec.Error = err.Error()
+			rec.FinishedAt = time.Now().Unix()
+			a.upsertTransfer(rec)
+			return
 		}
 	}
 
-	var total int64
-	for _, le := range localEntries {
-		if le.IsDir {
-			continue
-		}
-		total++
-		re, ok := remoteMap[le.Name]
-		if direction == "download" && ok && re.Size != le.Size {
-			total++
-		}
-		if direction == "upload" && (!ok || re.Size != le.Size) {
-			total++
-		}
-	}
-	rec.Total = total
-	a.upsertTransfer(rec)
+	needUpload := direction == "upload" || direction == "both"
+	needDownload := direction == "download" || direction == "both"
+	jobs := make([]syncFileJob, 0)
 
-	var done int64
-	for _, le := range localEntries {
-		if le.IsDir {
-			continue
-		}
-		re, ok := remoteMap[le.Name]
-		needUpload := direction == "upload" || direction == "both"
-		needDownload := direction == "download" || direction == "both"
-
-		if needUpload && (!ok || re.Size != le.Size) {
-			rp := remoteDir
-			if !strings.HasSuffix(rp, "/") {
-				rp += "/"
+	if needUpload {
+		for rel, le := range localFiles {
+			rp := path.Join(remoteDir, filepath.ToSlash(rel))
+			re, ok := remoteFiles[rel]
+			if ok && skipUnchanged && machine.SameSizeAndMtime(le.Size, time.Unix(le.ModTime, 0), re.Size, time.Unix(re.ModTime, 0)) {
+				continue
 			}
-			rp += le.Name
-			ctx := context.Background()
-			if upErr := aux.UploadFile(ctx, le.Path, rp, func(t, total int64, _ float64) {
-				rec.Transferred = done
-				rec.UpdatedAt = time.Now().Unix()
-				a.upsertTransfer(rec)
-				_ = t
-				_ = total
-			}); upErr != nil {
+			if ok && re.Size == le.Size && !skipUnchanged {
+				// 仍同步（强制覆盖）
+			}
+			jobs = append(jobs, syncFileJob{rel: rel, localPath: le.Path, remotePath: rp, action: "upload"})
+		}
+	}
+	if needDownload {
+		for rel, re := range remoteFiles {
+			lp := filepath.Join(localDir, filepath.FromSlash(rel))
+			le, ok := localFiles[rel]
+			if ok && skipUnchanged && machine.SameSizeAndMtime(le.Size, time.Unix(le.ModTime, 0), re.Size, time.Unix(re.ModTime, 0)) {
+				continue
+			}
+			jobs = append(jobs, syncFileJob{rel: rel, localPath: lp, remotePath: re.Path, action: "download"})
+		}
+	}
+
+	rec.Total = int64(len(jobs))
+	a.upsertTransfer(rec)
+	ctx := context.Background()
+	var done int64
+	for _, job := range jobs {
+		parentRemote := path.Dir(job.remotePath)
+		parentLocal := filepath.Dir(job.localPath)
+		if job.action == "upload" {
+			_ = aux.MkdirRemotePath(parentRemote)
+			if upErr := aux.UploadFile(ctx, job.localPath, job.remotePath, nil); upErr != nil {
 				rec.Status = "error"
 				rec.Error = upErr.Error()
 				rec.FinishedAt = time.Now().Unix()
 				a.upsertTransfer(rec)
 				return
 			}
-			done++
-		}
-		if needDownload && ok && re.Size != le.Size {
-			lp := filepath.Join(localDir, le.Name)
-			ctx := context.Background()
-			if dlErr := aux.DownloadFile(ctx, re.Path, lp, nil); dlErr != nil {
+			if info, err := os.Stat(job.localPath); err == nil {
+				aux.PreserveRemoteMtime(job.remotePath, info.ModTime())
+			}
+		} else {
+			_ = os.MkdirAll(parentLocal, 0o755)
+			if dlErr := aux.DownloadFile(ctx, job.remotePath, job.localPath, nil); dlErr != nil {
 				rec.Status = "error"
 				rec.Error = dlErr.Error()
 				rec.FinishedAt = time.Now().Unix()
 				a.upsertTransfer(rec)
 				return
 			}
-			done++
 		}
+		done++
 		rec.Transferred = done
-		rec.Percent = float64(done) / float64(max64(total, 1)) * 100
+		rec.Percent = float64(done) / float64(max64(rec.Total, 1)) * 100
 		rec.UpdatedAt = time.Now().Unix()
 		a.upsertTransfer(rec)
 	}
@@ -493,6 +500,56 @@ func (a *App) runFolderSync(id, machineName, localDir, remoteDir, direction stri
 	rec.Percent = 100
 	rec.FinishedAt = time.Now().Unix()
 	a.upsertTransfer(rec)
+}
+
+func (a *App) walkLocalFiles(root, rel string, out map[string]define.LocalFileEntry) error {
+	dir := root
+	if rel != "" {
+		dir = filepath.Join(root, rel)
+	}
+	entries, err := a.ListLocalFiles(dir, false)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		childRel := e.Name
+		if rel != "" {
+			childRel = filepath.ToSlash(filepath.Join(rel, e.Name))
+		}
+		if e.IsDir {
+			if err := a.walkLocalFiles(root, childRel, out); err != nil {
+				return err
+			}
+			continue
+		}
+		out[filepath.ToSlash(childRel)] = e
+	}
+	return nil
+}
+
+func (a *App) walkRemoteFiles(aux *machine.ShellAuxManager, root, rel string, out map[string]define.SftpEntry) error {
+	dir := root
+	if rel != "" {
+		dir = path.Join(root, rel)
+	}
+	entries, err := aux.ListDir(dir, false)
+	if err != nil {
+		return err
+	}
+	for _, e := range entries {
+		childRel := e.Name
+		if rel != "" {
+			childRel = path.Join(rel, e.Name)
+		}
+		if e.IsDir {
+			if err := a.walkRemoteFiles(aux, root, childRel, out); err != nil {
+				return err
+			}
+			continue
+		}
+		out[childRel] = e
+	}
+	return nil
 }
 
 func max64(a, b int64) int64 {

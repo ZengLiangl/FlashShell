@@ -75,6 +75,8 @@ type Machine struct {
 	SftpEncoding string `yaml:"sftpEncoding,omitempty" json:"sftpEncoding,omitempty"`
 	// SftpFileProtocol 文件协议：auto（优先 SFTP，失败回退 SCP）| sftp | scp
 	SftpFileProtocol string `yaml:"sftpFileProtocol,omitempty" json:"sftpFileProtocol,omitempty"`
+	// SftpSudo 以 sudo 提权方式打开 SFTP（需密码；与 SCP 模式互斥）
+	SftpSudo bool `yaml:"sftpSudo,omitempty" json:"sftpSudo,omitempty"`
 	// StartupCommand 连接后自动执行的启动命令（单行）
 	StartupCommand string `yaml:"startupCommand,omitempty" json:"startupCommand,omitempty"`
 	// AgentForwarding 启用 SSH Agent 转发
@@ -393,6 +395,11 @@ func (rm *RemoteMachine) EnsureSFTP() error {
 	}
 	rm.SFTPClient = sftpClient
 	return nil
+}
+
+// SetSFTPClient 注入已打开的 SFTP 客户端（如 sudo 提权通道）
+func (rm *RemoteMachine) SetSFTPClient(c *sftp.Client) {
+	rm.SFTPClient = c
 }
 
 // Close 关闭连接

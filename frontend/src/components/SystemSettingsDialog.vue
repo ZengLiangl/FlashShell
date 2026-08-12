@@ -216,6 +216,30 @@
                             </div>
                             <div class="system-setting-row">
                                 <div class="system-setting-text">
+                                    <span class="system-setting-label">跳过未变更文件</span>
+                                    <span class="system-setting-hint">上传/下载/同步时，大小与修改时间均一致则跳过</span>
+                                </div>
+                                <div class="system-setting-control">
+                                    <el-switch v-model="form.sftpSkipUnchanged" size="small" />
+                                </div>
+                            </div>
+                            <div class="system-setting-row">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">传输并发数</span>
+                                    <span class="system-setting-hint">同时进行的文件传输上限（1–16，默认 8）</span>
+                                </div>
+                                <div class="system-setting-control system-setting-control--wide">
+                                    <el-input-number
+                                        v-model="form.sftpTransferMaxConcurrent"
+                                        size="small"
+                                        :min="1"
+                                        :max="16"
+                                        controls-position="right"
+                                    />
+                                </div>
+                            </div>
+                            <div class="system-setting-row">
+                                <div class="system-setting-text">
                                     <span class="system-setting-label">默认文件打开方式</span>
                                     <span class="system-setting-hint">选择没有特定文件关联时的默认打开方式</span>
                                 </div>
@@ -995,6 +1019,8 @@ export default {
             shellPasswordAssist: true,
             sftpUseCompressedUpload: true,
             sftpAutoSync: true,
+            sftpSkipUnchanged: true,
+            sftpTransferMaxConcurrent: 8,
             sftpDefaultOpener: 'ask',
             sftpDefaultSystemApp: null,
             sftpFileAssociations: {},
@@ -1314,6 +1340,11 @@ theme preview · ${theme.foreground}`
             form.shellPasswordAssist = config.shellPasswordAssist !== false
             form.sftpUseCompressedUpload = config.sftpUseCompressedUpload !== false
             form.sftpAutoSync = config.sftpAutoSync !== false
+            form.sftpSkipUnchanged = config.sftpSkipUnchanged !== false
+            {
+                const n = Number(config.sftpTransferMaxConcurrent)
+                form.sftpTransferMaxConcurrent = Number.isFinite(n) && n >= 1 ? Math.min(16, Math.round(n)) : 8
+            }
             form.sftpDefaultOpener = ['builtin-editor', 'system-app'].includes(config.sftpDefaultOpener)
                 ? config.sftpDefaultOpener
                 : 'ask'
@@ -1715,6 +1746,8 @@ theme preview · ${theme.foreground}`
                 config.shellPasswordAssist = !!form.shellPasswordAssist
                 config.sftpUseCompressedUpload = !!form.sftpUseCompressedUpload
                 config.sftpAutoSync = !!form.sftpAutoSync
+                config.sftpSkipUnchanged = !!form.sftpSkipUnchanged
+                config.sftpTransferMaxConcurrent = Math.min(16, Math.max(1, Number(form.sftpTransferMaxConcurrent) || 8))
                 config.sftpDefaultOpener = form.sftpDefaultOpener === 'ask' ? '' : form.sftpDefaultOpener
                 config.sftpDefaultSystemApp = form.sftpDefaultOpener === 'system-app'
                     ? (form.sftpDefaultSystemApp || null)

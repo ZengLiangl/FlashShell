@@ -261,6 +261,10 @@ type GlobalConfig struct {
 	ShellAsciiInput *bool `yaml:"shellAsciiInput,omitempty" json:"shellAsciiInput"`
 	// SftpUseCompressedUpload 目录上传默认走压缩包（zip）再远端解压；nil 表示默认开启
 	SftpUseCompressedUpload *bool `yaml:"sftpUseCompressedUpload,omitempty" json:"sftpUseCompressedUpload"`
+	// SftpSkipUnchanged 传输时跳过大小与修改时间均一致的文件；nil 表示默认开启
+	SftpSkipUnchanged *bool `yaml:"sftpSkipUnchanged,omitempty" json:"sftpSkipUnchanged,omitempty"`
+	// SftpTransferMaxConcurrent 全局传输并发数；0/缺省表示 8，范围 1–16
+	SftpTransferMaxConcurrent int `yaml:"sftpTransferMaxConcurrent,omitempty" json:"sftpTransferMaxConcurrent,omitempty"`
 	// ShellSessionRestore 启动时恢复上次打开的 Shell 标签页；nil 表示默认开启
 	ShellSessionRestore *bool `yaml:"shellSessionRestore,omitempty" json:"shellSessionRestore"`
 	// ShellCursorLineHighlight 终端光标行高亮；nil/缺省表示关闭
@@ -612,6 +616,33 @@ func SftpUseCompressedUploadEnabled(cfg *GlobalConfig) bool {
 		return true
 	}
 	return *cfg.SftpUseCompressedUpload
+}
+
+// SftpSkipUnchangedEnabled 是否跳过未变更文件（缺省 true）
+func SftpSkipUnchangedEnabled(cfg *GlobalConfig) bool {
+	if cfg == nil || cfg.SftpSkipUnchanged == nil {
+		return true
+	}
+	return *cfg.SftpSkipUnchanged
+}
+
+// NormalizeSftpTransferMaxConcurrent 校验传输并发（默认 8，范围 1–16）
+func NormalizeSftpTransferMaxConcurrent(n int) int {
+	if n <= 0 {
+		return 8
+	}
+	if n > 16 {
+		return 16
+	}
+	return n
+}
+
+// SftpTransferMaxConcurrentValue 读取传输并发配置
+func SftpTransferMaxConcurrentValue(cfg *GlobalConfig) int {
+	if cfg == nil {
+		return 8
+	}
+	return NormalizeSftpTransferMaxConcurrent(cfg.SftpTransferMaxConcurrent)
 }
 
 // SftpAutoSyncEnabled 外置打开是否自动回传（缺省 true）

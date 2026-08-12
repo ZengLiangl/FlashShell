@@ -39,6 +39,7 @@ export async function copyMachineRecord(source, existingMachines) {
     skipEcdsaHostKey: !!source.skipEcdsaHostKey,
     sftpEncoding: source.sftpEncoding || 'auto',
     sftpFileProtocol: source.sftpFileProtocol || 'auto',
+    sftpSudo: !!source.sftpSudo,
     startupCommand: source.startupCommand || '',
     agentForwarding: !!source.agentForwarding,
     tunnels: (source.tunnels || [])

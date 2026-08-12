@@ -1,6 +1,7 @@
 package app
 
 import (
+	"fmt"
 	"strings"
 
 	"FlashDock/machine"
@@ -42,6 +43,15 @@ func (a *App) CopyShellRemotePath(sessionID, srcPath, dstPath string) error {
 	return aux.CopyRemotePath(strings.TrimSpace(srcPath), strings.TrimSpace(dstPath))
 }
 
+// MoveShellRemotePath 同机移动远端文件或目录
+func (a *App) MoveShellRemotePath(sessionID, srcPath, dstPath string) error {
+	aux, err := a.getShellAux(sessionID)
+	if err != nil {
+		return err
+	}
+	return aux.MoveRemotePath(strings.TrimSpace(srcPath), strings.TrimSpace(dstPath))
+}
+
 // CheckShellUploadConflict 检测上传冲突
 func (a *App) CheckShellUploadConflict(sessionID, localPath, remotePath string) (*machine.SftpUploadConflict, error) {
 	aux, err := a.getShellAux(sessionID)
@@ -49,4 +59,14 @@ func (a *App) CheckShellUploadConflict(sessionID, localPath, remotePath string) 
 		return nil, err
 	}
 	return aux.CheckUploadConflict(localPath, remotePath)
+}
+
+// SendShellCd 向终端发送 cd 到指定路径（路径自动加引号）
+func (a *App) SendShellCd(sessionID, remotePath string) error {
+	remotePath = strings.TrimSpace(remotePath)
+	if remotePath == "" {
+		return fmt.Errorf("路径为空")
+	}
+	quoted := machine.ShellQuotePath(remotePath)
+	return a.SendShellInput(sessionID, "cd "+quoted+"\r")
 }
