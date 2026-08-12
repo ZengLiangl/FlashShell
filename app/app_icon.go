@@ -10,10 +10,13 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"FlashDock/data"
 
 	"embed"
+
+	xdraw "golang.org/x/image/draw"
 )
 
 //go:embed assets/appicon.png
@@ -95,6 +98,60 @@ func pngDataURL(pngBytes []byte) string {
 	return "data:image/png;base64," + base64.StdEncoding.EncodeToString(pngBytes)
 }
 
+// dockPreviewSize 设置页预览边长。原图可达数百 KB～1MB，直接 base64 会拖慢设置打开。
+const dockPreviewSize = 96
+
+var (
+	appIconPresetCacheMu sync.Mutex
+	appIconPresetCache   []AppIconPresetInfo
+)
+
+func invalidateAppIconPresetCache() {
+	appIconPresetCacheMu.Lock()
+	appIconPresetCache = nil
+	appIconPresetCacheMu.Unlock()
+}
+
+// warmAppIconPresetCache 启动时后台生成缩略图，避免首次打开设置卡顿
+func warmAppIconPresetCache() {
+	go func() {
+		_ = listAppIconPresets()
+	}()
+}
+
+func resizePNGPreview(src image.Image, size int) []byte {
+	if src == nil || size <= 0 {
+		return nil
+	}
+	sb := src.Bounds()
+	if sb.Dx() <= 0 || sb.Dy() <= 0 {
+		return nil
+	}
+	dst := image.NewRGBA(image.Rect(0, 0, size, size))
+	xdraw.CatmullRom.Scale(dst, dst.Bounds(), src, sb, xdraw.Over, nil)
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, dst); err != nil {
+		return nil
+	}
+	return buf.Bytes()
+}
+
+func previewDataURLFromPNG(pngBytes []byte) string {
+	if len(pngBytes) == 0 {
+		return ""
+	}
+	img, err := png.Decode(bytes.NewReader(pngBytes))
+	if err != nil {
+		// 解码失败时退回原图 data URL（自定义图标可能非标准）
+		return pngDataURL(pngBytes)
+	}
+	thumb := resizePNGPreview(img, dockPreviewSize)
+	if len(thumb) == 0 {
+		return pngDataURL(pngBytes)
+	}
+	return pngDataURL(thumb)
+}
+
 func presetPNGBytes(id string) ([]byte, error) {
 	id = resolveAppIconPreset(id)
 	if id == "custom" {
@@ -120,6 +177,14 @@ func presetPNGBytes(id string) ([]byte, error) {
 }
 
 func listAppIconPresets() []AppIconPresetInfo {
+	appIconPresetCacheMu.Lock()
+	if appIconPresetCache != nil {
+		cached := appIconPresetCache
+		appIconPresetCacheMu.Unlock()
+		return cached
+	}
+	appIconPresetCacheMu.Unlock()
+
 	out := make([]AppIconPresetInfo, 0, len(appIconPresetDefs)+1)
 	for _, def := range appIconPresetDefs {
 		pngBytes, err := presetPNGBytes(def.ID)
@@ -129,7 +194,7 @@ func listAppIconPresets() []AppIconPresetInfo {
 		out = append(out, AppIconPresetInfo{
 			ID:      def.ID,
 			Label:   def.Label,
-			Preview: pngDataURL(pngBytes),
+			Preview: previewDataURLFromPNG(pngBytes),
 		})
 	}
 	if customAppIconExists() {
@@ -137,11 +202,20 @@ func listAppIconPresets() []AppIconPresetInfo {
 			out = append(out, AppIconPresetInfo{
 				ID:       "custom",
 				Label:    "自定义",
-				Preview:  pngDataURL(pngBytes),
+				Preview:  previewDataURLFromPNG(pngBytes),
 				IsCustom: true,
 			})
 		}
 	}
+
+	appIconPresetCacheMu.Lock()
+	if appIconPresetCache != nil {
+		cached := appIconPresetCache
+		appIconPresetCacheMu.Unlock()
+		return cached
+	}
+	appIconPresetCache = out
+	appIconPresetCacheMu.Unlock()
 	return out
 }
 
@@ -169,6 +243,7 @@ func saveCustomAppIconFromFile(srcPath string) error {
 	if err := os.WriteFile(dest, buf.Bytes(), 0644); err != nil {
 		return fmt.Errorf("保存自定义图标失败: %w", err)
 	}
+	invalidateAppIconPresetCache()
 	return nil
 }
 

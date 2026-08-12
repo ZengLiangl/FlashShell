@@ -947,11 +947,19 @@ export default {
         const appIconPresets = ref([])
         const uploadingAppIcon = ref(false)
 
-        const loadAppIconPresets = async () => {
+        let cachedAppIconPresets = null
+
+        const loadAppIconPresets = async (force = false) => {
+            if (!force && cachedAppIconPresets?.length) {
+                appIconPresets.value = cachedAppIconPresets
+                return
+            }
             try {
-                appIconPresets.value = (await App.ListAppIconPresets()) || []
+                const list = (await App.ListAppIconPresets()) || []
+                cachedAppIconPresets = list
+                appIconPresets.value = list
             } catch {
-                appIconPresets.value = []
+                if (!appIconPresets.value.length) appIconPresets.value = []
             }
         }
 
@@ -961,7 +969,7 @@ export default {
                 const id = await App.PickCustomAppIcon()
                 if (!id) return
                 form.appIconPreset = id
-                await loadAppIconPresets()
+                await loadAppIconPresets(true)
                 ElMessage.success('自定义图标已保存到 ~/.flashdock/icons/')
             } catch (e) {
                 ElMessage.error(`上传失败: ${e}`)
@@ -1198,7 +1206,9 @@ theme preview · ${theme.foreground}`
             } catch {
                 appVersion.value = ''
             }
-            await Promise.all([loadSystemFonts(), loadAppIconPresets()])
+            await loadSystemFonts()
+            // Dock 图标缩略图不阻塞设置页打开；有缓存时几乎瞬时
+            loadAppIconPresets()
             await loadKnownHosts()
         }
 

@@ -112,6 +112,7 @@ func (a *App) Startup(ctx context.Context) {
 	a.applyAppBrandingFromConfig()
 	a.applyStartupFullscreenFromConfig()
 	a.StartAutoPortForwards()
+	warmAppIconPresetCache()
 }
 
 // DomReady is called after front-end resources have been loaded
