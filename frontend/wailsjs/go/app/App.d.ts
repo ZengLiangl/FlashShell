@@ -168,6 +168,8 @@ export function GetWorkPaths():Promise<Record<string, string>>;
 
 export function ImportFinalShellPick(arg1:string,arg2:string):Promise<data.MachineImportResult>;
 
+export function ImportMobaXtermPick(arg1:string,arg2:string):Promise<data.MachineImportResult>;
+
 export function ImportKnownHosts(arg1:string):Promise<number>;
 
 export function ImportMachineTemplate(arg1:string,arg2:boolean):Promise<data.ImportMachineTemplateResult>;
@@ -177,6 +179,10 @@ export function ImportMachineTemplateFromFile(arg1:boolean):Promise<data.ImportM
 export function ImportMachinesCSVPick():Promise<data.MachineImportResult>;
 
 export function ImportOpenSSHConfigPick(arg1:string,arg2:string):Promise<data.OpenSSHImportResult>;
+
+export function ImportPuttyPick(arg1:string,arg2:string):Promise<data.MachineImportResult>;
+
+export function ImportSecureCRTPick(arg1:string,arg2:string):Promise<data.MachineImportResult>;
 
 export function ImportSystemKnownHosts():Promise<number>;
 

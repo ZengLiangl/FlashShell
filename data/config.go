@@ -268,6 +268,27 @@ func (cm *ConfigManager) ImportFinalShell(paths []string, accountID, group strin
 	return cm.globalConfigManager.ImportFinalShellFiles(paths, accountID, group)
 }
 
+func (cm *ConfigManager) ImportPutty(paths []string, accountID, group string) (*MachineImportResult, error) {
+	if cm.globalConfigManager == nil {
+		return nil, fmt.Errorf("全局配置管理器未初始化")
+	}
+	return cm.globalConfigManager.ImportPuttyFiles(paths, accountID, group)
+}
+
+func (cm *ConfigManager) ImportMobaXterm(paths []string, accountID, group string) (*MachineImportResult, error) {
+	if cm.globalConfigManager == nil {
+		return nil, fmt.Errorf("全局配置管理器未初始化")
+	}
+	return cm.globalConfigManager.ImportMobaXtermFiles(paths, accountID, group)
+}
+
+func (cm *ConfigManager) ImportSecureCRT(paths []string, accountID, group string) (*MachineImportResult, error) {
+	if cm.globalConfigManager == nil {
+		return nil, fmt.Errorf("全局配置管理器未初始化")
+	}
+	return cm.globalConfigManager.ImportSecureCRTFiles(paths, accountID, group)
+}
+
 func (cm *ConfigManager) ImportOpenSSHConfig(path, accountID, group string) (*OpenSSHImportResult, error) {
 	if cm.globalConfigManager == nil {
 		return nil, fmt.Errorf("全局配置管理器未初始化")

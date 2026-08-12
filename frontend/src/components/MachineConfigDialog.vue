@@ -81,6 +81,9 @@
                                 <el-dropdown-menu>
                                     <el-dropdown-item command="import-xshell">导入 Xshell</el-dropdown-item>
                                     <el-dropdown-item command="import-finalshell">导入 FinalShell</el-dropdown-item>
+                                    <el-dropdown-item command="import-putty">导入 PuTTY</el-dropdown-item>
+                                    <el-dropdown-item command="import-mobaxterm">导入 MobaXterm</el-dropdown-item>
+                                    <el-dropdown-item command="import-securecrt">导入 SecureCRT</el-dropdown-item>
                                     <el-dropdown-item command="import-openssh">导入 OpenSSH config</el-dropdown-item>
                                     <el-dropdown-item command="import-csv">导入 CSV</el-dropdown-item>
                                     <el-dropdown-item command="export-template" divided>导出连接模板</el-dropdown-item>
@@ -591,6 +594,9 @@ import {
     SelectKeyFile,
     ImportXshellPick,
     ImportFinalShellPick,
+    ImportPuttyPick,
+    ImportMobaXtermPick,
+    ImportSecureCRTPick,
     ImportOpenSSHConfigPick,
     ImportMachinesCSVPick,
     ExportMachineTemplateToFile,
@@ -1257,6 +1263,45 @@ export default {
             }
         }
 
+        const importPutty = async () => {
+            if (!ensureImportApi(ImportPuttyPick, 'PuTTY 导入')) return
+            try {
+                const result = await ImportPuttyPick(importAccountId.value || '', normalizeGroup(importGroup.value))
+                if (!result) return
+                showImportResult(result)
+                await loadMachines()
+                emit('changed')
+            } catch (error) {
+                ElMessage.error('导入失败: ' + error)
+            }
+        }
+
+        const importMobaXterm = async () => {
+            if (!ensureImportApi(ImportMobaXtermPick, 'MobaXterm 导入')) return
+            try {
+                const result = await ImportMobaXtermPick(importAccountId.value || '', normalizeGroup(importGroup.value))
+                if (!result) return
+                showImportResult(result)
+                await loadMachines()
+                emit('changed')
+            } catch (error) {
+                ElMessage.error('导入失败: ' + error)
+            }
+        }
+
+        const importSecureCRT = async () => {
+            if (!ensureImportApi(ImportSecureCRTPick, 'SecureCRT 导入')) return
+            try {
+                const result = await ImportSecureCRTPick(importAccountId.value || '', normalizeGroup(importGroup.value))
+                if (!result) return
+                showImportResult(result)
+                await loadMachines()
+                emit('changed')
+            } catch (error) {
+                ElMessage.error('导入失败: ' + error)
+            }
+        }
+
         const exportTemplate = async () => {
             try {
                 const path = await ExportMachineTemplateToFile()
@@ -1319,6 +1364,9 @@ export default {
         const handleAddCommand = (command) => {
             if (command === 'import-finalshell') importFinalShell()
             else if (command === 'import-xshell') importXshell()
+            else if (command === 'import-putty') importPutty()
+            else if (command === 'import-mobaxterm') importMobaXterm()
+            else if (command === 'import-securecrt') importSecureCRT()
             else if (command === 'import-openssh') importOpenSSH()
             else if (command === 'import-csv') importCSV()
             else if (command === 'export-template') exportTemplate()

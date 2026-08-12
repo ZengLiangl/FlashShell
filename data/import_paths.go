@@ -73,6 +73,70 @@ func CollectFilesFromPaths(paths []string, match func(fileName string) bool) ([]
 	return result, nil
 }
 
+// CollectFilesRecursive 从文件或文件夹路径递归收集匹配的配置文件
+func CollectFilesRecursive(paths []string, match func(fileName string) bool) ([]string, error) {
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("未选择文件或文件夹")
+	}
+
+	seen := make(map[string]struct{})
+	result := make([]string, 0)
+
+	addFile := func(path string) {
+		if _, ok := seen[path]; ok {
+			return
+		}
+		seen[path] = struct{}{}
+		result = append(result, path)
+	}
+
+	var walkDir func(dir string) error
+	walkDir = func(dir string) error {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return err
+		}
+		for _, entry := range entries {
+			full := filepath.Join(dir, entry.Name())
+			if entry.IsDir() {
+				if err := walkDir(full); err != nil {
+					return err
+				}
+				continue
+			}
+			if matchFileName(entry.Name(), match) {
+				addFile(full)
+			}
+		}
+		return nil
+	}
+
+	for _, path := range paths {
+		if path == "" {
+			continue
+		}
+		info, err := os.Stat(path)
+		if err != nil {
+			return nil, err
+		}
+		if info.IsDir() {
+			if err := walkDir(path); err != nil {
+				return nil, err
+			}
+			continue
+		}
+		if !matchFileName(filepath.Base(path), match) {
+			return nil, fmt.Errorf("不支持的文件: %s", filepath.Base(path))
+		}
+		addFile(path)
+	}
+
+	if len(result) == 0 {
+		return nil, fmt.Errorf("未找到可导入的配置文件")
+	}
+	return result, nil
+}
+
 func isXshellFile(name string) bool {
 	return strings.HasSuffix(name, ".xsh")
 }
