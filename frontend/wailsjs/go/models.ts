@@ -297,6 +297,8 @@ export namespace data {
 	    proxyJump?: string;
 	    startupCommand?: string;
 	    sftpEncoding?: string;
+	    agentForwarding?: boolean;
+	    proxyOverride?: define.MachineProxyOverride;
 	    tags?: string[];
 	
 	    static createFrom(source: any = {}) {
@@ -311,8 +313,28 @@ export namespace data {
 	        this.proxyJump = source["proxyJump"];
 	        this.startupCommand = source["startupCommand"];
 	        this.sftpEncoding = source["sftpEncoding"];
+	        this.agentForwarding = source["agentForwarding"];
+	        this.proxyOverride = this.convertValues(source["proxyOverride"], define.MachineProxyOverride);
 	        this.tags = source["tags"];
 	    }
+
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 	export class GlobalConfig {
 	    appId: string;
@@ -343,6 +365,7 @@ export namespace data {
 	    shellSessionRestore?: boolean;
 	    shellCursorLineHighlight?: boolean;
 	    shellLineTimestamps?: boolean;
+	    shellPasswordAssist?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new GlobalConfig(source);
@@ -378,6 +401,7 @@ export namespace data {
 	        this.shellSessionRestore = source["shellSessionRestore"];
 	        this.shellCursorLineHighlight = source["shellCursorLineHighlight"];
 	        this.shellLineTimestamps = source["shellLineTimestamps"];
+	        this.shellPasswordAssist = source["shellPasswordAssist"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -882,6 +906,7 @@ export namespace define {
 	    sftpFileProtocol?: string;
 	    startupCommand?: string;
 	    agentForwarding?: boolean;
+	    terminalPreset?: string;
 	    pinned?: boolean;
 	    tags?: string[];
 	    notes?: string;
@@ -915,6 +940,7 @@ export namespace define {
 	        this.sftpFileProtocol = source["sftpFileProtocol"];
 	        this.startupCommand = source["startupCommand"];
 	        this.agentForwarding = source["agentForwarding"];
+	        this.terminalPreset = source["terminalPreset"];
 	        this.pinned = source["pinned"];
 	        this.tags = source["tags"];
 	        this.notes = source["notes"];

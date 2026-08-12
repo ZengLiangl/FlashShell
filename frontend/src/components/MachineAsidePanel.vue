@@ -280,9 +280,6 @@ export default {
       if (defaults.keyFile) form.key_file = defaults.keyFile
       if (defaults.proxyJump) form.proxyJump = defaults.proxyJump
       if (defaults.startupCommand) form.startupCommand = defaults.startupCommand
-      if (defaults.sftpEncoding) {
-        // aside 表单未展示编码，但保留应用入口一致性
-      }
       if (defaults.tags?.length) form.tags = normalizeMachineTags(defaults.tags)
       ElMessage.success('已应用分组默认')
     }

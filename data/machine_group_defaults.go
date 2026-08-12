@@ -19,6 +19,11 @@ func (gcm *GlobalConfigManager) GetMachineGroupDefaults() []MachineGroupDefaults
 	}
 	out := make([]MachineGroupDefaults, len(gcm.config.MachineGroupDefaultsList))
 	copy(out, gcm.config.MachineGroupDefaultsList)
+	for i := range out {
+		if out[i].ProxyOverride != nil {
+			out[i].ProxyOverride.HydrateMachineProxyPassword()
+		}
+	}
 	return out
 }
 
