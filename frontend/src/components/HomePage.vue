@@ -3,32 +3,23 @@
     <!-- 有任务配置时：左侧分区导航（对标 Netcatty Vault sidebar） -->
     <aside v-if="hasProjects" class="home-rail" aria-label="首页分区">
       <div class="rail-brand">
-        <img
-          class="rail-brand-mark"
-          :src="brandIconUrl"
-          alt=""
-          aria-hidden="true"
-        />
+        <img class="rail-brand-mark" :src="brandIconUrl" alt="" aria-hidden="true" />
         <span class="rail-brand-text">FlashDock</span>
       </div>
       <nav class="rail-nav">
-        <button
-          type="button"
-          class="rail-item"
-          :class="{ active: homeSection === 'task' }"
-          @click="setHomeSection('task')"
-        >
-          <el-icon :size="16"><Folder /></el-icon>
+        <button type="button" class="rail-item" :class="{ active: homeSection === 'task' }"
+          @click="setHomeSection('task')">
+          <el-icon :size="16">
+            <Folder />
+          </el-icon>
           <span>任务</span>
           <span class="rail-count">{{ projects.length }}</span>
         </button>
-        <button
-          type="button"
-          class="rail-item"
-          :class="{ active: homeSection === 'shell' }"
-          @click="setHomeSection('shell')"
-        >
-          <el-icon :size="16"><Monitor /></el-icon>
+        <button type="button" class="rail-item" :class="{ active: homeSection === 'shell' }"
+          @click="setHomeSection('shell')">
+          <el-icon :size="16">
+            <Monitor />
+          </el-icon>
           <span>主机</span>
           <span v-if="connectedCount > 0" class="rail-live">{{ connectedCount }}</span>
           <span v-else class="rail-count">{{ (machines || []).length }}</span>
@@ -36,7 +27,9 @@
       </nav>
       <div class="rail-footer">
         <button type="button" class="rail-item rail-settings" @click="$emit('open-system-settings')">
-          <el-icon :size="16"><Setting /></el-icon>
+          <el-icon :size="16">
+            <Setting />
+          </el-icon>
           <span>设置</span>
         </button>
       </div>
@@ -46,55 +39,60 @@
       <div class="home-surface">
         <!-- 顶栏：搜索 + 主操作（对标 VaultPageHeader） -->
         <header class="home-header">
-          <el-input
-            ref="searchInputRef"
-            v-model="machineKeyword"
-            clearable
-            size="large"
-            class="home-search"
-            :placeholder="searchPlaceholder"
-            @keydown.enter.exact.prevent="onSearchEnter"
-          >
+          <el-input ref="searchInputRef" v-model="machineKeyword" clearable size="large" class="home-search"
+            :placeholder="searchPlaceholder" @keydown.enter.exact.prevent="onSearchEnter">
             <template #prefix>
-              <el-icon><Search /></el-icon>
+              <el-icon>
+                <Search />
+              </el-icon>
             </template>
           </el-input>
 
           <div class="home-header-actions">
-            <el-button
-              v-if="showingShell"
-              class="home-btn-secondary"
-              :disabled="!quickConnectHint"
-              @click="onQuickConnect"
-            >
-              连接
-            </el-button>
+            <el-tooltip v-if="showingShell" content="新建主机" placement="bottom">
+              <el-button type="primary" class="home-btn-icon home-btn-icon--primary" @click="$emit('add-machine')">
+                <el-icon>
+                  <Plus />
+                </el-icon>
+              </el-button>
+            </el-tooltip>
+            <el-tooltip v-else content="编辑流水线" placement="bottom">
+              <el-button type="primary" class="home-btn-icon home-btn-icon--primary" @click="openConfigEditor">
+                <el-icon>
+                  <Edit />
+                </el-icon>
+              </el-button>
+            </el-tooltip>
 
-            <el-dropdown
-              trigger="hover"
-              :show-timeout="120"
-              :hide-timeout="160"
-              @command="onConfigCommand"
-            >
-              <el-button class="home-btn-icon" title="配置文件">
-                <el-icon><FolderOpened /></el-icon>
+            <el-tooltip content="打开终端" placement="bottom">
+              <el-button class="home-btn-icon" @click="$emit('open-shell')">
+                <el-icon>
+                  <Monitor />
+                </el-icon>
+              </el-button>
+            </el-tooltip>
+
+            <el-dropdown trigger="click" :show-timeout="120" :hide-timeout="160" @command="onMoreCommand">
+              <el-button class="home-btn-icon" title="更多">
+                <el-icon>
+                  <MoreFilled />
+                </el-icon>
               </el-button>
               <template #dropdown>
                 <el-dropdown-menu>
                   <template v-if="configFiles.length">
-                    <el-dropdown-item
-                      v-for="file in configFiles"
-                      :key="file"
-                      :command="`switch:${file}`"
-                    >
+                    <el-dropdown-item v-for="file in configFiles" :key="file" :command="`switch:${file}`">
                       <span class="config-item">
-                        <el-icon v-if="file === currentConfig" class="config-check"><Check /></el-icon>
+                        <el-icon v-if="file === currentConfig" class="config-check">
+                          <Check />
+                        </el-icon>
                         <span>{{ basename(file) }}</span>
                       </span>
                     </el-dropdown-item>
                   </template>
                   <el-dropdown-item v-else disabled>无法加载配置文件</el-dropdown-item>
                   <el-dropdown-item divided command="edit-pipeline">编辑任务流水线</el-dropdown-item>
+                  <el-dropdown-item command="reload">刷新</el-dropdown-item>
                   <el-dropdown-item command="refresh">
                     <span>刷新配置列表</span>
                     <span class="menu-shortcut">{{ labelOf('refreshConfig') }}</span>
@@ -104,41 +102,6 @@
                 </el-dropdown-menu>
               </template>
             </el-dropdown>
-
-            <el-tooltip content="编辑任务流水线" placement="bottom">
-              <el-button class="home-btn-icon" @click="openConfigEditor">
-                <el-icon><Edit /></el-icon>
-              </el-button>
-            </el-tooltip>
-
-            <el-tooltip content="刷新" placement="bottom">
-              <el-button class="home-btn-icon" :icon="Refresh" @click="handleRefresh" />
-            </el-tooltip>
-
-            <div class="home-btn-group">
-              <el-button
-                v-if="showingShell"
-                type="primary"
-                class="home-btn-primary"
-                @click="$emit('add-machine')"
-              >
-                <el-icon><Plus /></el-icon>
-                新建主机
-              </el-button>
-              <el-button
-                v-else
-                type="primary"
-                class="home-btn-primary"
-                @click="openConfigEditor"
-              >
-                <el-icon><Edit /></el-icon>
-                编辑流水线
-              </el-button>
-              <el-button class="home-btn-secondary home-btn-terminal" @click="$emit('open-shell')">
-                <el-icon><Monitor /></el-icon>
-                终端
-              </el-button>
-            </div>
           </div>
         </header>
 
@@ -152,7 +115,9 @@
 
             <div v-if="!filteredProjects.length" class="home-empty">
               <div class="home-empty-icon" aria-hidden="true">
-                <el-icon :size="28"><Folder /></el-icon>
+                <el-icon :size="28">
+                  <Folder />
+                </el-icon>
               </div>
               <p class="home-empty-title">{{ machineKeyword.trim() ? '无匹配任务' : '暂无任务项目' }}</p>
               <p class="home-empty-desc">
@@ -162,15 +127,12 @@
 
             <div v-else class="home-section">
               <div class="item-grid">
-                <button
-                  v-for="project in filteredProjects"
-                  :key="project.name"
-                  type="button"
-                  class="item-card"
-                  @click="$emit('select-project', project)"
-                >
+                <button v-for="project in filteredProjects" :key="project.name" type="button" class="item-card"
+                  @click="$emit('select-project', project)">
                   <div class="item-icon task-icon">
-                    <el-icon :size="18"><Folder /></el-icon>
+                    <el-icon :size="18">
+                      <Folder />
+                    </el-icon>
                   </div>
                   <div class="item-meta">
                     <span class="item-name">{{ project.name }}</span>
@@ -186,25 +148,23 @@
           <template v-else>
             <div class="home-crumb">
               <span class="crumb-active">全部主机</span>
-              <el-tag
-                v-if="connectedCount > 0"
-                size="small"
-                type="primary"
-                effect="plain"
-                class="session-tag"
-              >
+              <el-tag v-if="connectedCount > 0" size="small" type="primary" effect="plain" class="session-tag">
                 {{ connectedCount }} 会话进行中
               </el-tag>
             </div>
 
             <div v-if="!(machines || []).length" class="home-empty">
               <div class="home-empty-icon" aria-hidden="true">
-                <el-icon :size="28"><Monitor /></el-icon>
+                <el-icon :size="28">
+                  <Monitor />
+                </el-icon>
               </div>
               <p class="home-empty-title">配置你的主机</p>
               <p class="home-empty-desc">保存主机后可快速连接到服务器、虚拟机与容器</p>
               <el-button type="primary" @click="$emit('add-machine')">
-                <el-icon><Plus /></el-icon>
+                <el-icon>
+                  <Plus />
+                </el-icon>
                 新建主机
               </el-button>
             </div>
@@ -212,95 +172,62 @@
             <div v-else class="zone-list-wrap">
               <div v-if="quickConnectHint" class="quick-connect-bar">
                 <span class="quick-connect-text">{{ quickConnectHint.text }}</span>
-                <el-button size="small" type="primary" @click="onQuickConnect">
-                  {{ quickConnectHint.action }}
-                </el-button>
+                <el-tooltip :content="quickConnectHint.action" placement="top">
+                  <el-button size="small" type="primary" class="quick-connect-btn" @click="onQuickConnect">
+                    <el-icon>
+                      <Connection />
+                    </el-icon>
+                  </el-button>
+                </el-tooltip>
               </div>
 
               <div v-if="availableTags.length" class="home-tag-filter">
-                <button
-                  type="button"
-                  class="home-tag-chip"
-                  :class="{ active: !selectedTags.length }"
-                  @click="selectedTags = []"
-                >全部</button>
-                <button
-                  v-for="t in availableTags"
-                  :key="t"
-                  type="button"
-                  class="home-tag-chip"
-                  :class="{ active: selectedTags.includes(t) }"
-                  @click="toggleTagFilter(t)"
-                >{{ t }}</button>
+                <button type="button" class="home-tag-chip" :class="{ active: !selectedTags.length }"
+                  @click="selectedTags = []">全部</button>
+                <button v-for="t in availableTags" :key="t" type="button" class="home-tag-chip"
+                  :class="{ active: selectedTags.includes(t) }" @click="toggleTagFilter(t)">{{ t }}</button>
               </div>
 
               <div v-if="pinnedMachines.length" class="home-section">
                 <div class="home-section-title">
-                  <el-icon :size="13"><StarFilled /></el-icon>
+                  <el-icon :size="13">
+                    <StarFilled />
+                  </el-icon>
                   置顶
                 </div>
-                <MachineConnectList
-                  :machines="pinnedMachines"
-                  :sessions="sessions"
-                  :workspace-sessions="workspaceSessions"
-                  :connecting-name="connectingName"
-                  :filter-keyword="machineKeyword"
-                  layout="grid"
-                  variant="cards"
-                  show-context-menu
-                  empty-text="无匹配机器"
-                  @connect="onConnectMachine"
-                  @edit-machine="(m) => $emit('edit-machine', m)"
-                  @copy-machine="(m) => $emit('copy-machine', m)"
-                  @delete-machine="(m) => $emit('delete-machine', m)"
-                  @toggle-pin="onTogglePin"
-                />
+                <MachineConnectList :machines="pinnedMachines" :sessions="sessions"
+                  :workspace-sessions="workspaceSessions" :connecting-name="connectingName"
+                  :filter-keyword="machineKeyword" layout="grid" variant="cards" show-context-menu empty-text="无匹配机器"
+                  @connect="onConnectMachine" @edit-machine="(m) => $emit('edit-machine', m)"
+                  @copy-machine="(m) => $emit('copy-machine', m)" @delete-machine="(m) => $emit('delete-machine', m)"
+                  @toggle-pin="onTogglePin" />
               </div>
 
               <div v-if="recentMachines.length" class="home-section">
                 <div class="home-section-title">
-                  <el-icon :size="13"><Clock /></el-icon>
+                  <el-icon :size="13">
+                    <Clock />
+                  </el-icon>
                   最近连接
                 </div>
-                <MachineConnectList
-                  :machines="recentMachines"
-                  :sessions="sessions"
-                  :workspace-sessions="workspaceSessions"
-                  :connecting-name="connectingName"
-                  :filter-keyword="machineKeyword"
-                  layout="grid"
-                  variant="cards"
-                  flat
-                  show-context-menu
-                  empty-text="无匹配机器"
-                  @connect="onConnectMachine"
-                  @edit-machine="(m) => $emit('edit-machine', m)"
-                  @copy-machine="(m) => $emit('copy-machine', m)"
-                  @delete-machine="(m) => $emit('delete-machine', m)"
-                  @toggle-pin="onTogglePin"
-                />
+                <MachineConnectList :machines="recentMachines" :sessions="sessions"
+                  :workspace-sessions="workspaceSessions" :connecting-name="connectingName"
+                  :filter-keyword="machineKeyword" layout="grid" variant="cards" flat show-context-menu
+                  empty-text="无匹配机器" @connect="onConnectMachine" @edit-machine="(m) => $emit('edit-machine', m)"
+                  @copy-machine="(m) => $emit('copy-machine', m)" @delete-machine="(m) => $emit('delete-machine', m)"
+                  @toggle-pin="onTogglePin" />
               </div>
 
               <div class="home-section">
                 <div v-if="pinnedMachines.length || recentMachines.length" class="home-section-title">
                   全部主机
                 </div>
-                <MachineConnectList
-                  :machines="filteredMachines"
-                  :sessions="sessions"
-                  :workspace-sessions="workspaceSessions"
-                  :connecting-name="connectingName"
-                  :filter-keyword="machineKeyword"
-                  layout="grid"
-                  variant="cards"
-                  show-context-menu
-                  empty-text="无匹配机器"
-                  @connect="onConnectMachine"
-                  @edit-machine="(m) => $emit('edit-machine', m)"
-                  @copy-machine="(m) => $emit('copy-machine', m)"
-                  @delete-machine="(m) => $emit('delete-machine', m)"
-                  @toggle-pin="onTogglePin"
-                />
+                <MachineConnectList :machines="filteredMachines" :sessions="sessions"
+                  :workspace-sessions="workspaceSessions" :connecting-name="connectingName"
+                  :filter-keyword="machineKeyword" layout="grid" variant="cards" show-context-menu empty-text="无匹配机器"
+                  @connect="onConnectMachine" @edit-machine="(m) => $emit('edit-machine', m)"
+                  @copy-machine="(m) => $emit('copy-machine', m)" @delete-machine="(m) => $emit('delete-machine', m)"
+                  @toggle-pin="onTogglePin" />
               </div>
             </div>
           </template>
@@ -312,7 +239,7 @@
 
 <script>
 import { ref, computed, nextTick, onMounted, onUnmounted } from 'vue'
-import { Refresh, Clock, StarFilled } from '@element-plus/icons-vue'
+import { Clock, StarFilled } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { machineMatchesKeyword, isMachineConnecting, collectMachineTags, machineMatchesTags } from '../utils/machineGroups'
@@ -498,6 +425,14 @@ export default {
       }
     }
 
+    const onMoreCommand = (cmd) => {
+      if (cmd === 'reload') {
+        handleRefresh()
+        return
+      }
+      onConfigCommand(cmd)
+    }
+
     const onConfigCommand = (cmd) => {
       if (cmd === 'edit-pipeline') {
         openConfigEditor()
@@ -643,7 +578,6 @@ export default {
     })
 
     return {
-      Refresh,
       machineKeyword,
       selectedTags,
       availableTags,
@@ -665,6 +599,7 @@ export default {
       basename,
       labelOf,
       onConfigCommand,
+      onMoreCommand,
       openConfigEditor,
       onConnectMachine,
       onQuickConnect,
@@ -691,7 +626,7 @@ export default {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  padding: 12px 10px 10px;
+  padding: 10px;
   box-sizing: border-box;
   border-right: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent);
   background: var(--app-inset-bg, var(--app-bg));
@@ -793,12 +728,8 @@ export default {
   min-width: 0;
   min-height: 0;
   display: flex;
-  padding: 0 10px 10px 0;
-  box-sizing: border-box;
-}
-
-.home-page:not(.has-rail) .home-stage {
   padding: 10px;
+  box-sizing: border-box;
 }
 
 .home-surface {
@@ -841,46 +772,18 @@ export default {
 .home-header-actions {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   flex-shrink: 0;
 }
 
-.home-btn-group {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin-left: 4px;
-}
-
-.home-btn-primary {
-  height: 36px;
-  padding: 0 14px;
-  border-radius: 8px;
-  font-weight: 600;
-}
-
-.home-btn-secondary {
-  height: 36px;
-  padding: 0 12px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--app-text) 5%, transparent);
-  border-color: color-mix(in srgb, var(--app-border) 80%, transparent);
-  color: var(--app-text);
-}
-
-.home-btn-secondary:hover {
-  background: color-mix(in srgb, var(--app-text) 9%, transparent);
-  color: var(--app-text);
-}
-
-.home-btn-terminal {
-  gap: 6px;
-}
-
 .home-btn-icon {
+  box-sizing: border-box;
   width: 36px;
   height: 36px;
+  min-width: 36px;
+  min-height: 36px;
   padding: 0;
+  margin: 0;
   border-radius: 8px;
   background: color-mix(in srgb, var(--app-text) 5%, transparent);
   border-color: color-mix(in srgb, var(--app-border) 80%, transparent);
@@ -891,6 +794,29 @@ export default {
   color: var(--app-accent-color);
   background: var(--app-accent-bg);
   border-color: color-mix(in srgb, var(--app-accent-color) 35%, var(--app-border));
+}
+
+.home-btn-icon--primary {
+  width: 48px;
+  min-width: 48px;
+  height: 36px;
+  min-height: 36px;
+  background: var(--app-accent-color);
+  border-color: var(--app-accent-color);
+  color: #fff;
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--app-accent-color) 35%, transparent);
+}
+
+.home-btn-icon--primary:hover {
+  background: color-mix(in srgb, var(--app-accent-color) 88%, #000);
+  border-color: color-mix(in srgb, var(--app-accent-color) 88%, #000);
+  color: #fff;
+}
+
+.quick-connect-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
 }
 
 .home-scroll {
@@ -1169,9 +1095,8 @@ export default {
     display: none;
   }
 
-  .home-stage,
-  .home-page:not(.has-rail) .home-stage {
-    padding: 0 8px 8px;
+  .home-stage {
+    padding: 8px;
   }
 
   .home-header {
