@@ -235,6 +235,27 @@ import ShellHistoryList from './ShellHistoryList.vue'
 const isLocalSession = (s) =>
   s?.kind === 'local' || String(s?.machineName || '').startsWith('local')
 
+const PICKER_TAB_KEY = 'flashdock.shell.pickerActiveTab'
+const PICKER_TABS = ['sessions', 'history', 'machines']
+
+const readLastPickerTab = () => {
+  try {
+    const v = localStorage.getItem(PICKER_TAB_KEY)
+    return PICKER_TABS.includes(v) ? v : ''
+  } catch {
+    return ''
+  }
+}
+
+const writeLastPickerTab = (tab) => {
+  if (!PICKER_TABS.includes(tab)) return
+  try {
+    localStorage.setItem(PICKER_TAB_KEY, tab)
+  } catch {
+    /* ignore */
+  }
+}
+
 export default {
   name: 'ShellMachinePickerDialog',
   components: { MachineConnectList, ShellHistoryList, Search, Clock, List, Monitor },
@@ -265,11 +286,15 @@ export default {
   ],
   setup(props, { emit }) {
     const keyword = ref('')
-    const activeTab = ref('sessions')
+    const activeTab = ref(readLastPickerTab() || 'sessions')
     const selectedIdx = ref(0)
     const searchInputRef = ref(null)
     const listScrollRef = ref(null)
     const localShellOptions = ref([])
+
+    watch(activeTab, (tab) => {
+      writeLastPickerTab(tab)
+    })
 
     const loadLocalShells = async () => {
       try {
@@ -472,9 +497,10 @@ export default {
     })
 
     const resolveDefaultTab = () => {
-      if (props.initialTab === 'history' || props.initialTab === 'machines' || props.initialTab === 'sessions') {
-        return props.initialTab
-      }
+      // 调用方显式指定（如空历史点「打开连接」）优先
+      if (PICKER_TABS.includes(props.initialTab)) return props.initialTab
+      const last = readLastPickerTab()
+      if (last) return last
       if ((props.workspaceSessions || []).length) return 'sessions'
       return (props.historyRecords || []).length ? 'history' : 'machines'
     }
