@@ -169,6 +169,8 @@
       :history-records="historyRecords"
       :initial-tab="pickerInitialTab"
       @connect="onPickerConnect"
+      @focus-session="onPickerFocusSession"
+      @connect-machines="onPickerConnectMachines"
       @edit-machine="(m) => $emit('edit-machine', m)"
       @copy-machine="(m) => $emit('copy-machine', m)"
       @delete-machine="(m) => $emit('delete-machine', m)"
@@ -247,6 +249,7 @@ export default {
     'add-local', 'start-resize', 'update:activeMachine', 'history-changed',
     'update:broadcast-enabled', 'update:broadcast-targets', 'update:split-session-ids',
     'reorder-tabs', 'machines-changed', 'cwd-sync',
+    'focus-session', 'connect-machines',
   ],
   setup(props, { emit }) {
     const tabsRef = ref(null)
@@ -617,6 +620,16 @@ export default {
       await loadHistory()
     }
 
+    const onPickerFocusSession = (sessionId) => {
+      pickerVisible.value = false
+      emit('focus-session', sessionId)
+    }
+
+    const onPickerConnectMachines = (names) => {
+      pickerVisible.value = false
+      emit('connect-machines', names)
+    }
+
     const onReconnect = (name) => {
       emit('reconnect', name || props.activeMachine)
     }
@@ -631,7 +644,7 @@ export default {
     }
 
     const openPicker = (tab = '') => {
-      pickerInitialTab.value = tab === 'history' || tab === 'machines' ? tab : ''
+      pickerInitialTab.value = (tab === 'history' || tab === 'machines' || tab === 'sessions') ? tab : ''
       pickerVisible.value = true
     }
 
@@ -881,6 +894,8 @@ export default {
       toggleLeftPanel,
       onHistoryConnect,
       onPickerConnect,
+      onPickerFocusSession,
+      onPickerConnectMachines,
       onReconnect,
       onAddLocal,
       onPickerAddLocal,

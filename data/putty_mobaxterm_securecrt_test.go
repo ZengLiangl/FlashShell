@@ -19,17 +19,33 @@ func TestParsePuttyRegContent(t *testing.T) {
 		`[HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions\serial-box]`,
 		`"HostName"="com1"`,
 		`"Protocol"="serial"`,
+		``,
+		`[HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions\user-at-host]`,
+		`"HostName"="ops@192.168.1.10"`,
+		`"PortNumber"=dword:00000016`,
+		`"Protocol"="ssh"`,
+		``,
+		`[HKEY_CURRENT_USER\Software\SimonTatham\PuTTY\Sessions\user-at-host-named]`,
+		`"HostName"="ignored@10.0.0.2"`,
+		`"UserName"="alice"`,
+		`"Protocol"="ssh"`,
 	}, "\n")
 
 	sessions, err := ParsePuttyRegContent(text)
 	if err != nil {
 		t.Fatalf("parse: %v", err)
 	}
-	if len(sessions) != 2 {
-		t.Fatalf("expected 2 sessions, got %d", len(sessions))
+	if len(sessions) != 4 {
+		t.Fatalf("expected 4 sessions, got %d", len(sessions))
 	}
 	if sessions[0].Name != "prod web" || sessions[0].Host != "10.0.0.1" || sessions[0].Port != 2222 || sessions[0].User != "deploy" {
 		t.Fatalf("unexpected session: %+v", sessions[0])
+	}
+	if sessions[2].Name != "user-at-host" || sessions[2].Host != "192.168.1.10" || sessions[2].User != "ops" || sessions[2].Port != 22 {
+		t.Fatalf("user@host: %+v", sessions[2])
+	}
+	if sessions[3].Name != "user-at-host-named" || sessions[3].Host != "10.0.0.2" || sessions[3].User != "alice" {
+		t.Fatalf("UserName 优先: %+v", sessions[3])
 	}
 }
 

@@ -43,8 +43,11 @@ func ParsePuttyRegContent(text string) ([]ParsedPuttySession, error) {
 	var current *ParsedPuttySession
 
 	flush := func() {
-		if current != nil && strings.TrimSpace(current.Host) != "" {
-			sessions = append(sessions, *current)
+		if current != nil {
+			normalizePuttyHostUser(current)
+			if strings.TrimSpace(current.Host) != "" {
+				sessions = append(sessions, *current)
+			}
 		}
 		current = nil
 	}
@@ -107,6 +110,29 @@ func decodePuttySessionName(raw string) string {
 		return decoded
 	}
 	return raw
+}
+
+// normalizePuttyHostUser 处理 HostName=user@host：拆出用户名，Host 只保留主机。
+// 若已有 UserName，以 UserName 为准，仍去掉 HostName 里的 user@ 前缀。
+func normalizePuttyHostUser(s *ParsedPuttySession) {
+	if s == nil {
+		return
+	}
+	host := strings.TrimSpace(s.Host)
+	at := strings.LastIndex(host, "@")
+	if at <= 0 || at >= len(host)-1 {
+		return
+	}
+	userPart := host[:at]
+	hostPart := host[at+1:]
+	// 避免把含冒号的异常串误判成 user@host（如残缺 IPv6）
+	if strings.Contains(userPart, ":") {
+		return
+	}
+	if strings.TrimSpace(s.User) == "" {
+		s.User = userPart
+	}
+	s.Host = hostPart
 }
 
 func decodeRegString(raw string) string {

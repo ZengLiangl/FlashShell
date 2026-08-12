@@ -326,10 +326,6 @@ export function ImportFinalShellPick(arg1, arg2) {
   return window['go']['app']['App']['ImportFinalShellPick'](arg1, arg2);
 }
 
-export function ImportMobaXtermPick(arg1, arg2) {
-  return window['go']['app']['App']['ImportMobaXtermPick'](arg1, arg2);
-}
-
 export function ImportKnownHosts(arg1) {
   return window['go']['app']['App']['ImportKnownHosts'](arg1);
 }
@@ -344,6 +340,10 @@ export function ImportMachineTemplateFromFile(arg1) {
 
 export function ImportMachinesCSVPick() {
   return window['go']['app']['App']['ImportMachinesCSVPick']();
+}
+
+export function ImportMobaXtermPick(arg1, arg2) {
+  return window['go']['app']['App']['ImportMobaXtermPick'](arg1, arg2);
 }
 
 export function ImportOpenSSHConfigPick(arg1, arg2) {

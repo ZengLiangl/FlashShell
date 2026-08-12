@@ -61,6 +61,7 @@
         @back="leaveShellMode" @connect="(name) => connectShell(name)" @disconnect="disconnectShell"
         @close-session="closeShellSession" @close-sessions="closeShellSessions"
         @reconnect="(name) => connectOrReconnectShell(name)" @add-local="() => connectLocalShell()"
+        @focus-session="onQuickFocusSession" @connect-machines="onQuickConnectMachines"
         @test="testShellConnection" @update:broadcast-enabled="(v) => (broadcastEnabled = v)"
         @update:broadcast-targets="(v) => (broadcastTargets = v)"
         @update:split-session-ids="(v) => (splitSessionIds = v)" @reorder-tabs="({ from, to }) => reorderTabs(from, to)"
@@ -103,21 +104,6 @@
     <ConfigEditorDialog v-model="configEditorVisible" @saved="refreshProjectConfig" />
 
     <HostKeyTrustDialog v-model="hostKeyDialogVisible" :host-key-info="pendingHostKey" @trusted="onHostKeyTrusted" />
-    <QuickSwitcher
-      v-model="quickSwitcherVisible"
-      :machines="shellMachines"
-      :sessions="shellSessions"
-      @focus-session="onQuickFocusSession"
-      @connect-machine="onQuickConnectMachine"
-      @connect-machines="onQuickConnectMachines"
-      @open-settings="() => { settingsSection = 'general'; settingsHubVisible = true }"
-      @open-machine-config="() => { settingsSection = 'machines'; settingsHubVisible = true }"
-      @open-shell="() => switchActiveView('shell')"
-      @open-command-palette="() => {
-        switchActiveView('shell')
-        nextTick(() => shellWorkspaceRef.value?.openCommandPalette?.())
-      }"
-    />
   </div>
 </template>
 
@@ -156,12 +142,11 @@ const AboutDialog = defineAsyncComponent(() => import("./components/AboutDialog.
 const ConfigEditorDialog = defineAsyncComponent(() => import("./components/ConfigEditorDialog.vue"));
 const SettingsHubDialog = defineAsyncComponent(() => import("./components/SettingsHubDialog.vue"));
 const HostKeyTrustDialog = defineAsyncComponent(() => import("./components/shell/HostKeyTrustDialog.vue"));
-const QuickSwitcher = defineAsyncComponent(() => import("./components/QuickSwitcher.vue"));
 const MachineAsidePanel = defineAsyncComponent(() => import("./components/MachineAsidePanel.vue"));
 
 export default {
   name: "App",
-  components: { AppMenuBar, TerminalOutput, StatusBar, ProjectList, HomePage, ShellWorkspace, SubProjectList, TerminalHeader, AboutDialog, ConfigEditorDialog, SettingsHubDialog, HostKeyTrustDialog, QuickSwitcher, MachineAsidePanel },
+  components: { AppMenuBar, TerminalOutput, StatusBar, ProjectList, HomePage, ShellWorkspace, SubProjectList, TerminalHeader, AboutDialog, ConfigEditorDialog, SettingsHubDialog, HostKeyTrustDialog, MachineAsidePanel },
   setup() {
     const { isDark, themeMode, terminalPreset, shellFontSize, loadTheme, applyThemeSettings, saveTheme } = useTheme();
     const projects = ref([]);
@@ -221,7 +206,6 @@ export default {
     const machineAsideMachine = ref(null);
     const machines = ref([]);
     const machinesLoading = ref(false);
-    const quickSwitcherVisible = ref(false);
 
     // 关于弹框 / 更新提示
     const aboutVisible = ref(false);
@@ -647,15 +631,15 @@ export default {
       await openShellAndConnect(machineName);
     };
 
-    /** 错峰批量连接（150–300ms 间隔） */
+    /** 错峰批量连接（150–300ms 间隔）；已连接则聚焦，不重复开会话 */
     const onQuickConnectMachines = async (names) => {
       const list = Array.isArray(names) ? names.filter(Boolean) : []
       if (!list.length) return
-      switchActiveView('shell')
+      await enterShellMode()
       for (let i = 0; i < list.length; i++) {
         const name = list[i]
         try {
-          await connectShell(name)
+          await onQuickConnectMachine(name)
         } catch (e) {
           console.error('批量连接失败:', name, e)
         }
@@ -1148,12 +1132,6 @@ export default {
         if (activeView.value === 'shell') {
           shellWorkspaceRef.value?.openCommandPalette?.();
         }
-        return;
-      }
-
-      if (matchesShortcut(e, sc.quickSwitcher)) {
-        take();
-        quickSwitcherVisible.value = true;
         return;
       }
 
@@ -1667,7 +1645,6 @@ export default {
       machines,
       machinesLoading,
       settingsHubVisible,
-      quickSwitcherVisible,
       settingsSection,
       openSettingsHub,
       openMachineConfig,

@@ -133,6 +133,12 @@ export default {
       }
       const idx = records.value.findIndex((r) => r.id === rec.id)
       if (idx >= 0) {
+        const cur = records.value[idx]
+        // 忽略完成/失败后迟到的 running 进度事件，避免卡在「解压中」
+        if ((cur.status === 'done' || cur.status === 'error') &&
+            (rec.status === 'running' || rec.status === 'pending' || rec.status === 'queued')) {
+          return
+        }
         records.value.splice(idx, 1, { ...records.value[idx], ...rec })
       } else {
         records.value.unshift(rec)

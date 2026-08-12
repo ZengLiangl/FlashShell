@@ -317,7 +317,7 @@ export namespace data {
 	        this.proxyOverride = this.convertValues(source["proxyOverride"], define.MachineProxyOverride);
 	        this.tags = source["tags"];
 	    }
-
+	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
 		    if (!a) {
 		        return a;
@@ -718,7 +718,7 @@ export namespace data {
 	    paste: ShortcutBinding;
 	    clearOutput: ShortcutBinding;
 	    commandPalette: ShortcutBinding;
-	    quickSwitcher: ShortcutBinding;
+	    quickSwitcher?: ShortcutBinding;
 	    paneZoom: ShortcutBinding;
 	    snippets?: ShellSnippet[];
 	

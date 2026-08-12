@@ -38,9 +38,10 @@ type ShortcutSettings struct {
 	Paste             ShortcutBinding `json:"paste"`
 	ClearOutput       ShortcutBinding `json:"clearOutput"`
 	CommandPalette    ShortcutBinding `json:"commandPalette"`
-	QuickSwitcher     ShortcutBinding `json:"quickSwitcher"`
-	PaneZoom          ShortcutBinding `json:"paneZoom"`
-	Snippets          []ShellSnippet  `json:"snippets,omitempty"`
+	// QuickSwitcher 已废弃（合并进 ConnectionManager）；保留字段以兼容旧配置
+	QuickSwitcher ShortcutBinding `json:"quickSwitcher,omitempty"`
+	PaneZoom      ShortcutBinding `json:"paneZoom"`
+	Snippets      []ShellSnippet  `json:"snippets,omitempty"`
 }
 
 // DefaultShortcutSettings 默认快捷键
@@ -57,7 +58,6 @@ func DefaultShortcutSettings() ShortcutSettings {
 		Paste:             ShortcutBinding{Key: "v", UseMod: true},
 		ClearOutput:       ShortcutBinding{Key: "k", UseMod: true},
 		CommandPalette:    ShortcutBinding{Key: "p", UseMod: true, UseShift: true},
-		QuickSwitcher:     ShortcutBinding{Key: "j", UseMod: true},
 		PaneZoom:          ShortcutBinding{Key: "z", UseMod: true, UseShift: true},
 	}
 }
@@ -100,9 +100,8 @@ func fillShortcutDefaults(s *ShortcutSettings) {
 	if s.CommandPalette.Key == "" {
 		s.CommandPalette = def.CommandPalette
 	}
-	if s.QuickSwitcher.Key == "" {
-		s.QuickSwitcher = def.QuickSwitcher
-	}
+	// 废弃 Ctrl+J 快速切换：清空旧绑定，避免残留
+	s.QuickSwitcher = ShortcutBinding{}
 	if s.PaneZoom.Key == "" {
 		s.PaneZoom = def.PaneZoom
 	}

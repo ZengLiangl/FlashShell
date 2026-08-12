@@ -308,9 +308,11 @@ func (a *ShellAuxManager) UploadFile(ctx context.Context, localPath, remotePath 
 	return nil
 }
 
-// UploadDirectoryZip 将本地目录打成 zip 上传后在远端解压，保留本地原目录，删除远端压缩包。
+// UploadDirectoryZip 将本地目录打成 zip 上传后解压到 remoteTarget（完整远端目录路径）。
+// remoteTarget 必须是最终目录（如 /home/u/foo 或 /home/u/foo (1)），不再用本地目录名拼接。
+// onPhase 可选：上报 compressing/uploading/extracting（由调用方决定何时 compressing）。
 // 若远端无 unzip/python，则回退为 SFTP 递归上传。
-func (a *ShellAuxManager) UploadDirectoryZip(ctx context.Context, localDir, remoteParent string, onProgress TransferProgressFunc) error {
+func (a *ShellAuxManager) UploadDirectoryZip(ctx context.Context, localDir, remoteTarget string, onProgress TransferProgressFunc, onPhase func(string)) error {
 	if err := ctxErr(ctx); err != nil {
 		return err
 	}
@@ -321,12 +323,14 @@ func (a *ShellAuxManager) UploadDirectoryZip(ctx context.Context, localDir, remo
 	if !info.IsDir() {
 		return fmt.Errorf("不是目录: %s", localDir)
 	}
-	folderName := info.Name()
-	remoteParent = strings.TrimSpace(remoteParent)
-	if remoteParent == "" {
-		remoteParent = "."
+	targetDir := strings.TrimSpace(remoteTarget)
+	if targetDir == "" || targetDir == "." {
+		targetDir = path.Join(".", info.Name())
 	}
-	targetDir := path.Join(remoteParent, folderName)
+	folderName := path.Base(targetDir)
+	if folderName == "" || folderName == "." || folderName == "/" {
+		folderName = info.Name()
+	}
 
 	tempZip, err := os.CreateTemp("", "shell_upload_*.zip")
 	if err != nil {
@@ -348,6 +352,9 @@ func (a *ShellAuxManager) UploadDirectoryZip(ctx context.Context, localDir, remo
 		return err
 	}
 
+	if onPhase != nil {
+		onPhase("extracting")
+	}
 	if err := a.extractRemoteZip(remoteZip, targetDir); err != nil {
 		_, _ = a.Exec("rm -f " + shellSingleQuote(remoteZip))
 		if fallbackErr := a.uploadDirectoryRecursive(ctx, localDir, targetDir, onProgress); fallbackErr != nil {

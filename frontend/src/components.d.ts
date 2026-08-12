@@ -58,7 +58,6 @@ declare module 'vue' {
     PortForwardPanel: typeof import('./components/PortForwardPanel.vue')['default']
     ProjectList: typeof import('./components/ProjectList.vue')['default']
     ProxySettingsPanel: typeof import('./components/ProxySettingsPanel.vue')['default']
-    QuickSwitcher: typeof import('./components/QuickSwitcher.vue')['default']
     SettingsHubDialog: typeof import('./components/SettingsHubDialog.vue')['default']
     SftpConflictDialog: typeof import('./components/shell/SftpConflictDialog.vue')['default']
     ShellBroadcastBar: typeof import('./components/shell/ShellBroadcastBar.vue')['default']

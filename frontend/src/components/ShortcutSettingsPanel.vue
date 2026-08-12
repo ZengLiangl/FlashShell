@@ -363,7 +363,6 @@ export default {
           paste: { ...shortcuts.paste },
           clearOutput: { ...shortcuts.clearOutput },
           commandPalette: { ...shortcuts.commandPalette },
-          quickSwitcher: { ...shortcuts.quickSwitcher },
           paneZoom: { ...shortcuts.paneZoom },
           snippets: snippets.value.map((s) => {
             const out = {

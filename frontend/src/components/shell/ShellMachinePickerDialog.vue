@@ -1,7 +1,7 @@
 <template>
   <el-dialog
     v-model="visibleProxy"
-    title="连接"
+    title="连接 / 快速切换"
     width="600px"
     class="machine-picker-dialog"
     append-to-body
@@ -12,13 +12,16 @@
           ref="searchInputRef"
           v-model="keyword"
           clearable
-          placeholder="搜索机器名 / 地址"
+          :placeholder="searchPlaceholder"
           size="small"
           class="app-toolbar-search"
-          @keydown.enter.prevent="connectFirst"
+          @keydown="onSearchKeydown"
         >
           <template #prefix>
             <el-icon><Search /></el-icon>
+          </template>
+          <template #suffix>
+            <span class="picker-shortcut-hint">{{ shortcutHint }}</span>
           </template>
         </el-input>
         <div class="icon-actions">
@@ -32,6 +35,18 @@
       </div>
 
       <div v-if="!isSearching" class="picker-segment" role="tablist">
+        <button
+          type="button"
+          class="picker-segment-btn"
+          :class="{ active: activeTab === 'sessions' }"
+          role="tab"
+          :aria-selected="activeTab === 'sessions'"
+          @click="activeTab = 'sessions'"
+        >
+          <el-icon :size="14"><Monitor /></el-icon>
+          <span class="picker-segment-label">已打开</span>
+          <span class="picker-segment-count">{{ openSessionCount }}</span>
+        </button>
         <button
           type="button"
           class="picker-segment-btn"
@@ -59,56 +74,70 @@
       </div>
 
       <div class="picker-panel">
-        <!-- 搜索：同时覆盖最近连接 + 全部机器 -->
+        <!-- 搜索：会话 / 本机 / 批量 / 最近 / 机器 统一列表 -->
         <div v-if="isSearching" class="picker-pane picker-pane--search">
           <div class="picker-pane-head">
             <span class="picker-pane-hint">{{ searchPaneHint }}</span>
           </div>
 
-          <div v-if="!hasSearchHits" class="picker-empty compact">
-            <p class="picker-empty-desc">没有匹配「{{ keyword.trim() }}」的连接或机器</p>
+          <div v-if="!flatItems.length" class="picker-empty compact">
+            <p class="picker-empty-desc">没有匹配「{{ keyword.trim() }}」的标签、本机或机器</p>
           </div>
 
-          <div v-else class="picker-search-scroll">
-            <section v-if="historyFiltered.length" class="picker-search-section">
-              <div class="picker-search-section-head">
-                <span class="picker-search-section-title">最近连接</span>
-                <span class="picker-search-section-count">{{ historyFiltered.length }}</span>
+          <div v-else class="picker-search-scroll" ref="listScrollRef">
+            <template v-for="(item, i) in flatItems" :key="item.id">
+              <div
+                v-if="item.kind === 'header'"
+                class="picker-search-section-head"
+              >
+                <span class="picker-search-section-title">{{ item.title }}</span>
+                <span v-if="item.count != null" class="picker-search-section-count">{{ item.count }}</span>
               </div>
-              <ShellHistoryList
-                :records="historyRecords"
-                :sessions="sessions"
-                :workspace-sessions="workspaceSessions"
-                :keyword="keyword"
-                :show-head="false"
-                embedded
-                @connect="onConnect"
-                @remove="(row) => $emit('remove-history', row)"
-              />
-            </section>
+              <button
+                v-else
+                type="button"
+                class="picker-nav-item"
+                :class="{ selected: i === selectedIdx }"
+                @mouseenter="selectedIdx = i"
+                @click="runItem(item)"
+              >
+                <span class="picker-nav-kind">{{ item.kindLabel }}</span>
+                <span class="picker-nav-main">
+                  <span class="picker-nav-title">{{ item.title }}</span>
+                  <span v-if="item.subtitle" class="picker-nav-sub">{{ item.subtitle }}</span>
+                </span>
+              </button>
+            </template>
+          </div>
+        </div>
 
-            <section v-if="filteredMachines.length" class="picker-search-section">
-              <div class="picker-search-section-head">
-                <span class="picker-search-section-title">全部机器</span>
-                <span class="picker-search-section-count">{{ filteredMachines.length }}</span>
-              </div>
-              <div class="picker-pane-body picker-pane-body--flush">
-                <MachineConnectList
-                  :machines="filteredMachines"
-                  :sessions="sessions"
-                  :workspace-sessions="workspaceSessions"
-                  :connecting-name="connectingName"
-                  :filter-keyword="keyword"
-                  show-edit
-                  show-context-menu
-                  empty-text="没有匹配的机器"
-                  @connect="onConnect"
-                  @edit-machine="(m) => $emit('edit-machine', m)"
-                  @copy-machine="(m) => $emit('copy-machine', m)"
-                  @delete-machine="(m) => $emit('delete-machine', m)"
-                />
-              </div>
-            </section>
+        <!-- 已打开：切标签 + 本机 -->
+        <div v-show="!isSearching && activeTab === 'sessions'" class="picker-pane">
+          <div class="picker-pane-head">
+            <span class="picker-pane-hint">聚焦已开标签，或新开本机终端</span>
+          </div>
+          <div v-if="!sessionNavItems.length" class="picker-empty">
+            <el-icon :size="36" class="picker-empty-icon"><Monitor /></el-icon>
+            <p class="picker-empty-title">暂无已打开标签</p>
+            <p class="picker-empty-desc">连接机器后会出现在这里，也可直接打开本机</p>
+            <el-button size="small" type="primary" @click="onAddLocal">打开本机终端</el-button>
+          </div>
+          <div v-else class="picker-nav-scroll" ref="listScrollRef">
+            <button
+              v-for="(item, i) in sessionNavItems"
+              :key="item.id"
+              type="button"
+              class="picker-nav-item"
+              :class="{ selected: i === selectedIdx }"
+              @mouseenter="selectedIdx = i"
+              @click="runItem(item)"
+            >
+              <span class="picker-nav-kind">{{ item.kindLabel }}</span>
+              <span class="picker-nav-main">
+                <span class="picker-nav-title">{{ item.title }}</span>
+                <span v-if="item.subtitle" class="picker-nav-sub">{{ item.subtitle }}</span>
+              </span>
+            </button>
           </div>
         </div>
 
@@ -179,9 +208,18 @@
 <script>
 import { computed, ref, watch, nextTick } from 'vue'
 import { Monitor, Plus, Search, Clock, List } from '@element-plus/icons-vue'
-import { machineMatchesKeyword } from '../../utils/machineGroups'
+import {
+  machineMatchesKeyword,
+  normalizeMachineTags,
+  collectMachineTags,
+  formatMachineAddr,
+} from '../../utils/machineGroups'
+import { DEFAULT_SHORTCUTS, formatShortcut } from '../../utils/shortcuts'
 import MachineConnectList from './MachineConnectList.vue'
 import ShellHistoryList from './ShellHistoryList.vue'
+
+const isLocalSession = (s) =>
+  s?.kind === 'local' || String(s?.machineName || '').startsWith('local')
 
 export default {
   name: 'ShellMachinePickerDialog',
@@ -198,6 +236,8 @@ export default {
   emits: [
     'update:modelValue',
     'connect',
+    'focus-session',
+    'connect-machines',
     'edit-machine',
     'copy-machine',
     'delete-machine',
@@ -209,8 +249,10 @@ export default {
   ],
   setup(props, { emit }) {
     const keyword = ref('')
-    const activeTab = ref('history')
+    const activeTab = ref('sessions')
+    const selectedIdx = ref(0)
     const searchInputRef = ref(null)
+    const listScrollRef = ref(null)
 
     const visibleProxy = computed({
       get: () => props.modelValue,
@@ -218,6 +260,15 @@ export default {
     })
 
     const isSearching = computed(() => !!String(keyword.value || '').trim())
+    const shortcutHint = computed(() => formatShortcut(DEFAULT_SHORTCUTS.connectionManager))
+    const searchPlaceholder = computed(
+      () => `搜索主机、已开标签或本机…（${shortcutHint.value}）`,
+    )
+
+    const openSessions = computed(() =>
+      (props.workspaceSessions || []).filter((s) => s?.machineName),
+    )
+    const openSessionCount = computed(() => openSessions.value.length)
 
     const filteredMachines = computed(() => {
       const kw = keyword.value
@@ -238,9 +289,139 @@ export default {
       })
     })
 
-    const hasSearchHits = computed(
-      () => historyFiltered.value.length > 0 || filteredMachines.value.length > 0,
-    )
+    const filteredOpenSessions = computed(() => {
+      const kw = String(keyword.value || '').trim().toLowerCase()
+      const list = openSessions.value
+      if (!kw) return list
+      return list.filter((s) => {
+        const hay = `${s.tabLabel || ''} ${s.machineName || ''} ${s.configName || ''}`.toLowerCase()
+        return hay.includes(kw)
+      })
+    })
+
+    const localMatchesSearch = computed(() => {
+      const kw = String(keyword.value || '').trim().toLowerCase()
+      if (!kw) return true
+      return ['本机', 'local', 'terminal', 'shell', 'powershell', 'cmd'].some((t) => t.includes(kw) || kw.includes(t))
+    })
+
+    const batchItems = computed(() => {
+      const kw = String(keyword.value || '').trim().toLowerCase()
+      if (!kw) return []
+      const out = []
+      const allTags = collectMachineTags(props.machines || [])
+      const matchedTags = allTags.filter((t) => t.toLowerCase().includes(kw) || kw.includes(t.toLowerCase()))
+      for (const tag of matchedTags.slice(0, 5)) {
+        const names = (props.machines || [])
+          .filter((m) => normalizeMachineTags(m.tags).includes(tag))
+          .map((m) => m.name)
+          .filter(Boolean)
+        if (names.length < 2) continue
+        out.push({
+          id: `batch-tag-${tag}`,
+          kind: 'batch',
+          kindLabel: '批量',
+          title: `连接标签「${tag}」`,
+          subtitle: `${names.length} 台 · 错峰连接`,
+          run: () => emit('connect-machines', names),
+        })
+      }
+      return out
+    })
+
+    const makeSessionItem = (s) => ({
+      id: `sess-${s.machineName}`,
+      kind: 'session',
+      kindLabel: isLocalSession(s) ? '本机' : (s.connected ? '标签' : '标签·断'),
+      title: s.tabLabel || s.machineName,
+      subtitle: s.configName && s.configName !== s.machineName
+        ? s.configName
+        : (s.connected ? '点击聚焦' : '点击聚焦并重连'),
+      run: () => {
+        visibleProxy.value = false
+        emit('focus-session', s.machineName)
+      },
+    })
+
+    const localItem = {
+      id: 'local-new',
+      kind: 'local',
+      kindLabel: '本机',
+      title: '打开本机终端',
+      subtitle: '新建本地 Shell 标签',
+      run: () => {
+        emit('add-local')
+        visibleProxy.value = false
+      },
+    }
+
+    const sessionNavItems = computed(() => {
+      const items = filteredOpenSessions.value.map(makeSessionItem)
+      items.push({ ...localItem })
+      return items
+    })
+
+    const flatItems = computed(() => {
+      if (!isSearching.value) return []
+      const rows = []
+      const pushHeader = (id, title, count) => {
+        rows.push({ id: `hdr-${id}`, kind: 'header', title, count })
+      }
+      const sessions = filteredOpenSessions.value
+      if (sessions.length) {
+        pushHeader('sessions', '已打开', sessions.length)
+        sessions.forEach((s) => rows.push(makeSessionItem(s)))
+      }
+      if (localMatchesSearch.value) {
+        pushHeader('local', '本机', 1)
+        rows.push({ ...localItem })
+      }
+      if (batchItems.value.length) {
+        pushHeader('batch', '批量', batchItems.value.length)
+        batchItems.value.forEach((b) => rows.push(b))
+      }
+      if (historyFiltered.value.length) {
+        pushHeader('history', '最近连接', historyFiltered.value.length)
+        historyFiltered.value.forEach((row) => {
+          rows.push({
+            id: `hist-${row.machineName}-${row.connectedAt || ''}`,
+            kind: 'history',
+            kindLabel: '最近',
+            title: row.machineName,
+            subtitle: [
+              row.user && row.host ? `${row.user}@${row.host}` : (row.host || row.user || ''),
+              row.port ? `:${row.port}` : '',
+            ].join('') || '点击连接',
+            run: () => onConnect(row.machineName),
+          })
+        })
+      }
+      if (filteredMachines.value.length) {
+        pushHeader('machines', '全部机器', filteredMachines.value.length)
+        filteredMachines.value.forEach((m) => {
+          const tags = normalizeMachineTags(m.tags)
+          rows.push({
+            id: `m-${m.id || m.name}`,
+            kind: 'machine',
+            kindLabel: '机器',
+            title: m.name,
+            subtitle: [formatMachineAddr(m), tags.join(' · ')].filter(Boolean).join(' | '),
+            run: () => onConnect(m.name),
+          })
+        })
+      }
+      return rows
+    })
+
+    const selectableItems = computed(() => {
+      if (isSearching.value) {
+        return flatItems.value.map((item, index) => ({ item, index })).filter(({ item }) => item.kind !== 'header')
+      }
+      if (activeTab.value === 'sessions') {
+        return sessionNavItems.value.map((item, index) => ({ item, index }))
+      }
+      return []
+    })
 
     const historyPaneHint = computed(() => {
       const total = props.historyRecords.length
@@ -253,31 +434,39 @@ export default {
     })
 
     const searchPaneHint = computed(() => {
-      const hist = historyFiltered.value.length
-      const mac = filteredMachines.value.length
-      if (!hist && !mac) return '无匹配结果'
-      return `最近连接 ${hist} · 全部机器 ${mac}，Enter 连接首条`
+      const n = selectableItems.value.length
+      if (!n) return '无匹配结果'
+      return `${n} 项可切换 · ↑↓ 选择 · Enter 确认`
     })
 
     const resolveDefaultTab = () => {
-      if (props.initialTab === 'history' || props.initialTab === 'machines') {
+      if (props.initialTab === 'history' || props.initialTab === 'machines' || props.initialTab === 'sessions') {
         return props.initialTab
       }
+      if ((props.workspaceSessions || []).length) return 'sessions'
       return (props.historyRecords || []).length ? 'history' : 'machines'
     }
 
     const focusSearch = async () => {
       await nextTick()
-      // 等对话框过渡后再 focus，避免被遮罩抢焦点
       requestAnimationFrame(() => {
         searchInputRef.value?.focus?.()
       })
     }
 
+    const resetSelection = () => {
+      const first = selectableItems.value[0]
+      selectedIdx.value = first ? first.index : 0
+    }
+
     const onDialogOpen = () => {
       activeTab.value = resolveDefaultTab()
+      keyword.value = ''
       emit('open')
-      focusSearch()
+      nextTick(() => {
+        resetSelection()
+        focusSearch()
+      })
     }
 
     watch(
@@ -291,20 +480,37 @@ export default {
       },
     )
 
-    const onConnect = (name) => emit('connect', name)
+    watch([isSearching, activeTab, () => flatItems.value.length, () => sessionNavItems.value.length], () => {
+      resetSelection()
+    })
 
-    const connectFirst = () => {
-      // 搜索时优先最近连接，再全部机器；非搜索按当前 Tab
-      if (isSearching.value) {
-        const hist = historyFiltered.value[0]
-        if (hist) {
-          onConnect(hist.machineName)
+    const onConnect = (name) => {
+      emit('connect', name)
+      visibleProxy.value = false
+    }
+
+    const runItem = (item) => {
+      if (!item?.run || item.kind === 'header') return
+      item.run()
+    }
+
+    const applySelected = () => {
+      if (isSearching.value || activeTab.value === 'sessions') {
+        const item = isSearching.value
+          ? flatItems.value[selectedIdx.value]
+          : sessionNavItems.value[selectedIdx.value]
+        if (item && item.kind !== 'header') {
+          runItem(item)
           return
         }
-        const mac = filteredMachines.value[0]
-        if (mac) onConnect(mac.name)
+        const next = selectableItems.value.find((x) => x.index >= selectedIdx.value) || selectableItems.value[0]
+        if (next) runItem(next.item)
         return
       }
+      connectFirstLegacy()
+    }
+
+    const connectFirstLegacy = () => {
       if (activeTab.value === 'history') {
         const first = historyFiltered.value[0]
         if (first) onConnect(first.machineName)
@@ -312,6 +518,37 @@ export default {
       }
       const first = filteredMachines.value[0]
       if (first) onConnect(first.name)
+    }
+
+    const moveSel = (delta) => {
+      const opts = selectableItems.value
+      if (!opts.length) return
+      const curPos = opts.findIndex((x) => x.index === selectedIdx.value)
+      const nextPos = curPos < 0 ? 0 : (curPos + delta + opts.length) % opts.length
+      selectedIdx.value = opts[nextPos].index
+      nextTick(() => {
+        const root = listScrollRef.value
+        if (!root) return
+        const el = root.querySelector('.picker-nav-item.selected')
+        el?.scrollIntoView?.({ block: 'nearest' })
+      })
+    }
+
+    const onSearchKeydown = (e) => {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        moveSel(1)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        moveSel(-1)
+        return
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault()
+        applySelected()
+      }
     }
 
     const onAddLocal = () => {
@@ -323,19 +560,26 @@ export default {
       Monitor,
       Plus,
       searchInputRef,
+      listScrollRef,
       visibleProxy,
       keyword,
       activeTab,
+      selectedIdx,
       isSearching,
+      shortcutHint,
+      searchPlaceholder,
+      openSessionCount,
       filteredMachines,
       historyFiltered,
-      hasSearchHits,
+      sessionNavItems,
+      flatItems,
       historyPaneHint,
       machinesPaneHint,
       searchPaneHint,
       onConnect,
       onAddLocal,
-      connectFirst,
+      onSearchKeydown,
+      runItem,
     }
   },
 }
@@ -352,9 +596,16 @@ export default {
   margin-bottom: 0;
 }
 
+.picker-shortcut-hint {
+  font-size: 11px;
+  color: var(--app-text-muted, #909399);
+  padding-right: 4px;
+  white-space: nowrap;
+}
+
 .picker-segment {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 6px;
   padding: 4px;
   border-radius: var(--app-radius-lg, 10px);
@@ -368,7 +619,7 @@ export default {
   justify-content: center;
   gap: 6px;
   min-height: 36px;
-  padding: 0 12px;
+  padding: 0 10px;
   border: none;
   border-radius: var(--app-radius-md, 8px);
   background: transparent;
@@ -466,29 +717,26 @@ export default {
   padding: 8px;
 }
 
-.picker-pane-body--flush {
-  padding: 4px 8px 8px;
-}
-
 .picker-pane--search {
   min-height: 0;
 }
 
-.picker-search-scroll {
+.picker-search-scroll,
+.picker-nav-scroll {
   flex: 1;
   min-height: 0;
   overflow: auto;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding-bottom: 8px;
+  gap: 2px;
+  padding: 6px 8px 10px;
 }
 
 .picker-search-section-head {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 14px 4px;
+  padding: 10px 8px 4px;
 }
 
 .picker-search-section-title {
@@ -508,10 +756,57 @@ export default {
   background: color-mix(in srgb, var(--app-accent-color, #409eff) 14%, transparent);
 }
 
-.picker-pane--search :deep(.history-list-wrap) {
-  flex: none;
-  overflow: visible;
-  padding: 4px 8px 0;
+.picker-nav-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  border: none;
+  border-radius: var(--app-radius-md, 8px);
+  background: transparent;
+  padding: 10px 12px;
+  cursor: pointer;
+  color: inherit;
+}
+
+.picker-nav-item.selected,
+.picker-nav-item:hover {
+  background: var(--app-accent-bg, color-mix(in srgb, var(--app-accent-color, #409eff) 12%, transparent));
+}
+
+.picker-nav-kind {
+  flex-shrink: 0;
+  margin-top: 2px;
+  font-size: 10px;
+  line-height: 1;
+  padding: 4px 6px;
+  border-radius: 999px;
+  color: var(--app-text-muted);
+  border: 1px solid var(--app-border);
+  background: var(--app-panel-bg, transparent);
+}
+
+.picker-nav-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.picker-nav-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--app-text);
+}
+
+.picker-nav-sub {
+  font-size: 12px;
+  color: var(--app-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .picker-pane :deep(.history-list-wrap) {

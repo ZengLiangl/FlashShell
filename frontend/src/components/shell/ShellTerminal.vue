@@ -93,7 +93,6 @@ import {
   decodeOsc52ClipboardPayload,
   prefixLineTimestamps,
   looksLikePasswordPrompt,
-  stripAnsiForPromptDetect,
 } from '../../utils/shellTerminalUx'
 import { ClipboardSetText } from '../../../wailsjs/runtime/runtime'
 import ShellConnectionOverlay from './ShellConnectionOverlay.vue'
@@ -158,6 +157,55 @@ export default {
     let passwordAssistEnabled = true
     let passwordDetectTail = ''
     let passwordAssistDismissedUntil = 0
+    const PASSWORD_ASSIST_DISMISS_MS = 8000
+    const PASSWORD_DETECT_TAIL_MAX = 400
+
+    const dismissPasswordAssist = () => {
+      passwordAssistVisible.value = false
+      passwordAssistValue.value = ''
+      passwordAssistDismissedUntil = Date.now() + PASSWORD_ASSIST_DISMISS_MS
+    }
+
+    const showPasswordAssist = () => {
+      if (!passwordAssistEnabled) return
+      if (!props.connected) return
+      if (suppressInputForwardDepth > 0) return
+      if (passwordAssistVisible.value) return
+      if (Date.now() < passwordAssistDismissedUntil) return
+      passwordAssistValue.value = ''
+      passwordAssistVisible.value = true
+      nextTick(() => {
+        passwordAssistInputRef.value?.focus?.()
+      })
+    }
+
+    const sendPasswordAssist = async () => {
+      const value = passwordAssistValue.value
+      passwordAssistVisible.value = false
+      passwordAssistValue.value = ''
+      passwordDetectTail = ''
+      // 短冷却，避免同一提示立刻再次弹出
+      passwordAssistDismissedUntil = Date.now() + 1500
+      if (!props.connected || !value) return
+      try {
+        await App.SendShellInput(props.machineName, `${value}\r`)
+      } catch {
+        // ignore
+      }
+    }
+
+    const notePasswordPromptText = (text) => {
+      if (!passwordAssistEnabled || !text) return
+      if (suppressInputForwardDepth > 0) return
+      if (!props.connected) return
+      if (passwordAssistVisible.value) return
+      if (Date.now() < passwordAssistDismissedUntil) return
+      passwordDetectTail = (passwordDetectTail + text).slice(-PASSWORD_DETECT_TAIL_MAX)
+      if (looksLikePasswordPrompt(passwordDetectTail)) {
+        showPasswordAssist()
+      }
+    }
+
     let resizeObserver = null
     let fitTimers = []
     let initialized = false
@@ -506,6 +554,7 @@ export default {
         return writeTerminal(terminal, raw)
       }
       tuiModeDepth = updateTuiModeDepth(tuiModeDepth, text)
+      notePasswordPromptText(text)
       if (!logHighlightEnabled) {
         return writeTerminal(terminal, applyLineTimestampsIfNeeded(text))
       }

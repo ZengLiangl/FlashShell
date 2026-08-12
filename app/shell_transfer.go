@@ -74,7 +74,7 @@ func (a *App) updateTransferProgress(id string, transferred, total int64, speedB
 	store := a.ensureTransferStore()
 	store.mu.Lock()
 	rec, ok := store.items[id]
-	if !ok || rec.Status == "paused" {
+	if !ok || rec.Status == "paused" || rec.Status == "done" || rec.Status == "error" {
 		store.mu.Unlock()
 		return
 	}
@@ -96,7 +96,7 @@ func (a *App) setTransferPhase(id, phase string) {
 	store := a.ensureTransferStore()
 	store.mu.Lock()
 	rec, ok := store.items[id]
-	if !ok || rec.Status == "paused" {
+	if !ok || rec.Status == "paused" || rec.Status == "done" || rec.Status == "error" {
 		store.mu.Unlock()
 		return
 	}
@@ -132,6 +132,7 @@ func (a *App) finishTransfer(id string, err error) {
 	now := time.Now().Unix()
 	rec.UpdatedAt = now
 	rec.FinishedAt = now
+	rec.Phase = ""
 	if err != nil {
 		if errors.Is(err, context.Canceled) || errors.Is(err, define.ErrTransferPaused) {
 			rec.Status = "paused"
@@ -421,21 +422,20 @@ func (a *App) startTransferWorker(cp *define.SftpTransferRecord) {
 			}
 		} else {
 			if cp.IsDir {
-				remoteParent := path.Dir(cp.RemotePath)
 				if strings.EqualFold(cp.ConflictAction, "replace") {
 					_ = aux.RemovePath(cp.RemotePath)
 				}
 				if cp.UseCompress {
 					a.setTransferPhase(cp.ID, "compressing")
-					transferErr = aux.UploadDirectoryZip(ctx, cp.LocalPath, remoteParent, func(transferred, total int64, speedBPS float64) {
+					// RemotePath 已是最终目标目录（含 duplicate 分配的唯一名）
+					transferErr = aux.UploadDirectoryZip(ctx, cp.LocalPath, cp.RemotePath, func(transferred, total int64, speedBPS float64) {
 						if transferred > 0 || total > 0 {
 							a.setTransferPhase(cp.ID, "uploading")
 						}
 						progress(transferred, total, speedBPS)
+					}, func(phase string) {
+						a.setTransferPhase(cp.ID, phase)
 					})
-					if transferErr == nil {
-						a.setTransferPhase(cp.ID, "extracting")
-					}
 				} else {
 					transferErr = aux.UploadDirectoryRecursive(ctx, cp.LocalPath, cp.RemotePath, progress)
 				}

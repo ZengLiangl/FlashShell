@@ -11,7 +11,7 @@
           <ArrowLeft />
         </el-icon>
       </el-button>
-      <el-button class="folder-btn" size="small" text title="连接（最近 / 全部机器）" @click="$emit('open-picker')">
+      <el-button class="folder-btn" size="small" text title="连接 / 快速切换（Ctrl+E）" @click="$emit('open-picker')">
         <el-icon :size="16">
           <Folder />
         </el-icon>
@@ -40,7 +40,7 @@
         </div>
 
         <div class="add-session-wrap">
-          <el-button class="add-session-btn" size="small" text title="新建本机" @click="$emit('add-local')">
+          <el-button class="add-session-btn" size="small" text title="连接 / 快速切换（Ctrl+E）" @click="$emit('open-picker')">
             <el-icon :size="15">
               <Plus />
             </el-icon>
@@ -53,8 +53,8 @@
             </el-button>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item command="local">本机</el-dropdown-item>
-                <el-dropdown-item command="remote">远程连接…</el-dropdown-item>
+                <el-dropdown-item command="remote">连接 / 快速切换…</el-dropdown-item>
+                <el-dropdown-item command="local">本机终端</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>

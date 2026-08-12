@@ -9,6 +9,7 @@ import { resolveSnippetCommand } from './snippetVariables'
 export const DEFAULT_SHORTCUTS = {
   newWindow: { key: 'n', useMod: true },
   machineConfig: { key: 'm', useMod: true },
+  // 连接 / 快速切换（切标签、开本机、连主机）
   connectionManager: { key: 'e', useMod: true },
   envVars: { key: 'u', useMod: true },
   systemSettings: { key: ',', useMod: true },
@@ -19,8 +20,6 @@ export const DEFAULT_SHORTCUTS = {
   clearOutput: { key: 'k', useMod: true },
   // Shift+P，避免与终端 readline Ctrl+P（上一行历史）冲突
   commandPalette: { key: 'p', useMod: true, useShift: true },
-  // 快速切换：机器 / 会话 / 动作
-  quickSwitcher: { key: 'j', useMod: true },
   // 分屏窗格最大化 / 还原
   paneZoom: { key: 'z', useMod: true, useShift: true },
 }
@@ -28,7 +27,7 @@ export const DEFAULT_SHORTCUTS = {
 export const SHORTCUT_LABELS = {
   newWindow: '新建窗口',
   machineConfig: '机器配置',
-  connectionManager: '连接',
+  connectionManager: '连接 / 快速切换',
   envVars: '环境变量',
   systemSettings: '系统设置',
   refreshConfig: '刷新配置列表',
@@ -37,7 +36,6 @@ export const SHORTCUT_LABELS = {
   paste: '粘贴',
   clearOutput: '清空输出',
   commandPalette: '命令面板（历史/片段）',
-  quickSwitcher: '快速切换',
   paneZoom: '分屏窗格最大化',
 }
 
@@ -45,7 +43,7 @@ export const SHORTCUT_LABELS = {
 export const SHORTCUT_GROUPS = [
   {
     title: '应用',
-    ids: ['newWindow', 'systemSettings', 'machineConfig', 'connectionManager', 'envVars', 'quickSwitcher'],
+    ids: ['newWindow', 'systemSettings', 'machineConfig', 'connectionManager', 'envVars'],
   },
   {
     title: '编辑与输出',
