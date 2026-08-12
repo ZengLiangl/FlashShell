@@ -108,14 +108,21 @@ export default {
         const entries = computed(() => Object.entries(workPaths.value).map(([key, value]) => ({ key, value })))
 
         const loadWorkPaths = async () => {
+            const empty = Object.keys(workPaths.value).length === 0
+            let spinnerTimer = null
             try {
-                workPathsLoading.value = true
+                if (empty) {
+                    spinnerTimer = setTimeout(() => {
+                        workPathsLoading.value = true
+                    }, 160)
+                }
                 const workPathsData = await App.GetWorkPaths()
                 workPaths.value = workPathsData || {}
             } catch (error) {
                 console.error('加载环境变量配置失败:', error)
                 ElMessage.error('加载环境变量配置失败: ' + error.message)
             } finally {
+                if (spinnerTimer) clearTimeout(spinnerTimer)
                 workPathsLoading.value = false
             }
         }

@@ -164,7 +164,13 @@ export default {
     }
 
     const load = async () => {
-      loading.value = true
+      const empty = rules.value.length === 0
+      let spinnerTimer = null
+      if (empty) {
+        spinnerTimer = setTimeout(() => {
+          loading.value = true
+        }, 160)
+      }
       try {
         rules.value = (await ListPortForwards() || []).map((r) => ({ ...r, _starting: false, _active: false, _error: '' }))
         machines.value = await GetMachines() || []
@@ -172,6 +178,7 @@ export default {
       } catch (error) {
         ElMessage.error('加载端口转发失败: ' + (error?.message || error))
       } finally {
+        if (spinnerTimer) clearTimeout(spinnerTimer)
         loading.value = false
       }
     }

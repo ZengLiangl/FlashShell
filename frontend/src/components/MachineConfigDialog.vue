@@ -881,8 +881,15 @@ export default {
         }
 
         const loadMachines = async () => {
+            const showDelayedSpinner = machines.value.length === 0
+            let spinnerTimer = null
             try {
-                machinesLoading.value = true
+                // 本地 YAML 通常很快；仅在空列表且超过阈值时再转圈，避免切页闪一下
+                if (showDelayedSpinner) {
+                    spinnerTimer = setTimeout(() => {
+                        machinesLoading.value = true
+                    }, 160)
+                }
                 const machinesData = await GetMachines()
                 machines.value = machinesData || []
                 await loadGroups()
@@ -890,6 +897,7 @@ export default {
                 console.error('加载机器配置失败:', error)
                 ElMessage.error('加载机器配置失败: ' + error.message)
             } finally {
+                if (spinnerTimer) clearTimeout(spinnerTimer)
                 machinesLoading.value = false
             }
         }
@@ -1063,8 +1071,7 @@ export default {
         }
 
         const activate = async () => {
-            await loadMachines()
-            await loadGlobalAccounts()
+            await Promise.all([loadMachines(), loadGlobalAccounts()])
             if (props.editMachineId) {
                 const target = machines.value.find((m) => m.id === props.editMachineId)
                 if (target) await editMachine(target)
@@ -1083,7 +1090,7 @@ export default {
         watch(() => props.active, async (v) => {
             if (!props.embedded) return
             if (v) await activate()
-            else emit('closed')
+            // 侧栏切换隐藏时不要当成「关闭」，避免误清 editMachineId；真正关设置窗仍由 Hub handleClose 发出
         }, { immediate: true })
 
         const resetMachineForm = () => {

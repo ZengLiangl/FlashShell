@@ -1,6 +1,7 @@
 <template>
-    <div class="general-settings-panel" :class="{ embedded }">
-        <div class="settings-search-bar">
+    <div class="general-settings-panel" :class="{ embedded, 'is-panel-routed': !!panel }">
+        <!-- 设置内搜索暂未发挥明显作用，先隐藏
+        <div v-if="!panel" class="settings-search-bar">
             <el-input
                 v-model="settingsSearch"
                 clearable
@@ -8,18 +9,29 @@
                 placeholder="搜索设置（标签 / 说明）…"
             />
         </div>
-        <div class="settings-subnav">
+        -->
+        <div v-if="!panel" class="settings-subnav">
             <button v-for="tab in settingsTabs" :key="tab.id" type="button" class="subnav-item"
                 :class="{ active: settingsTab === tab.id }" @click="settingsTab = tab.id">
                 {{ tab.label }}
             </button>
         </div>
+        <!--
+        <div v-else class="settings-search-bar">
+            <el-input
+                v-model="settingsSearch"
+                clearable
+                size="small"
+                placeholder="搜索设置（标签 / 说明）…"
+            />
+        </div>
+        -->
 
         <div ref="panelScrollRef" class="panel-scroll">
             <!-- 系统设置 -->
             <section v-show="settingsTab === 'system'" class="settings-section system-section">
                 <div class="system-editor">
-                    <div class="theme-subnav">
+                    <div v-if="!panel" class="theme-subnav">
                         <button v-for="tab in systemPanels" :key="tab.id" type="button" class="theme-subnav-item"
                             :class="{ active: systemPanel === tab.id }" @click="systemPanel = tab.id">
                             {{ tab.label }}
@@ -28,7 +40,10 @@
 
                     <div class="appear-pane">
                         <!-- 应用信息 -->
-                        <div v-show="systemPanel === 'app'" class="appear-pane-body">
+                        <div v-show="systemPanel === 'app'" class="appear-pane-body settings-stack">
+                            <div class="setting-block">
+                                <h3 class="setting-block-title">应用</h3>
+                                <div class="setting-card">
                             <div class="system-setting-row">
                                 <div class="system-setting-text">
                                     <span class="system-setting-label">应用名称</span>
@@ -48,9 +63,12 @@
                                     <el-switch v-model="form.startupFullscreen" size="small" />
                                 </div>
                             </div>
-                            <div class="system-setting-row system-setting-row--stack">
-                                <div class="system-setting-text">
-                                    <span class="system-setting-label">Dock 图标</span>
+                                </div>
+                            </div>
+                            <div class="setting-block">
+                                <h3 class="setting-block-title">Dock 图标</h3>
+                                <div class="setting-card setting-card--padded">
+                                <div class="system-setting-text" style="margin-bottom: 10px">
                                     <span class="system-setting-hint">选择预设或上传自定义图片（PNG / JPG），保存至
                                         ~/.flashdock/icons/；保存后立即更新窗口/任务栏图标</span>
                                 </div>
@@ -68,11 +86,15 @@
                                         <span class="dock-icon-name">{{ uploadingAppIcon ? '上传中…' : '上传' }}</span>
                                     </button>
                                 </div>
+                                </div>
                             </div>
                         </div>
 
-                        <!-- Shell -->
-                        <div v-show="systemPanel === 'shell'" class="appear-pane-body">
+                        <!-- Shell / 终端 + SFTP -->
+                        <div v-show="systemPanel === 'shell'" class="appear-pane-body settings-stack">
+                            <div v-show="shellMode !== 'sftp'" class="setting-block">
+                                <h3 class="setting-block-title">连接与缓冲</h3>
+                                <div class="setting-card">
                             <div class="system-setting-row">
                                 <div class="system-setting-text">
                                     <span class="system-setting-label">SSH 握手超时</span>
@@ -128,6 +150,11 @@
                                     <span class="system-setting-unit">条</span>
                                 </div>
                             </div>
+                                </div>
+                            </div>
+                            <div v-show="shellMode !== 'sftp'" class="setting-block">
+                                <h3 class="setting-block-title">输入与显示</h3>
+                                <div class="setting-card">
                             <div class="system-setting-row">
                                 <div class="system-setting-text">
                                     <span class="system-setting-label">终端英文输入</span>
@@ -164,6 +191,11 @@
                                     <el-switch v-model="form.shellPasswordAssist" size="small" />
                                 </div>
                             </div>
+                                </div>
+                            </div>
+                            <div v-show="shellMode !== 'terminal'" class="setting-block">
+                                <h3 class="setting-block-title">SFTP</h3>
+                                <div class="setting-card">
                             <div class="system-setting-row">
                                 <div class="system-setting-text">
                                     <span class="system-setting-label">SFTP 目录压缩上传</span>
@@ -193,13 +225,16 @@
                                     placeholder=".md=code {path}&#10;.log=notepad"
                                 />
                             </div>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- 主机密钥 -->
-                        <div v-show="systemPanel === 'security'" class="appear-pane-body">
-                            <div class="system-setting-row system-setting-row--stack">
-                                <div class="system-setting-text">
-                                    <span class="system-setting-label">已信任主机</span>
+                        <div v-show="systemPanel === 'security'" class="appear-pane-body settings-stack">
+                            <div class="setting-block">
+                                <h3 class="setting-block-title">已信任主机</h3>
+                                <div class="setting-card setting-card--padded">
+                                <div class="system-setting-text" style="margin-bottom: 10px">
                                     <span class="system-setting-hint">连接 SSH 时校验的主机指纹；可从系统 ~/.ssh/known_hosts 合并导入</span>
                                 </div>
                                 <div class="known-hosts-toolbar icon-actions">
@@ -222,6 +257,7 @@
                                         </template>
                                     </el-table-column>
                                 </el-table>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -230,6 +266,8 @@
 
             <!-- 账号 / 密钥库 -->
             <section v-show="settingsTab === 'accounts'" class="settings-section">
+                <div class="settings-stack">
+                <div class="setting-block">
                 <div class="section-head">
                     <div>
                         <h4>密钥库 / 全局身份</h4>
@@ -243,6 +281,7 @@
                         </el-button>
                     </el-tooltip>
                 </div>
+                <div class="setting-card setting-card--padded">
                 <el-table :data="accounts" size="small" style="width: 100%" empty-text="暂无帐号">
                     <el-table-column prop="name" label="帐号名称" width="160" />
                     <el-table-column prop="user" label="用户名" width="140" />
@@ -272,6 +311,9 @@
                         </template>
                     </el-table-column>
                 </el-table>
+                </div>
+                </div>
+                </div>
             </section>
 
             <!-- 主题 -->
@@ -287,7 +329,10 @@
 
                         <div class="appear-pane">
                             <!-- 界面 -->
-                            <div v-show="themePanel === 'ui'" class="appear-pane-body">
+                            <div v-show="themePanel === 'ui'" class="appear-pane-body settings-stack">
+                                <div class="setting-block">
+                                    <h3 class="setting-block-title">界面</h3>
+                                    <div class="setting-card setting-card--padded">
                                 <div class="appear-field">
                                     <span class="appear-field-label">外观模式</span>
                                     <el-radio-group v-model="form.themeSettings.mode" size="small">
@@ -328,10 +373,15 @@
                                         <span>字号</span>
                                     </div>
                                 </div>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- 终端 -->
-                            <div v-show="themePanel === 'terminal'" class="appear-pane-body">
+                            <div v-show="themePanel === 'terminal'" class="appear-pane-body settings-stack">
+                                <div class="setting-block">
+                                    <h3 class="setting-block-title">字体与渲染</h3>
+                                    <div class="setting-card setting-card--padded">
                                 <div class="appear-field">
                                     <span class="appear-field-label">字体 / 字号 / 行高</span>
                                     <div class="term-font-row">
@@ -368,6 +418,11 @@
                                     <span class="memory-saver-label">Shell 意外断开时自动重连</span>
                                     <el-switch v-model="form.themeSettings.shellAutoReconnect" size="small" />
                                 </div>
+                                    </div>
+                                </div>
+                                <div class="setting-block">
+                                    <h3 class="setting-block-title">配色方案</h3>
+                                    <div class="setting-card setting-card--padded">
                                 <div class="appear-field appear-field--fill">
                                     <span class="appear-field-label">配色方案</span>
                                     <div class="preset-grid terminal-grid">
@@ -390,10 +445,15 @@
                                         </button>
                                     </div>
                                 </div>
+                                    </div>
+                                </div>
                             </div>
 
                             <!-- 日志高亮 -->
-                            <div v-show="themePanel === 'log'" class="appear-pane-body">
+                            <div v-show="themePanel === 'log'" class="appear-pane-body settings-stack">
+                                <div class="setting-block">
+                                    <h3 class="setting-block-title">日志高亮</h3>
+                                    <div class="setting-card setting-card--padded">
                                 <div class="appear-field memory-saver-row">
                                     <div>
                                         <span class="appear-field-label">启用日志高亮</span>
@@ -490,6 +550,8 @@
                                         </div>
                                     </div>
                                 </template>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -536,81 +598,97 @@
 
             <!-- 关于 -->
             <section v-show="settingsTab === 'about'" class="settings-section about-section">
-                <div class="about-meta">
-                    <div class="about-meta-row">
-                        <span class="about-meta-label">当前版本</span>
-                        <span class="about-meta-value">{{ appVersion || '—' }}</span>
-                    </div>
-                    <div class="about-meta-row">
-                        <span class="about-meta-label">最新 Release</span>
-                        <span class="about-meta-value">
-                            {{ updateResult?.latestVersion || (checkingUpdate ? '检查中…' : '—') }}
-                        </span>
-                    </div>
-                </div>
-
-                <div class="about-update-block" v-loading="checkingUpdate">
-                    <div class="about-update-actions">
-                        <el-button size="small" :loading="checkingUpdate" @click="() => checkUpdate(true)">
-                            检查更新
-                        </el-button>
-                        <el-button v-if="updateResult?.releaseURL" size="small" @click="openRelease">
-                            查看 Release
-                        </el-button>
-                    </div>
-
-                    <div v-if="updateResult?.hasUpdate" class="update-banner">
-                        <div class="update-banner-title">发现新版本 {{ updateResult.latestVersion }}</div>
-                        <div class="update-banner-sub">当前 {{ updateResult.currentVersion || appVersion }}</div>
-                        <div v-if="updateResult.assetName" class="asset-line">
-                            适配安装包：{{ updateResult.assetName }}
+                <div class="settings-stack">
+                    <div class="setting-block">
+                        <h3 class="setting-block-title">版本信息</h3>
+                        <div class="setting-card">
+                            <div class="system-setting-row">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">当前版本</span>
+                                </div>
+                                <div class="system-setting-control">
+                                    <span class="about-meta-value">{{ appVersion || '—' }}</span>
+                                </div>
+                            </div>
+                            <div class="system-setting-row">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">最新 Release</span>
+                                </div>
+                                <div class="system-setting-control">
+                                    <span class="about-meta-value">
+                                        {{ updateResult?.latestVersion || (checkingUpdate ? '检查中…' : '—') }}
+                                    </span>
+                                </div>
+                            </div>
                         </div>
-                        <div class="update-actions">
-                            <el-select v-model="selectedDownloadSource" size="small" class="source-select"
-                                :disabled="downloading || installing" placeholder="下载源">
-                                <el-option v-for="src in downloadSources" :key="src.label" :label="src.label"
-                                    :value="src.label" />
-                            </el-select>
-                            <el-button type="primary" size="small" :loading="downloading" :disabled="!canDownload"
-                                @click="downloadUpdate">
-                                {{ downloadButtonLabel }}
-                            </el-button>
-                            <el-button v-if="readyToInstall" type="success" size="small" :loading="installing"
-                                :disabled="downloading" @click="installUpdate">
-                                安装并重启
-                            </el-button>
-                            <el-button v-if="readyToInstall" size="small" :disabled="downloading || installing"
-                                @click="openPackage">
-                                打开安装包
-                            </el-button>
-                            <el-button v-if="downloading" size="small" @click="pauseDownload">
-                                暂停
-                            </el-button>
-                        </div>
-                        <el-progress v-if="downloading || downloadPercent > 0 || downloadPaused"
-                            :percentage="downloadPercent" :stroke-width="10" style="margin-top: 10px" />
-                        <div v-if="downloadMessage" class="download-msg"
-                            :class="{ err: downloadFailed, paused: downloadPaused }">
-                            {{ downloadMessage }}
-                        </div>
-                    </div>
-                    <div v-else-if="updateResult" class="update-ok">
-                        已是最新版本
                     </div>
 
-                    <div v-if="updateResult?.releaseNotes" class="release-section">
-                        <div class="release-section-title">
-                            <span>{{ updateResult.hasUpdate ? '更新说明' : '最新 Release' }}</span>
-                        </div>
-                        <div class="update-notes" v-html="renderReleaseNotes(updateResult.releaseNotes)"
-                            @click="onNotesClick">
+                    <div class="setting-block">
+                        <h3 class="setting-block-title">更新</h3>
+                        <div class="setting-card setting-card--padded" v-loading="checkingUpdate">
+                            <div class="about-update-actions">
+                                <el-button size="small" :loading="checkingUpdate" @click="() => checkUpdate(true)">
+                                    检查更新
+                                </el-button>
+                                <el-button v-if="updateResult?.releaseURL" size="small" @click="openRelease">
+                                    查看 Release
+                                </el-button>
+                            </div>
+
+                            <div v-if="updateResult?.hasUpdate" class="update-banner">
+                                <div class="update-banner-title">发现新版本 {{ updateResult.latestVersion }}</div>
+                                <div class="update-banner-sub">当前 {{ updateResult.currentVersion || appVersion }}</div>
+                                <div v-if="updateResult.assetName" class="asset-line">
+                                    适配安装包：{{ updateResult.assetName }}
+                                </div>
+                                <div class="update-actions">
+                                    <el-select v-model="selectedDownloadSource" size="small" class="source-select"
+                                        :disabled="downloading || installing" placeholder="下载源">
+                                        <el-option v-for="src in downloadSources" :key="src.label" :label="src.label"
+                                            :value="src.label" />
+                                    </el-select>
+                                    <el-button type="primary" size="small" :loading="downloading" :disabled="!canDownload"
+                                        @click="downloadUpdate">
+                                        {{ downloadButtonLabel }}
+                                    </el-button>
+                                    <el-button v-if="readyToInstall" type="success" size="small" :loading="installing"
+                                        :disabled="downloading" @click="installUpdate">
+                                        安装并重启
+                                    </el-button>
+                                    <el-button v-if="readyToInstall" size="small" :disabled="downloading || installing"
+                                        @click="openPackage">
+                                        打开安装包
+                                    </el-button>
+                                    <el-button v-if="downloading" size="small" @click="pauseDownload">
+                                        暂停
+                                    </el-button>
+                                </div>
+                                <el-progress v-if="downloading || downloadPercent > 0 || downloadPaused"
+                                    :percentage="downloadPercent" :stroke-width="10" style="margin-top: 10px" />
+                                <div v-if="downloadMessage" class="download-msg"
+                                    :class="{ err: downloadFailed, paused: downloadPaused }">
+                                    {{ downloadMessage }}
+                                </div>
+                            </div>
+                            <div v-else-if="updateResult" class="update-ok">
+                                已是最新版本
+                            </div>
+
+                            <div v-if="updateResult?.releaseNotes" class="release-section">
+                                <div class="release-section-title">
+                                    <span>{{ updateResult.hasUpdate ? '更新说明' : '最新 Release' }}</span>
+                                </div>
+                                <div class="update-notes" v-html="renderReleaseNotes(updateResult.releaseNotes)"
+                                    @click="onNotesClick">
+                                </div>
+                            </div>
                         </div>
                     </div>
                 </div>
             </section>
         </div>
 
-        <div class="panel-actions icon-actions">
+        <div v-if="settingsTab !== 'about' && settingsTab !== 'accounts'" class="panel-actions icon-actions">
             <el-tooltip content="保存设置" placement="top">
                 <el-button type="primary" circle :loading="saving" @click="save">
                     <el-icon v-if="!saving">
@@ -732,6 +810,8 @@ export default {
         modelValue: { type: Boolean, default: false },
         embedded: { type: Boolean, default: false },
         active: { type: Boolean, default: false },
+        /** Hub 侧栏路由：app | terminal | sftp | security | accounts | appearance | about | general */
+        panel: { type: String, default: '' },
     },
     emits: ['update:modelValue', 'saved'],
     setup(props, { emit }) {
@@ -773,12 +853,62 @@ export default {
             { id: 'shell', label: 'Shell' },
             { id: 'security', label: '主机密钥' },
         ]
+        /** all | terminal | sftp — Hub 分栏时拆开终端与 SFTP */
+        const shellMode = ref('all')
         const themePanel = ref('ui')
         const themePanels = [
             { id: 'ui', label: '界面' },
             { id: 'terminal', label: '终端' },
             { id: 'log', label: '日志高亮' },
         ]
+
+        const applyPanelRoute = (panelId) => {
+            const id = String(panelId || '').trim()
+            if (!id) {
+                shellMode.value = 'all'
+                return
+            }
+            if (id === 'general' || id === 'app') {
+                settingsTab.value = 'system'
+                systemPanel.value = 'app'
+                shellMode.value = 'all'
+                return
+            }
+            if (id === 'terminal') {
+                settingsTab.value = 'system'
+                systemPanel.value = 'shell'
+                shellMode.value = 'terminal'
+                return
+            }
+            if (id === 'sftp') {
+                settingsTab.value = 'system'
+                systemPanel.value = 'shell'
+                shellMode.value = 'sftp'
+                return
+            }
+            if (id === 'security') {
+                settingsTab.value = 'system'
+                systemPanel.value = 'security'
+                shellMode.value = 'all'
+                return
+            }
+            if (id === 'accounts') {
+                settingsTab.value = 'accounts'
+                shellMode.value = 'all'
+                return
+            }
+            if (id === 'appearance' || id === 'theme') {
+                settingsTab.value = 'theme'
+                shellMode.value = 'all'
+                return
+            }
+            if (id === 'about') {
+                settingsTab.value = 'about'
+                shellMode.value = 'all'
+            }
+        }
+
+        watch(() => props.panel, (p) => applyPanelRoute(p), { immediate: true })
         const form = reactive({
             windowsName: 'FlashDock',
             appIconPreset: 'default',
@@ -1485,8 +1615,10 @@ theme preview · ${theme.foreground}`
             settingsTabs,
             systemPanel,
             systemPanels,
+            shellMode,
             themePanel,
             themePanels,
+            panel: computed(() => props.panel),
             form,
             appIconPresets,
             uploadingAppIcon,
@@ -1573,6 +1705,71 @@ theme preview · ${theme.foreground}`
 
 .general-settings-panel.embedded {
     padding-bottom: 0;
+}
+
+.general-settings-panel.is-panel-routed .system-editor,
+.general-settings-panel.is-panel-routed .appear-editor {
+    border: none;
+    border-radius: 0;
+    background: transparent;
+}
+
+.general-settings-panel.is-panel-routed .panel-actions {
+    margin-left: -20px;
+    margin-right: -20px;
+    padding-left: 20px;
+    padding-right: 20px;
+}
+
+.settings-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    padding: 4px 2px 12px;
+}
+
+.setting-block {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    min-width: 0;
+}
+
+.setting-block-title {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 650;
+    color: var(--app-text);
+    letter-spacing: 0.01em;
+}
+
+.setting-block > .section-head {
+    margin-bottom: 0;
+}
+
+.setting-card {
+    border: 1px solid var(--app-border);
+    border-radius: 10px;
+    background: var(--app-card-bg, var(--app-panel-bg));
+    padding: 0 14px;
+    overflow: hidden;
+}
+
+.setting-card--padded {
+    padding: 14px;
+}
+
+.setting-card > .system-setting-row {
+    border-bottom: 1px solid var(--app-border);
+}
+
+.setting-card > .system-setting-row:last-child {
+    border-bottom: none;
+}
+
+.setting-card--padded > .system-setting-row {
+    padding-left: 0;
+    padding-right: 0;
 }
 
 .settings-search-bar {
@@ -1704,6 +1901,10 @@ theme preview · ${theme.foreground}`
     border: 1px solid var(--app-border);
     border-radius: 10px;
     background: var(--app-bg);
+}
+
+.general-settings-panel.is-panel-routed .system-editor .appear-pane-body {
+    padding: 0;
 }
 
 .appear-editor {
