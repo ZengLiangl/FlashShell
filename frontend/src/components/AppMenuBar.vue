@@ -2,15 +2,15 @@
   <div
     class="app-menu-bar"
     :class="{
-      'is-shell-top': activeView === 'shell',
       'is-task-top': activeView === 'task',
+      'is-shell-top': activeView === 'shell',
     }"
   >
-    <div v-if="activeView !== 'shell'" class="menu-side menu-left" aria-hidden="true" />
+    <div class="menu-side menu-left" aria-hidden="true" />
 
-    <div v-if="activeView !== 'shell'" class="menu-center">
+    <div class="menu-center">
       <ModeSwitcher
-        v-if="showHomeSwitcher"
+        v-if="canSwitchModes"
         :model-value="activeView"
         :has-projects="hasProjects"
         :has-machines="hasMachines"
@@ -26,23 +26,6 @@
 
     <div class="menu-side menu-right">
       <div class="menu-icons">
-        <div v-if="showCompactSwitcher" class="mode-compact-slot">
-          <ModeSwitcher
-            compact
-            float-align="end"
-            :model-value="activeView"
-            :has-projects="hasProjects"
-            :has-machines="hasMachines"
-            :has-task="hasTask"
-            :task-running="taskRunning"
-            :connected-count="connectedCount"
-            :projects="projects"
-            :selected-project-name="selectedProjectName"
-            @change="$emit('change-view', $event)"
-            @select-project="$emit('select-project', $event)"
-          />
-        </div>
-
         <button
           type="button"
           class="icon-btn"
@@ -98,14 +81,7 @@ export default {
   setup(props) {
     const canSwitchModes = computed(() =>
       props.hasProjects || props.hasMachines || props.hasTask || props.connectedCount > 0
-    )
-
-    const showHomeSwitcher = computed(() =>
-      props.activeView === 'home' && canSwitchModes.value
-    )
-
-    const showCompactSwitcher = computed(() =>
-      (props.activeView === 'task' || props.activeView === 'shell') && canSwitchModes.value
+        || props.activeView === 'task' || props.activeView === 'shell'
     )
 
     const shortcuts = ref(mergeShortcuts())
@@ -144,8 +120,7 @@ export default {
     })
 
     return {
-      showHomeSwitcher,
-      showCompactSwitcher,
+      canSwitchModes,
       labelOf,
       newWindow,
       openSettings,
@@ -171,33 +146,9 @@ export default {
   z-index: 30;
 }
 
-/* Shell：顶栏改为悬浮叠层，不占高度，会话 Tab 回到监控栏右侧 */
+.app-menu-bar.is-task-top,
 .app-menu-bar.is-shell-top {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 40px;
-  margin: 0;
-  padding: 0 8px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  grid-template-columns: unset;
-  background: transparent;
-  border-bottom: none;
-  pointer-events: none;
-}
-
-.app-menu-bar.is-shell-top .menu-right {
-  flex: 0 0 auto;
-  pointer-events: auto;
-  z-index: 2;
-  gap: 6px;
-}
-
-.app-menu-bar.is-task-top {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
 }
 
 .menu-side {
@@ -222,48 +173,10 @@ export default {
   min-width: 0;
 }
 
-.mode-compact-slot {
-  position: relative;
-  display: flex;
-  align-items: center;
-  flex-shrink: 0;
-}
-
-/* 并入设置组后，触发器尺寸与旁侧 icon-btn 对齐 */
-.menu-icons .mode-compact-slot :deep(.mode-trigger) {
-  width: 30px;
-  height: 28px;
-  min-width: 30px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  box-shadow: none;
-  opacity: 1;
-  color: var(--app-text-secondary, var(--app-text));
-}
-
-.menu-icons .mode-compact-slot :deep(.mode-trigger:hover),
-.menu-icons .mode-compact-slot :deep(.mode-switcher-host.is-expanded .mode-trigger) {
-  background: var(--app-accent-bg);
-  color: var(--app-accent-color);
-}
-
-.menu-icons .mode-compact-slot :deep(.mode-trigger-icon) {
-  font-size: 16px;
-}
-
 .menu-icons {
   display: flex;
   align-items: center;
   gap: 2px;
-}
-
-.app-menu-bar.is-shell-top .menu-icons {
-  padding: 2px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--app-panel-bg) 92%, transparent);
-  border: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent);
-  box-shadow: 0 1px 3px color-mix(in srgb, var(--app-text) 6%, transparent);
 }
 
 .icon-btn {

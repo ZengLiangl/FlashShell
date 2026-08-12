@@ -167,29 +167,28 @@ export default {
         },
       ]
       const canPickProject = props.projects.length > 0
-      if (props.hasProjects || props.hasTask || props.modelValue === 'task' || canPickProject) {
+      // 仅在已进入任务（有选中项目）时展示「任务」，与首页一致；勿在纯 Shell 时露出灰态 Tab
+      if (props.hasTask || props.modelValue === 'task') {
         list.push({
           id: 'task',
           label: '任务',
           icon: Folder,
-          title: props.hasTask
-            ? (props.taskRunning
-              ? '点击返回任务（运行中），悬停可切换项目'
-              : '点击返回任务，悬停可切换项目')
-            : (canPickProject ? '悬停选择项目' : '请先在首页选择项目'),
-          disabled: !props.hasTask && !canPickProject,
+          title: props.taskRunning
+            ? '切换到任务工作台（运行中）· 悬停可换项目'
+            : '切换到任务工作台 · 悬停可换项目',
+          disabled: false,
           showProjectPicker: canPickProject,
-          dot: props.hasTask && props.taskRunning,
+          dot: props.taskRunning,
         })
       }
-      if (props.hasMachines || props.connectedCount > 0 || props.modelValue === 'shell') {
+      if (props.hasMachines || props.connectedCount > 0 || props.modelValue === 'shell' || props.hasTask || props.modelValue === 'task') {
         list.push({
           id: 'shell',
           label: 'Shell',
           icon: Monitor,
           title: props.connectedCount > 0
-            ? `进入 Shell（${props.connectedCount} 会话）`
-            : '进入 Shell',
+            ? `切换到 Shell（${props.connectedCount} 个会话）`
+            : '切换到 Shell 终端',
           disabled: false,
           badge: props.connectedCount > 0 ? String(props.connectedCount) : '',
         })
@@ -202,7 +201,7 @@ export default {
       return found || items.value[0] || { id: 'home', icon: HomeFilled, label: '首页' }
     })
 
-    /** 悬浮展开时：当前模块居中（如 Shell 在中间） */
+    /** 非 compact：固定 首页 → 任务 → Shell；compact 悬浮时仍把当前项居中 */
     const displayItems = computed(() => {
       const list = items.value
       if (!props.compact || list.length < 3) return list
@@ -210,7 +209,7 @@ export default {
       if (!current) return list
       const others = list.filter((i) => i.id !== props.modelValue)
       const mid = Math.floor(others.length / 2)
-      return [...others.slice(0, mid), current, ...others.slice(mid)]
+      return [...others.slice(0, mid), current, others.slice(mid)]
     })
 
     const triggerTitle = computed(() => {

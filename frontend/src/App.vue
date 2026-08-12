@@ -15,8 +15,12 @@
       </div>
     </div>
 
-    <!-- 任务详情视图（与 Shell 可并行，仅切换展示） -->
-    <template v-if="activeView === 'task' && selectedProject">
+    <!-- 任务详情视图（与 Shell 可并行；用 v-show 保活，避免来回切换重挂） -->
+    <div
+      v-if="selectedProject"
+      v-show="activeView === 'task'"
+      class="task-view-host"
+    >
       <el-container class="main-container">
         <!-- 左侧面板 -->
         <el-aside :width="leftPanelWidth + 'px'" class="left-panel" :class="{ resizing: isResizing }">
@@ -48,7 +52,7 @@
       <StatusBar :status="status" :selected-project="selectedProject" :app-info="statusBarInfo"
         :remote-failure="lastRemoteFailure"
         @stop-all="stopAllCommands" @open-failure-shell="openFailureShell" />
-    </template>
+    </div>
 
     <!-- Shell 视图：挂载后用 v-show 保留会话，可与任务并行 -->
     <div v-show="activeView === 'shell'" class="shell-view-host shell-with-aside">
@@ -526,6 +530,7 @@ export default {
         expandedCommands.value = {};
 
         console.log(`选择项目: ${full.name}, 找到 ${subProjects.value.length} 个 SubProjects`);
+        await scrollTaskOutputToBottom();
       } catch (error) {
         console.error('加载项目详情失败:', error);
         ElMessage.error('加载项目详情失败: ' + (error.message || error));
@@ -537,9 +542,24 @@ export default {
       activeView.value = 'home';
     };
 
-    const resumeTaskView = () => {
+    const scrollTaskOutputToBottom = async () => {
+      if (!outputLines.value?.length) return;
+      await nextTick();
+      terminalOutputRef.value?.scrollToBottom?.();
+      // 虚拟列表布局后再滚一次，确保触底
+      await nextTick();
+      requestAnimationFrame(() => {
+        terminalOutputRef.value?.scrollToBottom?.();
+      });
+    };
+
+    const resumeTaskView = async () => {
       if (!selectedProject.value) return;
+      if (activeView.value === 'shell') {
+        notifyLeaveShellMode();
+      }
       activeView.value = 'task';
+      await scrollTaskOutputToBottom();
     };
 
     const enterShellMode = async () => {
@@ -601,11 +621,10 @@ export default {
       }
       if (view === 'task') {
         if (!selectedProject.value) {
-          ElMessage.info('请先在首页选择项目');
-          activeView.value = 'home';
+          ElMessage.info('请先在首页选择项目，或悬停「任务」从列表打开');
           return;
         }
-        resumeTaskView();
+        await resumeTaskView();
         return;
       }
       if (view === 'shell') {
@@ -1890,9 +1909,17 @@ export default {
   overflow: hidden;
 }
 
-/* Shell 顶栏悬浮不占位：会话 Tab 与监控栏齐顶，右侧给设置按钮留空 */
-.app-container:has(.app-menu-bar.is-shell-top) .shell-view-host :deep(.tabs-bar) {
-  padding-right: 168px;
+.task-view-host {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.task-view-host > .main-container {
+  flex: 1;
+  min-height: 0;
 }
 
 .projectlist-fullscreen {
