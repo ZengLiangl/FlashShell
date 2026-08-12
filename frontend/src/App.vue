@@ -60,7 +60,10 @@
         :broadcast-enabled="broadcastEnabled" :broadcast-targets="broadcastTargets" :split-session-ids="splitSessionIds"
         @back="leaveShellMode" @connect="(name) => connectShell(name)" @disconnect="disconnectShell"
         @close-session="closeShellSession" @close-sessions="closeShellSessions"
-        @reconnect="(name) => connectOrReconnectShell(name)" @add-local="() => connectLocalShell()"
+        @reconnect="(name) => connectOrReconnectShell(name)"
+        @add-local="() => connectLocalShell()"
+        @add-local-command="(cmd) => connectLocalShell('', cmd)"
+        @open-window="onOpenMachineWindow"
         @focus-session="onQuickFocusSession" @connect-machines="onQuickConnectMachines"
         @test="testShellConnection" @update:broadcast-enabled="(v) => (broadcastEnabled = v)"
         @update:broadcast-targets="(v) => (broadcastTargets = v)"
@@ -571,6 +574,17 @@ export default {
         }
       } catch {
         // 读取设置失败时保持现有 v-show 行为
+      }
+    };
+
+    const onOpenMachineWindow = async (machine) => {
+      const name = machine?.name || machine;
+      if (!name) return;
+      try {
+        await App.OpenMachineInNewWindow(name);
+        ElMessage.success(`已在新窗口打开 ${name}`);
+      } catch (e) {
+        ElMessage.error('打开新窗口失败: ' + e);
       }
     };
 
@@ -1143,6 +1157,60 @@ export default {
         return;
       }
 
+      // Shell 标签 / 分屏导航
+      if (activeView.value === 'shell' && shellMounted.value) {
+        if (matchesShortcut(e, sc.nextTab)) {
+          take();
+          shellWorkspaceRef.value?.selectNextTab?.(1);
+          return;
+        }
+        if (matchesShortcut(e, sc.prevTab)) {
+          take();
+          shellWorkspaceRef.value?.selectNextTab?.(-1);
+          return;
+        }
+        if (matchesShortcut(e, sc.closeTab)) {
+          take();
+          shellWorkspaceRef.value?.closeActiveTab?.();
+          return;
+        }
+        if (matchesShortcut(e, sc.toggleBroadcast)) {
+          take();
+          shellWorkspaceRef.value?.toggleBroadcast?.();
+          return;
+        }
+        if (matchesShortcut(e, sc.openSftp)) {
+          take();
+          shellWorkspaceRef.value?.toggleFilePanel?.();
+          return;
+        }
+        if (matchesShortcut(e, sc.openLocalShell)) {
+          take();
+          connectLocalShell();
+          return;
+        }
+        if (matchesShortcut(e, sc.splitFocusLeft) || matchesShortcut(e, sc.splitFocusUp)) {
+          take();
+          shellWorkspaceRef.value?.focusSplitNeighbor?.('left');
+          return;
+        }
+        if (matchesShortcut(e, sc.splitFocusRight) || matchesShortcut(e, sc.splitFocusDown)) {
+          take();
+          shellWorkspaceRef.value?.focusSplitNeighbor?.('right');
+          return;
+        }
+        // Ctrl+1..9 跳转到第 N 个标签（Ctrl+0 仍保留字号重置）
+        if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
+          const code = String(e.code || '');
+          const m = /^Digit([1-9])$/.exec(code) || /^Numpad([1-9])$/.exec(code);
+          if (m) {
+            take();
+            shellWorkspaceRef.value?.selectTabByIndex?.(Number(m[1]) - 1);
+            return;
+          }
+        }
+      }
+
       // Shell 终端字号：Ctrl/⌘ + = / - / 0（固定，不占用可配置快捷键表）
       if (activeView.value === 'shell' && (e.ctrlKey || e.metaKey) && !e.altKey) {
         const code = String(e.code || '');
@@ -1277,6 +1345,14 @@ export default {
 
       // 添加全局键盘事件监听器
       document.addEventListener('keydown', handleKeyDown, true);
+
+      // 新窗口自动连接
+      App.ConsumePendingConnectMachine?.().then(async (name) => {
+        const machineName = String(name || '').trim();
+        if (!machineName) return;
+        await enterShellMode();
+        await connectShell(machineName);
+      }).catch(() => {});
 
       // 监听统一的操作结果事件
       EventsOn("operation:result", async (event) => {

@@ -30,7 +30,9 @@ type SensitiveData struct {
 	Port     int    `json:"port"`     // 端口
 	Username string `json:"username"` // 用户名
 	Password string `json:"password"` // 密码
-	KeyData  []byte `json:"key_data"` // 密钥文件内容
+	// KeyPassphrase 私钥口令（可选）
+	KeyPassphrase string `json:"key_passphrase,omitempty"`
+	KeyData       []byte `json:"key_data"` // 密钥文件内容
 }
 
 // 加密数据

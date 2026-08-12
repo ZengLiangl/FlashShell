@@ -303,6 +303,13 @@ func (cm *ConfigManager) ImportMachinesCSV(path string) (*MachineImportResult, e
 	return cm.globalConfigManager.ImportMachinesCSV(path)
 }
 
+func (cm *ConfigManager) ExportMachinesCSV(path string) error {
+	if cm.globalConfigManager == nil {
+		return fmt.Errorf("全局配置管理器未初始化")
+	}
+	return cm.globalConfigManager.ExportMachinesCSV(path)
+}
+
 func (cm *ConfigManager) MachineForConnect(machine *define.Machine) (*define.Machine, error) {
 	if cm.globalConfigManager == nil {
 		return machine, nil

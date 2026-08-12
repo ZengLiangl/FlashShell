@@ -10,6 +10,7 @@ type ShortcutBinding struct {
 	Key      string `json:"key"`
 	UseMod   bool   `json:"useMod"`
 	UseShift bool   `json:"useShift,omitempty"`
+	UseAlt   bool   `json:"useAlt,omitempty"`
 }
 
 // ShellSnippet 终端命令片段（可绑定快捷键；可选择是否直接执行）
@@ -39,9 +40,19 @@ type ShortcutSettings struct {
 	ClearOutput       ShortcutBinding `json:"clearOutput"`
 	CommandPalette    ShortcutBinding `json:"commandPalette"`
 	// QuickSwitcher 已废弃（合并进 ConnectionManager）；保留字段以兼容旧配置
-	QuickSwitcher ShortcutBinding `json:"quickSwitcher,omitempty"`
-	PaneZoom      ShortcutBinding `json:"paneZoom"`
-	Snippets      []ShellSnippet  `json:"snippets,omitempty"`
+	QuickSwitcher     ShortcutBinding `json:"quickSwitcher,omitempty"`
+	PaneZoom          ShortcutBinding `json:"paneZoom"`
+	NextTab           ShortcutBinding `json:"nextTab"`
+	PrevTab           ShortcutBinding `json:"prevTab"`
+	CloseTab          ShortcutBinding `json:"closeTab"`
+	ToggleBroadcast   ShortcutBinding `json:"toggleBroadcast"`
+	OpenSftp          ShortcutBinding `json:"openSftp"`
+	OpenLocalShell    ShortcutBinding `json:"openLocalShell"`
+	SplitFocusLeft    ShortcutBinding `json:"splitFocusLeft"`
+	SplitFocusRight   ShortcutBinding `json:"splitFocusRight"`
+	SplitFocusUp      ShortcutBinding `json:"splitFocusUp"`
+	SplitFocusDown    ShortcutBinding `json:"splitFocusDown"`
+	Snippets          []ShellSnippet  `json:"snippets,omitempty"`
 }
 
 // DefaultShortcutSettings 默认快捷键
@@ -59,6 +70,16 @@ func DefaultShortcutSettings() ShortcutSettings {
 		ClearOutput:       ShortcutBinding{Key: "k", UseMod: true},
 		CommandPalette:    ShortcutBinding{Key: "p", UseMod: true, UseShift: true},
 		PaneZoom:          ShortcutBinding{Key: "z", UseMod: true, UseShift: true},
+		NextTab:           ShortcutBinding{Key: "Tab", UseMod: true},
+		PrevTab:           ShortcutBinding{Key: "Tab", UseMod: true, UseShift: true},
+		CloseTab:          ShortcutBinding{Key: "w", UseMod: true},
+		ToggleBroadcast:   ShortcutBinding{Key: "b", UseMod: true},
+		OpenSftp:          ShortcutBinding{Key: "o", UseMod: true, UseShift: true},
+		OpenLocalShell:    ShortcutBinding{Key: "l", UseMod: true},
+		SplitFocusLeft:    ShortcutBinding{Key: "ArrowLeft", UseMod: true, UseAlt: true},
+		SplitFocusRight:   ShortcutBinding{Key: "ArrowRight", UseMod: true, UseAlt: true},
+		SplitFocusUp:      ShortcutBinding{Key: "ArrowUp", UseMod: true, UseAlt: true},
+		SplitFocusDown:    ShortcutBinding{Key: "ArrowDown", UseMod: true, UseAlt: true},
 	}
 }
 
@@ -104,6 +125,36 @@ func fillShortcutDefaults(s *ShortcutSettings) {
 	s.QuickSwitcher = ShortcutBinding{}
 	if s.PaneZoom.Key == "" {
 		s.PaneZoom = def.PaneZoom
+	}
+	if s.NextTab.Key == "" {
+		s.NextTab = def.NextTab
+	}
+	if s.PrevTab.Key == "" {
+		s.PrevTab = def.PrevTab
+	}
+	if s.CloseTab.Key == "" {
+		s.CloseTab = def.CloseTab
+	}
+	if s.ToggleBroadcast.Key == "" {
+		s.ToggleBroadcast = def.ToggleBroadcast
+	}
+	if s.OpenSftp.Key == "" {
+		s.OpenSftp = def.OpenSftp
+	}
+	if s.OpenLocalShell.Key == "" {
+		s.OpenLocalShell = def.OpenLocalShell
+	}
+	if s.SplitFocusLeft.Key == "" {
+		s.SplitFocusLeft = def.SplitFocusLeft
+	}
+	if s.SplitFocusRight.Key == "" {
+		s.SplitFocusRight = def.SplitFocusRight
+	}
+	if s.SplitFocusUp.Key == "" {
+		s.SplitFocusUp = def.SplitFocusUp
+	}
+	if s.SplitFocusDown.Key == "" {
+		s.SplitFocusDown = def.SplitFocusDown
 	}
 }
 

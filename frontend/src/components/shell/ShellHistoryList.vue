@@ -43,7 +43,7 @@
           <TextOverflowTooltip :text="formatAddr(row)" text-class="ml-addr" />
         </div>
         <div class="ml-side-meta">
-          <span class="ml-meta-time">{{ formatRelative(row.lastConnectedAt) }}</span>
+          <span class="ml-meta-time" :title="formatAbsolute(row.lastConnectedAt)">{{ formatRelative(row.lastConnectedAt) }}</span>
           <span class="ml-meta-count">{{ row.connectCount || 1 }} 次</span>
           <button
             type="button"
@@ -116,6 +116,13 @@ export default {
       return `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
     }
 
+    const formatAbsolute = (ts) => {
+      if (!ts) return ''
+      const d = new Date(Number(ts) * 1000)
+      const pad = (n) => String(n).padStart(2, '0')
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+    }
+
     const onRowClick = (row) => emit('connect', row.machineName)
 
     return {
@@ -125,6 +132,7 @@ export default {
       isConnected,
       isOpen,
       formatRelative,
+      formatAbsolute,
       onRowClick,
     }
   },

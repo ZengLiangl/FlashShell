@@ -917,6 +917,9 @@ func (a *App) SaveGlobalAccountsFromDTO(accounts []data.GlobalAccountDTO) error 
 		if err := account.SetPassword(dto.Password); err != nil {
 			return err
 		}
+		if err := account.SetKeyPassphrase(dto.KeyPassphrase); err != nil {
+			return err
+		}
 		stored = append(stored, account)
 	}
 	return a.configManager.SaveGlobalAccounts(stored)
@@ -1403,10 +1406,7 @@ func (a *App) GetSystemSettings() (*data.GlobalConfig, error) {
 			v := true
 			cfg.ShellPasswordAssist = &v
 		}
-		if cfg.ShellSessionRestore == nil {
-			v := true
-			cfg.ShellSessionRestore = &v
-		}
+		// ShellSessionRestore 已下线：不再默认开启
 		if cfg.ThemeSettings.ShellTabHibernate == nil {
 			v := true
 			cfg.ThemeSettings.ShellTabHibernate = &v
@@ -1825,10 +1825,21 @@ func (a *App) ReconnectShell(sessionID string) (string, error) {
 
 // ConnectLocalShell 创建或重连本地终端。sessionID 为空则新建并返回新 ID；非空则按该 ID 重连。
 func (a *App) ConnectLocalShell(sessionID string) (string, error) {
+	return a.ConnectLocalShellCommand(sessionID, "")
+}
+
+// ListLocalShells 列出本机可用 Shell
+func (a *App) ListLocalShells() []machine.LocalShellOption {
+	return machine.ListLocalShellOptions()
+}
+
+// ConnectLocalShellCommand 用指定命令创建本地终端（command 空则默认）
+func (a *App) ConnectLocalShellCommand(sessionID, command string) (string, error) {
 	if a.localShellPool == nil {
 		return "", fmt.Errorf("本地终端不可用")
 	}
 	sessionID = strings.TrimSpace(sessionID)
+	command = strings.TrimSpace(command)
 	if sessionID != "" {
 		if !machine.IsLocalShellID(sessionID) {
 			return "", fmt.Errorf("非法本地会话 ID")
@@ -1839,13 +1850,22 @@ func (a *App) ConnectLocalShell(sessionID string) (string, error) {
 		a.emitShellSessions()
 		return sessionID, nil
 	}
-	id, err := a.localShellPool.Connect(a.shellHandlerFor)
+	var (
+		id  string
+		err error
+	)
+	if command != "" {
+		id, err = a.localShellPool.ConnectWithCommand(command, a.shellHandlerFor)
+	} else {
+		id, err = a.localShellPool.Connect(a.shellHandlerFor)
+	}
 	if err != nil {
 		return "", err
 	}
 	a.emitShellSessions()
 	return id, nil
 }
+
 func (a *App) resolveAuxKey(sessionOrConfig string) string {
 	if machine.IsLocalShellID(sessionOrConfig) {
 		return sessionOrConfig

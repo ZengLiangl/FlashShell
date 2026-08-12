@@ -169,12 +169,48 @@ func (a *App) OpenShellRemoteFileExternal(machineName, remotePath string) error 
 		_ = os.RemoveAll(tmpDir)
 		return fmt.Errorf("启动编辑监听失败: %w", err)
 	}
-	if err := openWithSystemDefault(localPath); err != nil {
+	if err := a.openExternalPath(localPath); err != nil {
 		a.externalEdits.stop(externalEditKey(machineName, remotePath))
 		_ = os.RemoveAll(tmpDir)
 		return err
 	}
 	return nil
+}
+
+func (a *App) openExternalPath(path string) error {
+	ext := strings.ToLower(filepath.Ext(path))
+	cfg, _ := a.GetGlobalConfig()
+	if cfg != nil && cfg.FileAssociations != nil {
+		if cmdTpl := strings.TrimSpace(cfg.FileAssociations[ext]); cmdTpl != "" {
+			if err := runEditorCommand(cmdTpl, path); err == nil {
+				return nil
+			}
+		}
+	}
+	if cfg != nil {
+		if cmdTpl := strings.TrimSpace(cfg.ExternalEditorCommand); cmdTpl != "" {
+			if err := runEditorCommand(cmdTpl, path); err == nil {
+				return nil
+			}
+		}
+	}
+	return openWithSystemDefault(path)
+}
+
+func runEditorCommand(tpl, path string) error {
+	tpl = strings.TrimSpace(tpl)
+	if tpl == "" {
+		return fmt.Errorf("命令为空")
+	}
+	replaced := strings.ReplaceAll(tpl, "{path}", path)
+	if !strings.Contains(tpl, "{path}") {
+		replaced = tpl + " " + path
+	}
+	parts := strings.Fields(replaced)
+	if len(parts) == 0 {
+		return fmt.Errorf("命令为空")
+	}
+	return exec.Command(parts[0], parts[1:]...).Start()
 }
 
 func openWithSystemDefault(path string) error {

@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 
 	"FlashDock/define"
@@ -19,6 +20,7 @@ import (
 type LocalShellSession struct {
 	mu         sync.Mutex
 	id         string
+	command    string
 	cpty       *conpty.ConPty
 	cancelRead context.CancelFunc
 	readDone   chan struct{}
@@ -30,12 +32,24 @@ func NewLocalShellSession(id string) *LocalShellSession {
 	return &LocalShellSession{id: id}
 }
 
+// SetCommand 指定启动命令行（空则用默认）
+func (s *LocalShellSession) SetCommand(cmd string) {
+	s.mu.Lock()
+	s.command = strings.TrimSpace(cmd)
+	s.mu.Unlock()
+}
+
 // Start 启动本地 shell
 func (s *LocalShellSession) Start(handler ShellOutputHandler) error {
 	if !conpty.IsConPtyAvailable() {
 		return fmt.Errorf("当前 Windows 版本不支持 ConPTY 本地终端")
 	}
-	cmdLine := defaultWindowsShell()
+	s.mu.Lock()
+	cmdLine := s.command
+	s.mu.Unlock()
+	if cmdLine == "" {
+		cmdLine = defaultWindowsShell()
+	}
 	opts := []conpty.ConPtyOption{conpty.ConPtyDimensions(120, 40)}
 	if dir := localShellStartDir(); dir != "" {
 		opts = append(opts, conpty.ConPtyWorkDir(dir))

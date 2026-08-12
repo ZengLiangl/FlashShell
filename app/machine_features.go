@@ -54,6 +54,27 @@ func (a *App) ImportMachinesCSVPick() (*data.MachineImportResult, error) {
 	return a.configManager.ImportMachinesCSV(path)
 }
 
+// ExportMachinesCSVPick 选择路径并导出机器 CSV
+func (a *App) ExportMachinesCSVPick() (string, error) {
+	path, err := wailsRuntime.SaveFileDialog(a.ctx, wailsRuntime.SaveDialogOptions{
+		Title:           "导出机器列表 CSV",
+		DefaultFilename: "flashdock-machines.csv",
+		Filters: []wailsRuntime.FileFilter{
+			{DisplayName: "CSV (*.csv)", Pattern: "*.csv"},
+		},
+	})
+	if err != nil {
+		return "", fmt.Errorf("选择保存路径失败: %w", err)
+	}
+	if path == "" {
+		return "", nil
+	}
+	if err := a.configManager.ExportMachinesCSV(path); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
 // ImportPuttyPick 选择并导入 PuTTY 注册表导出（*.reg）
 func (a *App) ImportPuttyPick(accountID, group string) (*data.MachineImportResult, error) {
 	paths, err := a.pickImportSources("选择 PuTTY 注册表文件", []wailsRuntime.FileFilter{

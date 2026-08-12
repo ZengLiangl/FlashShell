@@ -23,6 +23,10 @@
       <div class="tip-bar">
         <span>修饰键为 <strong>{{ modLabel }}</strong>。点击按键区域后按下新组合即可录制，Esc 取消</span>
       </div>
+      <div v-if="shortcutConflicts.length" class="conflict-bar">
+        快捷键冲突：
+        <span v-for="(c, i) in shortcutConflicts" :key="i">{{ c.label }}{{ i < shortcutConflicts.length - 1 ? '；' : '' }}</span>
+      </div>
 
       <section
         v-for="group in shortcutGroups"
@@ -85,7 +89,11 @@
 
       <div class="snippet-toolbar">
         <span class="snippet-toolbar-label">共 {{ snippets.length }} 条</span>
-        <el-button size="small" type="primary" plain @click="addSnippet">添加片段</el-button>
+        <div class="snippet-toolbar-actions">
+          <el-button size="small" plain @click="importSnippets">导入</el-button>
+          <el-button size="small" plain @click="exportSnippets">导出</el-button>
+          <el-button size="small" type="primary" plain @click="addSnippet">添加片段</el-button>
+        </div>
       </div>
 
       <div v-if="!snippets.length" class="snippet-empty">
@@ -211,6 +219,7 @@ import {
   normalizeSnippets,
   emptySnippetBinding,
   normalizeSnippet,
+  findShortcutConflicts,
 } from '../utils/shortcuts'
 import { formatKeyMapParts, keymapBindingFromEvent } from '../utils/keymaps'
 import { modKeyLabel } from '../utils/platform'
@@ -238,6 +247,8 @@ export default {
         })),
       })),
     )
+
+    const shortcutConflicts = computed(() => findShortcutConflicts(shortcuts))
 
     const shortcutParts = (binding) => {
       const label = formatShortcut(binding)
@@ -336,6 +347,42 @@ export default {
       )
     }
 
+    const exportSnippets = () => {
+      const blob = new Blob([JSON.stringify(snippets.value, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = 'flashdock-snippets.json'
+      a.click()
+      URL.revokeObjectURL(url)
+      ElMessage.success('已导出片段')
+    }
+
+    const importSnippets = () => {
+      const input = document.createElement('input')
+      input.type = 'file'
+      input.accept = '.json,application/json'
+      input.onchange = async () => {
+        const file = input.files?.[0]
+        if (!file) return
+        try {
+          const text = await file.text()
+          const parsed = JSON.parse(text)
+          const list = Array.isArray(parsed) ? parsed : parsed?.snippets
+          if (!Array.isArray(list)) throw new Error('无效的片段文件')
+          const imported = normalizeSnippets(list)
+          snippets.value = [...snippets.value, ...imported.map((s) => ({
+            ...s,
+            id: s.id || `sn-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          }))]
+          ElMessage.success(`已导入 ${imported.length} 条片段`)
+        } catch (e) {
+          ElMessage.error('导入失败: ' + e)
+        }
+      }
+      input.click()
+    }
+
     const removeSnippet = (index) => {
       snippets.value.splice(index, 1)
       recordingId.value = ''
@@ -364,6 +411,16 @@ export default {
           clearOutput: { ...shortcuts.clearOutput },
           commandPalette: { ...shortcuts.commandPalette },
           paneZoom: { ...shortcuts.paneZoom },
+          nextTab: { ...shortcuts.nextTab },
+          prevTab: { ...shortcuts.prevTab },
+          closeTab: { ...shortcuts.closeTab },
+          toggleBroadcast: { ...shortcuts.toggleBroadcast },
+          openSftp: { ...shortcuts.openSftp },
+          openLocalShell: { ...shortcuts.openLocalShell },
+          splitFocusLeft: { ...shortcuts.splitFocusLeft },
+          splitFocusRight: { ...shortcuts.splitFocusRight },
+          splitFocusUp: { ...shortcuts.splitFocusUp },
+          splitFocusDown: { ...shortcuts.splitFocusDown },
           snippets: snippets.value.map((s) => {
             const out = {
               id: s.id,
@@ -401,6 +458,7 @@ export default {
       activeTab,
       shortcuts,
       shortcutGroups,
+      shortcutConflicts,
       modLabel,
       shortcutParts,
       bindingParts,
@@ -414,6 +472,8 @@ export default {
       save,
       snippets,
       addSnippet,
+      importSnippets,
+      exportSnippets,
       removeSnippet,
     }
   },
@@ -477,6 +537,17 @@ export default {
   color: var(--app-text-muted);
   background: color-mix(in srgb, var(--app-accent-bg) 55%, transparent);
   border: 1px solid color-mix(in srgb, var(--app-accent-color) 18%, transparent);
+}
+
+.conflict-bar {
+  margin: -6px 0 14px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--el-color-warning-dark-2, #b88230);
+  background: color-mix(in srgb, var(--el-color-warning, #e6a23c) 14%, transparent);
+  border: 1px solid color-mix(in srgb, var(--el-color-warning, #e6a23c) 28%, transparent);
 }
 
 .tip-bar strong {
@@ -655,6 +726,12 @@ export default {
 .snippet-toolbar-label {
   font-size: 12px;
   color: var(--app-text-muted);
+}
+
+.snippet-toolbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .snippet-empty {

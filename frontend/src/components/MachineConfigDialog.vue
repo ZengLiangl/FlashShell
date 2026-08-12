@@ -86,6 +86,7 @@
                                     <el-dropdown-item command="import-securecrt">导入 SecureCRT</el-dropdown-item>
                                     <el-dropdown-item command="import-openssh">导入 OpenSSH config</el-dropdown-item>
                                     <el-dropdown-item command="import-csv">导入 CSV</el-dropdown-item>
+                                    <el-dropdown-item command="export-csv">导出 CSV</el-dropdown-item>
                                     <el-dropdown-item command="export-template" divided>导出连接模板</el-dropdown-item>
                                     <el-dropdown-item command="import-template">导入连接模板</el-dropdown-item>
                                 </el-dropdown-menu>
@@ -109,7 +110,8 @@
                         @contextmenu.prevent="onMachineContextMenu($event, machine)"
                     >
                         <div class="ml-machine-icon" aria-hidden="true">
-                            <el-icon :size="16"><Monitor /></el-icon>
+                            <span v-if="hostIconText(machine)" class="ml-machine-emoji">{{ hostIconText(machine) }}</span>
+                            <el-icon v-else :size="16"><Monitor /></el-icon>
                         </div>
                         <div class="ml-body">
                             <div class="ml-line">
@@ -176,7 +178,8 @@
                                 @contextmenu.prevent="onMachineContextMenu($event, machine)"
                             >
                                 <div class="ml-machine-icon" aria-hidden="true">
-                                    <el-icon :size="16"><Monitor /></el-icon>
+                                    <span v-if="hostIconText(machine)" class="ml-machine-emoji">{{ hostIconText(machine) }}</span>
+                                    <el-icon v-else :size="16"><Monitor /></el-icon>
                                 </div>
                                 <div class="board-card-main">
                                     <TextOverflowTooltip :text="machine.name" text-class="ml-name" />
@@ -318,6 +321,20 @@
                 <el-form-item label="密码" prop="password">
                     <el-input v-model="machineForm.password" type="password" placeholder="请输入密码（可选）" show-password />
                 </el-form-item>
+                <el-form-item label="密钥口令">
+                    <el-input v-model="machineForm.keyPassphrase" type="password" placeholder="加密私钥口令（可选）" show-password clearable />
+                </el-form-item>
+
+                <el-form-item label="主机图标">
+                    <el-select v-model="machineForm.icon" filterable allow-create clearable placeholder="预设或自定义 emoji" style="width: 100%">
+                        <el-option
+                            v-for="opt in hostIconPresets"
+                            :key="opt.id || 'default'"
+                            :label="opt.emoji ? `${opt.emoji} ${opt.label}` : opt.label"
+                            :value="opt.id"
+                        />
+                    </el-select>
+                </el-form-item>
 
                 <el-form-item label="跳板机">
                     <el-input v-model="machineForm.proxyJump" placeholder="单跳：机器名或 host[:port]（多跳请用下方跳板链）" clearable />
@@ -342,6 +359,18 @@
                             :value="m.name"
                         />
                     </el-select>
+                    <div v-if="machineForm.jumpChain?.length" class="jump-chain-order">
+                        <div
+                            v-for="(hop, idx) in machineForm.jumpChain"
+                            :key="`${hop}-${idx}`"
+                            class="jump-chain-row"
+                        >
+                            <span class="jump-chain-idx">{{ idx + 1 }}</span>
+                            <span class="jump-chain-name">{{ hop }}</span>
+                            <el-button size="small" text :disabled="idx === 0" @click="moveJumpHop(idx, -1)">上移</el-button>
+                            <el-button size="small" text :disabled="idx === machineForm.jumpChain.length - 1" @click="moveJumpHop(idx, 1)">下移</el-button>
+                        </div>
+                    </div>
                     <p class="field-hint">多跳时按从左到右顺序连接，最后一跳再连目标主机</p>
                 </el-form-item>
 
@@ -381,12 +410,13 @@
                 <el-form-item label="跳过 ECDSA 主机密钥">
                     <el-switch v-model="machineForm.skipEcdsaHostKey" />
                 </el-form-item>
-                <el-form-item label="SFTP 编码">
+                <el-form-item label="SFTP / 终端编码">
                     <el-select v-model="machineForm.sftpEncoding" style="width: 100%">
                         <el-option label="自动" value="auto" />
                         <el-option label="UTF-8" value="utf-8" />
-                        <el-option label="GB18030" value="gb18030" />
+                        <el-option label="GB18030（中文 Windows 远端）" value="gb18030" />
                     </el-select>
+                    <p class="field-hint">影响 SFTP 文件名编解码；远端中文乱码时优先试 GB18030</p>
                 </el-form-item>
                 <el-form-item label="文件协议">
                     <el-select v-model="machineForm.sftpFileProtocol" style="width: 100%">
@@ -635,6 +665,7 @@ import {
     ImportSecureCRTPick,
     ImportOpenSSHConfigPick,
     ImportMachinesCSVPick,
+    ExportMachinesCSVPick,
     ExportMachineTemplateToFile,
     ImportMachineTemplateFromFile,
 } from '../../wailsjs/go/app/App'
@@ -649,6 +680,7 @@ import {
 } from '../utils/machineGroups'
 import { copyMachineRecord } from '../utils/machineCopy'
 import { TERMINAL_PRESETS } from '../utils/themePresets'
+import { HOST_ICON_PRESETS, resolveHostIcon } from '../utils/hostIcons'
 import { useMachineContextMenu } from '../composables/useMachineContextMenu'
 import MachineContextMenu from './shell/MachineContextMenu.vue'
 import TextOverflowTooltip from './TextOverflowTooltip.vue'
@@ -770,6 +802,8 @@ export default {
             port: 22,
             user: '',
             password: '',
+            keyPassphrase: '',
+            icon: '',
             proxyJump: '',
             jumpChain: [],
             proxyOverride: {
@@ -791,6 +825,18 @@ export default {
         })
 
         const knownTagOptions = computed(() => collectMachineTags(machines.value))
+        const hostIconPresets = HOST_ICON_PRESETS
+        const hostIconText = (machine) => resolveHostIcon(machine).text
+        const moveJumpHop = (idx, delta) => {
+            const list = machineForm.jumpChain || []
+            const to = idx + delta
+            if (to < 0 || to >= list.length) return
+            const next = [...list]
+            const tmp = next[idx]
+            next[idx] = next[to]
+            next[to] = tmp
+            machineForm.jumpChain = next
+        }
 
         const emptyTunnel = () => ({
             enabled: true,
@@ -970,6 +1016,7 @@ export default {
             machineForm.group = machine.group || ''
             machineForm.tags = normalizeMachineTags(machine.tags)
             machineForm.notes = machine.notes || ''
+            machineForm.icon = machine.icon || ''
             machineForm.identityId = machine.identityId || ''
             machineForm.key_file = machine.key_file || ''
             machineForm.proxyJump = machine.proxyJump || ''
@@ -1006,6 +1053,7 @@ export default {
                     machineForm.port = sensitiveData.port || 22
                     machineForm.user = sensitiveData.user || ''
                     machineForm.password = sensitiveData.password || ''
+                    machineForm.keyPassphrase = sensitiveData.keyPassphrase || ''
                 }
             } catch (error) {
                 console.error('获取敏感数据失败:', error)
@@ -1043,12 +1091,14 @@ export default {
             machineForm.group = ''
             machineForm.tags = []
             machineForm.notes = ''
+            machineForm.icon = ''
             machineForm.identityId = ''
             machineForm.key_file = ''
             machineForm.host = ''
             machineForm.port = 22
             machineForm.user = ''
             machineForm.password = ''
+            machineForm.keyPassphrase = ''
             machineForm.proxyJump = ''
             machineForm.jumpChain = []
             machineForm.proxyOverride = {
@@ -1149,6 +1199,7 @@ export default {
                     group: normalizeGroup(machineForm.group),
                     tags: normalizeMachineTags(machineForm.tags),
                     notes: String(machineForm.notes || '').trim(),
+                    icon: String(machineForm.icon || '').trim(),
                     identityId: machineForm.identityId || '',
                     key_file: machineForm.key_file,
                     proxyJump: machineForm.proxyJump?.trim() || '',
@@ -1167,7 +1218,8 @@ export default {
                     host: machineForm.host,
                     port: machineForm.port,
                     user: machineForm.user,
-                    password: machineForm.password
+                    password: machineForm.password,
+                    keyPassphrase: machineForm.keyPassphrase || '',
                 }
                 if (editingMachine.value) {
                     machineData.id = editingMachine.value.id
@@ -1442,6 +1494,22 @@ export default {
             }
         }
 
+        const exportCSV = async () => {
+            try {
+                const fn = typeof ExportMachinesCSVPick === 'function'
+                    ? ExportMachinesCSVPick
+                    : window?.go?.app?.App?.ExportMachinesCSVPick
+                if (typeof fn !== 'function') {
+                    ElMessage.warning('导出 API 不可用：请完全重启 wails dev')
+                    return
+                }
+                const path = await fn()
+                if (path) ElMessage.success('已导出: ' + path)
+            } catch (error) {
+                ElMessage.error('导出失败: ' + error)
+            }
+        }
+
         const handleAddCommand = (command) => {
             if (command === 'import-finalshell') importFinalShell()
             else if (command === 'import-xshell') importXshell()
@@ -1450,6 +1518,7 @@ export default {
             else if (command === 'import-securecrt') importSecureCRT()
             else if (command === 'import-openssh') importOpenSSH()
             else if (command === 'import-csv') importCSV()
+            else if (command === 'export-csv') exportCSV()
             else if (command === 'export-template') exportTemplate()
             else if (command === 'import-template') importTemplate()
         }
@@ -1525,6 +1594,9 @@ export default {
             dragOverGroup,
             groupOptions,
             knownTagOptions,
+            hostIconPresets,
+            hostIconText,
+            moveJumpHop,
             managedGroups,
             machineKeyword,
             globalAccounts,
@@ -1785,6 +1857,46 @@ export default {
 .board-card:hover {
     background: var(--app-accent-bg);
     border-color: color-mix(in srgb, var(--app-accent-color) 35%, var(--app-border));
+}
+
+.ml-machine-emoji {
+    font-size: 14px;
+    line-height: 1;
+}
+
+.jump-chain-order {
+    margin-top: 8px;
+    display: grid;
+    gap: 4px;
+}
+
+.jump-chain-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: var(--app-panel-bg, #f5f7fa);
+}
+
+.jump-chain-idx {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--app-accent-color, #409eff);
+    color: #fff;
+    font-size: 11px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.jump-chain-name {
+    flex: 1;
+    font-size: 12px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .board-card:hover .ml-machine-icon {

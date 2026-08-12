@@ -512,6 +512,21 @@ export function useShell() {
       const hk = parseHostKeyError(error)
       if (hk) {
         pendingHostKey.value = { ...hk, configName, pendingId }
+      } else if (/私钥需要口令|passphrase/i.test(String(error || ''))) {
+        try {
+          const { value } = await ElMessageBox.prompt('请输入私钥口令', '密钥口令', {
+            inputType: 'password',
+            confirmButtonText: '连接',
+            cancelButtonText: '取消',
+          })
+          // 暂存到机器敏感字段需后端 API；先提示用户到机器配置保存口令后重试
+          if (value) {
+            ElMessage.info('请到机器配置或密钥库填写「密钥口令」后重新连接（口令会加密保存）')
+          }
+        } catch {
+          // cancel
+        }
+        ElMessage.error('连接失败: ' + error)
       } else {
         ElMessage.error('连接失败: ' + error)
       }
@@ -519,12 +534,14 @@ export function useShell() {
     }
   }
 
-  const connectLocal = async (sessionID = '') => {
+  const connectLocal = async (sessionID = '', command = '') => {
     if (sessionID) {
       return connectOrReconnect(sessionID)
     }
     try {
-      const id = await App.ConnectLocalShell('')
+      const id = command
+        ? await App.ConnectLocalShellCommand('', command)
+        : await App.ConnectLocalShell('')
       if (!id) throw new Error('未返回会话 ID')
 
       pruneOrphanLocalPending()
@@ -550,7 +567,7 @@ export function useShell() {
         tab.connecting = false
         tab.kind = 'local'
       }
-      ElMessage.success('已打开本机')
+      ElMessage.success(command ? '已打开本机 Shell' : '已打开本机')
       return true
     } catch (error) {
       pruneOrphanLocalPending()

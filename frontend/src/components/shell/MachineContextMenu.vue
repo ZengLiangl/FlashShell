@@ -10,6 +10,7 @@
       @mouseleave="$emit('hide')"
     >
       <li v-if="showConnect" @click="onConnect">连接</li>
+      <li v-if="showConnect" @click="onOpenWindow">在新窗口打开</li>
       <li @click="onTogglePin">{{ isPinned ? '取消置顶' : '置顶' }}</li>
       <li @click="onCopy">复制</li>
       <li @click="onEdit">编辑</li>
@@ -27,7 +28,7 @@ export default {
     ctx: { type: Object, required: true },
     showConnect: { type: Boolean, default: true },
   },
-  emits: ['connect', 'copy', 'edit', 'delete', 'toggle-pin', 'hide'],
+  emits: ['connect', 'open-window', 'copy', 'edit', 'delete', 'toggle-pin', 'hide'],
   setup(props, { emit }) {
     const menuRef = ref(null)
 
@@ -65,12 +66,13 @@ export default {
     )
 
     const onConnect = () => emit('connect', machine())
+    const onOpenWindow = () => emit('open-window', machine())
     const onCopy = () => emit('copy', machine())
     const onEdit = () => emit('edit', machine())
     const onDelete = () => emit('delete', machine())
     const onTogglePin = () => emit('toggle-pin', machine())
 
-    return { menuRef, isPinned, onConnect, onCopy, onEdit, onDelete, onTogglePin }
+    return { menuRef, isPinned, onConnect, onOpenWindow, onCopy, onEdit, onDelete, onTogglePin }
   },
 }
 </script>

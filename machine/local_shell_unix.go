@@ -20,6 +20,7 @@ import (
 type LocalShellSession struct {
 	mu         sync.Mutex
 	id         string
+	command    string
 	cmd        *exec.Cmd
 	ptmx       *os.File
 	cancelRead context.CancelFunc
@@ -32,9 +33,26 @@ func NewLocalShellSession(id string) *LocalShellSession {
 	return &LocalShellSession{id: id}
 }
 
+// SetCommand 指定启动命令（空则用默认）
+func (s *LocalShellSession) SetCommand(cmd string) {
+	s.mu.Lock()
+	s.command = strings.TrimSpace(cmd)
+	s.mu.Unlock()
+}
+
 // Start 启动本地 shell
 func (s *LocalShellSession) Start(handler ShellOutputHandler) error {
-	shell, args := defaultUnixShell()
+	s.mu.Lock()
+	custom := s.command
+	s.mu.Unlock()
+	var shell string
+	var args []string
+	if custom != "" {
+		shell = custom
+		args = nil
+	} else {
+		shell, args = defaultUnixShell()
+	}
 	cmd := exec.Command(shell, args...)
 	cmd.Env = buildLocalShellEnv(os.Environ())
 	if dir := localShellStartDir(); dir != "" {

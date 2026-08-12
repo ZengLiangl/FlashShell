@@ -50,9 +50,17 @@ func (p *LocalShellPool) nextID() string {
 
 // Connect 新建本地终端，返回会话 ID
 func (p *LocalShellPool) Connect(handlerFor func(id string) ShellOutputHandler) (string, error) {
+	return p.ConnectWithCommand("", handlerFor)
+}
+
+// ConnectWithCommand 用指定命令新建本地终端
+func (p *LocalShellPool) ConnectWithCommand(command string, handlerFor func(id string) ShellOutputHandler) (string, error) {
 	p.mu.Lock()
 	id := p.nextID()
 	sess := NewLocalShellSession(id)
+	if command != "" {
+		sess.SetCommand(command)
+	}
 	p.sessions[id] = sess
 	p.mu.Unlock()
 

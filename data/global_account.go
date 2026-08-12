@@ -10,12 +10,14 @@ import (
 
 // GlobalAccount 全局 SSH 帐号
 type GlobalAccount struct {
-	ID                string `yaml:"id" json:"id"`
-	Name              string `yaml:"name" json:"name"`
-	User              string `yaml:"user" json:"user"`
-	KeyFile           string `yaml:"keyFile,omitempty" json:"keyFile,omitempty"`
-	EncryptedPassword string `yaml:"encrypted_password,omitempty" json:"encrypted_password,omitempty"`
-	password          string `yaml:"-" json:"-"`
+	ID                    string `yaml:"id" json:"id"`
+	Name                  string `yaml:"name" json:"name"`
+	User                  string `yaml:"user" json:"user"`
+	KeyFile               string `yaml:"keyFile,omitempty" json:"keyFile,omitempty"`
+	EncryptedPassword     string `yaml:"encrypted_password,omitempty" json:"encrypted_password,omitempty"`
+	EncryptedKeyPassphrase string `yaml:"encrypted_key_passphrase,omitempty" json:"encrypted_key_passphrase,omitempty"`
+	password              string `yaml:"-" json:"-"`
+	keyPassphrase         string `yaml:"-" json:"-"`
 }
 
 // EnsureID 确保帐号有唯一 ID
@@ -60,13 +62,49 @@ func (a *GlobalAccount) GetPassword() (string, error) {
 	return a.password, nil
 }
 
+// SetKeyPassphrase 加密并保存私钥口令
+func (a *GlobalAccount) SetKeyPassphrase(passphrase string) error {
+	a.keyPassphrase = passphrase
+	if passphrase == "" {
+		a.EncryptedKeyPassphrase = ""
+		return nil
+	}
+	encrypted, err := crypto.EncryptSensitiveData(&crypto.SensitiveData{
+		Name:          a.Name,
+		Username:      a.User,
+		KeyPassphrase: passphrase,
+	})
+	if err != nil {
+		return err
+	}
+	a.EncryptedKeyPassphrase = encrypted
+	return nil
+}
+
+// GetKeyPassphrase 获取私钥口令
+func (a *GlobalAccount) GetKeyPassphrase() (string, error) {
+	if a.keyPassphrase != "" {
+		return a.keyPassphrase, nil
+	}
+	if a.EncryptedKeyPassphrase == "" {
+		return "", nil
+	}
+	data, err := crypto.DecryptSensitiveData(a.EncryptedKeyPassphrase)
+	if err != nil {
+		return "", err
+	}
+	a.keyPassphrase = data.KeyPassphrase
+	return a.keyPassphrase, nil
+}
+
 // GlobalAccountDTO 返回给前端的帐号信息（含密码，用于填充表单）
 type GlobalAccountDTO struct {
-	ID       string `json:"id"`
-	Name     string `json:"name"`
-	User     string `json:"user"`
-	Password string `json:"password"`
-	KeyFile  string `json:"keyFile,omitempty"`
+	ID            string `json:"id"`
+	Name          string `json:"name"`
+	User          string `json:"user"`
+	Password      string `json:"password"`
+	KeyFile       string `json:"keyFile,omitempty"`
+	KeyPassphrase string `json:"keyPassphrase,omitempty"`
 }
 
 func (gcm *GlobalConfigManager) ensureGlobalAccountIDs() bool {
@@ -90,12 +128,14 @@ func (gcm *GlobalConfigManager) GetGlobalAccounts() []GlobalAccountDTO {
 	result := make([]GlobalAccountDTO, 0, len(gcm.config.GlobalAccounts))
 	for _, account := range gcm.config.GlobalAccounts {
 		password, _ := account.GetPassword()
+		passphrase, _ := account.GetKeyPassphrase()
 		result = append(result, GlobalAccountDTO{
-			ID:       account.ID,
-			Name:     account.Name,
-			User:     account.User,
-			Password: password,
-			KeyFile:  account.KeyFile,
+			ID:            account.ID,
+			Name:          account.Name,
+			User:          account.User,
+			Password:      password,
+			KeyFile:       account.KeyFile,
+			KeyPassphrase: passphrase,
 		})
 	}
 	return result

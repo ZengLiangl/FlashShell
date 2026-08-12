@@ -156,6 +156,7 @@ export namespace data {
 	    user: string;
 	    keyFile?: string;
 	    encrypted_password?: string;
+	    encrypted_key_passphrase?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new GlobalAccount(source);
@@ -168,6 +169,7 @@ export namespace data {
 	        this.user = source["user"];
 	        this.keyFile = source["keyFile"];
 	        this.encrypted_password = source["encrypted_password"];
+	        this.encrypted_key_passphrase = source["encrypted_key_passphrase"];
 	    }
 	}
 	export class GlobalAccountDTO {
@@ -176,6 +178,7 @@ export namespace data {
 	    user: string;
 	    password: string;
 	    keyFile?: string;
+	    keyPassphrase?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new GlobalAccountDTO(source);
@@ -188,6 +191,7 @@ export namespace data {
 	        this.user = source["user"];
 	        this.password = source["password"];
 	        this.keyFile = source["keyFile"];
+	        this.keyPassphrase = source["keyPassphrase"];
 	    }
 	}
 	export class ShellLogHighlightCustomKeyword {
@@ -366,6 +370,8 @@ export namespace data {
 	    shellCursorLineHighlight?: boolean;
 	    shellLineTimestamps?: boolean;
 	    shellPasswordAssist?: boolean;
+	    externalEditorCommand?: string;
+	    fileAssociations?: Record<string, string>;
 	
 	    static createFrom(source: any = {}) {
 	        return new GlobalConfig(source);
@@ -402,6 +408,8 @@ export namespace data {
 	        this.shellCursorLineHighlight = source["shellCursorLineHighlight"];
 	        this.shellLineTimestamps = source["shellLineTimestamps"];
 	        this.shellPasswordAssist = source["shellPasswordAssist"];
+	        this.externalEditorCommand = source["externalEditorCommand"];
+	        this.fileAssociations = source["fileAssociations"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -694,6 +702,7 @@ export namespace data {
 	    key: string;
 	    useMod: boolean;
 	    useShift?: boolean;
+	    useAlt?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new ShortcutBinding(source);
@@ -704,6 +713,7 @@ export namespace data {
 	        this.key = source["key"];
 	        this.useMod = source["useMod"];
 	        this.useShift = source["useShift"];
+	        this.useAlt = source["useAlt"];
 	    }
 	}
 	export class ShortcutSettings {
@@ -720,6 +730,16 @@ export namespace data {
 	    commandPalette: ShortcutBinding;
 	    quickSwitcher?: ShortcutBinding;
 	    paneZoom: ShortcutBinding;
+	    nextTab: ShortcutBinding;
+	    prevTab: ShortcutBinding;
+	    closeTab: ShortcutBinding;
+	    toggleBroadcast: ShortcutBinding;
+	    openSftp: ShortcutBinding;
+	    openLocalShell: ShortcutBinding;
+	    splitFocusLeft: ShortcutBinding;
+	    splitFocusRight: ShortcutBinding;
+	    splitFocusUp: ShortcutBinding;
+	    splitFocusDown: ShortcutBinding;
 	    snippets?: ShellSnippet[];
 	
 	    static createFrom(source: any = {}) {
@@ -741,6 +761,16 @@ export namespace data {
 	        this.commandPalette = this.convertValues(source["commandPalette"], ShortcutBinding);
 	        this.quickSwitcher = this.convertValues(source["quickSwitcher"], ShortcutBinding);
 	        this.paneZoom = this.convertValues(source["paneZoom"], ShortcutBinding);
+	        this.nextTab = this.convertValues(source["nextTab"], ShortcutBinding);
+	        this.prevTab = this.convertValues(source["prevTab"], ShortcutBinding);
+	        this.closeTab = this.convertValues(source["closeTab"], ShortcutBinding);
+	        this.toggleBroadcast = this.convertValues(source["toggleBroadcast"], ShortcutBinding);
+	        this.openSftp = this.convertValues(source["openSftp"], ShortcutBinding);
+	        this.openLocalShell = this.convertValues(source["openLocalShell"], ShortcutBinding);
+	        this.splitFocusLeft = this.convertValues(source["splitFocusLeft"], ShortcutBinding);
+	        this.splitFocusRight = this.convertValues(source["splitFocusRight"], ShortcutBinding);
+	        this.splitFocusUp = this.convertValues(source["splitFocusUp"], ShortcutBinding);
+	        this.splitFocusDown = this.convertValues(source["splitFocusDown"], ShortcutBinding);
 	        this.snippets = this.convertValues(source["snippets"], ShellSnippet);
 	    }
 	
@@ -910,6 +940,7 @@ export namespace define {
 	    pinned?: boolean;
 	    tags?: string[];
 	    notes?: string;
+	    icon?: string;
 	    identityId?: string;
 	    tunnels?: SSHTunnel[];
 	    list_host?: string;
@@ -944,6 +975,7 @@ export namespace define {
 	        this.pinned = source["pinned"];
 	        this.tags = source["tags"];
 	        this.notes = source["notes"];
+	        this.icon = source["icon"];
 	        this.identityId = source["identityId"];
 	        this.tunnels = this.convertValues(source["tunnels"], SSHTunnel);
 	        this.list_host = source["list_host"];
@@ -1130,6 +1162,7 @@ export namespace define {
 	    port: number;
 	    user: string;
 	    password?: string;
+	    keyPassphrase?: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SensitiveData(source);
@@ -1141,6 +1174,7 @@ export namespace define {
 	        this.port = source["port"];
 	        this.user = source["user"];
 	        this.password = source["password"];
+	        this.keyPassphrase = source["keyPassphrase"];
 	    }
 	}
 	export class SftpEntry {
@@ -1637,6 +1671,24 @@ export namespace machine {
 	        this.whenResult = source["whenResult"];
 	        this.skipped = source["skipped"];
 	        this.parallel = source["parallel"];
+	    }
+	}
+	export class LocalShellOption {
+	    id: string;
+	    name: string;
+	    command: string;
+	    isDefault: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new LocalShellOption(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.name = source["name"];
+	        this.command = source["command"];
+	        this.isDefault = source["isDefault"];
 	    }
 	}
 	export class SftpUploadConflict {

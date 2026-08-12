@@ -44,7 +44,11 @@ export function ConfirmQuit():Promise<void>;
 
 export function ConnectLocalShell(arg1:string):Promise<string>;
 
+export function ConnectLocalShellCommand(arg1:string,arg2:string):Promise<string>;
+
 export function ConnectShell(arg1:string):Promise<string>;
+
+export function ConsumePendingConnectMachine():Promise<string>;
 
 export function CopyShellRemotePath(arg1:string,arg2:string,arg3:string):Promise<void>;
 
@@ -81,6 +85,8 @@ export function ExportKnownHosts():Promise<string>;
 export function ExportMachineTemplate():Promise<string>;
 
 export function ExportMachineTemplateToFile():Promise<string>;
+
+export function ExportMachinesCSVPick():Promise<string>;
 
 export function GetAppVersion():Promise<string>;
 
@@ -198,6 +204,8 @@ export function ListAppIconPresets():Promise<Array<app.AppIconPresetInfo>>;
 
 export function ListLocalFiles(arg1:string,arg2:boolean):Promise<Array<define.SftpEntry>>;
 
+export function ListLocalShells():Promise<Array<machine.LocalShellOption>>;
+
 export function ListPortForwards():Promise<Array<data.PortForwardRule>>;
 
 export function ListShellFiles(arg1:string,arg2:string,arg3:boolean):Promise<Array<define.SftpEntry>>;
@@ -225,6 +233,8 @@ export function OpenDownloadsDirectory():Promise<void>;
 export function OpenGlobalConfigWithEvent():Promise<void>;
 
 export function OpenMachineConfig():Promise<void>;
+
+export function OpenMachineInNewWindow(arg1:string):Promise<void>;
 
 export function OpenReleaseURL(arg1:string):Promise<void>;
 

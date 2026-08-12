@@ -173,6 +173,26 @@
                                     <el-switch v-model="form.sftpUseCompressedUpload" size="small" />
                                 </div>
                             </div>
+                            <div class="system-setting-row system-setting-row--stack">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">外置编辑器</span>
+                                    <span class="system-setting-hint">SFTP「用系统应用打开」优先用此命令；可用 {path} 占位，留空则系统默认</span>
+                                </div>
+                                <el-input v-model="form.externalEditorCommand" size="small" placeholder='例如 code "{path}" 或 notepad++' clearable />
+                            </div>
+                            <div class="system-setting-row system-setting-row--stack">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">文件关联</span>
+                                    <span class="system-setting-hint">每行：扩展名=命令，如 .go=code {path}</span>
+                                </div>
+                                <el-input
+                                    v-model="fileAssocText"
+                                    type="textarea"
+                                    :rows="3"
+                                    size="small"
+                                    placeholder=".md=code {path}&#10;.log=notepad"
+                                />
+                            </div>
                         </div>
 
                         <!-- 主机密钥 -->
@@ -208,12 +228,12 @@
                 </div>
             </section>
 
-            <!-- 账号 -->
+            <!-- 账号 / 密钥库 -->
             <section v-show="settingsTab === 'accounts'" class="settings-section">
                 <div class="section-head">
                     <div>
-                        <h4>全局 SSH 帐号</h4>
-                        <p>添加机器时可一键填充用户名与密码</p>
+                        <h4>密钥库 / 全局身份</h4>
+                        <p class="section-desc">可复用的用户名、密码与私钥；机器通过「身份」引用。添加机器时可一键填充</p>
                     </div>
                     <el-tooltip content="添加帐号" placement="top">
                         <el-button size="small" type="primary" circle @click="addAccount">
@@ -620,6 +640,9 @@
                         </el-button>
                     </div>
                 </el-form-item>
+                <el-form-item label="密钥口令">
+                    <el-input v-model="accountForm.keyPassphrase" type="password" show-password placeholder="加密私钥口令（可选）" />
+                </el-form-item>
             </el-form>
             <template #footer>
                 <div class="dialog-footer icon-actions">
@@ -734,12 +757,13 @@ export default {
         const importingKnownHosts = ref(false)
         const accountEditVisible = ref(false)
         const editingAccountIndex = ref(-1)
-        const accountForm = reactive({ id: '', name: '', user: '', password: '', keyFile: '' })
+        const accountForm = reactive({ id: '', name: '', user: '', password: '', keyFile: '', keyPassphrase: '' })
+        const fileAssocText = ref('')
         const { applyThemeSettings } = useTheme()
         const settingsTab = ref('system')
         const settingsTabs = [
             { id: 'system', label: '系统设置' },
-            { id: 'accounts', label: '账号' },
+            { id: 'accounts', label: '密钥库' },
             { id: 'theme', label: '主题' },
             { id: 'about', label: '关于' },
         ]
@@ -778,13 +802,13 @@ export default {
             shellTerminalScrollback: SHELL_TERMINAL_SCROLLBACK,
             taskOutputMaxLines: TASK_OUTPUT_MAX_LINES,
             shellCommandHistoryMax: SHELL_COMMAND_HISTORY_MAX,
-            shellSessionRestore: true,
             shellLogHighlight: true,
             shellAsciiInput: true,
             shellCursorLineHighlight: false,
             shellLineTimestamps: false,
             shellPasswordAssist: true,
             sftpUseCompressedUpload: true,
+            externalEditorCommand: '',
             shellLogHighlightColors: { ...DEFAULT_SHELL_LOG_COLORS },
             shellLogHighlightRules: mergeLogHighlightRules([]),
             shellLogHighlightKeywords: [],
@@ -1012,13 +1036,17 @@ theme preview · ${theme.foreground}`
             form.shellTerminalScrollback = clampShellTerminalScrollback(config.shellTerminalScrollback)
             form.taskOutputMaxLines = clampTaskOutputMaxLines(config.taskOutputMaxLines)
             form.shellCommandHistoryMax = clampShellCommandHistoryMax(config.shellCommandHistoryMax)
-            form.shellSessionRestore = false
             form.shellLogHighlight = config.shellLogHighlight !== false
             form.shellAsciiInput = config.shellAsciiInput !== false
             form.shellCursorLineHighlight = !!config.shellCursorLineHighlight
             form.shellLineTimestamps = !!config.shellLineTimestamps
             form.shellPasswordAssist = config.shellPasswordAssist !== false
             form.sftpUseCompressedUpload = config.sftpUseCompressedUpload !== false
+            form.externalEditorCommand = config.externalEditorCommand || ''
+            const assoc = config.fileAssociations || {}
+            fileAssocText.value = Object.entries(assoc)
+                .map(([ext, cmd]) => `${ext}=${cmd}`)
+                .join('\n')
             Object.assign(
                 form.shellLogHighlightColors,
                 mergeLogHighlightColors(config.shellLogHighlightColors),
@@ -1316,6 +1344,7 @@ theme preview · ${theme.foreground}`
             accountForm.user = ''
             accountForm.password = ''
             accountForm.keyFile = ''
+            accountForm.keyPassphrase = ''
         }
 
         const addAccount = () => {
@@ -1332,6 +1361,7 @@ theme preview · ${theme.foreground}`
             accountForm.user = account.user || ''
             accountForm.password = account.password || ''
             accountForm.keyFile = account.keyFile || ''
+            accountForm.keyPassphrase = account.keyPassphrase || ''
             accountEditVisible.value = true
         }
 
@@ -1375,6 +1405,7 @@ theme preview · ${theme.foreground}`
                 user: accountForm.user.trim(),
                 password: accountForm.password,
                 keyFile: accountForm.keyFile || '',
+                keyPassphrase: accountForm.keyPassphrase || '',
             }
             if (editingAccountIndex.value >= 0) {
                 accounts.value[editingAccountIndex.value] = payload
@@ -1403,13 +1434,26 @@ theme preview · ${theme.foreground}`
                 config.shellTerminalScrollback = clampShellTerminalScrollback(form.shellTerminalScrollback)
                 config.taskOutputMaxLines = clampTaskOutputMaxLines(form.taskOutputMaxLines)
                 config.shellCommandHistoryMax = clampShellCommandHistoryMax(form.shellCommandHistoryMax)
-                config.shellSessionRestore = false
                 config.shellLogHighlight = !!form.shellLogHighlight
                 config.shellAsciiInput = !!form.shellAsciiInput
                 config.shellCursorLineHighlight = !!form.shellCursorLineHighlight
                 config.shellLineTimestamps = !!form.shellLineTimestamps
                 config.shellPasswordAssist = !!form.shellPasswordAssist
                 config.sftpUseCompressedUpload = !!form.sftpUseCompressedUpload
+                config.externalEditorCommand = String(form.externalEditorCommand || '').trim()
+                const assocMap = {}
+                String(fileAssocText.value || '').split(/\r?\n/).forEach((line) => {
+                    const t = line.trim()
+                    if (!t || t.startsWith('#')) return
+                    const eq = t.indexOf('=')
+                    if (eq <= 0) return
+                    let ext = t.slice(0, eq).trim().toLowerCase()
+                    const cmd = t.slice(eq + 1).trim()
+                    if (!ext || !cmd) return
+                    if (!ext.startsWith('.')) ext = `.${ext}`
+                    assocMap[ext] = cmd
+                })
+                config.fileAssociations = assocMap
                 config.shellLogHighlightColors = mergeLogHighlightColors(form.shellLogHighlightColors)
                 config.shellLogHighlightDisabled = rulesToDisabled(form.shellLogHighlightRules)
                 config.shellLogHighlightKeywords = normalizeCustomKeywords(form.shellLogHighlightKeywords)
@@ -1472,6 +1516,7 @@ theme preview · ${theme.foreground}`
             previewTermLabel,
             previewTermSample,
             accounts,
+            fileAssocText,
             knownHosts,
             loadingKnownHosts,
             importingKnownHosts,

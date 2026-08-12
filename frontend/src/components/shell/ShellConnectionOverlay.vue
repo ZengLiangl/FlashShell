@@ -9,6 +9,11 @@
       <div class="conn-title">{{ title }}</div>
       <div v-if="subtitle" class="conn-sub">{{ subtitle }}</div>
       <div v-if="jumpHint" class="conn-jump">{{ jumpHint }}</div>
+      <ol v-if="status === 'connecting' || status === 'reconnecting'" class="conn-stages">
+        <li v-for="s in stages" :key="s.id" :class="{ active: s.id === activeStage, done: s.done }">
+          {{ s.label }}
+        </li>
+      </ol>
       <div v-if="status === 'connecting' || status === 'reconnecting'" class="conn-progress">
         <div class="conn-progress-bar" />
       </div>
@@ -21,8 +26,15 @@
 </template>
 
 <script>
-import { computed } from 'vue'
+import { computed, ref, watch, onUnmounted } from 'vue'
 import { Loading, WarningFilled, Monitor } from '@element-plus/icons-vue'
+
+const STAGE_DEFS = [
+  { id: 'resolve', label: '解析目标与跳板' },
+  { id: 'dial', label: '建立 TCP / 代理' },
+  { id: 'auth', label: 'SSH 认证' },
+  { id: 'session', label: '打开终端会话' },
+]
 
 export default {
   name: 'ShellConnectionOverlay',
@@ -40,6 +52,39 @@ export default {
   },
   emits: ['reconnect'],
   setup(props) {
+    const stageIndex = ref(0)
+    let timer = null
+
+    const clearTimer = () => {
+      if (timer) {
+        clearInterval(timer)
+        timer = null
+      }
+    }
+
+    watch(
+      () => props.status,
+      (st) => {
+        clearTimer()
+        stageIndex.value = 0
+        if (st === 'connecting' || st === 'reconnecting') {
+          timer = setInterval(() => {
+            if (stageIndex.value < STAGE_DEFS.length - 1) stageIndex.value += 1
+          }, 900)
+        }
+      },
+      { immediate: true },
+    )
+    onUnmounted(clearTimer)
+
+    const stages = computed(() =>
+      STAGE_DEFS.map((s, i) => ({
+        ...s,
+        done: i < stageIndex.value,
+      })),
+    )
+    const activeStage = computed(() => STAGE_DEFS[Math.min(stageIndex.value, STAGE_DEFS.length - 1)].id)
+
     const visible = computed(() =>
       props.status === 'connecting' ||
       props.status === 'reconnecting' ||
@@ -74,7 +119,7 @@ export default {
       if (props.proxyJump) return `跳板：${props.proxyJump}`
       return ''
     })
-    return { visible, statusClass, title, subtitle, jumpHint }
+    return { visible, statusClass, title, subtitle, jumpHint, stages, activeStage }
   },
 }
 </script>
@@ -119,32 +164,68 @@ export default {
   line-height: 1.4;
 }
 
-.conn-sub {
+.conn-sub,
+.conn-jump {
   margin-top: 6px;
-  font-size: 13px;
+  font-size: 12px;
   color: var(--app-text-muted, #909399);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
-.conn-jump {
-  margin-top: 10px;
+.conn-stages {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  text-align: left;
+  display: grid;
+  gap: 6px;
+}
+
+.conn-stages li {
   font-size: 12px;
-  color: var(--el-color-info, #909399);
-  line-height: 1.4;
+  color: var(--app-text-muted, #909399);
+  padding-left: 14px;
+  position: relative;
+}
+
+.conn-stages li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--app-border, #dcdfe6);
+}
+
+.conn-stages li.active {
+  color: var(--app-accent-color, #409eff);
+  font-weight: 600;
+}
+
+.conn-stages li.active::before {
+  background: var(--app-accent-color, #409eff);
+}
+
+.conn-stages li.done {
+  color: var(--el-color-success, #67c23a);
+}
+
+.conn-stages li.done::before {
+  background: var(--el-color-success, #67c23a);
 }
 
 .conn-progress {
   margin-top: 16px;
   height: 3px;
   border-radius: 2px;
-  background: var(--el-fill-color, #f0f2f5);
+  background: color-mix(in srgb, var(--app-accent-color, #409eff) 18%, transparent);
   overflow: hidden;
 }
 
 .conn-progress-bar {
   height: 100%;
   width: 40%;
-  border-radius: 2px;
   background: var(--app-accent-color, #409eff);
   animation: conn-slide 1.2s ease-in-out infinite;
 }
@@ -155,11 +236,11 @@ export default {
 }
 
 .conn-actions {
-  margin-top: 18px;
+  margin-top: 16px;
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 8px;
+  justify-content: center;
+  gap: 10px;
 }
 
 .conn-hint {

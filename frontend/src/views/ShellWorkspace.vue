@@ -176,6 +176,8 @@
       @delete-machine="(m) => $emit('delete-machine', m)"
       @add-machine="$emit('add-machine')"
       @add-local="onPickerAddLocal"
+      @add-local-command="onPickerAddLocalCommand"
+      @open-window="onOpenWindow"
       @clear-history="clearHistory"
       @remove-history="removeHistory"
       @open="loadHistory"
@@ -246,7 +248,7 @@ export default {
   emits: [
     'back', 'connect', 'disconnect', 'close-session', 'close-sessions', 'reconnect', 'test', 'add-machine', 'edit-machine',
     'copy-machine', 'delete-machine',
-    'add-local', 'start-resize', 'update:activeMachine', 'history-changed',
+    'add-local', 'add-local-command', 'open-window', 'start-resize', 'update:activeMachine', 'history-changed',
     'update:broadcast-enabled', 'update:broadcast-targets', 'update:split-session-ids',
     'reorder-tabs', 'machines-changed', 'cwd-sync',
     'focus-session', 'connect-machines',
@@ -643,6 +645,16 @@ export default {
       emit('add-local')
     }
 
+    const onPickerAddLocalCommand = (command) => {
+      pickerVisible.value = false
+      emit('add-local-command', command)
+    }
+
+    const onOpenWindow = (machine) => {
+      pickerVisible.value = false
+      emit('open-window', machine)
+    }
+
     const openPicker = (tab = '') => {
       pickerInitialTab.value = (tab === 'history' || tab === 'machines' || tab === 'sessions') ? tab : ''
       pickerVisible.value = true
@@ -858,6 +870,14 @@ export default {
       tabsRef.value?.togglePaneZoom?.(sessionId || props.activeMachine)
     }
 
+    const selectTabByIndex = (index) => tabsRef.value?.selectTabByIndex?.(index)
+    const selectNextTab = (delta) => tabsRef.value?.selectNextTab?.(delta)
+    const closeActiveTab = () => tabsRef.value?.closeActiveTab?.()
+    const focusSplitNeighbor = (dir) => tabsRef.value?.focusSplitNeighbor?.(dir)
+    const toggleBroadcast = () => {
+      emit('update:broadcast-enabled', !props.broadcastEnabled)
+    }
+
     return {
       tabsRef,
       filePanelRef,
@@ -899,6 +919,8 @@ export default {
       onReconnect,
       onAddLocal,
       onPickerAddLocal,
+      onPickerAddLocalCommand,
+      onOpenWindow,
       onToggleConnection,
       onSearchResult,
       clearHistory,
@@ -916,6 +938,11 @@ export default {
       openCommandPalette,
       pasteClipboard,
       togglePaneZoom,
+      selectTabByIndex,
+      selectNextTab,
+      closeActiveTab,
+      focusSplitNeighbor,
+      toggleBroadcast,
       onCommandPaletteInsert,
       sendMappedInput,
       loadTunnels,

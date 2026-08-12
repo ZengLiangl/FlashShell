@@ -861,6 +861,47 @@ export default {
     }
     const getSelection = () => getActiveTerminal()?.getSelection?.() || ''
 
+    const selectTabByIndex = (index) => {
+      const list = orderedSessions.value
+      if (!list.length) return false
+      const i = Math.max(0, Math.min(list.length - 1, index))
+      const id = list[i]?.machineName
+      if (!id) return false
+      activeTab.value = id
+      return true
+    }
+
+    const selectNextTab = (delta = 1) => {
+      const list = orderedSessions.value
+      if (!list.length) return false
+      const cur = list.findIndex((s) => s.machineName === activeTab.value)
+      const next = cur < 0 ? 0 : (cur + delta + list.length) % list.length
+      activeTab.value = list[next].machineName
+      return true
+    }
+
+    const closeActiveTab = () => {
+      const id = activeTab.value
+      if (!id) return false
+      emit('close-session', id)
+      return true
+    }
+
+    const focusSplitNeighbor = (dir) => {
+      const ids = props.splitSessionIds || []
+      if (ids.length < 2) return false
+      const cur = ids.indexOf(activeTab.value)
+      if (cur < 0) {
+        activeTab.value = ids[0]
+        return true
+      }
+      let next = cur
+      if (dir === 'left' || dir === 'up') next = (cur - 1 + ids.length) % ids.length
+      else next = (cur + 1) % ids.length
+      activeTab.value = ids[next]
+      return true
+    }
+
     expose({
       clearActive,
       findNext,
@@ -870,6 +911,10 @@ export default {
       getSelection,
       pasteClipboard,
       togglePaneZoom,
+      selectTabByIndex,
+      selectNextTab,
+      closeActiveTab,
+      focusSplitNeighbor,
     })
 
     return {

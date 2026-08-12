@@ -78,8 +78,16 @@ export function ConnectLocalShell(arg1) {
   return window['go']['app']['App']['ConnectLocalShell'](arg1);
 }
 
+export function ConnectLocalShellCommand(arg1, arg2) {
+  return window['go']['app']['App']['ConnectLocalShellCommand'](arg1, arg2);
+}
+
 export function ConnectShell(arg1) {
   return window['go']['app']['App']['ConnectShell'](arg1);
+}
+
+export function ConsumePendingConnectMachine() {
+  return window['go']['app']['App']['ConsumePendingConnectMachine']();
 }
 
 export function CopyShellRemotePath(arg1, arg2, arg3) {
@@ -152,6 +160,10 @@ export function ExportMachineTemplate() {
 
 export function ExportMachineTemplateToFile() {
   return window['go']['app']['App']['ExportMachineTemplateToFile']();
+}
+
+export function ExportMachinesCSVPick() {
+  return window['go']['app']['App']['ExportMachinesCSVPick']();
 }
 
 export function GetAppVersion() {
@@ -386,6 +398,10 @@ export function ListLocalFiles(arg1, arg2) {
   return window['go']['app']['App']['ListLocalFiles'](arg1, arg2);
 }
 
+export function ListLocalShells() {
+  return window['go']['app']['App']['ListLocalShells']();
+}
+
 export function ListPortForwards() {
   return window['go']['app']['App']['ListPortForwards']();
 }
@@ -440,6 +456,10 @@ export function OpenGlobalConfigWithEvent() {
 
 export function OpenMachineConfig() {
   return window['go']['app']['App']['OpenMachineConfig']();
+}
+
+export function OpenMachineInNewWindow(arg1) {
+  return window['go']['app']['App']['OpenMachineInNewWindow'](arg1);
 }
 
 export function OpenReleaseURL(arg1) {

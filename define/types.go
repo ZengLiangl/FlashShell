@@ -87,6 +87,8 @@ type Machine struct {
 	Tags []string `yaml:"tags,omitempty" json:"tags,omitempty"`
 	// Notes 主机备注（纯文本/Markdown）
 	Notes string `yaml:"notes,omitempty" json:"notes,omitempty"`
+	// Icon 主机图标：预设 id 或单个 emoji
+	Icon string `yaml:"icon,omitempty" json:"icon,omitempty"`
 	// IdentityID 引用全局帐号（身份）；连接时覆盖用户名/密码/密钥，不落盘
 	IdentityID string `yaml:"identityId,omitempty" json:"identityId,omitempty"`
 	// Tunnels SSH 隧道（本地/远程/动态），连接后自动建立
@@ -161,10 +163,11 @@ func (m *Machine) EnsureID() {
 
 // SensitiveData 敏感数据
 type SensitiveData struct {
-	Host     string `yaml:"host" json:"host"`
-	Port     int    `yaml:"port" json:"port"`
-	User     string `yaml:"user" json:"user"`
-	Password string `yaml:"password,omitempty" json:"password,omitempty"`
+	Host          string `yaml:"host" json:"host"`
+	Port          int    `yaml:"port" json:"port"`
+	User          string `yaml:"user" json:"user"`
+	Password      string `yaml:"password,omitempty" json:"password,omitempty"`
+	KeyPassphrase string `yaml:"keyPassphrase,omitempty" json:"keyPassphrase,omitempty"`
 }
 
 // SetSensitiveData 设置敏感数据并加密
@@ -175,12 +178,13 @@ func (m *Machine) SetSensitiveData(data *SensitiveData) error {
 
 	// 创建加密用的数据结构
 	cryptoData := &crypto.SensitiveData{
-		Name:     m.Name,
-		Host:     data.Host,
-		Port:     data.Port,
-		Username: data.User,
-		Password: data.Password,
-		KeyData:  []byte{}, // 密钥文件内容暂时为空
+		Name:          m.Name,
+		Host:          data.Host,
+		Port:          data.Port,
+		Username:      data.User,
+		Password:      data.Password,
+		KeyPassphrase: data.KeyPassphrase,
+		KeyData:       []byte{}, // 密钥文件内容暂时为空
 	}
 
 	// 加密敏感数据
@@ -254,10 +258,11 @@ func (m *Machine) GetSensitiveData() (*SensitiveData, error) {
 
 	// 转换为内部数据结构
 	data := &SensitiveData{
-		Host:     cryptoData.Host,
-		Port:     cryptoData.Port,
-		User:     cryptoData.Username,
-		Password: cryptoData.Password,
+		Host:          cryptoData.Host,
+		Port:          cryptoData.Port,
+		User:          cryptoData.Username,
+		Password:      cryptoData.Password,
+		KeyPassphrase: cryptoData.KeyPassphrase,
 	}
 
 	// 缓存解密后的数据
@@ -271,8 +276,8 @@ func (m *Machine) ClearSensitiveData() {
 	m.sensitiveData = nil
 }
 
-// OverlaySensitiveFields 覆盖运行时用户名/密码（身份引用等，不落盘）
-func (m *Machine) OverlaySensitiveFields(user, password string) error {
+// OverlaySensitiveFields 覆盖运行时用户名/密码/口令（身份引用等，不落盘）
+func (m *Machine) OverlaySensitiveFields(user, password, keyPassphrase string) error {
 	sensitive, err := m.GetSensitiveData()
 	if err != nil {
 		return err
@@ -285,6 +290,9 @@ func (m *Machine) OverlaySensitiveFields(user, password string) error {
 	}
 	if password != "" {
 		sensitive.Password = password
+	}
+	if keyPassphrase != "" {
+		sensitive.KeyPassphrase = keyPassphrase
 	}
 	m.sensitiveData = sensitive
 	return nil

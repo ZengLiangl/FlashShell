@@ -32,6 +32,7 @@ export async function copyMachineRecord(source, existingMachines) {
     key_file: source.key_file || '',
     tags: Array.isArray(source.tags) ? [...source.tags] : [],
     notes: source.notes || '',
+    icon: source.icon || '',
     proxyJump: source.proxyJump || '',
     jumpChain: Array.isArray(source.jumpChain) ? [...source.jumpChain] : [],
     legacyAlgorithms: !!source.legacyAlgorithms,

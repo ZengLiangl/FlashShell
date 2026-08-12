@@ -84,6 +84,9 @@
         <el-form-item label="密码">
           <el-input v-model="form.password" type="password" show-password placeholder="可选" />
         </el-form-item>
+        <el-form-item label="密钥口令">
+          <el-input v-model="form.keyPassphrase" type="password" show-password placeholder="加密私钥口令" clearable />
+        </el-form-item>
         <el-form-item label="跳板机">
           <el-input v-model="form.proxyJump" placeholder="机器名或 host[:port]" clearable />
         </el-form-item>
@@ -165,6 +168,7 @@ export default {
       port: 22,
       user: '',
       password: '',
+      keyPassphrase: '',
       proxyJump: '',
       startupCommand: '',
       terminalPreset: '',
@@ -207,6 +211,7 @@ export default {
       form.port = 22
       form.user = ''
       form.password = ''
+      form.keyPassphrase = ''
       form.proxyJump = ''
       form.startupCommand = ''
       form.terminalPreset = ''
@@ -252,6 +257,7 @@ export default {
             form.port = sensitive.port || 22
             form.user = sensitive.user || ''
             form.password = sensitive.password || ''
+            form.keyPassphrase = sensitive.keyPassphrase || ''
           }
         } catch {
           ElMessage.warning('获取敏感数据失败，请重新输入')
@@ -301,6 +307,7 @@ export default {
         port: form.port,
         user: form.user,
         password: form.password,
+        keyPassphrase: form.keyPassphrase || '',
       }
       return { machineData, sensitiveData }
     }

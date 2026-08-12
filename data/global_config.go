@@ -269,9 +269,13 @@ type GlobalConfig struct {
 	ShellLineTimestamps *bool `yaml:"shellLineTimestamps,omitempty" json:"shellLineTimestamps"`
 	// ShellPasswordAssist 检测到 Password:/密码 提示时显示终端底部输入条；nil 表示默认开启
 	ShellPasswordAssist *bool `yaml:"shellPasswordAssist,omitempty" json:"shellPasswordAssist"`
+	// ExternalEditorCommand 外置编辑器命令（空则系统默认打开）；可用 {path} 占位
+	ExternalEditorCommand string `yaml:"externalEditorCommand,omitempty" json:"externalEditorCommand,omitempty"`
+	// FileAssociations 扩展名 → 打开命令（如 ".go": "code {path}"）
+	FileAssociations map[string]string `yaml:"fileAssociations,omitempty" json:"fileAssociations,omitempty"`
 }
 
-// ShellSessionRestoreEnabled 启动时是否恢复 Shell 会话（已关闭，保留字段兼容旧配置）
+// ShellSessionRestoreEnabled 启动时是否恢复 Shell 会话（功能已下线，恒为 false）
 func ShellSessionRestoreEnabled(cfg *GlobalConfig) bool {
 	return false
 }

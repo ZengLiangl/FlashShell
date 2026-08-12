@@ -29,7 +29,11 @@ func (gcm *GlobalConfigManager) ResolveMachineAuth(machine *define.Machine) erro
 	if err != nil {
 		return err
 	}
-	if err := machine.OverlaySensitiveFields(account.User, password); err != nil {
+	passphrase, err := account.GetKeyPassphrase()
+	if err != nil {
+		return err
+	}
+	if err := machine.OverlaySensitiveFields(account.User, password, passphrase); err != nil {
 		return err
 	}
 	if k := strings.TrimSpace(account.KeyFile); k != "" {

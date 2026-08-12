@@ -157,6 +157,30 @@
             <el-icon><Refresh /></el-icon>
           </el-button>
         </el-tooltip>
+        <el-dropdown trigger="click">
+          <el-button size="small" text class="tool-icon-btn" title="显示列">
+            <el-icon><Setting /></el-icon>
+          </el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item @click.stop>
+                <el-checkbox v-model="colVisible.size">大小</el-checkbox>
+              </el-dropdown-item>
+              <el-dropdown-item @click.stop>
+                <el-checkbox v-model="colVisible.type">类型</el-checkbox>
+              </el-dropdown-item>
+              <el-dropdown-item @click.stop>
+                <el-checkbox v-model="colVisible.mtime">修改时间</el-checkbox>
+              </el-dropdown-item>
+              <el-dropdown-item @click.stop>
+                <el-checkbox v-model="colVisible.mode">权限</el-checkbox>
+              </el-dropdown-item>
+              <el-dropdown-item @click.stop>
+                <el-checkbox v-model="colVisible.owner">用户:组</el-checkbox>
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
       <div class="toolbar-right">
         <el-tooltip content="收起 SFTP" placement="top">
@@ -213,8 +237,10 @@
           height="100%"
           v-loading="loading"
           empty-text="空目录（可拖拽文件/文件夹到此处上传）"
+          tabindex="0"
           @row-dblclick="onOpen"
           @row-contextmenu="onContextMenu"
+          @keydown="onTableKeydown"
         >
           <el-table-column prop="name" label="文件名" min-width="160" show-overflow-tooltip>
             <template #default="{ row }">
@@ -229,19 +255,19 @@
               </span>
             </template>
           </el-table-column>
-          <el-table-column label="大小" width="90" align="right">
+          <el-table-column v-if="colVisible.size" label="大小" width="90" align="right">
             <template #default="{ row }">
               {{ row.isDir ? '-' : formatSize(row.size) }}
             </template>
           </el-table-column>
-          <el-table-column prop="type" label="类型" width="70" />
-          <el-table-column label="修改时间" width="150">
+          <el-table-column v-if="colVisible.type" prop="type" label="类型" width="70" />
+          <el-table-column v-if="colVisible.mtime" label="修改时间" width="150">
             <template #default="{ row }">
               {{ formatTime(row.modTime) }}
             </template>
           </el-table-column>
-          <el-table-column prop="mode" label="权限" width="110" show-overflow-tooltip />
-          <el-table-column label="用户:组" width="120" show-overflow-tooltip>
+          <el-table-column v-if="colVisible.mode" prop="mode" label="权限" width="110" show-overflow-tooltip />
+          <el-table-column v-if="colVisible.owner" label="用户:组" width="120" show-overflow-tooltip>
             <template #default="{ row }">
               {{ formatOwnerGroup(row) }}
             </template>
@@ -418,6 +444,22 @@ export default {
     const cwd = ref('')
     const pathDraft = ref('')
     const entries = ref([])
+    const COL_KEY = 'shell.sftpColumns'
+    const defaultCols = () => ({ size: true, type: true, mtime: true, mode: true, owner: true })
+    const loadCols = () => {
+      try {
+        const raw = localStorage.getItem(COL_KEY)
+        if (!raw) return defaultCols()
+        return { ...defaultCols(), ...JSON.parse(raw) }
+      } catch {
+        return defaultCols()
+      }
+    }
+    const colVisible = reactive(loadCols())
+    watch(colVisible, (v) => {
+      try { localStorage.setItem(COL_KEY, JSON.stringify({ ...v })) } catch { /* ignore */ }
+    }, { deep: true })
+
     const loading = ref(false)
     const error = ref('')
     const treeRoot = ref([])
@@ -1551,6 +1593,31 @@ export default {
       }
     }
 
+    const renamePrimary = async () => {
+      const row = ctx.row
+      if (!row) return
+      await promptRename()
+    }
+    const onTableKeydown = (e) => {
+      const tag = String(e.target?.tagName || '').toLowerCase()
+      if (tag === 'input' || tag === 'textarea') return
+      const mod = e.ctrlKey || e.metaKey
+      if (e.key === 'F2') {
+        e.preventDefault()
+        void renamePrimary()
+        return
+      }
+      if (e.key === 'Delete' || (e.key === 'Backspace' && mod)) {
+        e.preventDefault()
+        void deleteEntry()
+        return
+      }
+      if (e.key === 'Backspace' && !mod && !e.altKey) {
+        e.preventDefault()
+        void goParent()
+      }
+    }
+
     watch(() => props.machineName, async (name) => {
       cwd.value = ''
       pathDraft.value = ''
@@ -1639,6 +1706,8 @@ export default {
       cwd,
       pathDraft,
       entries,
+      colVisible,
+      onTableKeydown,
       loading,
       error,
       treeData,

@@ -20,14 +20,18 @@ var defaultKeyPreference = []string{
 
 func buildSSHAuth(machine *define.Machine, sensitive *define.SensitiveData) ([]ssh.AuthMethod, error) {
 	var auth []ssh.AuthMethod
+	passphrase := ""
+	if sensitive != nil {
+		passphrase = strings.TrimSpace(sensitive.KeyPassphrase)
+	}
 	if machine.KeyFile != "" {
-		key, err := loadPrivateKey(machine.KeyFile)
+		key, err := loadPrivateKey(machine.KeyFile, passphrase)
 		if err != nil {
 			return nil, fmt.Errorf("加载私钥失败: %w", err)
 		}
 		auth = append(auth, ssh.PublicKeys(key))
 	} else {
-		for _, signer := range loadDefaultPrivateKeys() {
+		for _, signer := range loadDefaultPrivateKeys(passphrase) {
 			auth = append(auth, ssh.PublicKeys(signer))
 		}
 	}
@@ -40,7 +44,7 @@ func buildSSHAuth(machine *define.Machine, sensitive *define.SensitiveData) ([]s
 	return auth, nil
 }
 
-func loadDefaultPrivateKeys() []ssh.Signer {
+func loadDefaultPrivateKeys(passphrase string) []ssh.Signer {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil
@@ -53,7 +57,7 @@ func loadDefaultPrivateKeys() []ssh.Signer {
 		if err != nil {
 			continue
 		}
-		signer, err := ssh.ParsePrivateKey(key)
+		signer, err := parsePrivateKey(key, passphrase)
 		if err != nil {
 			continue
 		}
@@ -62,7 +66,7 @@ func loadDefaultPrivateKeys() []ssh.Signer {
 	return signers
 }
 
-func loadPrivateKey(keyPath string) (ssh.Signer, error) {
+func loadPrivateKey(keyPath, passphrase string) (ssh.Signer, error) {
 	if strings.HasPrefix(keyPath, "~/") {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
@@ -74,5 +78,24 @@ func loadPrivateKey(keyPath string) (ssh.Signer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return ssh.ParsePrivateKey(key)
+	return parsePrivateKey(key, passphrase)
+}
+
+func parsePrivateKey(key []byte, passphrase string) (ssh.Signer, error) {
+	signer, err := ssh.ParsePrivateKey(key)
+	if err == nil {
+		return signer, nil
+	}
+	if _, ok := err.(*ssh.PassphraseMissingError); ok {
+		if passphrase == "" {
+			return nil, fmt.Errorf("私钥需要口令")
+		}
+		return ssh.ParsePrivateKeyWithPassphrase(key, []byte(passphrase))
+	}
+	if passphrase != "" {
+		if s2, err2 := ssh.ParsePrivateKeyWithPassphrase(key, []byte(passphrase)); err2 == nil {
+			return s2, nil
+		}
+	}
+	return nil, err
 }

@@ -24,6 +24,13 @@
         </template>
       </el-table-column>
       <el-table-column prop="machineName" label="关联机器" min-width="100" />
+      <el-table-column label="状态" width="100" align="center">
+        <template #default="{ row }">
+          <el-tag v-if="row._active" size="small" type="success">运行中</el-tag>
+          <el-tag v-else-if="row._error" size="small" type="danger" :title="row._error">异常</el-tag>
+          <el-tag v-else size="small" type="info">未启动</el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="自动启动" width="88" align="center">
         <template #default="{ row }">
           <el-switch v-model="row.autoStart" size="small" @change="persist" />
@@ -39,8 +46,14 @@
       </el-table-column>
     </el-table>
 
-    <el-dialog v-model="editVisible" :title="editing?.id ? '编辑规则' : '添加规则'" width="520px" append-to-body>
+    <el-dialog v-model="editVisible" :title="editing?.id ? '编辑规则' : '添加规则'" width="560px" append-to-body>
+      <div class="pf-wizard-steps">
+        <button type="button" class="pf-step" :class="{ active: wizardStep === 1 }" @click="wizardStep = 1">1. 类型与机器</button>
+        <button type="button" class="pf-step" :class="{ active: wizardStep === 2 }" @click="wizardStep = 2">2. 地址端口</button>
+        <button type="button" class="pf-step" :class="{ active: wizardStep === 3 }" @click="wizardStep = 3">3. 选项</button>
+      </div>
       <el-form :model="editForm" label-width="96px" size="small">
+        <template v-if="wizardStep === 1">
         <el-form-item label="名称">
           <el-input v-model="editForm.name" placeholder="规则名称" />
         </el-form-item>
@@ -56,6 +69,8 @@
             <el-option v-for="m in machines" :key="m.id || m.name" :label="m.name" :value="m.name" />
           </el-select>
         </el-form-item>
+        </template>
+        <template v-else-if="wizardStep === 2">
         <el-form-item label="本地地址">
           <el-input v-model="editForm.localHost" placeholder="127.0.0.1" />
         </el-form-item>
@@ -70,23 +85,28 @@
             <el-input-number v-model="editForm.remotePort" :min="1" :max="65535" style="width: 100%" />
           </el-form-item>
         </template>
+        </template>
+        <template v-else>
         <el-form-item label="启用">
           <el-switch v-model="editForm.enabled" />
         </el-form-item>
         <el-form-item label="自动启动">
           <el-switch v-model="editForm.autoStart" />
         </el-form-item>
+        </template>
       </el-form>
       <template #footer>
+        <el-button v-if="wizardStep > 1" @click="wizardStep -= 1">上一步</el-button>
         <el-button @click="editVisible = false">取消</el-button>
-        <el-button type="primary" :loading="saving" @click="confirmEdit">保存</el-button>
+        <el-button v-if="wizardStep < 3" type="primary" @click="wizardStep += 1">下一步</el-button>
+        <el-button v-else type="primary" :loading="saving" @click="confirmEdit">保存</el-button>
       </template>
     </el-dialog>
   </div>
 </template>
 
 <script>
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, onUnmounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus } from '@element-plus/icons-vue'
 import {
@@ -94,6 +114,7 @@ import {
   SavePortForwards,
   StartPortForward,
   StopPortForward,
+  GetPortForwardStatus,
   GetMachines,
 } from '../../wailsjs/go/app/App'
 
@@ -123,13 +144,31 @@ export default {
     const machines = ref([])
     const editVisible = ref(false)
     const editing = ref(null)
+    const wizardStep = ref(1)
     const editForm = reactive(emptyRule())
+    let statusTimer = null
+
+    const refreshStatus = async () => {
+      for (const row of rules.value) {
+        if (!row?.id) continue
+        try {
+          const list = await GetPortForwardStatus(row.id)
+          const active = (list || []).some((s) => s.active)
+          const err = (list || []).find((s) => s.error)?.error || ''
+          row._active = active
+          row._error = err
+        } catch {
+          row._active = false
+        }
+      }
+    }
 
     const load = async () => {
       loading.value = true
       try {
-        rules.value = (await ListPortForwards() || []).map((r) => ({ ...r, _starting: false }))
+        rules.value = (await ListPortForwards() || []).map((r) => ({ ...r, _starting: false, _active: false, _error: '' }))
         machines.value = await GetMachines() || []
+        await refreshStatus()
       } catch (error) {
         ElMessage.error('加载端口转发失败: ' + (error?.message || error))
       } finally {
@@ -140,7 +179,7 @@ export default {
     const persist = async () => {
       saving.value = true
       try {
-        const payload = rules.value.map(({ _starting, ...rest }) => rest)
+        const payload = rules.value.map(({ _starting, _active, _error, ...rest }) => rest)
         await SavePortForwards(payload)
       } catch (error) {
         ElMessage.error('保存失败: ' + (error?.message || error))
@@ -153,12 +192,14 @@ export default {
     const addRule = () => {
       editing.value = null
       Object.assign(editForm, emptyRule())
+      wizardStep.value = 1
       editVisible.value = true
     }
 
     const editRule = (row) => {
       editing.value = row
       Object.assign(editForm, { ...row })
+      wizardStep.value = 1
       editVisible.value = true
     }
 
@@ -208,6 +249,7 @@ export default {
       try {
         await StartPortForward(row.id)
         ElMessage.success('端口转发已启动')
+        await refreshStatus()
       } catch (error) {
         ElMessage.error('启动失败: ' + (error?.message || error))
       } finally {
@@ -219,14 +261,26 @@ export default {
       try {
         await StopPortForward(row.id)
         ElMessage.success('端口转发已停止')
+        await refreshStatus()
       } catch (error) {
         ElMessage.error('停止失败: ' + (error?.message || error))
       }
     }
 
     watch(() => props.active, (active) => {
-      if (active) load()
+      if (statusTimer) {
+        clearInterval(statusTimer)
+        statusTimer = null
+      }
+      if (active) {
+        load()
+        statusTimer = setInterval(refreshStatus, 3000)
+      }
     }, { immediate: true })
+
+    onUnmounted(() => {
+      if (statusTimer) clearInterval(statusTimer)
+    })
 
     return {
       loading,
@@ -236,6 +290,7 @@ export default {
       editVisible,
       editing,
       editForm,
+      wizardStep,
       addRule,
       editRule,
       confirmEdit,
@@ -272,5 +327,29 @@ export default {
   margin: 4px 0 0;
   font-size: 12px;
   color: var(--app-text-muted);
+}
+
+.pf-wizard-steps {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.pf-step {
+  border: 1px solid var(--app-border, #e4e7ed);
+  background: var(--app-panel-bg, #f5f7fa);
+  border-radius: 8px;
+  padding: 8px 6px;
+  font-size: 12px;
+  cursor: pointer;
+  color: var(--app-text-muted, #606266);
+}
+
+.pf-step.active {
+  border-color: var(--app-accent-color, #409eff);
+  color: var(--app-accent-color, #409eff);
+  background: color-mix(in srgb, var(--app-accent-color, #409eff) 10%, transparent);
+  font-weight: 600;
 }
 </style>

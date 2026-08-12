@@ -55,7 +55,8 @@
             @contextmenu.prevent="onItemContextMenu($event, machine)"
           >
             <div class="ml-machine-icon" aria-hidden="true">
-              <el-icon :size="variant === 'cards' ? 18 : 16"><Monitor /></el-icon>
+              <span v-if="hostIconText(machine)" class="ml-machine-emoji">{{ hostIconText(machine) }}</span>
+              <el-icon v-else :size="variant === 'cards' ? 18 : 16"><Monitor /></el-icon>
             </div>
             <div class="ml-body">
               <div class="ml-line">
@@ -114,7 +115,8 @@
           @contextmenu.prevent="onItemContextMenu($event, machine)"
         >
           <div class="ml-machine-icon" aria-hidden="true">
-            <el-icon :size="variant === 'cards' ? 18 : 16"><Monitor /></el-icon>
+            <span v-if="hostIconText(machine)" class="ml-machine-emoji">{{ hostIconText(machine) }}</span>
+            <el-icon v-else :size="variant === 'cards' ? 18 : 16"><Monitor /></el-icon>
           </div>
           <div class="ml-body">
             <div class="ml-line">
@@ -149,6 +151,7 @@
     v-if="showContextMenu"
     :ctx="ctx"
     @connect="onConnect"
+    @open-window="onOpenWindow"
     @copy="onCopy"
     @edit="onEdit"
     @delete="onDelete"
@@ -170,6 +173,7 @@ import {
 } from '../../utils/machineGroups'
 import { windowMachineList, MACHINE_LIST_VIRTUALIZE_AT, MACHINE_LIST_ROW_H } from '../../utils/machineListWindow'
 import { useMachineContextMenu } from '../../composables/useMachineContextMenu'
+import { resolveHostIcon } from '../../utils/hostIcons'
 import MachineContextMenu from './MachineContextMenu.vue'
 
 export default {
@@ -192,7 +196,7 @@ export default {
     /** 不按分组名折叠，按传入顺序直接展示机器（如首页最近连接） */
     flat: { type: Boolean, default: false },
   },
-  emits: ['connect', 'edit-machine', 'copy-machine', 'delete-machine', 'toggle-pin'],
+  emits: ['connect', 'open-window', 'edit-machine', 'copy-machine', 'delete-machine', 'toggle-pin'],
   setup(props, { emit }) {
     const expandedGroups = ref([])
     const scrollTops = reactive({})
@@ -264,10 +268,17 @@ export default {
     const machineConnecting = (name) =>
       isMachineConnecting(name, props.workspaceSessions.length ? props.workspaceSessions : props.sessions)
     const machineTags = (machine) => normalizeMachineTags(machine?.tags)
+    const hostIconText = (machine) => resolveHostIcon(machine).text
 
     const onConnect = (machine) => {
       if (machineConnecting(machine.name)) return
       emit('connect', machine.name)
+    }
+
+    const onOpenWindow = async (machine) => {
+      hideContextMenu()
+      if (!machine?.name) return
+      emit('open-window', machine)
     }
 
     const onItemContextMenu = (event, machine) => {
@@ -307,12 +318,14 @@ export default {
       sessionCount,
       machineConnecting,
       machineTags,
+      hostIconText,
       formatMachineAddr,
       needsVirtual,
       visibleMachines,
       listPadStyle,
       onListScroll,
       onConnect,
+      onOpenWindow,
       onItemContextMenu,
       isContextTarget,
       onCopy,

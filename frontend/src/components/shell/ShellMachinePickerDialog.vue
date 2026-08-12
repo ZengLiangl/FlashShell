@@ -25,9 +25,21 @@
           </template>
         </el-input>
         <div class="icon-actions">
-          <el-tooltip content="本机终端" placement="top">
-            <el-button class="picker-tool-btn" size="small" circle :icon="Monitor" @click="onAddLocal" />
-          </el-tooltip>
+          <el-dropdown trigger="click" @command="onLocalShellCommand">
+            <el-button class="picker-tool-btn" size="small" circle :icon="Monitor" title="本机终端" />
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="">默认本机终端</el-dropdown-item>
+                <el-dropdown-item
+                  v-for="opt in localShellOptions"
+                  :key="opt.id || opt.command"
+                  :command="opt.command"
+                >
+                  {{ opt.name }}{{ opt.isDefault ? '（默认）' : '' }}
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
           <el-tooltip content="添加机器" placement="top">
             <el-button class="picker-tool-btn" size="small" circle :icon="Plus" @click="$emit('add-machine')" />
           </el-tooltip>
@@ -194,6 +206,7 @@
               show-context-menu
               :empty-text="keyword ? `没有匹配「${keyword}」的机器` : '暂无机器配置'"
               @connect="onConnect"
+              @open-window="(m) => $emit('open-window', m)"
               @edit-machine="(m) => $emit('edit-machine', m)"
               @copy-machine="(m) => $emit('copy-machine', m)"
               @delete-machine="(m) => $emit('delete-machine', m)"
@@ -206,8 +219,9 @@
 </template>
 
 <script>
-import { computed, ref, watch, nextTick } from 'vue'
+import { computed, ref, watch, nextTick, onMounted } from 'vue'
 import { Monitor, Plus, Search, Clock, List } from '@element-plus/icons-vue'
+import * as App from '../../../wailsjs/go/app/App'
 import {
   machineMatchesKeyword,
   normalizeMachineTags,
@@ -243,6 +257,8 @@ export default {
     'delete-machine',
     'add-machine',
     'add-local',
+    'add-local-command',
+    'open-window',
     'clear-history',
     'remove-history',
     'open',
@@ -253,6 +269,22 @@ export default {
     const selectedIdx = ref(0)
     const searchInputRef = ref(null)
     const listScrollRef = ref(null)
+    const localShellOptions = ref([])
+
+    const loadLocalShells = async () => {
+      try {
+        const list = await App.ListLocalShells()
+        localShellOptions.value = Array.isArray(list) ? list : []
+      } catch {
+        localShellOptions.value = []
+      }
+    }
+
+    onMounted(() => { loadLocalShells() })
+    watch(
+      () => props.modelValue,
+      (open) => { if (open) loadLocalShells() },
+    )
 
     const visibleProxy = computed({
       get: () => props.modelValue,
@@ -556,6 +588,16 @@ export default {
       visibleProxy.value = false
     }
 
+    const onLocalShellCommand = (command) => {
+      const cmd = String(command || '').trim()
+      if (!cmd) {
+        onAddLocal()
+        return
+      }
+      emit('add-local-command', cmd)
+      visibleProxy.value = false
+    }
+
     return {
       Monitor,
       Plus,
@@ -578,6 +620,8 @@ export default {
       searchPaneHint,
       onConnect,
       onAddLocal,
+      onLocalShellCommand,
+      localShellOptions,
       onSearchKeydown,
       runItem,
     }
