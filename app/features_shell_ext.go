@@ -11,10 +11,12 @@ import (
 	"strings"
 	"time"
 
+	"FlashDock/data"
 	"FlashDock/define"
 	"FlashDock/machine"
 
 	"github.com/google/uuid"
+	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 const (
@@ -149,11 +151,116 @@ func (a *App) SaveShellRemoteFile(machineName, remotePath, content string) error
 	return aux.WriteFile(remotePath, []byte(content))
 }
 
-// OpenShellRemoteFileExternal 下载到临时目录并用系统默认应用打开；保存后自动回传远端
+// SelectSystemApplication 选择用于打开文件的本地应用程序
+func (a *App) SelectSystemApplication() (*data.SftpSystemApp, error) {
+	if a.ctx == nil {
+		return nil, fmt.Errorf("应用未就绪")
+	}
+	path, err := a.selectSystemApplicationPath()
+	if err != nil {
+		return nil, err
+	}
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return nil, nil
+	}
+	name := filepath.Base(path)
+	name = strings.TrimSuffix(name, filepath.Ext(name))
+	if name == "" {
+		name = filepath.Base(path)
+	}
+	return &data.SftpSystemApp{Path: path, Name: name}, nil
+}
+
+// OpenShellRemoteFileExternal 下载到临时目录并用关联/外置编辑器/系统默认打开；是否回传由 sftpAutoSync 决定
 func (a *App) OpenShellRemoteFileExternal(machineName, remotePath string) error {
+	cfg, _ := a.GetGlobalConfig()
+	enableWatch := data.SftpAutoSyncEnabled(cfg)
+	return a.openRemoteFileExternal(machineName, remotePath, "", false, enableWatch)
+}
+
+// OpenShellRemoteFileWithApp 下载到临时目录并用指定应用程序打开
+func (a *App) OpenShellRemoteFileWithApp(machineName, remotePath, appPath string, enableWatch bool) error {
+	appPath = strings.TrimSpace(appPath)
+	if appPath == "" {
+		return fmt.Errorf("请选择应用程序")
+	}
+	return a.openRemoteFileExternal(machineName, remotePath, appPath, false, enableWatch)
+}
+
+// OpenShellRemoteFileSystemDefault 下载到临时目录并用操作系统默认程序打开
+func (a *App) OpenShellRemoteFileSystemDefault(machineName, remotePath string, enableWatch bool) error {
+	return a.openRemoteFileExternal(machineName, remotePath, "", true, enableWatch)
+}
+
+// UpsertSftpFileAssociation 新增或更新扩展名打开关联
+func (a *App) UpsertSftpFileAssociation(extension string, assoc data.SftpFileAssociation) error {
+	cfg, err := a.GetGlobalConfig()
+	if err != nil {
+		return err
+	}
+	if cfg == nil {
+		return fmt.Errorf("配置未加载")
+	}
+	ext := data.NormalizeSftpFileExtension(extension)
+	normalized := data.NormalizeSftpFileAssociations(map[string]data.SftpFileAssociation{ext: assoc})
+	entry, ok := normalized[ext]
+	if !ok {
+		return fmt.Errorf("无效的文件关联")
+	}
+	if cfg.SftpFileAssociations == nil {
+		cfg.SftpFileAssociations = map[string]data.SftpFileAssociation{}
+	}
+	cfg.SftpFileAssociations[ext] = entry
+	cfg.SftpFileAssociations = data.NormalizeSftpFileAssociations(cfg.SftpFileAssociations)
+	if err := a.configManager.SaveGlobalConfig(cfg); err != nil {
+		return err
+	}
+	a.emitSftpOpenSettingsChanged(cfg)
+	return nil
+}
+
+// DeleteSftpFileAssociation 删除扩展名打开关联
+func (a *App) DeleteSftpFileAssociation(extension string) error {
+	cfg, err := a.GetGlobalConfig()
+	if err != nil {
+		return err
+	}
+	if cfg == nil || cfg.SftpFileAssociations == nil {
+		return nil
+	}
+	ext := data.NormalizeSftpFileExtension(extension)
+	delete(cfg.SftpFileAssociations, ext)
+	if len(cfg.SftpFileAssociations) == 0 {
+		cfg.SftpFileAssociations = nil
+	}
+	if err := a.configManager.SaveGlobalConfig(cfg); err != nil {
+		return err
+	}
+	a.emitSftpOpenSettingsChanged(cfg)
+	return nil
+}
+
+func (a *App) emitSftpOpenSettingsChanged(cfg *data.GlobalConfig) {
+	if a.ctx == nil || cfg == nil {
+		return
+	}
+	wailsRuntime.EventsEmit(a.ctx, "system-settings:changed", map[string]any{
+		"sftpAutoSync":         data.SftpAutoSyncEnabled(cfg),
+		"sftpDefaultOpener":    data.NormalizeSftpDefaultOpener(cfg.SftpDefaultOpener),
+		"sftpDefaultSystemApp": cfg.SftpDefaultSystemApp,
+		"sftpFileAssociations": cfg.SftpFileAssociations,
+	})
+}
+
+func (a *App) openRemoteFileExternal(machineName, remotePath, appPath string, forceOSDefault, enableWatch bool) error {
 	aux, err := a.getShellAux(machineName)
 	if err != nil {
 		return err
+	}
+	remotePath = strings.TrimSpace(remotePath)
+	if remotePath == "" {
+		return fmt.Errorf("路径为空")
 	}
 	base := filepath.Base(remotePath)
 	tmpDir, err := os.MkdirTemp("", "flashdock-remote-*")
@@ -165,14 +272,26 @@ func (a *App) OpenShellRemoteFileExternal(machineName, remotePath string) error 
 		_ = os.RemoveAll(tmpDir)
 		return err
 	}
-	if err := a.startExternalEditWatch(machineName, remotePath, localPath); err != nil {
-		_ = os.RemoveAll(tmpDir)
-		return fmt.Errorf("启动编辑监听失败: %w", err)
+	if enableWatch {
+		if err := a.startExternalEditWatch(machineName, remotePath, localPath); err != nil {
+			_ = os.RemoveAll(tmpDir)
+			return fmt.Errorf("启动编辑监听失败: %w", err)
+		}
 	}
-	if err := a.openExternalPath(localPath); err != nil {
-		a.externalEdits.stop(externalEditKey(machineName, remotePath))
+	var openErr error
+	if forceOSDefault {
+		openErr = openWithSystemDefault(localPath)
+	} else if appPath != "" {
+		openErr = openWithApplication(localPath, appPath)
+	} else {
+		openErr = a.openExternalPath(localPath)
+	}
+	if openErr != nil {
+		if enableWatch {
+			a.externalEdits.stop(externalEditKey(machineName, remotePath))
+		}
 		_ = os.RemoveAll(tmpDir)
-		return err
+		return openErr
 	}
 	return nil
 }
@@ -211,6 +330,22 @@ func runEditorCommand(tpl, path string) error {
 		return fmt.Errorf("命令为空")
 	}
 	return exec.Command(parts[0], parts[1:]...).Start()
+}
+
+func openWithApplication(filePath, appPath string) error {
+	filePath = strings.TrimSpace(filePath)
+	appPath = strings.TrimSpace(appPath)
+	if filePath == "" || appPath == "" {
+		return fmt.Errorf("路径为空")
+	}
+	switch runtime.GOOS {
+	case "darwin":
+		return exec.Command("open", "-a", appPath, filePath).Start()
+	case "windows":
+		return exec.Command(appPath, filePath).Start()
+	default:
+		return exec.Command(appPath, filePath).Start()
+	}
 }
 
 func openWithSystemDefault(path string) error {

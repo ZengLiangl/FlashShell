@@ -223,6 +223,7 @@
         class="list-pane"
         :class="{ 'drag-over': dragOver }"
         @click="closeMenu"
+        @contextmenu.prevent="onBlankContextMenu"
         @dragenter.prevent="onDragOver"
         @dragover.prevent="onDragOver"
         @dragleave="onDragLeave"
@@ -285,15 +286,21 @@
         @click.stop
         @mouseleave="closeMenu"
       >
+        <li v-if="!ctx.row" @click="reloadFromMenu">刷新</li>
         <li @click="promptMkdir">新建文件夹</li>
+        <li @click="promptNewFile">新建文件</li>
+        <li v-if="!ctx.row" @click="uploadFilesFromMenu">上传文件</li>
+        <li v-if="!ctx.row" @click="uploadFolderFromMenu">上传文件夹</li>
         <li v-if="ctx.row" @click="promptRename">重命名</li>
         <li v-if="ctx.row" @click="promptChmod">修改权限</li>
         <li v-if="ctx.row && ctx.row.isDir" @click="copyDirHere">复制到当前目录</li>
-        <li v-if="ctx.row && !ctx.row.isDir" @click="editEntry">编辑</li>
-        <li v-if="ctx.row && !ctx.row.isDir" @click="openExternalEntry">用系统应用打开</li>
-        <li @click="downloadEntry">下载</li>
-        <li @click="copyPath">复制路径</li>
-        <li class="danger" @click="deleteEntry">删除</li>
+        <li v-if="ctx.row && !ctx.row.isDir" @click="openEntry">打开</li>
+        <li v-if="ctx.row && !ctx.row.isDir" @click="openWithSystemDefaultEntry">系统默认程序打开</li>
+        <li v-if="ctx.row && !ctx.row.isDir" @click="openWithEntry">打开方式...</li>
+        <li v-if="ctx.row && !ctx.row.isDir && !isBinaryRow(ctx.row)" @click="editEntry">编辑</li>
+        <li v-if="ctx.row" @click="downloadEntry">下载</li>
+        <li v-if="ctx.row" @click="copyPath">复制路径</li>
+        <li v-if="ctx.row" class="danger" @click="deleteEntry">删除</li>
       </ul>
     </Teleport>
 
@@ -381,6 +388,12 @@
       :format-size="formatSize"
       @resolve="onConflictResolve"
     />
+
+    <SftpFileOpenerDialog
+      v-model:visible="openerVisible"
+      :file-name="openerFileName"
+      @select="onOpenerSelect"
+    />
   </div>
 </template>
 
@@ -391,6 +404,7 @@ import * as App from '../../../wailsjs/go/app/App'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import { OnFileDrop, OnFileDropOff } from '../../../wailsjs/runtime/runtime'
 import SftpConflictDialog from './SftpConflictDialog.vue'
+import SftpFileOpenerDialog from './SftpFileOpenerDialog.vue'
 import {
   mergedBookmarks,
   isPathBookmarked,
@@ -402,10 +416,15 @@ import {
   saveFollowCwd,
   suggestPaths,
 } from '../../utils/sftpBookmarks'
+import {
+  getFileExtension,
+  getOpenerForFile,
+  isKnownBinaryFile,
+} from '../../utils/sftpFileOpen'
 
 export default {
   name: 'ShellFilePanel',
-  components: { SftpConflictDialog },
+  components: { SftpConflictDialog, SftpFileOpenerDialog },
   props: {
     machineName: { type: String, default: '' },
     cwdHint: { type: String, default: '' },
@@ -482,6 +501,15 @@ export default {
     const editorPath = ref('')
     const editorTitle = ref('编辑文件')
     const editorSaving = ref(false)
+    const openerVisible = ref(false)
+    const openerFileName = ref('')
+    const openerTarget = ref(null)
+    const sftpOpenConfig = reactive({
+      sftpDefaultOpener: 'ask',
+      sftpDefaultSystemApp: null,
+      sftpAutoSync: true,
+      sftpFileAssociations: {},
+    })
     const chmodVisible = ref(false)
     const chmodSaving = ref(false)
     const chmodTarget = ref('')
@@ -1005,8 +1033,156 @@ export default {
     }
 
     const onOpen = async (row) => {
-      if (!row?.isDir) return
-      await navigateTo(row.path, { alreadyAbsolute: true })
+      if (!row) return
+      if (row.isDir) {
+        await navigateTo(row.path, { alreadyAbsolute: true })
+        return
+      }
+      await openFileByPolicy(row)
+    }
+
+    const isBinaryRow = (row) => isKnownBinaryFile(row?.name)
+
+    const applySftpOpenConfig = (cfg) => {
+      if (!cfg || typeof cfg !== 'object') return
+      if (cfg.sftpDefaultOpener !== undefined) {
+        sftpOpenConfig.sftpDefaultOpener = cfg.sftpDefaultOpener || 'ask'
+      }
+      if (cfg.sftpDefaultSystemApp !== undefined) {
+        sftpOpenConfig.sftpDefaultSystemApp = cfg.sftpDefaultSystemApp || null
+      }
+      if (cfg.sftpAutoSync !== undefined) {
+        sftpOpenConfig.sftpAutoSync = cfg.sftpAutoSync !== false
+      }
+      if (cfg.sftpFileAssociations !== undefined) {
+        sftpOpenConfig.sftpFileAssociations = cfg.sftpFileAssociations || {}
+      }
+    }
+
+    const loadSftpOpenConfig = async () => {
+      try {
+        const cfg = await App.GetGlobalConfig()
+        applySftpOpenConfig(cfg)
+      } catch {
+        // 使用默认打开策略
+      }
+    }
+
+    const openBuiltinEditor = async (row) => {
+      if (!row?.path || row.isDir || !props.machineName) return
+      try {
+        editorContent.value = await App.ReadShellRemoteFile(props.machineName, row.path)
+        editorPath.value = row.path
+        editorTitle.value = `编辑 — ${row.name}`
+        editorVisible.value = true
+      } catch (e) {
+        ElMessage.error(String(e))
+      }
+    }
+
+    const openWithSystemApp = async (row, appPath) => {
+      if (!row?.path || !props.machineName) return
+      try {
+        await App.OpenShellRemoteFileWithApp(
+          props.machineName,
+          row.path,
+          appPath,
+          !!sftpOpenConfig.sftpAutoSync,
+        )
+      } catch (e) {
+        ElMessage.error(String(e))
+      }
+    }
+
+    const openWithSystemDefault = async (row) => {
+      if (!row?.path || !props.machineName) return
+      try {
+        await App.OpenShellRemoteFileSystemDefault(
+          props.machineName,
+          row.path,
+          !!sftpOpenConfig.sftpAutoSync,
+        )
+      } catch (e) {
+        ElMessage.error(String(e))
+      }
+    }
+
+    const showOpenerDialog = (row) => {
+      openerTarget.value = row
+      openerFileName.value = row?.name || ''
+      openerVisible.value = true
+    }
+
+    const openFileByPolicy = async (row) => {
+      if (!row?.path || row.isDir || !props.machineName) return
+      const opener = getOpenerForFile(sftpOpenConfig, row.name)
+      if (!opener) {
+        showOpenerDialog(row)
+        return
+      }
+      if (opener.openerType === 'builtin-editor') {
+        await openBuiltinEditor(row)
+        return
+      }
+      if (opener.openerType === 'system-app' && opener.systemApp?.path) {
+        await openWithSystemApp(row, opener.systemApp.path)
+        return
+      }
+      showOpenerDialog(row)
+    }
+
+    const rememberAssociation = async (fileName, openerType, systemApp) => {
+      const ext = getFileExtension(fileName)
+      try {
+        await App.UpsertSftpFileAssociation(ext, {
+          openerType,
+          systemApp: systemApp || undefined,
+        })
+        if (!sftpOpenConfig.sftpFileAssociations) {
+          sftpOpenConfig.sftpFileAssociations = {}
+        }
+        sftpOpenConfig.sftpFileAssociations[ext] = {
+          openerType,
+          systemApp: systemApp || undefined,
+        }
+      } catch (e) {
+        ElMessage.error('保存文件关联失败: ' + e)
+      }
+    }
+
+    const onOpenerSelect = async (payload) => {
+      const row = openerTarget.value
+      openerTarget.value = null
+      if (!row || !payload?.openerType) return
+      if (payload.remember) {
+        await rememberAssociation(row.name, payload.openerType, payload.systemApp)
+      }
+      if (payload.openerType === 'builtin-editor') {
+        await openBuiltinEditor(row)
+        return
+      }
+      if (payload.openerType === 'system-app' && payload.systemApp?.path) {
+        await openWithSystemApp(row, payload.systemApp.path)
+      }
+    }
+
+    const openEntry = async () => {
+      const row = ctx.row
+      closeMenu()
+      await openFileByPolicy(row)
+    }
+
+    const openWithEntry = () => {
+      const row = ctx.row
+      closeMenu()
+      if (!row?.path || row.isDir) return
+      showOpenerDialog(row)
+    }
+
+    const openWithSystemDefaultEntry = async () => {
+      const row = ctx.row
+      closeMenu()
+      await openWithSystemDefault(row)
     }
 
     const goParent = async () => {
@@ -1163,7 +1339,17 @@ export default {
 
     const onContextMenu = (row, _col, event) => {
       event.preventDefault()
+      event.stopPropagation()
       ctx.row = row
+      ctx.x = event.clientX
+      ctx.y = event.clientY
+      ctx.visible = true
+      adjustContextMenuPosition()
+    }
+
+    const onBlankContextMenu = (event) => {
+      // 点在表格行上时由 row-contextmenu 处理并 stopPropagation
+      ctx.row = null
       ctx.x = event.clientX
       ctx.y = event.clientY
       ctx.visible = true
@@ -1173,6 +1359,21 @@ export default {
     const closeMenu = () => {
       ctx.visible = false
       ctx.row = null
+    }
+
+    const reloadFromMenu = async () => {
+      closeMenu()
+      await reload()
+    }
+
+    const uploadFilesFromMenu = async () => {
+      closeMenu()
+      await onUploadCommand('files')
+    }
+
+    const uploadFolderFromMenu = async () => {
+      closeMenu()
+      await onUploadCommand('folder')
     }
 
     const copyPath = async () => {
@@ -1202,15 +1403,7 @@ export default {
     const editEntry = async () => {
       const row = ctx.row
       closeMenu()
-      if (!row?.path || row.isDir || !props.machineName) return
-      try {
-        editorContent.value = await App.ReadShellRemoteFile(props.machineName, row.path)
-        editorPath.value = row.path
-        editorTitle.value = `编辑 — ${row.name}`
-        editorVisible.value = true
-      } catch (e) {
-        ElMessage.error(String(e))
-      }
+      await openBuiltinEditor(row)
     }
 
     const saveEditor = async () => {
@@ -1225,17 +1418,6 @@ export default {
         ElMessage.error('保存失败: ' + e)
       } finally {
         editorSaving.value = false
-      }
-    }
-
-    const openExternalEntry = async () => {
-      const row = ctx.row
-      closeMenu()
-      if (!row?.path || !props.machineName) return
-      try {
-        await App.OpenShellRemoteFileExternal(props.machineName, row.path)
-      } catch (e) {
-        ElMessage.error(String(e))
       }
     }
 
@@ -1259,6 +1441,31 @@ export default {
         const remotePath = joinRemote(cwd.value, value)
         await App.MkdirShellRemotePath(props.machineName, remotePath)
         ElMessage.success('文件夹已创建')
+        reload()
+      } catch (e) {
+        if (e === 'cancel') return
+        ElMessage.error(String(e))
+      }
+    }
+
+    const promptNewFile = async () => {
+      closeMenu()
+      if (!props.machineName || !cwd.value) return
+      try {
+        const { value } = await ElMessageBox.prompt('输入新文件名称', '新建文件', {
+          confirmButtonText: '创建',
+          cancelButtonText: '取消',
+          inputPattern: /.+/,
+          inputErrorMessage: '名称不能为空',
+        })
+        const name = String(value || '').trim()
+        if (!name || name.includes('/')) {
+          ElMessage.warning('文件名无效')
+          return
+        }
+        const remotePath = joinRemote(cwd.value, name)
+        await App.SaveShellRemoteFile(props.machineName, remotePath, '')
+        ElMessage.success('文件已创建')
         reload()
       } catch (e) {
         if (e === 'cancel') return
@@ -1659,15 +1866,20 @@ export default {
     })
 
     let offExternalEdit = null
+    let offSystemSettings = null
 
     onMounted(() => {
       bindFileDrop()
       window.addEventListener('paste', onClipboardPaste)
+      void loadSftpOpenConfig()
       offExternalEdit = EventsOn('shell:external-edit', (payload) => {
         if (!payload || payload.machineName !== props.machineName) return
         if (payload.status === 'uploaded') {
           reload()
         }
+      })
+      offSystemSettings = EventsOn('system-settings:changed', (payload) => {
+        applySftpOpenConfig(payload)
       })
     })
 
@@ -1678,6 +1890,8 @@ export default {
       window.removeEventListener('paste', onClipboardPaste)
       offExternalEdit?.()
       offExternalEdit = null
+      offSystemSettings?.()
+      offSystemSettings = null
     })
 
     expose({
@@ -1753,17 +1967,28 @@ export default {
       startHeightResize,
       startResize,
       onContextMenu,
+      onBlankContextMenu,
       closeMenu,
       copyPath,
       downloadEntry,
       editEntry,
       saveEditor,
-      openExternalEntry,
+      openEntry,
+      openWithEntry,
+      openWithSystemDefaultEntry,
+      isBinaryRow,
+      openerVisible,
+      openerFileName,
+      onOpenerSelect,
       editorVisible,
       editorContent,
       editorTitle,
       editorSaving,
       promptMkdir,
+      promptNewFile,
+      reloadFromMenu,
+      uploadFilesFromMenu,
+      uploadFolderFromMenu,
       promptRename,
       promptChmod,
       submitChmod,

@@ -114,6 +114,10 @@ export function DeleteMachineWithEvent(arg1) {
   return window['go']['app']['App']['DeleteMachineWithEvent'](arg1);
 }
 
+export function DeleteSftpFileAssociation(arg1) {
+  return window['go']['app']['App']['DeleteSftpFileAssociation'](arg1);
+}
+
 export function DeleteShellFile(arg1, arg2) {
   return window['go']['app']['App']['DeleteShellFile'](arg1, arg2);
 }
@@ -474,6 +478,14 @@ export function OpenShellRemoteFileExternal(arg1, arg2) {
   return window['go']['app']['App']['OpenShellRemoteFileExternal'](arg1, arg2);
 }
 
+export function OpenShellRemoteFileSystemDefault(arg1, arg2, arg3) {
+  return window['go']['app']['App']['OpenShellRemoteFileSystemDefault'](arg1, arg2, arg3);
+}
+
+export function OpenShellRemoteFileWithApp(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['OpenShellRemoteFileWithApp'](arg1, arg2, arg3, arg4);
+}
+
 export function OpenSystemSettings() {
   return window['go']['app']['App']['OpenSystemSettings']();
 }
@@ -630,6 +642,10 @@ export function SelectKeyFile() {
   return window['go']['app']['App']['SelectKeyFile']();
 }
 
+export function SelectSystemApplication() {
+  return window['go']['app']['App']['SelectSystemApplication']();
+}
+
 export function SelectXshellFile() {
   return window['go']['app']['App']['SelectXshellFile']();
 }
@@ -772,4 +788,8 @@ export function UpdateWorkPath(arg1, arg2) {
 
 export function UpdateWorkPathWithEvent(arg1, arg2) {
   return window['go']['app']['App']['UpdateWorkPathWithEvent'](arg1, arg2);
+}
+
+export function UpsertSftpFileAssociation(arg1, arg2) {
+  return window['go']['app']['App']['UpsertSftpFileAssociation'](arg1, arg2);
 }

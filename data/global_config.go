@@ -269,10 +269,30 @@ type GlobalConfig struct {
 	ShellLineTimestamps *bool `yaml:"shellLineTimestamps,omitempty" json:"shellLineTimestamps"`
 	// ShellPasswordAssist 检测到 Password:/密码 提示时显示终端底部输入条；nil 表示默认开启
 	ShellPasswordAssist *bool `yaml:"shellPasswordAssist,omitempty" json:"shellPasswordAssist"`
-	// ExternalEditorCommand 外置编辑器命令（空则系统默认打开）；可用 {path} 占位
+	// SftpDefaultOpener 无扩展名关联时的默认打开方式：ask | builtin-editor | system-app（空等同 ask）
+	SftpDefaultOpener string `yaml:"sftpDefaultOpener,omitempty" json:"sftpDefaultOpener,omitempty"`
+	// SftpDefaultSystemApp 默认打开方式为 system-app 时的应用程序
+	SftpDefaultSystemApp *SftpSystemApp `yaml:"sftpDefaultSystemApp,omitempty" json:"sftpDefaultSystemApp,omitempty"`
+	// SftpAutoSync 外置应用打开后监听本地改动并回传远端；nil 表示默认开启
+	SftpAutoSync *bool `yaml:"sftpAutoSync,omitempty" json:"sftpAutoSync,omitempty"`
+	// SftpFileAssociations 按扩展名的打开方式（键为无点扩展名，如 go；无扩展名用 file）
+	SftpFileAssociations map[string]SftpFileAssociation `yaml:"sftpFileAssociations,omitempty" json:"sftpFileAssociations,omitempty"`
+	// ExternalEditorCommand 外置编辑器命令（空则系统默认打开）；可用 {path} 占位；兼容旧配置
 	ExternalEditorCommand string `yaml:"externalEditorCommand,omitempty" json:"externalEditorCommand,omitempty"`
-	// FileAssociations 扩展名 → 打开命令（如 ".go": "code {path}"）
+	// FileAssociations 扩展名 → 打开命令（如 ".go": "code {path}"）；兼容旧配置
 	FileAssociations map[string]string `yaml:"fileAssociations,omitempty" json:"fileAssociations,omitempty"`
+}
+
+// SftpSystemApp 用于打开远端文件的本地应用程序
+type SftpSystemApp struct {
+	Path string `yaml:"path" json:"path"`
+	Name string `yaml:"name" json:"name"`
+}
+
+// SftpFileAssociation 扩展名打开关联
+type SftpFileAssociation struct {
+	OpenerType string         `yaml:"openerType" json:"openerType"` // builtin-editor | system-app
+	SystemApp  *SftpSystemApp `yaml:"systemApp,omitempty" json:"systemApp,omitempty"`
 }
 
 // ShellSessionRestoreEnabled 启动时是否恢复 Shell 会话（功能已下线，恒为 false）
@@ -592,6 +612,69 @@ func SftpUseCompressedUploadEnabled(cfg *GlobalConfig) bool {
 		return true
 	}
 	return *cfg.SftpUseCompressedUpload
+}
+
+// SftpAutoSyncEnabled 外置打开是否自动回传（缺省 true）
+func SftpAutoSyncEnabled(cfg *GlobalConfig) bool {
+	if cfg == nil || cfg.SftpAutoSync == nil {
+		return true
+	}
+	return *cfg.SftpAutoSync
+}
+
+// NormalizeSftpDefaultOpener 校验默认打开方式
+func NormalizeSftpDefaultOpener(v string) string {
+	switch strings.TrimSpace(v) {
+	case "builtin-editor", "system-app":
+		return strings.TrimSpace(v)
+	default:
+		return "ask"
+	}
+}
+
+// NormalizeSftpFileExtension 规范化扩展名键（无前导点，小写；空 → file）
+func NormalizeSftpFileExtension(ext string) string {
+	ext = strings.TrimSpace(strings.ToLower(ext))
+	ext = strings.TrimPrefix(ext, ".")
+	if ext == "" {
+		return "file"
+	}
+	return ext
+}
+
+// NormalizeSftpFileAssociations 清洗扩展名关联表
+func NormalizeSftpFileAssociations(m map[string]SftpFileAssociation) map[string]SftpFileAssociation {
+	if len(m) == 0 {
+		return nil
+	}
+	out := make(map[string]SftpFileAssociation, len(m))
+	for k, v := range m {
+		ext := NormalizeSftpFileExtension(k)
+		opener := strings.TrimSpace(v.OpenerType)
+		if opener != "builtin-editor" && opener != "system-app" {
+			continue
+		}
+		entry := SftpFileAssociation{OpenerType: opener}
+		if opener == "system-app" && v.SystemApp != nil {
+			path := strings.TrimSpace(v.SystemApp.Path)
+			if path == "" {
+				continue
+			}
+			name := strings.TrimSpace(v.SystemApp.Name)
+			if name == "" {
+				name = filepath.Base(path)
+				name = strings.TrimSuffix(name, filepath.Ext(name))
+			}
+			entry.SystemApp = &SftpSystemApp{Path: path, Name: name}
+		} else if opener == "system-app" {
+			continue
+		}
+		out[ext] = entry
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // ShellCursorLineHighlightEnabled 光标行高亮是否开启（缺省 false）

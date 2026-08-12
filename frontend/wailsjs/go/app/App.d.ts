@@ -62,6 +62,8 @@ export function DeleteMachineGroup(arg1:string):Promise<void>;
 
 export function DeleteMachineWithEvent(arg1:string):Promise<void>;
 
+export function DeleteSftpFileAssociation(arg1:string):Promise<void>;
+
 export function DeleteShellFile(arg1:string,arg2:string):Promise<void>;
 
 export function DeleteWorkPath(arg1:string):Promise<void>;
@@ -242,6 +244,10 @@ export function OpenShellDownloadDir():Promise<void>;
 
 export function OpenShellRemoteFileExternal(arg1:string,arg2:string):Promise<void>;
 
+export function OpenShellRemoteFileSystemDefault(arg1:string,arg2:string,arg3:boolean):Promise<void>;
+
+export function OpenShellRemoteFileWithApp(arg1:string,arg2:string,arg3:string,arg4:boolean):Promise<void>;
+
 export function OpenSystemSettings():Promise<void>;
 
 export function OpenWorkPathConfig():Promise<void>;
@@ -320,6 +326,8 @@ export function SearchShellCommandHistory(arg1:string,arg2:string,arg3:number):P
 
 export function SelectKeyFile():Promise<string>;
 
+export function SelectSystemApplication():Promise<data.SftpSystemApp>;
+
 export function SelectXshellFile():Promise<string>;
 
 export function SelectXshellFolder():Promise<string>;
@@ -391,3 +399,5 @@ export function UpdateMachineWithEvent(arg1:string,arg2:define.Machine):Promise<
 export function UpdateWorkPath(arg1:string,arg2:string):Promise<void>;
 
 export function UpdateWorkPathWithEvent(arg1:string,arg2:string):Promise<void>;
+
+export function UpsertSftpFileAssociation(arg1:string,arg2:data.SftpFileAssociation):Promise<void>;

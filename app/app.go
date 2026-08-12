@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"sync"
@@ -1474,6 +1475,26 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	config.ShellLogHighlightColors = data.NormalizeShellLogHighlightColors(config.ShellLogHighlightColors)
 	config.ShellLogHighlightDisabled = data.NormalizeShellLogHighlightDisabled(config.ShellLogHighlightDisabled)
 	config.ShellLogHighlightKeywords = data.NormalizeShellLogHighlightKeywords(config.ShellLogHighlightKeywords)
+	config.SftpDefaultOpener = data.NormalizeSftpDefaultOpener(config.SftpDefaultOpener)
+	if config.SftpDefaultOpener != "system-app" {
+		config.SftpDefaultSystemApp = nil
+	} else if config.SftpDefaultSystemApp != nil {
+		path := strings.TrimSpace(config.SftpDefaultSystemApp.Path)
+		if path == "" {
+			config.SftpDefaultOpener = "ask"
+			config.SftpDefaultSystemApp = nil
+		} else {
+			name := strings.TrimSpace(config.SftpDefaultSystemApp.Name)
+			if name == "" {
+				name = filepath.Base(path)
+				name = strings.TrimSuffix(name, filepath.Ext(name))
+			}
+			config.SftpDefaultSystemApp = &data.SftpSystemApp{Path: path, Name: name}
+		}
+	} else {
+		config.SftpDefaultOpener = "ask"
+	}
+	config.SftpFileAssociations = data.NormalizeSftpFileAssociations(config.SftpFileAssociations)
 	if err := a.configManager.SaveGlobalConfig(config); err != nil {
 		return err
 	}
@@ -1508,6 +1529,11 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 			"shellPasswordAssist":       data.ShellPasswordAssistEnabled(config),
 			"shellUseWebgl":             config.ThemeSettings.ShellUseWebgl,
 			"shellTabHibernate":         data.ShellTabHibernateEnabled(config),
+			"sftpUseCompressedUpload":   data.SftpUseCompressedUploadEnabled(config),
+			"sftpAutoSync":              data.SftpAutoSyncEnabled(config),
+			"sftpDefaultOpener":         config.SftpDefaultOpener,
+			"sftpDefaultSystemApp":      config.SftpDefaultSystemApp,
+			"sftpFileAssociations":      config.SftpFileAssociations,
 			"proxySettings":             config.ProxySettings,
 			"windowsName":               config.WindowsName,
 			"appIconPreset":             config.AppIconPreset,

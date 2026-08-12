@@ -205,25 +205,80 @@
                                     <el-switch v-model="form.sftpUseCompressedUpload" size="small" />
                                 </div>
                             </div>
-                            <div class="system-setting-row system-setting-row--stack">
+                            <div class="system-setting-row">
                                 <div class="system-setting-text">
-                                    <span class="system-setting-label">外置编辑器</span>
-                                    <span class="system-setting-hint">SFTP「用系统应用打开」优先用此命令；可用 {path} 占位，留空则系统默认</span>
+                                    <span class="system-setting-label">外置打开自动同步</span>
+                                    <span class="system-setting-hint">用系统应用打开远端文件后，监听本地改动并自动回传</span>
                                 </div>
-                                <el-input v-model="form.externalEditorCommand" size="small" placeholder='例如 code "{path}" 或 notepad++' clearable />
+                                <div class="system-setting-control">
+                                    <el-switch v-model="form.sftpAutoSync" size="small" />
+                                </div>
+                            </div>
+                            <div class="system-setting-row">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">默认文件打开方式</span>
+                                    <span class="system-setting-hint">选择没有特定文件关联时的默认打开方式</span>
+                                </div>
+                                <div class="system-setting-control sftp-opener-control">
+                                    <el-select
+                                        :model-value="defaultOpenerSelectValue"
+                                        size="small"
+                                        style="width: 180px"
+                                        :disabled="selectingDefaultApp"
+                                        @change="onDefaultOpenerChange"
+                                    >
+                                        <el-option label="每次询问" value="ask" />
+                                        <el-option label="内置编辑器" value="builtin-editor" />
+                                        <el-option
+                                            :label="defaultSystemAppOptionLabel"
+                                            value="system-app"
+                                        />
+                                    </el-select>
+                                    <el-button
+                                        v-if="form.sftpDefaultOpener === 'system-app'"
+                                        size="small"
+                                        text
+                                        :loading="selectingDefaultApp"
+                                        @click="pickDefaultSystemApp"
+                                    >
+                                        更换应用
+                                    </el-button>
+                                </div>
                             </div>
                             <div class="system-setting-row system-setting-row--stack">
                                 <div class="system-setting-text">
-                                    <span class="system-setting-label">文件关联</span>
-                                    <span class="system-setting-hint">每行：扩展名=命令，如 .go=code {path}</span>
+                                    <span class="system-setting-label">SFTP 文件关联</span>
+                                    <span class="system-setting-hint">配置按扩展名打开文件的默认应用程序；在「打开方式」中勾选记住后也会出现在此</span>
                                 </div>
-                                <el-input
-                                    v-model="fileAssocText"
-                                    type="textarea"
-                                    :rows="3"
-                                    size="small"
-                                    placeholder=".md=code {path}&#10;.log=notepad"
-                                />
+                                <div v-if="associationRows.length" class="sftp-assoc-list">
+                                    <div
+                                        v-for="row in associationRows"
+                                        :key="row.extension"
+                                        class="sftp-assoc-row"
+                                    >
+                                        <div class="sftp-assoc-ext">.{{ row.extension === 'file' ? '(无扩展名)' : row.extension }}</div>
+                                        <div class="sftp-assoc-opener" :title="row.label">{{ row.label }}</div>
+                                        <div class="sftp-assoc-actions">
+                                            <el-button
+                                                size="small"
+                                                text
+                                                :loading="editingAssocExt === row.extension"
+                                                @click="editAssociation(row.extension)"
+                                            >
+                                                更换
+                                            </el-button>
+                                            <el-button
+                                                size="small"
+                                                text
+                                                type="danger"
+                                                @click="removeAssociation(row.extension)"
+                                            >
+                                                删除
+                                            </el-button>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div v-else class="sftp-assoc-empty">未配置文件关联</div>
                             </div>
                                 </div>
                             </div>
@@ -838,7 +893,8 @@ export default {
         const accountEditVisible = ref(false)
         const editingAccountIndex = ref(-1)
         const accountForm = reactive({ id: '', name: '', user: '', password: '', keyFile: '', keyPassphrase: '' })
-        const fileAssocText = ref('')
+        const selectingDefaultApp = ref(false)
+        const editingAssocExt = ref('')
         const { applyThemeSettings } = useTheme()
         const settingsTab = ref('system')
         const settingsTabs = [
@@ -938,11 +994,88 @@ export default {
             shellLineTimestamps: false,
             shellPasswordAssist: true,
             sftpUseCompressedUpload: true,
-            externalEditorCommand: '',
+            sftpAutoSync: true,
+            sftpDefaultOpener: 'ask',
+            sftpDefaultSystemApp: null,
+            sftpFileAssociations: {},
             shellLogHighlightColors: { ...DEFAULT_SHELL_LOG_COLORS },
             shellLogHighlightRules: mergeLogHighlightRules([]),
             shellLogHighlightKeywords: [],
         })
+
+        const defaultOpenerSelectValue = computed(() => {
+            if (form.sftpDefaultOpener === 'builtin-editor') return 'builtin-editor'
+            if (form.sftpDefaultOpener === 'system-app') return 'system-app'
+            return 'ask'
+        })
+
+        const defaultSystemAppOptionLabel = computed(() => {
+            const name = form.sftpDefaultSystemApp?.name
+            return name ? `应用程序（${name}）` : '选择应用程序...'
+        })
+
+        const associationRows = computed(() => {
+            const map = form.sftpFileAssociations || {}
+            return Object.entries(map)
+                .map(([extension, entry]) => {
+                    let label = '应用程序'
+                    if (entry?.openerType === 'builtin-editor') label = '内置编辑器'
+                    else if (entry?.systemApp?.name) label = entry.systemApp.name
+                    else if (entry?.systemApp?.path) label = entry.systemApp.path
+                    return { extension, label, entry }
+                })
+                .sort((a, b) => a.extension.localeCompare(b.extension))
+        })
+
+        const pickDefaultSystemApp = async () => {
+            selectingDefaultApp.value = true
+            try {
+                const app = await App.SelectSystemApplication()
+                if (!app?.path) return
+                form.sftpDefaultOpener = 'system-app'
+                form.sftpDefaultSystemApp = app
+            } catch (e) {
+                ElMessage.error(String(e))
+            } finally {
+                selectingDefaultApp.value = false
+            }
+        }
+
+        const onDefaultOpenerChange = async (value) => {
+            if (value === 'ask') {
+                form.sftpDefaultOpener = 'ask'
+                form.sftpDefaultSystemApp = null
+                return
+            }
+            if (value === 'builtin-editor') {
+                form.sftpDefaultOpener = 'builtin-editor'
+                form.sftpDefaultSystemApp = null
+                return
+            }
+            await pickDefaultSystemApp()
+        }
+
+        const editAssociation = async (extension) => {
+            editingAssocExt.value = extension
+            try {
+                const app = await App.SelectSystemApplication()
+                if (!app?.path) return
+                form.sftpFileAssociations = {
+                    ...(form.sftpFileAssociations || {}),
+                    [extension]: { openerType: 'system-app', systemApp: app },
+                }
+            } catch (e) {
+                ElMessage.error(String(e))
+            } finally {
+                editingAssocExt.value = ''
+            }
+        }
+
+        const removeAssociation = (extension) => {
+            const next = { ...(form.sftpFileAssociations || {}) }
+            delete next[extension]
+            form.sftpFileAssociations = next
+        }
 
         const appIconPresets = ref([])
         const uploadingAppIcon = ref(false)
@@ -1180,11 +1313,12 @@ theme preview · ${theme.foreground}`
             form.shellLineTimestamps = !!config.shellLineTimestamps
             form.shellPasswordAssist = config.shellPasswordAssist !== false
             form.sftpUseCompressedUpload = config.sftpUseCompressedUpload !== false
-            form.externalEditorCommand = config.externalEditorCommand || ''
-            const assoc = config.fileAssociations || {}
-            fileAssocText.value = Object.entries(assoc)
-                .map(([ext, cmd]) => `${ext}=${cmd}`)
-                .join('\n')
+            form.sftpAutoSync = config.sftpAutoSync !== false
+            form.sftpDefaultOpener = ['builtin-editor', 'system-app'].includes(config.sftpDefaultOpener)
+                ? config.sftpDefaultOpener
+                : 'ask'
+            form.sftpDefaultSystemApp = config.sftpDefaultSystemApp || null
+            form.sftpFileAssociations = { ...(config.sftpFileAssociations || {}) }
             Object.assign(
                 form.shellLogHighlightColors,
                 mergeLogHighlightColors(config.shellLogHighlightColors),
@@ -1580,20 +1714,12 @@ theme preview · ${theme.foreground}`
                 config.shellLineTimestamps = !!form.shellLineTimestamps
                 config.shellPasswordAssist = !!form.shellPasswordAssist
                 config.sftpUseCompressedUpload = !!form.sftpUseCompressedUpload
-                config.externalEditorCommand = String(form.externalEditorCommand || '').trim()
-                const assocMap = {}
-                String(fileAssocText.value || '').split(/\r?\n/).forEach((line) => {
-                    const t = line.trim()
-                    if (!t || t.startsWith('#')) return
-                    const eq = t.indexOf('=')
-                    if (eq <= 0) return
-                    let ext = t.slice(0, eq).trim().toLowerCase()
-                    const cmd = t.slice(eq + 1).trim()
-                    if (!ext || !cmd) return
-                    if (!ext.startsWith('.')) ext = `.${ext}`
-                    assocMap[ext] = cmd
-                })
-                config.fileAssociations = assocMap
+                config.sftpAutoSync = !!form.sftpAutoSync
+                config.sftpDefaultOpener = form.sftpDefaultOpener === 'ask' ? '' : form.sftpDefaultOpener
+                config.sftpDefaultSystemApp = form.sftpDefaultOpener === 'system-app'
+                    ? (form.sftpDefaultSystemApp || null)
+                    : null
+                config.sftpFileAssociations = { ...(form.sftpFileAssociations || {}) }
                 config.shellLogHighlightColors = mergeLogHighlightColors(form.shellLogHighlightColors)
                 config.shellLogHighlightDisabled = rulesToDisabled(form.shellLogHighlightRules)
                 config.shellLogHighlightKeywords = normalizeCustomKeywords(form.shellLogHighlightKeywords)
@@ -1658,7 +1784,15 @@ theme preview · ${theme.foreground}`
             previewTermLabel,
             previewTermSample,
             accounts,
-            fileAssocText,
+            selectingDefaultApp,
+            editingAssocExt,
+            defaultOpenerSelectValue,
+            defaultSystemAppOptionLabel,
+            associationRows,
+            onDefaultOpenerChange,
+            pickDefaultSystemApp,
+            editAssociation,
+            removeAssociation,
             knownHosts,
             loadingKnownHosts,
             importingKnownHosts,
@@ -2439,6 +2573,61 @@ theme preview · ${theme.foreground}`
 .system-setting-row--stack {
     flex-direction: column;
     align-items: stretch;
+}
+
+.sftp-opener-control {
+    display: flex !important;
+    grid-template-columns: none !important;
+    align-items: center;
+    gap: 8px;
+}
+
+.sftp-assoc-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 8px;
+}
+
+.sftp-assoc-row {
+    display: grid;
+    grid-template-columns: 110px 1fr auto;
+    gap: 8px;
+    align-items: center;
+    padding: 8px 10px;
+    border: 1px solid var(--app-border, var(--el-border-color));
+    border-radius: 8px;
+    background: var(--app-panel-bg, var(--el-fill-color-blank));
+}
+
+.sftp-assoc-ext {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--app-text);
+}
+
+.sftp-assoc-opener {
+    font-size: 12px;
+    color: var(--app-text-secondary, var(--el-text-color-secondary));
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.sftp-assoc-actions {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.sftp-assoc-empty {
+    margin-top: 8px;
+    padding: 28px 12px;
+    text-align: center;
+    font-size: 13px;
+    color: var(--app-text-muted, var(--el-text-color-placeholder));
+    border: 1px dashed var(--app-border, var(--el-border-color));
+    border-radius: 8px;
 }
 
 .dock-icon-presets {
