@@ -39,6 +39,7 @@ type ShortcutSettings struct {
 	ClearOutput       ShortcutBinding `json:"clearOutput"`
 	CommandPalette    ShortcutBinding `json:"commandPalette"`
 	QuickSwitcher     ShortcutBinding `json:"quickSwitcher"`
+	PaneZoom          ShortcutBinding `json:"paneZoom"`
 	Snippets          []ShellSnippet  `json:"snippets,omitempty"`
 }
 
@@ -57,6 +58,7 @@ func DefaultShortcutSettings() ShortcutSettings {
 		ClearOutput:       ShortcutBinding{Key: "k", UseMod: true},
 		CommandPalette:    ShortcutBinding{Key: "p", UseMod: true, UseShift: true},
 		QuickSwitcher:     ShortcutBinding{Key: "j", UseMod: true},
+		PaneZoom:          ShortcutBinding{Key: "z", UseMod: true, UseShift: true},
 	}
 }
 
@@ -100,6 +102,9 @@ func fillShortcutDefaults(s *ShortcutSettings) {
 	}
 	if s.QuickSwitcher.Key == "" {
 		s.QuickSwitcher = def.QuickSwitcher
+	}
+	if s.PaneZoom.Key == "" {
+		s.PaneZoom = def.PaneZoom
 	}
 }
 

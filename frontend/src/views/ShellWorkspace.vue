@@ -841,6 +841,10 @@ export default {
       await tabsRef.value?.pasteClipboard?.()
     }
 
+    const togglePaneZoom = (sessionId) => {
+      tabsRef.value?.togglePaneZoom?.(sessionId || props.activeMachine)
+    }
+
     return {
       tabsRef,
       filePanelRef,
@@ -896,6 +900,7 @@ export default {
       commandPaletteVisible,
       openCommandPalette,
       pasteClipboard,
+      togglePaneZoom,
       onCommandPaletteInsert,
       sendMappedInput,
       loadTunnels,

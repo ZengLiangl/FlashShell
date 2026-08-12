@@ -337,6 +337,8 @@ export namespace data {
 	    shellAsciiInput?: boolean;
 	    sftpUseCompressedUpload?: boolean;
 	    shellSessionRestore?: boolean;
+	    shellCursorLineHighlight?: boolean;
+	    shellLineTimestamps?: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new GlobalConfig(source);
@@ -370,6 +372,8 @@ export namespace data {
 	        this.shellAsciiInput = source["shellAsciiInput"];
 	        this.sftpUseCompressedUpload = source["sftpUseCompressedUpload"];
 	        this.shellSessionRestore = source["shellSessionRestore"];
+	        this.shellCursorLineHighlight = source["shellCursorLineHighlight"];
+	        this.shellLineTimestamps = source["shellLineTimestamps"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -687,6 +691,7 @@ export namespace data {
 	    clearOutput: ShortcutBinding;
 	    commandPalette: ShortcutBinding;
 	    quickSwitcher: ShortcutBinding;
+	    paneZoom: ShortcutBinding;
 	    snippets?: ShellSnippet[];
 	
 	    static createFrom(source: any = {}) {
@@ -707,6 +712,7 @@ export namespace data {
 	        this.clearOutput = this.convertValues(source["clearOutput"], ShortcutBinding);
 	        this.commandPalette = this.convertValues(source["commandPalette"], ShortcutBinding);
 	        this.quickSwitcher = this.convertValues(source["quickSwitcher"], ShortcutBinding);
+	        this.paneZoom = this.convertValues(source["paneZoom"], ShortcutBinding);
 	        this.snippets = this.convertValues(source["snippets"], ShellSnippet);
 	    }
 	

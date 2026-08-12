@@ -364,6 +364,7 @@ export default {
           clearOutput: { ...shortcuts.clearOutput },
           commandPalette: { ...shortcuts.commandPalette },
           quickSwitcher: { ...shortcuts.quickSwitcher },
+          paneZoom: { ...shortcuts.paneZoom },
           snippets: snippets.value.map((s) => {
             const out = {
               id: s.id,

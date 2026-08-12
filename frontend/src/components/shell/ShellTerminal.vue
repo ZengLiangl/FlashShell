@@ -67,6 +67,11 @@ import {
   notifyShellTerminalFocus,
   setShellAsciiInputEnabled,
 } from '../../utils/shellAsciiInput'
+import {
+  decodeOsc52ClipboardPayload,
+  prefixLineTimestamps,
+} from '../../utils/shellTerminalUx'
+import { ClipboardSetText } from '../../../wailsjs/runtime/runtime'
 import ShellConnectionOverlay from './ShellConnectionOverlay.vue'
 
 export default {
@@ -125,6 +130,14 @@ export default {
     let logHighlightConfig = mergeLogHighlightConfig(null)
     let tuiModeDepth = 0
     let scrollbackLines = SHELL_TERMINAL_SCROLLBACK
+    let cursorLineHighlightEnabled = false
+    let lineTimestampsEnabled = false
+    /** 行时间戳：是否处于行首（跳过回放时由 aroundReplay 重置） */
+    const lineTsState = { atLineStart: true }
+    let cursorLineDecoration = null
+    let cursorLineMarker = null
+    let cursorMoveListener = null
+    let osc52Disposable = null
     const textDecoder = new TextDecoder('utf-8')
     /**
      * 不用 xterm-addon-search：它对超长折行（grep 出的整行 JSON）会拼成巨串同步扫描，必卡死。
@@ -426,6 +439,11 @@ export default {
       return writeHighlighted(terminal, bytes)
     }
 
+    const applyLineTimestampsIfNeeded = (text) => {
+      if (!lineTimestampsEnabled || tuiModeDepth > 0 || !text) return text
+      return prefixLineTimestamps(text, lineTsState)
+    }
+
     const writeHighlighted = (terminal, bytes) => {
       const raw = bytes instanceof Uint8Array ? bytes : decodeBase64(bytes)
       if (isProbablyBinary(raw)) {
@@ -439,13 +457,99 @@ export default {
       }
       tuiModeDepth = updateTuiModeDepth(tuiModeDepth, text)
       if (!logHighlightEnabled) {
-        return writeTerminal(terminal, raw)
+        return writeTerminal(terminal, applyLineTimestampsIfNeeded(text))
       }
       try {
         // 不因 less/TUI 整块跳过：按行高亮，含交互序列的行仍原样透传
-        return writeTerminal(terminal, highlightShellChunk(text, logHighlightConfig))
+        const highlighted = highlightShellChunk(text, logHighlightConfig)
+        return writeTerminal(terminal, applyLineTimestampsIfNeeded(highlighted))
       } catch {
-        return writeTerminal(terminal, raw)
+        return writeTerminal(terminal, applyLineTimestampsIfNeeded(text))
+      }
+    }
+
+    const clearCursorLineHighlight = () => {
+      try {
+        cursorLineDecoration?.dispose?.()
+      } catch {
+        // ignore
+      }
+      cursorLineDecoration = null
+      try {
+        cursorLineMarker?.dispose?.()
+      } catch {
+        // ignore
+      }
+      cursorLineMarker = null
+    }
+
+    const refreshCursorLineHighlight = () => {
+      const terminal = term.value
+      clearCursorLineHighlight()
+      if (!terminal || !cursorLineHighlightEnabled || !initialized) return
+      try {
+        cursorLineMarker = terminal.registerMarker?.(0)
+        if (!cursorLineMarker) return
+        cursorLineDecoration = terminal.registerDecoration?.({
+          marker: cursorLineMarker,
+          layer: 'bottom',
+        })
+        if (!cursorLineDecoration) return
+        cursorLineDecoration.onRender?.((element) => {
+          if (!element || !term.value) return
+          const cols = term.value.cols || 80
+          const cell = term.value._core?._renderService?.dimensions?.css?.cell
+          const width = cell?.width ? Math.ceil(cell.width * cols) : '100%'
+          element.style.left = '0'
+          element.style.width = typeof width === 'number' ? `${width}px` : width
+          element.style.backgroundColor = 'rgba(128, 128, 128, 0.18)'
+          element.style.pointerEvents = 'none'
+        })
+      } catch {
+        clearCursorLineHighlight()
+      }
+    }
+
+    const bindCursorLineHighlight = (terminal) => {
+      cursorMoveListener?.dispose?.()
+      cursorMoveListener = null
+      if (!terminal) return
+      cursorMoveListener = terminal.onCursorMove?.(() => {
+        if (cursorLineHighlightEnabled) refreshCursorLineHighlight()
+      }) || null
+      if (cursorLineHighlightEnabled) refreshCursorLineHighlight()
+    }
+
+    const writeOsc52ToClipboard = async (text) => {
+      if (!text) return
+      try {
+        await navigator.clipboard.writeText(text)
+        return
+      } catch {
+        // fallback Wails
+      }
+      try {
+        ClipboardSetText(text)
+      } catch {
+        // ignore
+      }
+    }
+
+    const bindOsc52Clipboard = (terminal) => {
+      osc52Disposable?.dispose?.()
+      osc52Disposable = null
+      const register = terminal?.parser?.registerOscHandler
+      if (typeof register !== 'function') return
+      try {
+        osc52Disposable = register.call(terminal.parser, 52, (data) => {
+          const text = decodeOsc52ClipboardPayload(data)
+          if (text != null) {
+            writeOsc52ToClipboard(text)
+          }
+          return true
+        })
+      } catch {
+        osc52Disposable = null
       }
     }
 
@@ -456,12 +560,17 @@ export default {
         logHighlightConfig = mergeLogHighlightConfig(cfg)
         scrollbackLines = clampShellTerminalScrollback(cfg?.shellTerminalScrollback)
         setShellAsciiInputEnabled(cfg?.shellAsciiInput !== false)
+        cursorLineHighlightEnabled = !!cfg?.shellCursorLineHighlight
+        lineTimestampsEnabled = !!cfg?.shellLineTimestamps
         if (term.value) {
           term.value.options.scrollback = scrollbackLines
+          refreshCursorLineHighlight()
         }
       } catch {
         logHighlightEnabled = true
         setShellAsciiInputEnabled(true)
+        cursorLineHighlightEnabled = false
+        lineTimestampsEnabled = false
       }
     }
 
@@ -469,6 +578,7 @@ export default {
     const reapplyLogHighlightToTerminal = () => {
       if (!term.value || !initialized) return
       tuiModeDepth = 0
+      lineTsState.atLineStart = true
       term.value.clear()
       resetShellWriterReplay(props.machineName)
       detachWriter()
@@ -510,6 +620,17 @@ export default {
       }
       if (Object.prototype.hasOwnProperty.call(payload, 'shellAsciiInput')) {
         setShellAsciiInputEnabled(payload.shellAsciiInput !== false)
+      }
+      if (Object.prototype.hasOwnProperty.call(payload, 'shellCursorLineHighlight')) {
+        cursorLineHighlightEnabled = !!payload.shellCursorLineHighlight
+        refreshCursorLineHighlight()
+      }
+      if (Object.prototype.hasOwnProperty.call(payload, 'shellLineTimestamps')) {
+        const next = !!payload.shellLineTimestamps
+        if (next !== lineTimestampsEnabled) {
+          lineTimestampsEnabled = next
+          lineTsState.atLineStart = true
+        }
       }
     }
 
@@ -606,10 +727,13 @@ export default {
 
       bindAsciiInputListeners(terminal)
       bindInputHandler(terminal)
+      bindOsc52Clipboard(terminal)
+      bindCursorLineHighlight(terminal)
 
       scrollListener?.dispose?.()
       scrollListener = terminal.onScroll?.(() => {
         if (activeSearchQuery) scheduleViewportHighlights()
+        if (cursorLineHighlightEnabled) refreshCursorLineHighlight()
       }) || null
 
       term.value = terminal
@@ -626,15 +750,21 @@ export default {
       clearCwdSyncTimer()
       cancelAsyncMatchCount()
       clearViewportHighlights()
+      clearCursorLineHighlight()
       activeSearchQuery = ''
       lastActiveMatch = null
       lastCountedQuery = ''
       resetSearchMatchIndex()
       scrollListener?.dispose?.()
       scrollListener = null
+      cursorMoveListener?.dispose?.()
+      cursorMoveListener = null
+      osc52Disposable?.dispose?.()
+      osc52Disposable = null
       detachWriter()
       resetShellWriterReplay(props.machineName)
       tuiModeDepth = 0
+      lineTsState.atLineStart = true
       if (resizeObserver) {
         resizeObserver.disconnect()
         resizeObserver = null
@@ -891,6 +1021,7 @@ export default {
             if (phase === 'start') {
               holdingReplaySuppress = true
               beginSuppressInputForward()
+              lineTsState.atLineStart = true
               return
             }
             releaseReplaySuppress()
@@ -900,6 +1031,7 @@ export default {
             } catch {
               // ignore
             }
+            if (cursorLineHighlightEnabled) refreshCursorLineHighlight()
           },
         },
       )

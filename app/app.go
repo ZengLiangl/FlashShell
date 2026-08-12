@@ -1494,6 +1494,8 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 			"shellLogHighlightKeywords": config.ShellLogHighlightKeywords,
 			"shellAsciiInput":           data.ShellAsciiInputEnabled(config),
 			"shellSessionRestore":       data.ShellSessionRestoreEnabled(config),
+			"shellCursorLineHighlight":  data.ShellCursorLineHighlightEnabled(config),
+			"shellLineTimestamps":       data.ShellLineTimestampsEnabled(config),
 			"proxySettings":             config.ProxySettings,
 			"windowsName":               config.WindowsName,
 			"appIconPreset":             config.AppIconPreset,
@@ -1650,6 +1652,12 @@ func (a *App) normalizeThemeSettings(settings *data.ThemeSettings) {
 	}
 	if settings.ShellFontSize <= 0 {
 		settings.ShellFontSize = 13
+	}
+	if settings.ShellFontSize < 8 {
+		settings.ShellFontSize = 8
+	}
+	if settings.ShellFontSize > 32 {
+		settings.ShellFontSize = 32
 	}
 	if settings.ShellLineHeight <= 0 {
 		settings.ShellLineHeight = 1.2

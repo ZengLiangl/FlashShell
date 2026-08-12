@@ -131,6 +131,24 @@
                             </div>
                             <div class="system-setting-row">
                                 <div class="system-setting-text">
+                                    <span class="system-setting-label">光标行高亮</span>
+                                    <span class="system-setting-hint">高亮当前光标所在行；已打开的终端保存后立即生效</span>
+                                </div>
+                                <div class="system-setting-control">
+                                    <el-switch v-model="form.shellCursorLineHighlight" size="small" />
+                                </div>
+                            </div>
+                            <div class="system-setting-row">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">行时间戳</span>
+                                    <span class="system-setting-hint">在新输出行前缀显示本地时间（HH:MM:SS）；TUI 全屏程序下自动跳过</span>
+                                </div>
+                                <div class="system-setting-control">
+                                    <el-switch v-model="form.shellLineTimestamps" size="small" />
+                                </div>
+                            </div>
+                            <div class="system-setting-row">
+                                <div class="system-setting-text">
                                     <span class="system-setting-label">SFTP 目录压缩上传</span>
                                     <span class="system-setting-hint">目录默认先打 zip 再远端解压；关闭则逐文件上传。文件面板可粘贴剪贴板图片直接上传</span>
                                 </div>
@@ -286,14 +304,14 @@
                                                 :value="font.id" />
                                         </el-select>
                                         <el-input-number v-model="form.themeSettings.shellFontSize" class="term-num"
-                                            size="small" :min="10" :max="28" :step="1" controls-position="right" />
+                                            size="small" :min="8" :max="32" :step="1" controls-position="right" />
                                         <el-input-number v-model="form.themeSettings.shellLineHeight" class="term-num"
                                             size="small" :min="1" :max="2.5" :step="0.1" :precision="1"
                                             controls-position="right" />
                                     </div>
                                     <div class="term-font-hints">
                                         <span>字体</span>
-                                        <span>字号</span>
+                                        <span>字号 (Ctrl+=/-/0)</span>
                                         <span>行高</span>
                                     </div>
                                 </div>
@@ -734,6 +752,8 @@ export default {
             shellSessionRestore: true,
             shellLogHighlight: true,
             shellAsciiInput: true,
+            shellCursorLineHighlight: false,
+            shellLineTimestamps: false,
             sftpUseCompressedUpload: true,
             shellLogHighlightColors: { ...DEFAULT_SHELL_LOG_COLORS },
             shellLogHighlightRules: mergeLogHighlightRules([]),
@@ -963,6 +983,8 @@ theme preview · ${theme.foreground}`
             form.shellSessionRestore = false
             form.shellLogHighlight = config.shellLogHighlight !== false
             form.shellAsciiInput = config.shellAsciiInput !== false
+            form.shellCursorLineHighlight = !!config.shellCursorLineHighlight
+            form.shellLineTimestamps = !!config.shellLineTimestamps
             form.sftpUseCompressedUpload = config.sftpUseCompressedUpload !== false
             Object.assign(
                 form.shellLogHighlightColors,
@@ -1331,6 +1353,8 @@ theme preview · ${theme.foreground}`
                 config.shellSessionRestore = false
                 config.shellLogHighlight = !!form.shellLogHighlight
                 config.shellAsciiInput = !!form.shellAsciiInput
+                config.shellCursorLineHighlight = !!form.shellCursorLineHighlight
+                config.shellLineTimestamps = !!form.shellLineTimestamps
                 config.sftpUseCompressedUpload = !!form.sftpUseCompressedUpload
                 config.shellLogHighlightColors = mergeLogHighlightColors(form.shellLogHighlightColors)
                 config.shellLogHighlightDisabled = rulesToDisabled(form.shellLogHighlightRules)

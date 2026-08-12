@@ -80,7 +80,14 @@ export function useShell() {
   /** 待信任的主机密钥（连接失败时弹出对话框） */
   const pendingHostKey = ref(null)
 
-  const updateTabLastCwd = () => {}
+  const updateTabLastCwd = (machineName, cwd) => {
+    if (!machineName || !cwd) return
+    const tab = openTabs.value.find((t) => t.machineName === machineName)
+    if (!tab) return
+    const next = String(cwd).trim()
+    if (!next) return
+    tab.lastCwd = next
+  }
 
   const persistShellLayout = () => {
     writeShellLayout({
@@ -387,6 +394,7 @@ export function useShell() {
             connectedAt: tab.connectedAt || Date.now(),
             tabLabel: live.tabLabel || tab.tabLabel,
             configName: live.configName || tab.configName,
+            lastCwd: tab.lastCwd,
           }
         }
         if (tab.connecting || isPendingSession(tab.machineName)) return tab

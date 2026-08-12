@@ -21,6 +21,8 @@ export const DEFAULT_SHORTCUTS = {
   commandPalette: { key: 'p', useMod: true, useShift: true },
   // 快速切换：机器 / 会话 / 动作
   quickSwitcher: { key: 'j', useMod: true },
+  // 分屏窗格最大化 / 还原
+  paneZoom: { key: 'z', useMod: true, useShift: true },
 }
 
 export const SHORTCUT_LABELS = {
@@ -36,6 +38,7 @@ export const SHORTCUT_LABELS = {
   clearOutput: '清空输出',
   commandPalette: '命令面板（历史/片段）',
   quickSwitcher: '快速切换',
+  paneZoom: '分屏窗格最大化',
 }
 
 /** 设置页分组展示（覆盖全部可配置项） */
@@ -50,7 +53,7 @@ export const SHORTCUT_GROUPS = [
   },
   {
     title: 'Shell',
-    ids: ['commandPalette'],
+    ids: ['commandPalette', 'paneZoom'],
   },
 ]
 

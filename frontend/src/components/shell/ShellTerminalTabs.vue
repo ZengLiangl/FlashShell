@@ -117,7 +117,11 @@
     </div>
     <template v-else>
       <div class="terminal-stack"
-        :class="{ 'is-split': splitViewVisible, 'is-drag-over': !!draggingTab && !draggingSplitPane }"
+        :class="{
+          'is-split': splitViewVisible,
+          'is-drag-over': !!draggingTab && !draggingSplitPane,
+          'is-pane-zoomed': splitViewVisible && !!zoomedSessionId,
+        }"
         :style="splitGridStyle" @dragover.prevent="onStackDragOver" @dragleave="onStackDragLeave"
         @drop.prevent="onStackDrop">
         <div v-if="draggingTab && !draggingSplitPane" class="split-drop-overlay">
@@ -136,12 +140,22 @@
           'is-split-pane': splitViewVisible && splitSessionIds.includes(session.machineName),
           'is-split-hidden': splitViewVisible && !splitSessionIds.includes(session.machineName),
           'is-focused': activeTab === session.machineName,
+          'is-zoomed': zoomedSessionId === session.machineName,
         }">
           <div v-if="splitViewVisible && splitSessionIds.includes(session.machineName)" class="split-pane-header"
             draggable="true" @dragstart="onPaneDragStart($event, session.machineName)" @dragend="onPaneDragEnd"
             @mousedown="activeTab = session.machineName"
+            @dblclick.stop="togglePaneZoom(session.machineName)"
             @contextmenu.prevent="onPaneContextMenu($event, session.machineName)">
-            <span class="split-pane-name" :title="tabLabel(session)">{{ tabLabel(session) }}</span>
+            <span class="split-pane-name" :title="paneTitle(session)">{{ tabLabel(session) }}</span>
+            <button
+              type="button"
+              class="split-pane-zoom"
+              :title="zoomedSessionId === session.machineName ? '还原分屏' : '最大化窗格'"
+              @click.stop="togglePaneZoom(session.machineName)"
+            >
+              {{ zoomedSessionId === session.machineName ? '⊡' : '▣' }}
+            </button>
             <button type="button" class="split-pane-unsplit" title="移出分屏"
               @click.stop="removeFromSplit(session.machineName)">
               ×
@@ -175,6 +189,7 @@
 
       <ul v-if="paneMenu.visible" class="pane-ctx-menu" :style="{ left: paneMenu.x + 'px', top: paneMenu.y + 'px' }"
         @click.stop @mouseleave="hidePaneMenu">
+        <li @click="onPaneMenuZoom">{{ zoomedSessionId === paneMenu.sessionId ? '还原分屏' : '最大化窗格' }}</li>
         <li @click="onPaneMenuRemove">移出分屏</li>
         <li @click="onPaneMenuExit">取消全部分屏</li>
       </ul>
@@ -190,6 +205,7 @@ import { ArrowLeft, ArrowDown, Folder, Upload, Plus, Promotion, Memo, EditPen } 
 import ShellTerminal from './ShellTerminal.vue'
 import ShellBroadcastBar from './ShellBroadcastBar.vue'
 import ShellComposeBar from './ShellComposeBar.vue'
+import { cwdBasename } from '../../utils/shellTerminalUx'
 
 const MAX_SPLIT = 4
 const DRAG_REORDER_PX = 4
@@ -290,6 +306,8 @@ export default {
     const localTabOrder = ref([])
     const paneMenu = reactive({ visible: false, x: 0, y: 0, sessionId: '' })
     const tabMenu = reactive({ visible: false, x: 0, y: 0, sessionId: '' })
+    /** 分屏最大化：仅展示该窗格 */
+    const zoomedSessionId = ref('')
 
     const sessionMeta = (session) => {
       const key = session?.configName || session?.machineName || ''
@@ -362,6 +380,9 @@ export default {
     })
 
     watch(splitViewVisible, (visible) => {
+      if (!visible) {
+        zoomedSessionId.value = ''
+      }
       if (visible) {
         setTimeout(() => {
           props.splitSessionIds.forEach((id) => terminalRefs.value[id]?.fitAndResize?.())
@@ -386,6 +407,9 @@ export default {
       (ids) => {
         if (ids.length === 1) {
           emit('update:split-session-ids', [])
+        }
+        if (zoomedSessionId.value && !ids.includes(zoomedSessionId.value)) {
+          zoomedSessionId.value = ''
         }
       },
     )
@@ -418,12 +442,21 @@ export default {
     }
 
     const tabDisplayLabel = (session) => {
-      return (
+      const base =
         session?.tabLabel
         || (session?.kind === 'local' || isLocalSession(session?.machineName)
           ? localTabLabel(session.machineName)
           : (session?.configName || session?.machineName))
-      )
+      const host = String(sessionMeta(session).host || '').trim()
+      const cwdBase = cwdBasename(session?.lastCwd)
+      // 动态标题：有 cwd 时追加目录名；否则在标签不含主机时附上 hostname
+      if (cwdBase) {
+        return `${base}:${cwdBase}`
+      }
+      if (host && base && !String(base).includes(host)) {
+        return `${base}@${host}`
+      }
+      return base
     }
 
     const tabLabel = (session) => {
@@ -433,13 +466,40 @@ export default {
       return base
     }
 
+    const paneTitle = (session) => {
+      const cwd = String(session?.lastCwd || '').trim()
+      const label = tabLabel(session)
+      return cwd ? `${label}\n${cwd}` : label
+    }
+
     const tabStatusClass = (session) => {
       if (session?.connecting) return 'is-connecting'
       if (session?.connected) return 'is-connected'
       return 'is-disconnected'
     }
 
+    const togglePaneZoom = (sessionId) => {
+      if (!sessionId || !splitViewVisible.value) return
+      if (!props.splitSessionIds.includes(sessionId)) return
+      zoomedSessionId.value = zoomedSessionId.value === sessionId ? '' : sessionId
+      activeTab.value = sessionId
+      setTimeout(() => {
+        if (zoomedSessionId.value) {
+          terminalRefs.value[zoomedSessionId.value]?.fitAndResize?.()
+        } else {
+          props.splitSessionIds.forEach((id) => terminalRefs.value[id]?.fitAndResize?.())
+        }
+      }, 80)
+    }
+
+    const onPaneMenuZoom = () => {
+      const id = paneMenu.sessionId
+      hidePaneMenu()
+      if (id) togglePaneZoom(id)
+    }
+
     const exitSplit = () => {
+      zoomedSessionId.value = ''
       emit('update:split-session-ids', [])
       hidePaneMenu()
       setTimeout(() => terminalRefs.value[activeTab.value]?.fitAndResize?.(), 80)
@@ -449,8 +509,10 @@ export default {
       hidePaneMenu()
       const id = sessionId || paneMenu.sessionId
       if (!id) return
+      if (zoomedSessionId.value === id) zoomedSessionId.value = ''
       const next = props.splitSessionIds.filter((x) => x !== id)
       if (next.length < 2) {
+        zoomedSessionId.value = ''
         emit('update:split-session-ids', [])
         if (id) activeTab.value = id
       } else {
@@ -552,6 +614,9 @@ export default {
 
     const splitGridStyle = computed(() => {
       if (!splitViewVisible.value) return {}
+      if (zoomedSessionId.value) {
+        return { gridTemplateColumns: '1fr', gridTemplateRows: '1fr' }
+      }
       const n = props.splitSessionIds.length
       if (n === 2) return { gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr' }
       return { gridTemplateColumns: '1fr 1fr', gridTemplateRows: '1fr 1fr' }
@@ -779,6 +844,10 @@ export default {
     const pasteClipboard = () => getActiveTerminal()?.pasteClipboard?.()
     const fitActive = () => {
       if (splitViewVisible.value) {
+        if (zoomedSessionId.value) {
+          terminalRefs.value[zoomedSessionId.value]?.fitAndResize?.()
+          return
+        }
         props.splitSessionIds.forEach((id) => terminalRefs.value[id]?.fitAndResize?.())
         return
       }
@@ -786,7 +855,16 @@ export default {
     }
     const getSelection = () => getActiveTerminal()?.getSelection?.() || ''
 
-    expose({ clearActive, findNext, findPrevious, clearSearch, fitActive, getSelection, pasteClipboard })
+    expose({
+      clearActive,
+      findNext,
+      findPrevious,
+      clearSearch,
+      fitActive,
+      getSelection,
+      pasteClipboard,
+      togglePaneZoom,
+    })
 
     return {
       activeTab,
@@ -805,6 +883,7 @@ export default {
       hideTabMenu,
       hasSplitGroup,
       splitViewVisible,
+      zoomedSessionId,
       setTerminalRef,
       onTabRemove,
       onTabContextMenu,
@@ -814,6 +893,7 @@ export default {
       clearActive,
       tabLabel,
       tabDisplayLabel,
+      paneTitle,
       tabStatusClass,
       onAddCommand,
       isLocalSession,
@@ -833,10 +913,12 @@ export default {
       onZoneDragOver,
       onZoneDrop,
       onPaneContextMenu,
+      onPaneMenuZoom,
       onPaneMenuRemove,
       onPaneMenuExit,
       removeFromSplit,
       exitSplit,
+      togglePaneZoom,
       toggleBroadcast,
       composeEnabled,
       toggleCompose,
@@ -1194,6 +1276,15 @@ export default {
   display: none;
 }
 
+.terminal-stack.is-split.is-pane-zoomed .terminal-pane.is-split-pane:not(.is-zoomed) {
+  display: none;
+}
+
+.terminal-stack.is-split.is-pane-zoomed .terminal-pane.is-zoomed {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+}
+
 .terminal-pane.is-focused.is-split-pane {
   box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--app-accent-color) 55%, transparent);
 }
@@ -1230,16 +1321,27 @@ export default {
   color: var(--app-accent-color);
 }
 
+.split-pane-zoom,
 .split-pane-unsplit {
   flex-shrink: 0;
+  width: 20px;
+  height: 20px;
   border: none;
-  background: transparent;
-  color: var(--app-text-muted);
-  cursor: pointer;
-  font-size: 14px;
-  line-height: 1;
-  padding: 0 4px;
   border-radius: 4px;
+  background: transparent;
+  color: var(--app-text-secondary);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+
+.split-pane-zoom:hover {
+  background: var(--app-hover-bg, rgba(128, 128, 128, 0.15));
+  color: var(--app-text);
 }
 
 .split-pane-unsplit:hover {

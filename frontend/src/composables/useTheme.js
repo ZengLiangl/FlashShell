@@ -2,6 +2,7 @@ import { ref, watch } from 'vue'
 import * as App from '../../wailsjs/go/app/App'
 import { WindowSetDarkTheme, WindowSetLightTheme, WindowSetSystemDefaultTheme, WindowSetBackgroundColour } from '../../wailsjs/runtime/runtime'
 import { getUiAccent, getUiFont, isCustomUiAccent, applyElementPrimaryCssVars, resolveAccentBg, UI_ACCENTS, TERMINAL_PRESETS } from '../utils/themePresets'
+import { clampShellFontSize, SHELL_FONT_SIZE_DEFAULT } from '../utils/shellTerminalUx'
 
 const isDark = ref(false)
 const terminalPreset = ref('classic')
@@ -10,7 +11,7 @@ const uiAccent = ref('blue')
 const uiFontFamily = ref('system')
 const uiFontSize = ref(14)
 const shellFontFamily = ref('consolas')
-const shellFontSize = ref(13)
+const shellFontSize = ref(SHELL_FONT_SIZE_DEFAULT)
 const shellLineHeight = ref(1.2)
 
 let systemMediaQuery = null
@@ -123,7 +124,7 @@ function normalizeSettings(settings = {}) {
     uiFontFamily: settings.uiFontFamily || 'system',
     uiFontSize: clampUiFontSize(settings.uiFontSize),
     shellFontFamily: settings.shellFontFamily || 'consolas',
-    shellFontSize: settings.shellFontSize > 0 ? settings.shellFontSize : 13,
+    shellFontSize: clampShellFontSize(settings.shellFontSize),
     shellLineHeight: settings.shellLineHeight > 0 ? settings.shellLineHeight : 1.2,
   }
 }

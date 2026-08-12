@@ -136,6 +136,10 @@ import TerminalHeader from "./components/TerminalHeader.vue";
 import AppMenuBar from "./components/AppMenuBar.vue";
 import { useTheme } from "./composables/useTheme";
 import { mergeShortcuts, matchesShortcut, isFormFieldTarget, isXtermInput } from "./utils/shortcuts";
+import {
+  clampShellFontSize,
+  SHELL_FONT_SIZE_DEFAULT,
+} from "./utils/shellTerminalUx";
 import { hasOverlayAboveSettingsHub } from "./utils/dialogOverlay";
 import { setCachedUpdateCheck, isUsableUpdateResult } from "./utils/updateCheckCache";
 import { TASK_OUTPUT_MAX_LINES, clampTaskOutputMaxLines } from "./constants/shellMemory";
@@ -158,7 +162,7 @@ export default {
   name: "App",
   components: { AppMenuBar, TerminalOutput, StatusBar, ProjectList, HomePage, ShellWorkspace, SubProjectList, TerminalHeader, AboutDialog, ConfigEditorDialog, SettingsHubDialog, HostKeyTrustDialog, QuickSwitcher, MachineAsidePanel },
   setup() {
-    const { isDark, themeMode, terminalPreset, loadTheme, applyThemeSettings } = useTheme();
+    const { isDark, themeMode, terminalPreset, shellFontSize, loadTheme, applyThemeSettings, saveTheme } = useTheme();
     const projects = ref([]);
     const subProjects = ref([]);
     const outputLines = ref([]);
@@ -1131,6 +1135,34 @@ export default {
         take();
         quickSwitcherVisible.value = true;
         return;
+      }
+
+      if (matchesShortcut(e, sc.paneZoom)) {
+        if (activeView.value === 'shell') {
+          take();
+          shellWorkspaceRef.value?.togglePaneZoom?.();
+        }
+        return;
+      }
+
+      // Shell 终端字号：Ctrl/⌘ + = / - / 0（固定，不占用可配置快捷键表）
+      if (activeView.value === 'shell' && (e.ctrlKey || e.metaKey) && !e.altKey) {
+        const code = String(e.code || '');
+        const key = String(e.key || '');
+        let nextSize = null;
+        if (key === '=' || key === '+' || code === 'Equal' || code === 'NumpadAdd') {
+          nextSize = clampShellFontSize((shellFontSize.value || SHELL_FONT_SIZE_DEFAULT) + 1);
+        } else if (!e.shiftKey && (key === '-' || key === '_' || code === 'Minus' || code === 'NumpadSubtract')) {
+          nextSize = clampShellFontSize((shellFontSize.value || SHELL_FONT_SIZE_DEFAULT) - 1);
+        } else if (!e.shiftKey && (key === '0' || code === 'Digit0' || code === 'Numpad0')) {
+          nextSize = SHELL_FONT_SIZE_DEFAULT;
+        }
+        if (nextSize != null) {
+          take();
+          if (nextSize !== shellFontSize.value) {
+            saveTheme({ shellFontSize: nextSize }).catch(() => {});
+          }
+        }
       }
     };
 

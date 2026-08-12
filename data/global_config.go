@@ -257,6 +257,10 @@ type GlobalConfig struct {
 	SftpUseCompressedUpload *bool `yaml:"sftpUseCompressedUpload,omitempty" json:"sftpUseCompressedUpload"`
 	// ShellSessionRestore 启动时恢复上次打开的 Shell 标签页；nil 表示默认开启
 	ShellSessionRestore *bool `yaml:"shellSessionRestore,omitempty" json:"shellSessionRestore"`
+	// ShellCursorLineHighlight 终端光标行高亮；nil/缺省表示关闭
+	ShellCursorLineHighlight *bool `yaml:"shellCursorLineHighlight,omitempty" json:"shellCursorLineHighlight"`
+	// ShellLineTimestamps 新输出行前缀时间戳；nil/缺省表示关闭
+	ShellLineTimestamps *bool `yaml:"shellLineTimestamps,omitempty" json:"shellLineTimestamps"`
 }
 
 // ShellSessionRestoreEnabled 启动时是否恢复 Shell 会话（已关闭，保留字段兼容旧配置）
@@ -576,6 +580,22 @@ func SftpUseCompressedUploadEnabled(cfg *GlobalConfig) bool {
 		return true
 	}
 	return *cfg.SftpUseCompressedUpload
+}
+
+// ShellCursorLineHighlightEnabled 光标行高亮是否开启（缺省 false）
+func ShellCursorLineHighlightEnabled(cfg *GlobalConfig) bool {
+	if cfg == nil || cfg.ShellCursorLineHighlight == nil {
+		return false
+	}
+	return *cfg.ShellCursorLineHighlight
+}
+
+// ShellLineTimestampsEnabled 行时间戳是否开启（缺省 false）
+func ShellLineTimestampsEnabled(cfg *GlobalConfig) bool {
+	if cfg == nil || cfg.ShellLineTimestamps == nil {
+		return false
+	}
+	return *cfg.ShellLineTimestamps
 }
 
 // AddMachine 添加或更新机器配置（按 ID）
