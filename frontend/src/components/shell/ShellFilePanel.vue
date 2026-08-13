@@ -506,6 +506,8 @@ export default {
   },
   emits: [
     'layout-change',
+    'layout-resize-start',
+    'layout-resize-end',
     'cwd-change',
     'search-next',
     'search-prev',
@@ -1404,6 +1406,7 @@ export default {
 
     const startHeightResize = (e) => {
       e.preventDefault()
+      emit('layout-resize-start')
       const startY = e.clientY
       const opening = !expanded.value
       const startH = bodyHeight.value
@@ -1430,11 +1433,19 @@ export default {
         bodyHeight.value = Math.min(maxH, Math.max(MIN_BODY_HEIGHT, startH + delta))
       }
 
-      const onUp = () => {
+      const finishHeightResize = (shouldNotifyLayout) => {
         window.removeEventListener('mousemove', onMove)
         window.removeEventListener('mouseup', onUp)
+        emit('layout-resize-end')
+        if (shouldNotifyLayout) notifyLayout()
+      }
+
+      const onUp = () => {
         if (opening) {
-          if (!didOpen) return
+          if (!didOpen) {
+            finishHeightResize(false)
+            return
+          }
           if (bodyHeight.value < COLLAPSE_THRESHOLD) {
             expanded.value = false
             bodyHeight.value = startH >= MIN_BODY_HEIGHT ? startH : MIN_BODY_HEIGHT
@@ -1444,11 +1455,11 @@ export default {
             bodyHeight.value = Math.max(MIN_BODY_HEIGHT, bodyHeight.value)
             localStorage.setItem(HEIGHT_KEY, String(bodyHeight.value))
           }
-          notifyLayout()
+          finishHeightResize(true)
           return
         }
         localStorage.setItem(HEIGHT_KEY, String(bodyHeight.value))
-        notifyLayout()
+        finishHeightResize(true)
       }
       window.addEventListener('mousemove', onMove)
       window.addEventListener('mouseup', onUp)

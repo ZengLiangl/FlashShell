@@ -72,6 +72,7 @@
           :broadcast-enabled="broadcastEnabled"
           :broadcast-targets="broadcastTargets"
           :split-session-ids="splitSessionIds"
+          :file-panel-layout-dragging="filePanelLayoutDragging"
           :has-task="hasTask"
           :has-projects="hasProjects"
           :has-machines="hasMachines"
@@ -125,6 +126,8 @@
               v-model:search-query="searchQuery"
               :match-summary="searchMatchSummary"
               @update:expanded="(v) => { filePanelExpanded = !!v }"
+              @layout-resize-start="onFilePanelLayoutResizeStart"
+              @layout-resize-end="onFilePanelLayoutResizeEnd"
               @layout-change="onFilePanelLayout"
               @cwd-change="(dir) => onPanelCwdChange(am, dir)"
               @search-next="findNext"
@@ -276,6 +279,7 @@ export default {
     const tabsRef = ref(null)
     const filePanelRef = ref(null)
     const filePanelExpanded = ref(false)
+    const filePanelLayoutDragging = ref(false)
     const leftCollapsed = ref(false)
     const edgeHover = ref(false)
     const searchVisible = ref(false)
@@ -721,7 +725,16 @@ export default {
       // SFTP 面板手动浏览不应覆盖终端 cwd 缓存，避免与 shell:cwd 同步冲突
     }
 
+    const onFilePanelLayoutResizeStart = () => {
+      filePanelLayoutDragging.value = true
+    }
+
+    const onFilePanelLayoutResizeEnd = () => {
+      filePanelLayoutDragging.value = false
+    }
+
     const onFilePanelLayout = async () => {
+      filePanelLayoutDragging.value = false
       // 等一帧再 fit，合并展开瞬间的多次布局变化
       await nextTick()
       requestAnimationFrame(() => {
@@ -913,6 +926,7 @@ export default {
       tabsRef,
       filePanelRef,
       filePanelExpanded,
+      filePanelLayoutDragging,
       onLocalPathChange,
       leftCollapsed,
       edgeHover,
@@ -958,6 +972,8 @@ export default {
       clearHistory,
       removeHistory,
       onPanelCwdChange,
+      onFilePanelLayoutResizeStart,
+      onFilePanelLayoutResizeEnd,
       onFilePanelLayout,
       onCwdSync,
       loadHistory,

@@ -344,7 +344,7 @@ func (sm *ShellSessionManager) Resize(cols, rows int) error {
 	session := sm.session
 	sm.mu.Unlock()
 	if session == nil {
-		return nil
+		return fmt.Errorf("会话未就绪")
 	}
 	if cols < 1 {
 		cols = 80

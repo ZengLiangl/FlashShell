@@ -201,6 +201,7 @@
             :terminal-preset-override="sessionMeta(session).terminalPreset"
             :active="isTerminalActive(session.machineName)" :view-visible="viewVisible" :search-query="searchQuery"
             :in-split="splitViewVisible && splitSessionIds.includes(session.machineName)"
+            :suppress-resize-observer-fit="filePanelLayoutDragging"
             @open-search="(text) => $emit('open-search', text)" @reconnect="(name) => $emit('reconnect', name)"
             @clear-cache="(name) => $emit('clear', name)" @search-result="(payload) => $emit('search-result', payload)"
             @cwd-sync="(payload) => $emit('cwd-sync', payload)" @remove-from-split="removeFromSplit"
@@ -318,6 +319,8 @@ export default {
     broadcastEnabled: { type: Boolean, default: false },
     broadcastTargets: { type: Array, default: () => [] },
     splitSessionIds: { type: Array, default: () => [] },
+    /** SFTP 面板高度拖拽中：终端 ResizeObserver 不 fit，松手后 workspace 统一 fit */
+    filePanelLayoutDragging: { type: Boolean, default: false },
     hasTask: { type: Boolean, default: false },
     hasProjects: { type: Boolean, default: false },
     hasMachines: { type: Boolean, default: false },

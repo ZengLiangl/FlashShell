@@ -120,6 +120,8 @@ export default {
     inSplit: { type: Boolean, default: false },
     /** 是否曾成功连接过（用于区分「尚未连上」与「已断开」） */
     everConnected: { type: Boolean, default: false },
+    /** SFTP 面板拖拽改高中：抑制 ResizeObserver fit，松手后由 layout-change 统一 fit */
+    suppressResizeObserverFit: { type: Boolean, default: false },
     /** 自动重连中 */
     reconnecting: { type: Boolean, default: false },
     reconnectAttempt: { type: Number, default: 0 },
@@ -217,6 +219,7 @@ export default {
     let lastPtyRows = 0
     let fitRunning = false
     let fitAgain = false
+    let fitEpoch = 0
     let fitQuietUntil = 0
     let suppressRoUntil = 0
     let initialized = false
@@ -823,13 +826,24 @@ export default {
       const t = term.value
       if (!t) return
       if (t.cols !== cols || t.rows !== rows) {
+        const buf = t.buffer?.active
+        const pinned = buf ? buf.viewportY >= buf.baseY : true
+        const savedY = buf?.viewportY ?? 0
         t.resize(cols, rows)
+        try {
+          if (pinned) t.scrollToBottom?.()
+          else t.scrollToLine?.(Math.min(savedY, t.buffer.active.baseY))
+        } catch {
+          // ignore
+        }
+        if (cursorLineHighlightEnabled) refreshCursorLineHighlight()
       }
       lastFitCols = cols
       lastFitRows = rows
     }
 
     const runFitOnce = async ({ syncPty = true } = {}) => {
+      const epoch = fitEpoch
       if (!canFit()) return
       const dims = proposeFitDims()
       if (!dims) return
@@ -845,34 +859,39 @@ export default {
       }
 
       // 先改远端 PTY，再改本地 xterm：避免 SIGWINCH/readline 用旧 COLUMNS 把光标打到行首
-      markFitQuiet(400)
       if (needPty && !ptySame) {
+        markFitQuiet(400)
         try {
           await App.ResizeShell(props.machineName, cols, rows)
-          lastPtyCols = cols
-          lastPtyRows = rows
         } catch {
+          // 失败时缩短静默，让随后的 force fit / 重连补一次
+          markFitQuiet(80)
           return
         }
-        if (!canFit()) return
-        const latest = proposeFitDims()
-        if (!latest) return
-        if (latest.cols !== cols || latest.rows !== rows) {
-          fitAgain = true
-          return
-        }
+        if (epoch !== fitEpoch || !canFit()) return
+        lastPtyCols = cols
+        lastPtyRows = rows
       }
 
       applyLocalResize(cols, rows)
       markFitQuiet(220)
+      if (epoch !== fitEpoch || !canFit()) return
+      const latest = proposeFitDims()
+      if (latest && (latest.cols !== cols || latest.rows !== rows)) {
+        // 动画/拖拽期间尺寸仍在变：合并到下一次，而不是紧循环连打 WindowChange
+        scheduleFit({ force: true })
+      }
     }
 
     const runFit = async (opts = {}) => {
       fitAgain = true
       if (fitRunning) return
       fitRunning = true
+      const epoch = fitEpoch
       try {
-        while (fitAgain) {
+        let loops = 0
+        while (fitAgain && epoch === fitEpoch && loops < 4) {
+          loops += 1
           fitAgain = false
           await runFitOnce(opts)
         }
@@ -880,7 +899,7 @@ export default {
         // ignore
       } finally {
         fitRunning = false
-        if (fitAgain) {
+        if (fitAgain && epoch === fitEpoch) {
           queueMicrotask(() => { runFit(opts) })
         }
       }
@@ -889,7 +908,7 @@ export default {
     /** 合并短时间多次布局变化，避免连打 fit 造成页面闪烁 */
     const scheduleFit = (opts = {}) => {
       if (fitDebounceTimer) clearTimeout(fitDebounceTimer)
-      const delay = opts.immediate ? 0 : 64
+      const delay = opts.immediate ? 0 : 100
       fitDebounceTimer = setTimeout(() => {
         fitDebounceTimer = null
         if (!opts.force && Date.now() < fitQuietUntil) return
@@ -906,6 +925,7 @@ export default {
 
     const fitAndResize = (opts = {}) => {
       fitQuietUntil = 0
+      suppressRoUntil = 0
       scheduleFit({
         immediate: true,
         force: true,
@@ -919,7 +939,7 @@ export default {
       term.value.options.lineHeight = shellLineHeight.value || 1.2
       term.value.options.fontFamily = getTerminalFont(shellFontFamily.value).value
       term.value.options.theme = terminalThemeForPreset(effectiveTerminalPreset.value)
-      scheduleFit()
+      scheduleFit({ force: true })
     }
 
     const disposeWebglAddon = () => {
@@ -1055,7 +1075,8 @@ export default {
       initialized = true
       if (props.connected || props.connecting) attachWriter(terminal, { replay: true })
       setupObservers()
-      scheduleFit()
+      if (props.connected) fitAndResize()
+      else scheduleFit()
       terminal.focus()
     }
 
@@ -1099,6 +1120,7 @@ export default {
       lastFitRows = 0
       lastPtyCols = 0
       lastPtyRows = 0
+      fitEpoch += 1
       fitRunning = false
       fitAgain = false
       fitQuietUntil = 0
@@ -1372,6 +1394,7 @@ export default {
       const target = containerRef.value || terminalRef.value
       if (target && window.ResizeObserver) {
         resizeObserver = new ResizeObserver(() => {
+          if (props.suppressResizeObserverFit) return
           if (Date.now() < fitQuietUntil || Date.now() < suppressRoUntil) return
           scheduleFit()
         })
@@ -1395,7 +1418,8 @@ export default {
       }
       if (props.connected || props.connecting) ensureWriter()
       setupObservers()
-      scheduleFit()
+      if (props.connected) fitAndResize()
+      else scheduleFit()
       await nextTick()
       term.value?.focus()
     }
@@ -1407,7 +1431,13 @@ export default {
       }
       if (val || connecting) {
         ensureWriter()
-        scheduleFit()
+        if (val) {
+          lastPtyCols = 0
+          lastPtyRows = 0
+          fitAndResize()
+        } else {
+          scheduleFit()
+        }
         if (props.active && val) {
           scheduleCwdSync()
           await nextTick()

@@ -196,7 +196,7 @@ func (s *LocalShellSession) Resize(cols, rows int) error {
 	cpty := s.cpty
 	s.mu.Unlock()
 	if cpty == nil {
-		return nil
+		return fmt.Errorf("本地终端未连接")
 	}
 	if cols < 1 {
 		cols = 1
