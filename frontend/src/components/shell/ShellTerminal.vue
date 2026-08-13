@@ -213,6 +213,10 @@ export default {
     let fitRaf2 = 0
     let lastFitCols = 0
     let lastFitRows = 0
+    let lastPtyCols = 0
+    let lastPtyRows = 0
+    let fitRunning = false
+    let fitAgain = false
     let fitQuietUntil = 0
     let suppressRoUntil = 0
     let initialized = false
@@ -795,28 +799,90 @@ export default {
       return true
     }
 
-    const runFit = ({ syncPty = true } = {}) => {
-      if (!canFit()) return
+    const markFitQuiet = (ms = 220) => {
+      fitQuietUntil = Date.now() + ms
+      suppressRoUntil = Date.now() + ms
+    }
+
+    const proposeFitDims = () => {
+      let dims
       try {
-        fitAddon.value.fit()
-        const { cols, rows } = term.value
-        // 拒绝异常尺寸，避免把远端 PTY 缩成几列
-        if (!cols || !rows || cols < 20 || rows < 5) return
-        // 行列未变：只压制后续 RO，避免滚动条显隐导致 fit 振荡抖动
-        if (cols === lastFitCols && rows === lastFitRows) {
-          fitQuietUntil = Date.now() + 160
-          suppressRoUntil = Date.now() + 160
-          return
-        }
+        dims = fitAddon.value.proposeDimensions?.()
+      } catch {
+        return null
+      }
+      if (!dims) return null
+      const cols = Math.floor(Number(dims.cols) || 0)
+      const rows = Math.floor(Number(dims.rows) || 0)
+      // 拒绝异常尺寸，避免把远端 PTY 缩成几列
+      if (!cols || !rows || cols < 20 || rows < 5) return null
+      return { cols, rows }
+    }
+
+    const applyLocalResize = (cols, rows) => {
+      const t = term.value
+      if (!t) return
+      if (t.cols !== cols || t.rows !== rows) {
+        t.resize(cols, rows)
+      }
+      lastFitCols = cols
+      lastFitRows = rows
+    }
+
+    const runFitOnce = async ({ syncPty = true } = {}) => {
+      if (!canFit()) return
+      const dims = proposeFitDims()
+      if (!dims) return
+      const { cols, rows } = dims
+      const localSame = term.value.cols === cols && term.value.rows === rows
+      const needPty = syncPty && props.connected
+      const ptySame = lastPtyCols === cols && lastPtyRows === rows
+      if (localSame && (!needPty || ptySame)) {
         lastFitCols = cols
         lastFitRows = rows
-        fitQuietUntil = Date.now() + 220
-        suppressRoUntil = Date.now() + 220
-        // 必须与本地 fit 同步通知远端，否则行列短暂不一致会导致光标跑飞、提示符碎片
-        if (!syncPty || !props.connected) return
-        App.ResizeShell(props.machineName, cols, rows).catch(() => {})
+        markFitQuiet(160)
+        return
+      }
+
+      // 先改远端 PTY，再改本地 xterm：避免 SIGWINCH/readline 用旧 COLUMNS 把光标打到行首
+      markFitQuiet(400)
+      if (needPty && !ptySame) {
+        try {
+          await App.ResizeShell(props.machineName, cols, rows)
+          lastPtyCols = cols
+          lastPtyRows = rows
+        } catch {
+          return
+        }
+        if (!canFit()) return
+        const latest = proposeFitDims()
+        if (!latest) return
+        if (latest.cols !== cols || latest.rows !== rows) {
+          fitAgain = true
+          return
+        }
+      }
+
+      applyLocalResize(cols, rows)
+      markFitQuiet(220)
+    }
+
+    const runFit = async (opts = {}) => {
+      fitAgain = true
+      if (fitRunning) return
+      fitRunning = true
+      try {
+        while (fitAgain) {
+          fitAgain = false
+          await runFitOnce(opts)
+        }
       } catch {
         // ignore
+      } finally {
+        fitRunning = false
+        if (fitAgain) {
+          queueMicrotask(() => { runFit(opts) })
+        }
       }
     }
 
@@ -1031,6 +1097,10 @@ export default {
       initialized = false
       lastFitCols = 0
       lastFitRows = 0
+      lastPtyCols = 0
+      lastPtyRows = 0
+      fitRunning = false
+      fitAgain = false
       fitQuietUntil = 0
       suppressRoUntil = 0
       lastSearchResults = { resultIndex: -1, resultCount: 0, capped: false }
@@ -1346,6 +1416,8 @@ export default {
       } else {
         detachWriter()
         clearCwdSyncTimer()
+        lastPtyCols = 0
+        lastPtyRows = 0
       }
     })
 
