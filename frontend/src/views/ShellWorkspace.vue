@@ -524,12 +524,12 @@ export default {
           searchQueryTimer = null
         }
         if (!searchQuery.value.trim()) return
-        // 先让搜索栏完成绘制，再同步建装饰，避免 Ctrl+F 瞬间整窗卡死
+        // 等搜索栏占位 + fit 完成后再建装饰，避免与 ResizeShell 叠在一起闪
         searchQueryTimer = setTimeout(() => {
           searchQueryTimer = null
           const result = tabsRef.value?.findNext?.()
           searchMatchSummary.value = formatSearchSummary(result)
-        }, 0)
+        }, 32)
       })
     }
 

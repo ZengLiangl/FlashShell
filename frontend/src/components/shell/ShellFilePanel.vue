@@ -14,7 +14,7 @@
       title="拖动调整高度"
       @mousedown="startHeightResize"
     />
-    <div v-if="searchVisible" class="search-bar">
+    <div v-show="searchVisible" class="search-bar">
       <el-input
         ref="searchInputRef"
         v-model="localSearchQuery"
@@ -673,11 +673,13 @@ export default {
     watch(() => props.searchQuery, (v) => { localSearchQuery.value = v })
     watch(localSearchQuery, (v) => emit('update:searchQuery', v))
     watch(() => props.searchVisible, async (visible) => {
+      // 与展开 SFTP 相同：占文档流、先抑制 RO fit，布局稳定后再统一 fit
+      emit('layout-resize-start')
+      await nextTick()
       if (visible) {
-        await nextTick()
         searchInputRef.value?.focus?.()
       }
-      // 搜索浮层不改终端尺寸，避免 fit / ResizeShell 造成闪烁
+      notifyLayout()
     })
 
     watch(expanded, (v) => {
@@ -2429,27 +2431,9 @@ export default {
   box-shadow: none;
 }
 
-/* 仅搜索：浮在终端底部；展开的 SFTP 仍占文档流，避免 inset↔fit 反馈抖动 */
-.shell-file-panel.has-search.collapsed {
-  position: absolute;
-  left: 8px;
-  right: 8px;
-  bottom: 8px;
-  z-index: 5;
-  overflow: hidden;
-  border-radius: 10px;
-  border: 1px solid var(--app-border);
-  background: var(--app-card-bg);
-  box-shadow: 0 8px 24px color-mix(in srgb, #000 28%, transparent);
-}
-
-.shell-file-panel.has-search.collapsed .height-handle {
-  display: none;
-}
-
+/* 仅搜索：与 SFTP 工具条一样占文档流，不挡住终端 */
 .shell-file-panel.has-search.collapsed .search-bar {
   border-bottom: none;
-  padding: 8px 12px;
 }
 
 .height-handle {
@@ -2564,7 +2548,9 @@ export default {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 10px;
+  padding: 6px 8px 6px 10px;
+  min-height: 32px;
+  box-sizing: border-box;
   border-bottom: 1px solid var(--shell-chrome-divider, var(--app-border));
   flex-shrink: 0;
 }
