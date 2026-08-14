@@ -710,6 +710,10 @@ export function StartPortForward(arg1) {
   return window['go']['app']['App']['StartPortForward'](arg1);
 }
 
+export function StartShellCopyToOther(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['StartShellCopyToOther'](arg1, arg2, arg3, arg4);
+}
+
 export function StartShellDownload(arg1, arg2) {
   return window['go']['app']['App']['StartShellDownload'](arg1, arg2);
 }

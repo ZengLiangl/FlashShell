@@ -339,6 +339,26 @@
           <li @click="cutEntry">剪切</li>
           <li v-if="canPaste" @click="pasteEntry">粘贴</li>
           <li @click="copyHere">复制到此处</li>
+          <li
+            v-if="copyToOtherTargets.length === 1"
+            @click="copyToOtherSide(copyToOtherTargets[0])"
+          >复制到另一侧</li>
+          <li
+            v-else-if="copyToOtherTargets.length > 1"
+            class="ctx-has-sub"
+            @mouseenter="copyOtherSubOpen = true"
+            @mouseleave="copyOtherSubOpen = false"
+          >
+            复制到另一侧
+            <ul v-show="copyOtherSubOpen" class="ctx-submenu">
+              <li
+                v-for="t in copyToOtherTargets"
+                :key="t.sessionId"
+                :title="t.label"
+                @click="copyToOtherSide(t)"
+              >{{ t.label }}</li>
+            </ul>
+          </li>
           <li @click="moveToParent">移动到上级目录</li>
           <li @click="moveToPrompt">移动到…</li>
           <li class="ctx-sep" aria-hidden="true"></li>
@@ -503,6 +523,8 @@ export default {
     searchVisible: { type: Boolean, default: false },
     searchQuery: { type: String, default: '' },
     matchSummary: { type: String, default: '' },
+    /** @type {{ sessionId: string, destDir: string, label: string }[]} */
+    copyToOtherTargets: { type: Array, default: () => [] },
   },
   emits: [
     'layout-change',
@@ -567,6 +589,7 @@ export default {
     const treeRenderKey = ref(0)
     const expandedKeys = ref(['/'])
     const ctx = reactive({ visible: false, x: 0, y: 0, row: null })
+    const copyOtherSubOpen = ref(false)
     const ctxMenuRef = ref(null)
     const editorVisible = ref(false)
     const syncVisible = ref(false)
@@ -1527,6 +1550,7 @@ export default {
     const closeMenu = () => {
       ctx.visible = false
       ctx.row = null
+      copyOtherSubOpen.value = false
     }
 
     const reloadFromMenu = async () => {
@@ -1774,6 +1798,34 @@ export default {
         await App.CopyShellRemotePath(props.machineName, row.path, dst)
         ElMessage.success('已复制到此处')
         await reload()
+      } catch (e) {
+        ElMessage.error(String(e))
+      }
+    }
+
+    const copyToOtherSide = async (target) => {
+      const row = ctx.row || selectedRow.value
+      closeMenu()
+      copyOtherSubOpen.value = false
+      if (!row?.path || !props.machineName) return
+      if (!target?.sessionId || !target?.destDir) {
+        ElMessage.warning('请打开另一侧终端并进入目标目录后再复制')
+        return
+      }
+      try {
+        const result = await App.StartShellCopyToOther(
+          props.machineName,
+          row.path,
+          target.sessionId,
+          target.destDir,
+        )
+        const dest = result?.destPath || target.destDir
+        if (result?.mode === 'transfer') {
+          emit('transfer-started', { direction: 'copy', name: row.name })
+          ElMessage.success(`已开始复制到另一侧：${dest}`)
+        } else {
+          ElMessage.success(`已复制到另一侧：${dest}`)
+        }
       } catch (e) {
         ElMessage.error(String(e))
       }
@@ -2381,6 +2433,9 @@ export default {
       cutEntry,
       pasteEntry,
       copyHere,
+      copyToOtherSide,
+      copyToOtherTargets: computed(() => props.copyToOtherTargets || []),
+      copyOtherSubOpen,
       moveToParent,
       moveToPrompt,
       openInTerminal,
@@ -2865,6 +2920,51 @@ export default {
 .ctx-menu li.ctx-sep:hover {
   background: var(--app-border, #e4e7ed);
   color: inherit;
+}
+
+.ctx-menu li.ctx-has-sub {
+  position: relative;
+  padding-right: 28px;
+}
+
+.ctx-menu li.ctx-has-sub::after {
+  content: '›';
+  position: absolute;
+  right: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--app-text-secondary);
+}
+
+.ctx-submenu {
+  position: absolute;
+  left: 100%;
+  top: -4px;
+  margin: 0 0 0 2px;
+  padding: 4px 0;
+  list-style: none;
+  min-width: 200px;
+  max-width: 360px;
+  background: var(--app-card-bg);
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  z-index: 5001;
+}
+
+.ctx-submenu li {
+  padding: 8px 14px;
+  font-size: 13px;
+  color: var(--app-text);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ctx-submenu li:hover {
+  background: var(--app-accent-bg);
+  color: var(--app-accent-color);
 }
 </style>
 

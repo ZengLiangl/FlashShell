@@ -393,6 +393,11 @@ func (a *App) pumpTransferQueue() {
 
 func (a *App) startTransferWorker(cp *define.SftpTransferRecord) {
 	go func() {
+		if cp.Direction == "copy" {
+			a.updateTransferProgress(cp.ID, cp.Transferred, cp.Total, 0)
+			a.finishTransfer(cp.ID, a.runCrossHostCopyTransfer(cp))
+			return
+		}
 		aux, err := a.shellAuxPool.Get(cp.MachineName)
 		if err != nil {
 			a.finishTransfer(cp.ID, err)

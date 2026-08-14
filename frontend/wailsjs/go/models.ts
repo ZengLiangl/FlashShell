@@ -18,6 +18,24 @@ export namespace app {
 	        this.isCustom = source["isCustom"];
 	    }
 	}
+	export class ShellCopyToOtherResult {
+	    mode: string;
+	    transferId?: string;
+	    destPath: string;
+	    sameHost: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new ShellCopyToOtherResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.mode = source["mode"];
+	        this.transferId = source["transferId"];
+	        this.destPath = source["destPath"];
+	        this.sameHost = source["sameHost"];
+	    }
+	}
 	export class SystemFontInfo {
 	    family: string;
 	    mono: boolean;
@@ -1272,10 +1290,12 @@ export namespace define {
 	export class SftpTransferRecord {
 	    id: string;
 	    machineName: string;
+	    sourceMachineName?: string;
 	    direction: string;
 	    name: string;
 	    localPath: string;
 	    remotePath: string;
+	    sourceRemotePath?: string;
 	    isDir: boolean;
 	    useCompress: boolean;
 	    conflictAction: string;
@@ -1299,10 +1319,12 @@ export namespace define {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.machineName = source["machineName"];
+	        this.sourceMachineName = source["sourceMachineName"];
 	        this.direction = source["direction"];
 	        this.name = source["name"];
 	        this.localPath = source["localPath"];
 	        this.remotePath = source["remotePath"];
+	        this.sourceRemotePath = source["sourceRemotePath"];
 	        this.isDir = source["isDir"];
 	        this.useCompress = source["useCompress"];
 	        this.conflictAction = source["conflictAction"];
