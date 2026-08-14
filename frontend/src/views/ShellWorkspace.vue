@@ -85,6 +85,7 @@
           @update:split-session-ids="(v) => $emit('update:split-session-ids', v)"
           @close-session="(name) => $emit('close-session', name)"
           @close-sessions="(names) => $emit('close-sessions', names)"
+          @duplicate-session="(name) => $emit('duplicate-session', name)"
           @reconnect="onReconnect"
           @clear="onClear"
           @open-picker="() => openPicker()"
@@ -270,7 +271,7 @@ export default {
     selectedProjectName: { type: String, default: '' },
   },
   emits: [
-    'back', 'connect', 'disconnect', 'close-session', 'close-sessions', 'reconnect', 'test', 'add-machine', 'edit-machine',
+    'back', 'connect', 'disconnect', 'close-session', 'close-sessions', 'duplicate-session', 'reconnect', 'test', 'add-machine', 'edit-machine',
     'copy-machine', 'delete-machine',
     'add-local', 'add-local-command', 'open-window', 'start-resize', 'update:activeMachine', 'history-changed',
     'update:broadcast-enabled', 'update:broadcast-targets', 'update:split-session-ids',

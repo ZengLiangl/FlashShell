@@ -212,6 +212,7 @@
 
       <ul v-if="tabMenu.visible" class="pane-ctx-menu" :style="{ left: tabMenu.x + 'px', top: tabMenu.y + 'px' }"
         @mousedown.stop @click.stop>
+        <li @mousedown.prevent="onTabMenuDuplicate">复制标签页</li>
         <li @mousedown.prevent="onTabMenuClose">关闭</li>
         <li :class="{ disabled: !tabMenuHasRight }" @mousedown.prevent="onTabMenuCloseRight">关闭右侧</li>
         <li @mousedown.prevent="onTabMenuCloseAll">全部关闭</li>
@@ -331,6 +332,7 @@ export default {
   emits: [
     'update:activeMachine', 'close-session', 'close-sessions', 'clear', 'open-picker', 'add-local',
     'back', 'open-search', 'reconnect', 'search-result', 'open-transfer', 'open-command-palette', 'cwd-sync',
+    'duplicate-session',
     'update:broadcast-enabled', 'update:broadcast-targets', 'update:split-session-ids',
     'reorder-tabs',
     'change-view', 'select-project', 'focus-session',
@@ -607,6 +609,12 @@ export default {
       tabMenu.y = e.clientY
       tabMenu.visible = true
       activeTab.value = sessionId
+    }
+
+    const onTabMenuDuplicate = () => {
+      const id = tabMenu.sessionId
+      hideTabMenu()
+      if (id) emit('duplicate-session', id)
     }
 
     const onTabMenuClose = () => {
@@ -982,6 +990,7 @@ export default {
       setTerminalRef,
       onTabRemove,
       onTabContextMenu,
+      onTabMenuDuplicate,
       onTabMenuClose,
       onTabMenuCloseRight,
       onTabMenuCloseAll,
