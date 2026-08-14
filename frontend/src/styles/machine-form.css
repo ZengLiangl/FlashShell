@@ -1,0 +1,172 @@
+/* 机器表单分块：侧栏 / 弹窗共用，强调卡片与输入井对比 */
+
+.machine-edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.machine-form-section {
+  border: 1px solid color-mix(in srgb, var(--app-border) 78%, transparent);
+  border-radius: 14px;
+  background: var(--app-card-bg);
+  box-shadow:
+    0 1px 0 color-mix(in srgb, #fff 6%, transparent) inset,
+    0 8px 20px rgba(0, 0, 0, 0.12);
+  padding: 14px;
+}
+
+html:not(.dark) .machine-form-section {
+  box-shadow: var(--app-surface-shadow);
+  border-color: var(--app-card-border);
+}
+
+.machine-form-section-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  min-height: 22px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--app-text);
+}
+
+.machine-form-section-head .el-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--app-accent-color) 14%, transparent);
+  color: var(--app-accent-color);
+  font-size: 13px;
+}
+
+.machine-form-section-head .section-head-action {
+  margin-left: auto;
+  padding: 0 4px;
+}
+
+.machine-form-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.machine-edit-form .el-form-item {
+  margin-bottom: 14px;
+}
+
+.machine-edit-form .el-form-item:last-child {
+  margin-bottom: 0;
+}
+
+.machine-edit-form .el-form-item__label {
+  margin-bottom: 6px !important;
+  padding-bottom: 0 !important;
+  line-height: 1.25;
+  height: auto !important;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--app-text-muted);
+}
+
+.machine-edit-form .el-input__wrapper,
+.machine-edit-form .el-select__wrapper,
+.machine-edit-form .el-textarea__inner {
+  min-height: 38px;
+  border-radius: 10px !important;
+  background: color-mix(in srgb, var(--app-inset-bg) 88%, #000 8%) !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-border) 70%, transparent) inset !important;
+  transition: box-shadow 0.15s ease, background 0.15s ease;
+}
+
+html:not(.dark) .machine-edit-form .el-input__wrapper,
+html:not(.dark) .machine-edit-form .el-select__wrapper,
+html:not(.dark) .machine-edit-form .el-textarea__inner {
+  background: var(--app-inset-bg) !important;
+}
+
+.machine-edit-form .el-input__wrapper:hover,
+.machine-edit-form .el-select__wrapper:hover,
+.machine-edit-form .el-textarea__inner:hover {
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--app-accent-color) 45%, var(--app-border)) inset !important;
+}
+
+.machine-edit-form .el-input__wrapper.is-focus,
+.machine-edit-form .el-select__wrapper.is-focused,
+.machine-edit-form .el-textarea__inner:focus {
+  background: color-mix(in srgb, var(--app-card-bg) 70%, var(--app-inset-bg)) !important;
+  box-shadow: 0 0 0 1px var(--app-accent-color) inset !important;
+}
+
+.machine-edit-form .el-textarea__inner {
+  min-height: 72px;
+  padding: 10px 12px;
+  line-height: 1.45;
+}
+
+.machine-edit-form .el-input-number {
+  width: 100%;
+}
+
+.machine-edit-form .el-input-number .el-input__wrapper {
+  padding-left: 8px;
+  padding-right: 8px;
+}
+
+.machine-form-row-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.machine-form-row-2 .el-form-item {
+  margin-bottom: 14px;
+}
+
+.section-link-btn {
+  margin-top: 6px;
+  height: auto;
+  padding: 0;
+  font-size: 12px;
+}
+
+.machine-form-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent);
+  background: color-mix(in srgb, var(--app-inset-bg) 80%, transparent);
+}
+
+.machine-form-switch-label {
+  font-size: 13px;
+  color: var(--app-text);
+}
+
+.key-file-input {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  align-items: center;
+}
+
+.key-file-input .el-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.field-hint {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--app-text-muted);
+}

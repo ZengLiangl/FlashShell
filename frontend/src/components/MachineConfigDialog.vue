@@ -213,269 +213,325 @@
         <el-dialog
             v-model="machineEditVisible"
             :title="editingMachine ? '编辑机器' : '添加机器'"
-            width="600px"
-            class="settings-sub-dialog"
+            width="520px"
+            class="settings-sub-dialog machine-edit-dialog"
             append-to-body
         >
-            <el-form :model="machineForm" :rules="machineRules" ref="machineFormRef" label-width="100px">
-                <el-form-item label="机器名称" prop="name">
-                    <el-input v-model="machineForm.name" placeholder="请输入机器名称" />
-                </el-form-item>
-
-                <el-form-item label="分组" prop="group">
-                    <div class="group-field-row">
-                        <el-select
-                            v-model="machineForm.group"
-                            clearable
-                            filterable
-                            allow-create
-                            default-first-option
-                            placeholder="选择或输入分组，留空为默认分组"
-                            style="width: 100%"
-                        >
-                            <el-option
-                                v-for="g in groupOptions"
-                                :key="g"
-                                :label="g"
-                                :value="g === DEFAULT_MACHINE_GROUP ? '' : g"
-                            />
-                        </el-select>
-                        <el-button text type="primary" size="small" @click="applyGroupDefaultsToForm">应用分组默认</el-button>
-                    </div>
-                </el-form-item>
-
-                <el-form-item label="标签">
-                    <el-select
-                        v-model="machineForm.tags"
-                        multiple
-                        filterable
-                        allow-create
-                        default-first-option
-                        collapse-tags
-                        collapse-tags-tooltip
-                        placeholder="输入后回车添加标签"
-                        style="width: 100%"
-                    >
-                        <el-option
-                            v-for="t in knownTagOptions"
-                            :key="t"
-                            :label="t"
-                            :value="t"
-                        />
-                    </el-select>
-                </el-form-item>
-
-                <el-form-item label="备注">
-                    <el-input
-                        v-model="machineForm.notes"
-                        type="textarea"
-                        :rows="3"
-                        placeholder="运维备注（支持检索）"
-                        maxlength="4000"
-                        show-word-limit
-                    />
-                </el-form-item>
-
-                <el-form-item label="全局帐号">
-                    <el-select
-                        v-model="selectedAccountId"
-                        clearable
-                        placeholder="选择后自动填充用户名和密码"
-                        style="width: 100%"
-                        @change="applyGlobalAccount"
-                    >
-                        <el-option
-                            v-for="account in globalAccounts"
-                            :key="account.id"
-                            :label="account.name"
-                            :value="account.id"
-                        />
-                    </el-select>
-                </el-form-item>
-
-                <el-form-item label="密钥文件" prop="key_file">
-                    <div class="key-file-input">
-                        <el-input v-model="machineForm.key_file" placeholder="请选择密钥文件" readonly />
-                        <el-tooltip content="选择文件" placement="top">
-                            <el-button type="primary" circle @click="selectKeyFile">
-                                <el-icon><Folder /></el-icon>
+            <el-form
+                class="machine-edit-form"
+                :model="machineForm"
+                :rules="machineRules"
+                ref="machineFormRef"
+                label-position="top"
+                require-asterisk-position="right"
+            >
+                <section class="machine-form-section">
+                    <header class="machine-form-section-head">
+                        <el-icon><Monitor /></el-icon>
+                        <span>通用</span>
+                    </header>
+                    <div class="machine-form-section-body">
+                        <el-form-item label="名称" prop="name">
+                            <el-input v-model="machineForm.name" placeholder="例如：生产机 / taj-119" />
+                        </el-form-item>
+                        <el-form-item label="分组" prop="group">
+                            <el-select
+                                v-model="machineForm.group"
+                                clearable
+                                filterable
+                                allow-create
+                                default-first-option
+                                placeholder="选择或输入分组"
+                                style="width: 100%"
+                            >
+                                <el-option
+                                    v-for="g in groupOptions"
+                                    :key="g"
+                                    :label="g"
+                                    :value="g === DEFAULT_MACHINE_GROUP ? '' : g"
+                                />
+                            </el-select>
+                            <el-button class="section-link-btn" text type="primary" size="small" @click="applyGroupDefaultsToForm">
+                                应用分组默认
                             </el-button>
-                        </el-tooltip>
+                        </el-form-item>
+                        <el-form-item label="标签">
+                            <el-select
+                                v-model="machineForm.tags"
+                                multiple
+                                filterable
+                                allow-create
+                                default-first-option
+                                collapse-tags
+                                collapse-tags-tooltip
+                                placeholder="输入后回车添加标签"
+                                style="width: 100%"
+                            >
+                                <el-option v-for="t in knownTagOptions" :key="t" :label="t" :value="t" />
+                            </el-select>
+                        </el-form-item>
+                        <el-form-item label="备注">
+                            <el-input
+                                v-model="machineForm.notes"
+                                type="textarea"
+                                :rows="3"
+                                placeholder="运维备注（支持检索）"
+                                maxlength="4000"
+                                show-word-limit
+                            />
+                        </el-form-item>
+                        <el-form-item label="主机图标">
+                            <el-select v-model="machineForm.icon" filterable allow-create clearable placeholder="预设或自定义 emoji" style="width: 100%">
+                                <el-option
+                                    v-for="opt in hostIconPresets"
+                                    :key="opt.id || 'default'"
+                                    :label="opt.emoji ? `${opt.emoji} ${opt.label}` : opt.label"
+                                    :value="opt.id"
+                                />
+                            </el-select>
+                        </el-form-item>
                     </div>
-                </el-form-item>
+                </section>
 
-                <el-divider content-position="left">连接信息</el-divider>
+                <section class="machine-form-section">
+                    <header class="machine-form-section-head">
+                        <el-icon><Location /></el-icon>
+                        <span>地址</span>
+                    </header>
+                    <div class="machine-form-section-body">
+                        <el-form-item label="主机地址" prop="host">
+                            <el-input v-model="machineForm.host" placeholder="IP 或主机名" />
+                        </el-form-item>
+                    </div>
+                </section>
 
-                <el-form-item label="主机地址" prop="host">
-                    <el-input v-model="machineForm.host" placeholder="请输入主机地址" />
-                </el-form-item>
-
-                <el-form-item label="端口" prop="port">
-                    <el-input-number v-model="machineForm.port" :min="1" :max="65535" placeholder="SSH端口" />
-                </el-form-item>
-
-                <el-form-item label="用户名" prop="user">
-                    <el-input v-model="machineForm.user" placeholder="请输入用户名" />
-                </el-form-item>
-
-                <el-form-item label="密码" prop="password">
-                    <el-input v-model="machineForm.password" type="password" placeholder="请输入密码（可选）" show-password />
-                </el-form-item>
-                <el-form-item label="密钥口令">
-                    <el-input v-model="machineForm.keyPassphrase" type="password" placeholder="加密私钥口令（可选）" show-password clearable />
-                </el-form-item>
-
-                <el-form-item label="主机图标">
-                    <el-select v-model="machineForm.icon" filterable allow-create clearable placeholder="预设或自定义 emoji" style="width: 100%">
-                        <el-option
-                            v-for="opt in hostIconPresets"
-                            :key="opt.id || 'default'"
-                            :label="opt.emoji ? `${opt.emoji} ${opt.label}` : opt.label"
-                            :value="opt.id"
-                        />
-                    </el-select>
-                </el-form-item>
-
-                <el-form-item label="跳板机">
-                    <el-input v-model="machineForm.proxyJump" placeholder="单跳：机器名或 host[:port]（多跳请用下方跳板链）" clearable />
-                </el-form-item>
-
-                <el-form-item label="跳板链">
-                    <el-select
-                        v-model="machineForm.jumpChain"
-                        multiple
-                        filterable
-                        allow-create
-                        default-first-option
-                        collapse-tags
-                        collapse-tags-tooltip
-                        placeholder="按顺序选择或输入跳板（优先于单跳跳板机）"
-                        style="width: 100%"
-                    >
-                        <el-option
-                            v-for="m in machines"
-                            :key="m.id || m.name"
-                            :label="m.name"
-                            :value="m.name"
-                        />
-                    </el-select>
-                    <div v-if="machineForm.jumpChain?.length" class="jump-chain-order">
-                        <div
-                            v-for="(hop, idx) in machineForm.jumpChain"
-                            :key="`${hop}-${idx}`"
-                            class="jump-chain-row"
-                        >
-                            <span class="jump-chain-idx">{{ idx + 1 }}</span>
-                            <span class="jump-chain-name">{{ hop }}</span>
-                            <el-button size="small" text :disabled="idx === 0" @click="moveJumpHop(idx, -1)">上移</el-button>
-                            <el-button size="small" text :disabled="idx === machineForm.jumpChain.length - 1" @click="moveJumpHop(idx, 1)">下移</el-button>
+                <section class="machine-form-section">
+                    <header class="machine-form-section-head">
+                        <el-icon><Key /></el-icon>
+                        <span>端口与凭据</span>
+                    </header>
+                    <div class="machine-form-section-body">
+                        <div class="machine-form-row-2">
+                            <el-form-item label="端口" prop="port">
+                                <el-input-number v-model="machineForm.port" :min="1" :max="65535" controls-position="right" />
+                            </el-form-item>
+                            <el-form-item label="用户名" prop="user">
+                                <el-input v-model="machineForm.user" placeholder="SSH 用户名" />
+                            </el-form-item>
                         </div>
+                        <el-form-item label="全局帐号">
+                            <el-select
+                                v-model="selectedAccountId"
+                                clearable
+                                placeholder="选择后自动填充用户名和密码"
+                                style="width: 100%"
+                                @change="applyGlobalAccount"
+                            >
+                                <el-option
+                                    v-for="account in globalAccounts"
+                                    :key="account.id"
+                                    :label="account.name"
+                                    :value="account.id"
+                                />
+                            </el-select>
+                        </el-form-item>
+                        <el-form-item label="密码" prop="password">
+                            <el-input v-model="machineForm.password" type="password" placeholder="可选" show-password />
+                        </el-form-item>
+                        <el-form-item label="密钥文件" prop="key_file">
+                            <div class="key-file-input">
+                                <el-input v-model="machineForm.key_file" placeholder="私钥路径" readonly />
+                                <el-tooltip content="选择文件" placement="top">
+                                    <el-button type="primary" @click="selectKeyFile">
+                                        <el-icon><Folder /></el-icon>
+                                    </el-button>
+                                </el-tooltip>
+                            </div>
+                        </el-form-item>
+                        <el-form-item label="密钥口令">
+                            <el-input v-model="machineForm.keyPassphrase" type="password" placeholder="加密私钥口令（可选）" show-password clearable />
+                        </el-form-item>
                     </div>
-                    <p class="field-hint">多跳时按从左到右顺序连接，最后一跳再连目标主机</p>
-                </el-form-item>
+                </section>
 
-                <el-divider content-position="left">每主机代理</el-divider>
-                <el-form-item label="代理模式">
-                    <el-select v-model="machineForm.proxyOverride.mode" style="width: 100%">
-                        <el-option label="继承全局" value="inherit" />
-                        <el-option label="直连（不走代理）" value="none" />
-                        <el-option label="独立代理" value="manual" />
-                    </el-select>
-                </el-form-item>
-                <template v-if="machineForm.proxyOverride.mode === 'manual'">
-                    <el-form-item label="代理类型">
-                        <el-select v-model="machineForm.proxyOverride.type" style="width: 100%">
-                            <el-option label="HTTP" value="http" />
-                            <el-option label="SOCKS5" value="socks" />
-                        </el-select>
-                    </el-form-item>
-                    <el-form-item label="代理主机">
-                        <el-input v-model="machineForm.proxyOverride.host" placeholder="主机" />
-                    </el-form-item>
-                    <el-form-item label="代理端口">
-                        <el-input-number v-model="machineForm.proxyOverride.port" :min="1" :max="65535" />
-                    </el-form-item>
-                    <el-form-item label="代理用户">
-                        <el-input v-model="machineForm.proxyOverride.user" clearable />
-                    </el-form-item>
-                    <el-form-item label="代理密码">
-                        <el-input v-model="machineForm.proxyOverride.password" type="password" show-password clearable />
-                    </el-form-item>
-                </template>
+                <section class="machine-form-section">
+                    <header class="machine-form-section-head">
+                        <el-icon><Link /></el-icon>
+                        <span>跳板与代理</span>
+                    </header>
+                    <div class="machine-form-section-body">
+                        <el-form-item label="跳板机">
+                            <el-input v-model="machineForm.proxyJump" placeholder="单跳：机器名或 host[:port]" clearable />
+                        </el-form-item>
+                        <el-form-item label="跳板链">
+                            <el-select
+                                v-model="machineForm.jumpChain"
+                                multiple
+                                filterable
+                                allow-create
+                                default-first-option
+                                collapse-tags
+                                collapse-tags-tooltip
+                                placeholder="按顺序选择或输入跳板（优先于单跳）"
+                                style="width: 100%"
+                            >
+                                <el-option
+                                    v-for="m in machines"
+                                    :key="m.id || m.name"
+                                    :label="m.name"
+                                    :value="m.name"
+                                />
+                            </el-select>
+                            <div v-if="machineForm.jumpChain?.length" class="jump-chain-order">
+                                <div
+                                    v-for="(hop, idx) in machineForm.jumpChain"
+                                    :key="`${hop}-${idx}`"
+                                    class="jump-chain-row"
+                                >
+                                    <span class="jump-chain-idx">{{ idx + 1 }}</span>
+                                    <span class="jump-chain-name">{{ hop }}</span>
+                                    <el-button size="small" text :disabled="idx === 0" @click="moveJumpHop(idx, -1)">上移</el-button>
+                                    <el-button size="small" text :disabled="idx === machineForm.jumpChain.length - 1" @click="moveJumpHop(idx, 1)">下移</el-button>
+                                </div>
+                            </div>
+                            <p class="field-hint">多跳时按从左到右顺序连接，最后一跳再连目标主机</p>
+                        </el-form-item>
+                        <el-form-item label="代理模式">
+                            <el-select v-model="machineForm.proxyOverride.mode" style="width: 100%">
+                                <el-option label="继承全局" value="inherit" />
+                                <el-option label="直连（不走代理）" value="none" />
+                                <el-option label="独立代理" value="manual" />
+                            </el-select>
+                        </el-form-item>
+                        <template v-if="machineForm.proxyOverride.mode === 'manual'">
+                            <el-form-item label="代理类型">
+                                <el-select v-model="machineForm.proxyOverride.type" style="width: 100%">
+                                    <el-option label="HTTP" value="http" />
+                                    <el-option label="SOCKS5" value="socks" />
+                                </el-select>
+                            </el-form-item>
+                            <el-form-item label="代理主机">
+                                <el-input v-model="machineForm.proxyOverride.host" placeholder="主机" />
+                            </el-form-item>
+                            <el-form-item label="代理端口">
+                                <el-input-number v-model="machineForm.proxyOverride.port" :min="1" :max="65535" style="width: 100%" />
+                            </el-form-item>
+                            <el-form-item label="代理用户">
+                                <el-input v-model="machineForm.proxyOverride.user" clearable />
+                            </el-form-item>
+                            <el-form-item label="代理密码">
+                                <el-input v-model="machineForm.proxyOverride.password" type="password" show-password clearable />
+                            </el-form-item>
+                        </template>
+                    </div>
+                </section>
 
-                <el-divider content-position="left">高级选项</el-divider>
-                <el-form-item label="旧设备算法">
-                    <el-switch v-model="machineForm.legacyAlgorithms" active-text="启用兼容算法" />
-                </el-form-item>
-                <el-form-item label="跳过 ECDSA 主机密钥">
-                    <el-switch v-model="machineForm.skipEcdsaHostKey" />
-                </el-form-item>
-                <el-form-item label="SFTP / 终端编码">
-                    <el-select v-model="machineForm.sftpEncoding" style="width: 100%">
-                        <el-option label="自动" value="auto" />
-                        <el-option label="UTF-8" value="utf-8" />
-                        <el-option label="GB18030（中文 Windows 远端）" value="gb18030" />
-                    </el-select>
-                    <p class="field-hint">影响 SFTP 文件名编解码；远端中文乱码时优先试 GB18030</p>
-                </el-form-item>
-                <el-form-item label="文件协议">
-                    <el-select v-model="machineForm.sftpFileProtocol" style="width: 100%">
-                        <el-option label="自动（SFTP 优先，失败回退 SCP）" value="auto" />
-                        <el-option label="仅 SFTP" value="sftp" />
-                        <el-option label="仅 SCP" value="scp" />
-                    </el-select>
-                    <p class="field-hint">远端无 SFTP 子系统时可用 SCP 回退完成浏览与传输</p>
-                </el-form-item>
-                <el-form-item label="Sudo SFTP">
-                    <el-switch
-                        v-model="machineForm.sftpSudo"
-                        :disabled="machineForm.sftpFileProtocol === 'scp'"
-                        active-text="以 sudo 提权打开 SFTP"
-                    />
-                    <p class="field-hint">需密码认证与远端 sudo 权限；与「仅 SCP」互斥。用于读写 /etc 等受保护路径</p>
-                </el-form-item>
-                <el-form-item label="启动命令">
-                    <el-input v-model="machineForm.startupCommand" placeholder="连接后自动执行（单行）" clearable />
-                </el-form-item>
-                <el-form-item label="Agent 转发">
-                    <el-switch v-model="machineForm.agentForwarding" active-text="启用 SSH Agent 转发" />
-                </el-form-item>
-                <el-form-item label="终端配色">
-                    <el-select v-model="machineForm.terminalPreset" clearable placeholder="跟随全局主题" style="width: 100%">
-                        <el-option label="跟随全局" value="" />
-                        <el-option v-for="preset in terminalPresetOptions" :key="preset.id" :label="preset.label" :value="preset.id" />
-                    </el-select>
-                </el-form-item>
+                <section class="machine-form-section">
+                    <header class="machine-form-section-head">
+                        <el-icon><FolderOpened /></el-icon>
+                        <span>SFTP 设置</span>
+                    </header>
+                    <div class="machine-form-section-body">
+                        <el-form-item label="文件协议">
+                            <el-select v-model="machineForm.sftpFileProtocol" style="width: 100%">
+                                <el-option label="自动（SFTP 优先，失败回退 SCP）" value="auto" />
+                                <el-option label="仅 SFTP" value="sftp" />
+                                <el-option label="仅 SCP" value="scp" />
+                            </el-select>
+                            <p class="field-hint">远端无 SFTP 子系统时可用 SCP 回退完成浏览与传输</p>
+                        </el-form-item>
+                        <el-form-item label="文件名编码">
+                            <el-select v-model="machineForm.sftpEncoding" style="width: 100%">
+                                <el-option label="自动" value="auto" />
+                                <el-option label="UTF-8" value="utf-8" />
+                                <el-option label="GB18030（中文 Windows 远端）" value="gb18030" />
+                            </el-select>
+                            <p class="field-hint">影响 SFTP 文件名编解码；远端中文乱码时优先试 GB18030</p>
+                        </el-form-item>
+                        <el-form-item label="Sudo 提权">
+                            <div class="machine-form-switch-row">
+                                <span class="machine-form-switch-label">以 sudo 打开 SFTP</span>
+                                <el-switch
+                                    v-model="machineForm.sftpSudo"
+                                    :disabled="machineForm.sftpFileProtocol === 'scp'"
+                                />
+                            </div>
+                            <p class="field-hint">需密码认证与远端 sudo 权限；与「仅 SCP」互斥</p>
+                        </el-form-item>
+                    </div>
+                </section>
 
-                <el-divider content-position="left">SSH 隧道</el-divider>
-                <div class="tunnel-head">
-                    <span class="tunnel-hint">连接成功后自动建立；本地转发：本机端口 → 远端地址</span>
-                    <el-button size="small" text type="primary" class="tunnel-add-btn" @click="addTunnel">
-                        <el-icon><Plus /></el-icon>
-                        添加隧道
-                    </el-button>
-                </div>
-                <div
-                    v-for="(tun, idx) in machineForm.tunnels"
-                    :key="idx"
-                    class="tunnel-row"
-                >
-                    <el-switch v-model="tun.enabled" size="small" />
-                    <el-select v-model="tun.type" size="small" style="width: 88px">
-                        <el-option label="本地" value="local" />
-                        <el-option label="远程" value="remote" />
-                        <el-option label="SOCKS" value="dynamic" />
-                    </el-select>
-                    <el-input v-model="tun.name" size="small" placeholder="名称" style="width: 72px" />
-                    <el-input-number v-model="tun.localPort" size="small" :min="1" :max="65535" controls-position="right" style="width: 96px" />
-                    <template v-if="tun.type !== 'dynamic'">
-                        <el-input v-model="tun.remoteHost" size="small" placeholder="远端主机" style="width: 96px" />
-                        <el-input-number v-model="tun.remotePort" size="small" :min="1" :max="65535" controls-position="right" style="width: 96px" />
-                    </template>
-                    <el-button size="small" text type="danger" @click="machineForm.tunnels.splice(idx, 1)">
-                        <el-icon><Delete /></el-icon>
-                    </el-button>
-                </div>
+                <section class="machine-form-section">
+                    <header class="machine-form-section-head">
+                        <el-icon><Setting /></el-icon>
+                        <span>高级选项</span>
+                    </header>
+                    <div class="machine-form-section-body">
+                        <el-form-item label="旧设备算法">
+                            <div class="machine-form-switch-row">
+                                <span class="machine-form-switch-label">启用兼容算法</span>
+                                <el-switch v-model="machineForm.legacyAlgorithms" />
+                            </div>
+                        </el-form-item>
+                        <el-form-item label="主机密钥">
+                            <div class="machine-form-switch-row">
+                                <span class="machine-form-switch-label">跳过 ECDSA 主机密钥</span>
+                                <el-switch v-model="machineForm.skipEcdsaHostKey" />
+                            </div>
+                        </el-form-item>
+                        <el-form-item label="启动命令">
+                            <el-input v-model="machineForm.startupCommand" placeholder="连接后自动执行（单行）" clearable />
+                        </el-form-item>
+                        <el-form-item label="Agent 转发">
+                            <div class="machine-form-switch-row">
+                                <span class="machine-form-switch-label">启用 SSH Agent 转发</span>
+                                <el-switch v-model="machineForm.agentForwarding" />
+                            </div>
+                        </el-form-item>
+                        <el-form-item label="终端配色">
+                            <el-select v-model="machineForm.terminalPreset" clearable placeholder="跟随全局主题" style="width: 100%">
+                                <el-option label="跟随全局" value="" />
+                                <el-option v-for="preset in terminalPresetOptions" :key="preset.id" :label="preset.label" :value="preset.id" />
+                            </el-select>
+                        </el-form-item>
+                    </div>
+                </section>
+
+                <section class="machine-form-section">
+                    <header class="machine-form-section-head">
+                        <el-icon><Share /></el-icon>
+                        <span>SSH 隧道</span>
+                        <el-button class="section-head-action" size="small" text type="primary" @click="addTunnel">
+                            <el-icon><Plus /></el-icon>
+                            添加
+                        </el-button>
+                    </header>
+                    <div class="machine-form-section-body">
+                        <p class="field-hint tunnel-top-hint">连接成功后自动建立；本地转发：本机端口 → 远端地址</p>
+                        <div
+                            v-for="(tun, idx) in machineForm.tunnels"
+                            :key="idx"
+                            class="tunnel-row"
+                        >
+                            <el-switch v-model="tun.enabled" size="small" />
+                            <el-select v-model="tun.type" size="small" style="width: 88px">
+                                <el-option label="本地" value="local" />
+                                <el-option label="远程" value="remote" />
+                                <el-option label="SOCKS" value="dynamic" />
+                            </el-select>
+                            <el-input v-model="tun.name" size="small" placeholder="名称" style="width: 72px" />
+                            <el-input-number v-model="tun.localPort" size="small" :min="1" :max="65535" controls-position="right" style="width: 96px" />
+                            <template v-if="tun.type !== 'dynamic'">
+                                <el-input v-model="tun.remoteHost" size="small" placeholder="远端主机" style="width: 96px" />
+                                <el-input-number v-model="tun.remotePort" size="small" :min="1" :max="65535" controls-position="right" style="width: 96px" />
+                            </template>
+                            <el-button size="small" text type="danger" @click="machineForm.tunnels.splice(idx, 1)">
+                                <el-icon><Delete /></el-icon>
+                            </el-button>
+                        </div>
+                        <p v-if="!machineForm.tunnels?.length" class="tunnel-empty">暂无隧道，点击右上角添加</p>
+                    </div>
+                </section>
             </el-form>
 
             <template #footer>
@@ -647,6 +703,7 @@ import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
     Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid, Close, Check, Monitor, VideoPlay, Setting,
+    Location, Key, Link, Share,
 } from '@element-plus/icons-vue'
 import {
     GetMachines,
@@ -697,6 +754,7 @@ export default {
     name: 'MachineConfigDialog',
     components: {
         Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid, Close, Check, Monitor, VideoPlay, Setting,
+        Location, Key, Link, Share,
         MachineContextMenu,
         TextOverflowTooltip,
     },
@@ -2006,40 +2064,31 @@ export default {
     display: flex;
     gap: 8px;
     width: 100%;
+    align-items: center;
 }
 
-.group-field-row {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-    width: 100%;
+.key-file-input .el-input {
+    flex: 1;
+    min-width: 0;
 }
 
 .field-hint {
-    margin: 4px 0 0;
+    margin: 6px 0 0;
     font-size: 12px;
     color: var(--el-text-color-secondary);
     line-height: 1.4;
 }
 
-.tunnel-head {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-bottom: 10px;
-    flex-wrap: wrap;
+.tunnel-top-hint {
+    margin-bottom: 8px;
 }
 
-.tunnel-hint {
+.tunnel-empty {
     margin: 0;
+    padding: 12px 0;
+    text-align: center;
     font-size: 12px;
-    color: var(--app-text-muted);
-    line-height: 1.4;
-}
-
-.tunnel-add-btn {
-    padding: 0;
-    height: auto;
+    color: var(--app-text-muted, #909399);
 }
 
 .tunnel-row {
