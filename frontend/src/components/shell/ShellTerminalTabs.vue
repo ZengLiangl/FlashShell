@@ -436,13 +436,16 @@ export default {
     })
 
     const nextTickFit = (name) => {
-      setTimeout(() => {
-        if (splitViewVisible.value) {
-          props.splitSessionIds.forEach((id) => terminalRefs.value[id]?.fitAndResize?.())
-        } else {
-          terminalRefs.value[name]?.fitAndResize?.()
-        }
-      }, 40)
+      // 切 tab 后立刻 fit，勿再拖 40ms，否则重建终端会先以默认行列露一帧
+      nextTick(() => {
+        requestAnimationFrame(() => {
+          if (splitViewVisible.value) {
+            props.splitSessionIds.forEach((id) => terminalRefs.value[id]?.fitAndResize?.())
+          } else {
+            terminalRefs.value[name]?.fitAndResize?.()
+          }
+        })
+      })
     }
 
     watch(

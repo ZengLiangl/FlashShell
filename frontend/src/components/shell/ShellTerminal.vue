@@ -1,6 +1,7 @@
 <template>
   <div
     class="shell-terminal"
+    :class="{ 'is-size-pending': !sizeReady }"
     ref="containerRef"
     @contextmenu.prevent="onContextMenu"
     @mousedown="onPaneFocus"
@@ -140,6 +141,8 @@ export default {
     const ctxMenuRef = ref(null)
     const term = ref(null)
     const fitAddon = ref(null)
+    /** 首次按容器 fit 完成前隐藏画面，避免 80×24 缩在左上角闪一帧 */
+    const sizeReady = ref(false)
     const ctx = reactive({ visible: false, x: 0, y: 0, selection: '' })
     const { shellFontSize, shellLineHeight, terminalPreset, shellFontFamily } = useTheme()
     const displayName = computed(() => props.tabLabel || props.machineName || '')
@@ -840,6 +843,31 @@ export default {
       }
       lastFitCols = cols
       lastFitRows = rows
+      sizeReady.value = true
+    }
+
+    /**
+     * 打开后立刻按容器尺寸同步本地行列，再回放缓冲。
+     * 否则默认 80×24 先露一帧，满屏日志会缩在左上角再撑开。
+     */
+    const syncLocalFitFromAddon = (terminal, fit) => {
+      let dims
+      try {
+        dims = fit?.proposeDimensions?.()
+      } catch {
+        return false
+      }
+      if (!dims) return false
+      const cols = Math.floor(Number(dims.cols) || 0)
+      const rows = Math.floor(Number(dims.rows) || 0)
+      if (!cols || !rows || cols < 20 || rows < 5) return false
+      if (terminal.cols !== cols || terminal.rows !== rows) {
+        terminal.resize(cols, rows)
+      }
+      lastFitCols = cols
+      lastFitRows = rows
+      sizeReady.value = true
+      return true
     }
 
     const runFitOnce = async ({ syncPty = true } = {}) => {
@@ -854,11 +882,17 @@ export default {
       if (localSame && (!needPty || ptySame)) {
         lastFitCols = cols
         lastFitRows = rows
+        sizeReady.value = true
         markFitQuiet(160)
         return
       }
 
-      // 先改远端 PTY，再改本地 xterm：避免 SIGWINCH/readline 用旧 COLUMNS 把光标打到行首
+      // 先改本地尺寸再异步同步 PTY：切 tab / 重建时避免 80×24 露一帧
+      if (!localSame) {
+        applyLocalResize(cols, rows)
+      } else {
+        sizeReady.value = true
+      }
       if (needPty && !ptySame) {
         markFitQuiet(400)
         try {
@@ -873,7 +907,6 @@ export default {
         lastPtyRows = rows
       }
 
-      applyLocalResize(cols, rows)
       markFitQuiet(220)
       if (epoch !== fitEpoch || !canFit()) return
       const latest = proposeFitDims()
@@ -1040,6 +1073,13 @@ export default {
       const fit = new FitAddon()
       terminal.loadAddon(fit)
       terminal.open(terminalRef.value)
+      term.value = terminal
+      fitAddon.value = fit
+      // 回放前必须先同步到容器行列，否则满屏日志会先挤在默认 80×24 区域
+      if (!syncLocalFitFromAddon(terminal, fit)) {
+        await nextTick()
+        syncLocalFitFromAddon(terminal, fit)
+      }
       tryEnableWebgl(terminal)
 
       // 拦截原生复制：Ctrl/Cmd+C、系统菜单复制也会走 xterm 默认选区（含 less 视觉换行）
@@ -1070,8 +1110,6 @@ export default {
         if (cursorLineHighlightEnabled) refreshCursorLineHighlight()
       }) || null
 
-      term.value = terminal
-      fitAddon.value = fit
       initialized = true
       if (props.connected || props.connecting) attachWriter(terminal, { replay: true })
       setupObservers()
@@ -1116,6 +1154,7 @@ export default {
         fitAddon.value = null
       }
       initialized = false
+      sizeReady.value = false
       lastFitCols = 0
       lastFitRows = 0
       lastPtyCols = 0
@@ -1554,6 +1593,7 @@ export default {
       ctx,
       displayName,
       overlayStatus,
+      sizeReady,
       passwordAssistVisible,
       passwordAssistValue,
       passwordAssistInputRef,
@@ -1584,6 +1624,11 @@ export default {
   background: #0d1117;
   overflow: hidden;
   position: relative;
+}
+
+/* 重建后 fit 完成前不露默认行列，避免左上角缩成一团再撑开 */
+.shell-terminal.is-size-pending .terminal-host {
+  opacity: 0;
 }
 
 .ctx-menu {
