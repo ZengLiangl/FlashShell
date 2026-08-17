@@ -37,12 +37,12 @@
     <ul v-else class="transfer-list">
       <li v-for="item in records" :key="item.id" class="transfer-item">
         <div class="transfer-head">
-          <span class="dir-tag" :class="item.direction">{{ item.direction === 'download' ? '下载' : '上传' }}</span>
+          <span class="dir-tag" :class="item.direction">{{ directionLabel(item.direction) }}</span>
           <span class="name" :title="item.name">{{ item.name }}</span>
           <span class="status" :class="item.status">{{ statusLabel(item) }}</span>
         </div>
-        <div class="meta" :title="item.remotePath">
-          {{ item.machineName }} · {{ item.isDir ? '目录' : '文件' }}
+        <div class="meta" :title="itemMetaTitle(item)">
+          {{ itemMetaText(item) }}
         </div>
         <el-progress
           v-if="item.status === 'running' || item.status === 'pending' || item.status === 'queued'"
@@ -285,6 +285,32 @@ export default {
       return item.speedBps > 0 ? item.speedBps : 0
     }
 
+    const directionLabel = (direction) => {
+      if (direction === 'download') return '下载'
+      if (direction === 'upload') return '上传'
+      if (direction === 'copy') return '复制'
+      return direction || ''
+    }
+
+    const itemMetaText = (item) => {
+      const kind = item?.isDir ? '目录' : '文件'
+      if (item?.direction === 'copy') {
+        const src = item.sourceMachineName || '?'
+        const dst = item.machineName || '?'
+        return `${src} → ${dst} · ${kind}`
+      }
+      return `${item?.machineName || ''} · ${kind}`
+    }
+
+    const itemMetaTitle = (item) => {
+      if (item?.direction === 'copy') {
+        const src = item.sourceRemotePath || ''
+        const dst = item.remotePath || ''
+        return src && dst ? `${src} → ${dst}` : (dst || src)
+      }
+      return item?.remotePath || ''
+    }
+
     const statusLabel = (item) => {
       const s = typeof item === 'string' ? item : item?.status
       if (s === 'queued') return '排队'
@@ -292,6 +318,7 @@ export default {
       if (s === 'running') {
         const phase = typeof item === 'object' ? item?.phase : ''
         if (phase === 'compressing') return '压缩中'
+        if (phase === 'downloading') return '下载中'
         if (phase === 'uploading') return '上传中'
         if (phase === 'extracting') return '解压中'
         return '进行中'
@@ -338,6 +365,9 @@ export default {
       formatSize,
       formatSpeed,
       avgSpeedBps,
+      directionLabel,
+      itemMetaText,
+      itemMetaTitle,
       statusLabel,
     }
   },
@@ -418,6 +448,11 @@ export default {
 .dir-tag.upload {
   background: rgba(103, 194, 58, 0.12);
   color: #67c23a;
+}
+
+.dir-tag.copy {
+  background: rgba(230, 162, 60, 0.14);
+  color: #e6a23c;
 }
 
 .name {

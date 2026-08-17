@@ -360,6 +360,8 @@ export function StartAutoPortForwards():Promise<void>;
 
 export function StartPortForward(arg1:string):Promise<void>;
 
+export function StartShellCopyToOther(arg1:string,arg2:string,arg3:string,arg4:string):Promise<app.ShellCopyToOtherResult>;
+
 export function StartShellDownload(arg1:string,arg2:string):Promise<string>;
 
 export function StartShellFolderSync(arg1:string,arg2:string,arg3:string,arg4:string):Promise<string>;

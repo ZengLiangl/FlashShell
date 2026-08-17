@@ -481,19 +481,22 @@ export function useShell() {
   }
 
   /** 始终新建远程会话（同机可开多个）；若已有断开 tab 则重连该 tab */
-  const connect = async (configName) => {
+  const connect = async (configName, opts = {}) => {
     if (!configName) return false
     if (isLocalSession(configName)) {
       return connectLocal('')
     }
-    const inFlight = openTabs.value.find((t) => t.configName === configName && t.connecting)
-    if (inFlight) {
-      activeMachine.value = inFlight.machineName
-      return false
-    }
-    const disconnected = findDisconnectedTab(configName)
-    if (disconnected) {
-      return connectOrReconnect(disconnected.machineName)
+    const forceNew = !!opts.forceNew
+    if (!forceNew) {
+      const inFlight = openTabs.value.find((t) => t.configName === configName && t.connecting)
+      if (inFlight) {
+        activeMachine.value = inFlight.machineName
+        return false
+      }
+      const disconnected = findDisconnectedTab(configName)
+      if (disconnected) {
+        return connectOrReconnect(disconnected.machineName)
+      }
     }
     const pendingId = addPendingTab({ configName, kind: 'remote', tabLabel: configName })
     try {
@@ -537,6 +540,23 @@ export function useShell() {
       }
       return false
     }
+  }
+
+  /** 复制标签页：始终新开同机/本机会话，不复用已断开 tab */
+  const duplicateSession = async (sessionID) => {
+    const id = String(sessionID || '').trim()
+    if (!id || isPendingSession(id)) return false
+    const tab = openTabs.value.find((t) => t.machineName === id)
+    if (!tab) return false
+    if (tab.kind === 'local' || isLocalSession(id) || isLocalSession(tab.configName)) {
+      return connectLocal('')
+    }
+    const configName = String(tab.configName || resolveRemoteConfigName(id) || '').trim()
+    if (!configName) {
+      ElMessage.warning('无法解析机器配置，复制标签页失败')
+      return false
+    }
+    return connect(configName, { forceNew: true })
   }
 
   const connectLocal = async (sessionID = '', command = '') => {
@@ -928,6 +948,7 @@ export function useShell() {
     connect,
     connectLocal,
     connectOrReconnect,
+    duplicateSession,
     disconnect,
     pendingHostKey,
     closeSession,

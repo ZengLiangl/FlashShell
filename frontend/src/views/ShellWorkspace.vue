@@ -85,6 +85,7 @@
           @update:split-session-ids="(v) => $emit('update:split-session-ids', v)"
           @close-session="(name) => $emit('close-session', name)"
           @close-sessions="(names) => $emit('close-sessions', names)"
+          @duplicate-session="(name) => $emit('duplicate-session', name)"
           @reconnect="onReconnect"
           @clear="onClear"
           @open-picker="() => openPicker()"
@@ -125,6 +126,7 @@
               :search-visible="searchVisible"
               v-model:search-query="searchQuery"
               :match-summary="searchMatchSummary"
+              :copy-to-other-targets="copyToOtherTargets"
               @update:expanded="(v) => { filePanelExpanded = !!v }"
               @layout-resize-start="onFilePanelLayoutResizeStart"
               @layout-resize-end="onFilePanelLayoutResizeEnd"
@@ -133,6 +135,7 @@
               @search-next="findNext"
               @search-prev="findPrevious"
               @close-search="closeSearch"
+              @transfer-started="transferVisible = true"
             />
           </template>
         </ShellTerminalTabs>
@@ -217,6 +220,7 @@ import ShellCommandPalette from '../components/shell/ShellCommandPalette.vue'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import { remoteConfigName, buildKnownMachineNames } from '../utils/sessionId'
+import { resolveCopyToOtherTargets } from '../utils/sftpCopyToOther'
 import {
   normalizeSnippets,
   findMatchingSnippet,
@@ -267,7 +271,7 @@ export default {
     selectedProjectName: { type: String, default: '' },
   },
   emits: [
-    'back', 'connect', 'disconnect', 'close-session', 'close-sessions', 'reconnect', 'test', 'add-machine', 'edit-machine',
+    'back', 'connect', 'disconnect', 'close-session', 'close-sessions', 'duplicate-session', 'reconnect', 'test', 'add-machine', 'edit-machine',
     'copy-machine', 'delete-machine',
     'add-local', 'add-local-command', 'open-window', 'start-resize', 'update:activeMachine', 'history-changed',
     'update:broadcast-enabled', 'update:broadcast-targets', 'update:split-session-ids',
@@ -293,6 +297,8 @@ export default {
     const transferActiveCount = ref(0)
     const historyRecords = ref([])
     const cwdHints = reactive({})
+    /** SFTP 面板手动浏览路径（与终端 cwd 分开，供跨会话复制目标） */
+    const sftpCwds = reactive({})
     const ptyCwds = reactive({})
     const tunnelStatuses = ref([])
     const tunnelLoading = ref(false)
@@ -721,9 +727,32 @@ export default {
       }
     }
 
-    const onPanelCwdChange = (_machineName, _dir) => {
-      // SFTP 面板手动浏览不应覆盖终端 cwd 缓存，避免与 shell:cwd 同步冲突
+    const onPanelCwdChange = (machineName, dir) => {
+      // SFTP 面板手动浏览不应覆盖终端 cwd 缓存，但需记住各会话最后浏览目录
+      const id = String(machineName || '').trim()
+      let cwd = String(dir || '').trim()
+      if (!id || !cwd.startsWith('/')) return
+      if (cwd.length > 1) cwd = cwd.replace(/\/+$/, '')
+      sftpCwds[id] = cwd
     }
+
+    const copyToOtherTargets = computed(() => {
+      const sourceSessionId = String(props.activeMachine || '').trim()
+      if (!sourceSessionId || isLocalSessionName(sourceSessionId)) return []
+      const cwdBySession = {}
+      for (const s of props.workspaceSessions || []) {
+        const id = String(s?.machineName || '').trim()
+        if (!id) continue
+        cwdBySession[id] = sftpCwds[id] || cwdHints[id] || s.lastCwd || ''
+      }
+      return resolveCopyToOtherTargets({
+        sourceSessionId,
+        splitSessionIds: props.splitSessionIds || [],
+        sessions: props.workspaceSessions || [],
+        cwdBySession,
+        isLocalSession: isLocalSessionName,
+      })
+    })
 
     const onFilePanelLayoutResizeStart = () => {
       filePanelLayoutDragging.value = true
@@ -763,7 +792,11 @@ export default {
         if (!alive.has(name)) {
           delete ptyCwds[name]
           delete cwdHints[name]
+          delete sftpCwds[name]
         }
+      }
+      for (const name of Object.keys(sftpCwds)) {
+        if (!alive.has(name)) delete sftpCwds[name]
       }
       for (const s of sessions || []) {
         if (s?.machineName && s.connected && !ptyCwds[s.machineName]) {
@@ -940,6 +973,7 @@ export default {
       transferActiveCount,
       historyRecords,
       cwdHints,
+      copyToOtherTargets,
       activeConnected,
       showMonitorPanel,
       showLeftPanel,

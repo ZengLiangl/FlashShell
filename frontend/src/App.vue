@@ -78,6 +78,7 @@
         :selected-project-name="selectedProject?.name || ''"
         @back="leaveShellMode" @connect="(name) => connectShell(name)" @disconnect="disconnectShell"
         @close-session="closeShellSession" @close-sessions="closeShellSessions"
+        @duplicate-session="(id) => duplicateShellSession(id)"
         @reconnect="(name) => connectOrReconnectShell(name)"
         @add-local="() => connectLocalShell()"
         @add-local-command="(cmd) => connectLocalShell('', cmd)"
@@ -258,6 +259,7 @@ export default {
       connect: connectShell,
       connectLocal: connectLocalShell,
       connectOrReconnect: connectOrReconnectShell,
+      duplicateSession: duplicateShellSession,
       disconnect: disconnectShell,
       closeSession: closeShellSession,
       closeSessions: closeShellSessions,
@@ -1825,6 +1827,7 @@ export default {
       connectShell,
       connectLocalShell,
       connectOrReconnectShell,
+      duplicateShellSession,
       disconnectShell,
       closeShellSession,
       closeShellSessions,

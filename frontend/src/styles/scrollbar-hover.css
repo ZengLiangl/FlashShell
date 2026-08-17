@@ -41,3 +41,9 @@ html :where(:not(.xterm, .xterm *)):hover::-webkit-scrollbar-thumb:hover {
   max-height: min(56vh, 520px);
   overflow: auto;
 }
+
+.settings-sub-dialog.machine-edit-dialog.el-dialog .el-dialog__body {
+  max-height: min(72vh, 680px);
+  padding: 16px;
+  background: var(--app-inset-bg, var(--app-panel-bg));
+}
