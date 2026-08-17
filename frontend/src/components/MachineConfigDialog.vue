@@ -1204,7 +1204,12 @@ export default {
             if (!machineFormRef.value) return
             try {
                 await machineFormRef.value.validate()
-                savingMachine.value = true
+            } catch {
+                // 表单校验失败时 Element Plus 会 reject 字段错误对象，字段下方已有红字提示，勿再弹系统错误
+                return
+            }
+            savingMachine.value = true
+            try {
                 const proxyOverride = { ...machineForm.proxyOverride }
                 if (proxyOverride.mode !== 'manual') {
                     proxyOverride.host = ''
@@ -1254,7 +1259,7 @@ export default {
                 emit('changed')
             } catch (error) {
                 console.error('保存机器配置失败:', error)
-                ElMessage.error('保存机器配置失败: ' + error.message)
+                ElMessage.error('保存机器配置失败: ' + (error?.message || error))
             } finally {
                 savingMachine.value = false
             }
@@ -1338,7 +1343,12 @@ export default {
             if (!machineFormRef.value) return
             try {
                 await machineFormRef.value.validate()
-                testingDraft.value = true
+            } catch {
+                // 表单校验失败时字段下方已有红字提示，勿再弹系统错误
+                return
+            }
+            testingDraft.value = true
+            try {
                 await TestMachineDraftConnection(
                     {
                         name: machineForm.name || 'draft-test',
@@ -1356,7 +1366,6 @@ export default {
                 )
                 ElMessage.success('连接测试成功')
             } catch (error) {
-                if (error === false || error?.fields) return
                 console.error('连接测试失败:', error)
                 ElMessage.error('连接测试失败: ' + errText(error))
             } finally {

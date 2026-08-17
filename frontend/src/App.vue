@@ -1505,8 +1505,13 @@ export default {
 
       try {
         await machineFormRef.value.validate();
-        savingMachine.value = true;
+      } catch {
+        // 表单校验失败时 Element Plus 会 reject 字段错误对象，字段下方已有红字提示，勿再弹系统错误
+        return;
+      }
 
+      savingMachine.value = true;
+      try {
         const machineData = {
           name: machineForm.name,
           key_file: machineForm.key_file
@@ -1533,10 +1538,9 @@ export default {
         machineEditVisible.value = false;
         await loadMachines();
         await loadShellMachines();
-
       } catch (error) {
         console.error('保存机器配置失败:', error);
-        ElMessage.error('保存机器配置失败: ' + error.message);
+        ElMessage.error('保存机器配置失败: ' + (error?.message || error));
       } finally {
         savingMachine.value = false;
       }

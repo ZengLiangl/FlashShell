@@ -346,12 +346,16 @@ export default {
       if (!formRef.value) return
       try {
         await formRef.value.validate()
-        testing.value = true
+      } catch {
+        // 表单校验失败时字段下方已有红字提示，勿再弹系统错误
+        return
+      }
+      testing.value = true
+      try {
         const { machineData, sensitiveData } = buildPayload()
         await TestMachineDraftConnection(machineData, sensitiveData)
         ElMessage.success('连接测试成功')
       } catch (error) {
-        if (error === false || error?.fields) return
         ElMessage.error('连接测试失败: ' + (error?.message || error))
       } finally {
         testing.value = false
