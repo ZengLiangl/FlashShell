@@ -38,7 +38,7 @@
               v-model="form.host"
               size="small"
               clearable
-              placeholder="127.0.0.1"
+              placeholder="代理主机"
               class="proxy-host"
             />
           </div>
@@ -121,7 +121,7 @@
       <el-input
         v-model="testURL"
         clearable
-        placeholder="例如 https://www.google.com 或 github.com"
+        placeholder="测试地址"
         @keydown.enter.exact.prevent="runTest"
       />
       <template #footer>
@@ -167,7 +167,7 @@ export default {
     const saving = ref(false)
     const testing = ref(false)
     const testVisible = ref(false)
-    const testURL = ref('https://www.google.com')
+    const testURL = ref('')
     const form = reactive(defaultForm())
 
     const applyConfig = (cfg) => {

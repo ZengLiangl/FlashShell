@@ -171,7 +171,7 @@
           />
         </el-form-item>
         <el-form-item label="作用域">
-          <el-input v-model="editorForm.scope" placeholder="global 或机器配置名" />
+          <el-input v-model="editorForm.scope" placeholder="作用域或机器配置名" />
         </el-form-item>
         <el-form-item label="快捷键">
           <div class="editor-bind-row">

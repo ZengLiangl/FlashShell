@@ -31,7 +31,7 @@
           </header>
           <div class="machine-form-section-body">
             <el-form-item label="名称" prop="name">
-              <el-input v-model="form.name" placeholder="例如：生产机 / taj-119" />
+              <el-input v-model="form.name" placeholder="机器名称" />
             </el-form-item>
             <el-form-item label="分组">
               <el-select
@@ -87,11 +87,11 @@
           </header>
           <div class="machine-form-section-body">
             <div class="machine-form-row-2">
+              <el-form-item label="用户名" prop="user">
+                <el-input v-model="form.user" placeholder="SSH 用户名" />
+              </el-form-item>
               <el-form-item label="端口" prop="port">
                 <el-input-number v-model="form.port" :min="1" :max="65535" controls-position="right" />
-              </el-form-item>
-              <el-form-item label="用户名" prop="user">
-                <el-input v-model="form.user" placeholder="root" />
               </el-form-item>
             </div>
             <el-form-item label="全局帐号">

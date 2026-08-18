@@ -45,14 +45,14 @@
           <el-input v-model="form.name" placeholder="可选" />
         </el-form-item>
         <el-form-item label="本地地址">
-          <el-input v-model="form.localHost" placeholder="127.0.0.1" />
+          <el-input v-model="form.localHost" placeholder="本机地址" />
         </el-form-item>
         <el-form-item label="本地端口">
           <el-input-number v-model="form.localPort" :min="1" :max="65535" />
         </el-form-item>
         <template v-if="form.type !== 'dynamic'">
           <el-form-item label="远端地址">
-            <el-input v-model="form.remoteHost" placeholder="127.0.0.1" />
+            <el-input v-model="form.remoteHost" placeholder="远端主机" />
           </el-form-item>
           <el-form-item label="远端端口">
             <el-input-number v-model="form.remotePort" :min="1" :max="65535" />

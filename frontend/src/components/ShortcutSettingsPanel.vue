@@ -115,7 +115,7 @@
             </div>
             <div class="snippet-col snippet-col-scope">
               <span class="snippet-label">作用域</span>
-              <el-input v-model="s.scope" size="small" placeholder="global" />
+              <el-input v-model="s.scope" size="small" placeholder="作用域" />
             </div>
             <el-tooltip content="删除" placement="top">
               <el-button
@@ -139,7 +139,7 @@
                 type="textarea"
                 :rows="2"
                 resize="vertical"
-                placeholder="例如 ls -la 或 git status"
+                placeholder="要插入或执行的命令"
                 class="sn-cmd"
               />
             </div>

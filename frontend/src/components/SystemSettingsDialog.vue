@@ -51,7 +51,7 @@
                                 </div>
                                 <div class="system-setting-control system-setting-control--wide">
                                     <el-input v-model="form.windowsName" class="system-setting-text-input" size="small"
-                                        maxlength="64" placeholder="FlashDock" clearable />
+                                        maxlength="64" placeholder="窗口标题" clearable />
                                 </div>
                             </div>
                             <div class="system-setting-row">
@@ -781,7 +781,7 @@
             class="settings-sub-dialog" append-to-body>
             <el-form :model="accountForm" label-width="90px">
                 <el-form-item label="帐号名称">
-                    <el-input v-model="accountForm.name" placeholder="例如：生产环境" />
+                    <el-input v-model="accountForm.name" placeholder="帐号名称" />
                 </el-form-item>
                 <el-form-item label="用户名">
                     <el-input v-model="accountForm.user" placeholder="SSH 用户名" />

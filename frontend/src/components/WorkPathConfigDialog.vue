@@ -43,17 +43,16 @@
         >
             <el-form :model="workPathForm" :rules="workPathRules" ref="workPathFormRef" label-width="100px">
                 <el-form-item label="变量名" prop="key">
-                    <el-input v-model="workPathForm.key" placeholder="请输入变量名（如：PROJECT_HOME）" />
+                    <el-input v-model="workPathForm.key" placeholder="变量名" />
                 </el-form-item>
                 <el-form-item label="变量值" prop="value">
-                    <el-input v-model="workPathForm.value" placeholder="请输入变量值（如：/home/user/projects）" />
+                    <el-input v-model="workPathForm.value" placeholder="变量值" />
                 </el-form-item>
                 <el-form-item label="使用说明">
                     <div class="usage-info">
                         <p>• 变量名只能包含大写字母、数字和下划线</p>
                         <p>• 变量名必须以字母或下划线开头</p>
                         <p>• 在配置文件中可以使用 ${变量名} 来引用这些环境变量</p>
-                        <p>• 例如：workdir: "${PROJECT_HOME}/my-project"</p>
                     </div>
                 </el-form-item>
             </el-form>

@@ -48,7 +48,7 @@
           <el-input
             v-model="localDraft.workdir"
             size="small"
-            placeholder="可选，支持 ${ENV}"
+            placeholder="可选，支持环境变量"
             @input="emitChange"
           />
         </label>
@@ -61,7 +61,7 @@
           <el-input
             v-model="localDraft.name"
             size="small"
-            placeholder="如：构建 / 部署"
+            placeholder="步骤名称"
             @input="emitChange"
           />
         </label>
@@ -101,7 +101,7 @@
           <el-input
             v-model="localDraft.workdir"
             size="small"
-            placeholder="可选，支持 ${ENV}"
+            placeholder="可选，支持环境变量"
             @input="emitChange"
           />
         </label>
@@ -150,7 +150,7 @@
           <el-input
             v-model="localDraft.when"
             size="small"
-            placeholder="可选，如 ${ENV} == prod"
+            placeholder="可选条件"
             @input="emitChange"
           />
         </label>
@@ -168,7 +168,7 @@
         <template v-else-if="localDraft.kind === 'chdir'">
           <label class="field field-span-full">
             <span class="field-label">远程目录</span>
-            <el-input v-model="chdirPath" size="small" placeholder="/opt/app" @input="syncChdir" />
+            <el-input v-model="chdirPath" size="small" placeholder="远程目录" @input="syncChdir" />
           </label>
         </template>
         <template v-else-if="localDraft.kind === 'targz'">

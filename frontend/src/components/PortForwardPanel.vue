@@ -72,14 +72,14 @@
         </template>
         <template v-else-if="wizardStep === 2">
         <el-form-item label="本地地址">
-          <el-input v-model="editForm.localHost" placeholder="127.0.0.1" />
+          <el-input v-model="editForm.localHost" placeholder="本机地址" />
         </el-form-item>
         <el-form-item label="本地端口">
           <el-input-number v-model="editForm.localPort" :min="1" :max="65535" style="width: 100%" />
         </el-form-item>
         <template v-if="editForm.type !== 'dynamic'">
           <el-form-item label="远端地址">
-            <el-input v-model="editForm.remoteHost" placeholder="127.0.0.1" />
+            <el-input v-model="editForm.remoteHost" placeholder="远端主机" />
           </el-form-item>
           <el-form-item label="远端端口">
             <el-input-number v-model="editForm.remotePort" :min="1" :max="65535" style="width: 100%" />

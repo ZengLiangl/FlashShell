@@ -337,7 +337,7 @@ export default {
 
     const searchPlaceholder = computed(() => {
       if (showingTask.value) return '搜索任务项目名称 / 描述…'
-      return '查找主机或输入 user@host / user@host:2222…'
+      return '查找主机或输入 SSH 地址…'
     })
 
     const filteredProjects = computed(() => {
