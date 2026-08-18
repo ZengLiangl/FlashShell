@@ -21,8 +21,7 @@
             <Monitor />
           </el-icon>
           <span>主机</span>
-          <span v-if="connectedCount > 0" class="rail-live">{{ connectedCount }}</span>
-          <span v-else class="rail-count">{{ (machines || []).length }}</span>
+          <span class="rail-count">{{ (machines || []).length }}</span>
         </button>
       </nav>
       <div class="rail-footer">
@@ -64,7 +63,14 @@
               </el-button>
             </el-tooltip>
 
-            <el-tooltip content="打开终端" placement="bottom">
+            <el-button
+              v-if="liveSessionCount > 0"
+              class="home-btn-resume"
+              @click="$emit('open-shell')"
+            >
+              返回终端
+            </el-button>
+            <el-tooltip v-else content="打开终端" placement="bottom">
               <el-button class="home-btn-icon" @click="$emit('open-shell')">
                 <el-icon>
                   <Monitor />
@@ -145,9 +151,6 @@
           <template v-else>
             <div class="home-crumb">
               <span class="crumb-active">全部主机</span>
-              <el-tag v-if="connectedCount > 0" size="small" type="primary" effect="plain" class="session-tag">
-                {{ connectedCount }} 会话进行中
-              </el-tag>
             </div>
 
             <div v-if="!(machines || []).length" class="home-empty">
@@ -333,6 +336,14 @@ export default {
     })
     const showingTask = computed(() => hasProjects.value && homeSection.value === 'task')
     const showingShell = computed(() => !showingTask.value)
+
+    const liveSessions = computed(() =>
+      (props.workspaceSessions || []).filter((s) => s?.machineName && !String(s.machineName).startsWith('__pending__')),
+    )
+    const liveSessionCount = computed(() => {
+      const live = liveSessions.value.filter((s) => s.connected || s.connecting).length
+      return live || liveSessions.value.length
+    })
 
     const availableTags = computed(() => collectMachineTags(props.machines || []))
 
@@ -577,6 +588,7 @@ export default {
       homeSection,
       showingTask,
       showingShell,
+      liveSessionCount,
       filteredProjects,
       filteredMachines,
       pinnedMachines,
@@ -683,8 +695,7 @@ export default {
   color: var(--app-text);
 }
 
-.rail-count,
-.rail-live {
+.rail-count {
   margin-left: auto;
   font-size: 11px;
   font-weight: 600;
@@ -695,11 +706,6 @@ export default {
   padding: 1px 7px;
   color: var(--app-text-muted);
   background: color-mix(in srgb, var(--app-text) 8%, transparent);
-}
-
-.rail-live {
-  color: var(--app-accent-color);
-  background: var(--app-accent-bg);
 }
 
 .rail-footer {
@@ -801,6 +807,22 @@ export default {
   color: #fff;
 }
 
+.home-btn-resume {
+  height: 36px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--app-text-secondary);
+  background: color-mix(in srgb, var(--app-text) 5%, transparent);
+  border-color: color-mix(in srgb, var(--app-border) 80%, transparent);
+}
+
+.home-btn-resume:hover {
+  color: var(--app-text);
+  background: color-mix(in srgb, var(--app-text) 8%, transparent);
+}
+
 .quick-connect-btn {
   width: 28px;
   height: 28px;
@@ -834,10 +856,6 @@ export default {
 .crumb-meta {
   font-size: 12px;
   color: var(--app-text-muted);
-}
-
-.session-tag {
-  vertical-align: middle;
 }
 
 .home-section {
