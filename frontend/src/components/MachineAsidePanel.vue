@@ -140,6 +140,9 @@
                 <el-option v-for="preset in terminalPresetOptions" :key="preset.id" :label="preset.label" :value="preset.id" />
               </el-select>
             </el-form-item>
+            <el-form-item label="本地回显">
+              <el-switch v-model="form.localEcho" active-text="高延迟时本机立即显示输入" />
+            </el-form-item>
           </div>
         </section>
       </el-form>
@@ -215,6 +218,7 @@ export default {
       proxyJump: '',
       startupCommand: '',
       terminalPreset: '',
+      localEcho: false,
     })
 
     const rules = {
@@ -258,6 +262,7 @@ export default {
       form.proxyJump = ''
       form.startupCommand = ''
       form.terminalPreset = ''
+      form.localEcho = false
       selectedAccountId.value = ''
     }
 
@@ -291,6 +296,7 @@ export default {
       form.proxyJump = machine.proxyJump || ''
       form.startupCommand = machine.startupCommand || ''
       form.terminalPreset = machine.terminalPreset || ''
+      form.localEcho = !!machine.localEcho
       selectedAccountId.value = form.identityId || ''
       if (machine.id) {
         try {
@@ -329,6 +335,7 @@ export default {
       if (defaults.keyFile) form.key_file = defaults.keyFile
       if (defaults.proxyJump) form.proxyJump = defaults.proxyJump
       if (defaults.startupCommand) form.startupCommand = defaults.startupCommand
+      if (defaults.localEcho) form.localEcho = true
       if (defaults.tags?.length) form.tags = normalizeMachineTags(defaults.tags)
       ElMessage.success('已应用分组默认')
     }
@@ -344,6 +351,7 @@ export default {
         proxyJump: form.proxyJump?.trim() || '',
         startupCommand: form.startupCommand?.trim() || '',
         terminalPreset: form.terminalPreset || '',
+        localEcho: !!form.localEcho,
       }
       const sensitiveData = {
         host: form.host,

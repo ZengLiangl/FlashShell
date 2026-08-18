@@ -488,6 +488,13 @@
                                 <el-switch v-model="machineForm.agentForwarding" />
                             </div>
                         </el-form-item>
+                        <el-form-item label="本地回显">
+                            <div class="machine-form-switch-row">
+                                <span class="machine-form-switch-label">高延迟时本机立即显示输入</span>
+                                <el-switch v-model="machineForm.localEcho" />
+                            </div>
+                            <p class="field-hint">可打印字符由客户端立刻显示，并抑制远端重复回显。全屏 TUI / 密码提示时自动停用。这不是 X11 图形转发。</p>
+                        </el-form-item>
                         <el-form-item label="终端配色">
                             <el-select v-model="machineForm.terminalPreset" clearable placeholder="跟随全局主题" style="width: 100%">
                                 <el-option label="跟随全局" value="" />
@@ -640,6 +647,9 @@
                 </el-form-item>
                 <el-form-item label="Agent 转发">
                     <el-switch v-model="groupDefaultsForm.agentForwarding" active-text="启用 SSH Agent 转发" />
+                </el-form-item>
+                <el-form-item label="本地回显">
+                    <el-switch v-model="groupDefaultsForm.localEcho" active-text="启用本地回显" />
                 </el-form-item>
                 <el-form-item label="代理覆盖">
                     <el-select v-model="groupDefaultsForm.proxyOverride.mode" style="width: 100%">
@@ -838,6 +848,7 @@ export default {
             startupCommand: '',
             sftpEncoding: 'auto',
             agentForwarding: false,
+            localEcho: false,
             proxyOverride: {
                 mode: 'inherit',
                 type: 'http',
@@ -887,6 +898,7 @@ export default {
             sftpSudo: false,
             startupCommand: '',
             agentForwarding: false,
+            localEcho: false,
             terminalPreset: '',
             tunnels: [],
         })
@@ -1000,6 +1012,7 @@ export default {
             if (defaults.startupCommand) machineForm.startupCommand = defaults.startupCommand
             if (defaults.sftpEncoding) machineForm.sftpEncoding = defaults.sftpEncoding
             if (defaults.agentForwarding) machineForm.agentForwarding = true
+            if (defaults.localEcho) machineForm.localEcho = true
             if (defaults.proxyOverride?.mode && defaults.proxyOverride.mode !== 'inherit') {
                 const po = defaults.proxyOverride
                 machineForm.proxyOverride = {
@@ -1024,6 +1037,7 @@ export default {
             groupDefaultsForm.startupCommand = existing?.startupCommand || ''
             groupDefaultsForm.sftpEncoding = existing?.sftpEncoding || 'auto'
             groupDefaultsForm.agentForwarding = !!existing?.agentForwarding
+            groupDefaultsForm.localEcho = !!existing?.localEcho
             const po = existing?.proxyOverride || {}
             groupDefaultsForm.proxyOverride = {
                 mode: po.mode || 'inherit',
@@ -1064,6 +1078,7 @@ export default {
                     startupCommand: groupDefaultsForm.startupCommand?.trim() || '',
                     sftpEncoding: groupDefaultsForm.sftpEncoding || 'auto',
                     agentForwarding: !!groupDefaultsForm.agentForwarding,
+                    localEcho: !!groupDefaultsForm.localEcho,
                     proxyOverride: po.mode === 'inherit' ? null : po,
                     tags: normalizeMachineTags(groupDefaultsForm.tags),
                 })
@@ -1112,6 +1127,7 @@ export default {
             machineForm.sftpSudo = !!machine.sftpSudo
             machineForm.startupCommand = machine.startupCommand || ''
             machineForm.agentForwarding = !!machine.agentForwarding
+            machineForm.localEcho = !!machine.localEcho
             machineForm.terminalPreset = machine.terminalPreset || ''
             machineForm.tunnels = (machine.tunnels || []).map((t) => ({
                 enabled: t.enabled !== false,
@@ -1191,6 +1207,7 @@ export default {
             machineForm.sftpSudo = false
             machineForm.startupCommand = ''
             machineForm.agentForwarding = false
+            machineForm.localEcho = false
             machineForm.terminalPreset = ''
             machineForm.tunnels = []
         }
@@ -1293,6 +1310,7 @@ export default {
                     sftpSudo: !!machineForm.sftpSudo && machineForm.sftpFileProtocol !== 'scp',
                     startupCommand: machineForm.startupCommand?.trim() || '',
                     agentForwarding: machineForm.agentForwarding,
+                    localEcho: !!machineForm.localEcho,
                     terminalPreset: machineForm.terminalPreset || '',
                     tunnels: (machineForm.tunnels || []).filter((t) => t.localPort > 0),
                 }

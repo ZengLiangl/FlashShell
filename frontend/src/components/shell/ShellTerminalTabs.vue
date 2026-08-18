@@ -199,6 +199,7 @@
             :jump-chain="sessionMeta(session).jumpChain"
             :proxy-jump="sessionMeta(session).proxyJump"
             :terminal-preset-override="sessionMeta(session).terminalPreset"
+            :local-echo="!!sessionMeta(session).localEcho"
             :active="isTerminalActive(session.machineName)" :view-visible="viewVisible" :search-query="searchQuery"
             :in-split="splitViewVisible && splitSessionIds.includes(session.machineName)"
             :suppress-resize-observer-fit="filePanelLayoutDragging"
@@ -362,6 +363,7 @@ export default {
         jumpChain: Array.isArray(m?.jumpChain) ? m.jumpChain : [],
         proxyJump: m?.proxyJump || '',
         terminalPreset: m?.terminalPreset || '',
+        localEcho: !!m?.localEcho,
       }
     }
 

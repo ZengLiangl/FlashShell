@@ -42,6 +42,7 @@ export async function copyMachineRecord(source, existingMachines) {
     sftpSudo: !!source.sftpSudo,
     startupCommand: source.startupCommand || '',
     agentForwarding: !!source.agentForwarding,
+    localEcho: !!source.localEcho,
     tunnels: (source.tunnels || [])
       .filter((t) => t.localPort > 0)
       .map((t) => ({

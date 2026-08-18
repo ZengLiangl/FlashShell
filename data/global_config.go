@@ -214,6 +214,7 @@ type MachineGroupDefaults struct {
 	StartupCommand  string                       `yaml:"startupCommand,omitempty" json:"startupCommand,omitempty"`
 	SftpEncoding    string                       `yaml:"sftpEncoding,omitempty" json:"sftpEncoding,omitempty"`
 	AgentForwarding bool                         `yaml:"agentForwarding,omitempty" json:"agentForwarding,omitempty"`
+	LocalEcho       bool                         `yaml:"localEcho,omitempty" json:"localEcho,omitempty"`
 	ProxyOverride   *define.MachineProxyOverride `yaml:"proxyOverride,omitempty" json:"proxyOverride,omitempty"`
 	Tags            []string                     `yaml:"tags,omitempty" json:"tags,omitempty"`
 }

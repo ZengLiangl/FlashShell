@@ -366,6 +366,7 @@ export namespace data {
 	    startupCommand?: string;
 	    sftpEncoding?: string;
 	    agentForwarding?: boolean;
+	    localEcho?: boolean;
 	    proxyOverride?: define.MachineProxyOverride;
 	    tags?: string[];
 	
@@ -382,6 +383,7 @@ export namespace data {
 	        this.startupCommand = source["startupCommand"];
 	        this.sftpEncoding = source["sftpEncoding"];
 	        this.agentForwarding = source["agentForwarding"];
+	        this.localEcho = source["localEcho"];
 	        this.proxyOverride = this.convertValues(source["proxyOverride"], define.MachineProxyOverride);
 	        this.tags = source["tags"];
 	    }
@@ -1015,6 +1017,7 @@ export namespace define {
 	    sftpSudo?: boolean;
 	    startupCommand?: string;
 	    agentForwarding?: boolean;
+	    localEcho?: boolean;
 	    terminalPreset?: string;
 	    pinned?: boolean;
 	    tags?: string[];
@@ -1051,6 +1054,7 @@ export namespace define {
 	        this.sftpSudo = source["sftpSudo"];
 	        this.startupCommand = source["startupCommand"];
 	        this.agentForwarding = source["agentForwarding"];
+	        this.localEcho = source["localEcho"];
 	        this.terminalPreset = source["terminalPreset"];
 	        this.pinned = source["pinned"];
 	        this.tags = source["tags"];

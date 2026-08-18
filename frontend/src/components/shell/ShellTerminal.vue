@@ -97,6 +97,12 @@ import {
   prefixLineTimestamps,
   looksLikePasswordPrompt,
 } from '../../utils/shellTerminalUx'
+import {
+  createLocalEchoState,
+  resetLocalEchoState,
+  applyLocalEchoInput,
+  applyRemoteEchoSuppression,
+} from '../../utils/shellLocalEcho'
 import { ClipboardSetText } from '../../../wailsjs/runtime/runtime'
 import ShellConnectionOverlay from './ShellConnectionOverlay.vue'
 
@@ -130,6 +136,8 @@ export default {
     reconnectDelaySec: { type: Number, default: 0 },
     /** 本机终端配色覆盖；空则跟随全局 */
     terminalPresetOverride: { type: String, default: '' },
+    /** SSH 本地回显（输入体验；非 X11） */
+    localEcho: { type: Boolean, default: false },
   },
   emits: [
     'open-search', 'clear-cache', 'reconnect', 'search-result', 'cwd-sync',
@@ -236,6 +244,7 @@ export default {
     let logHighlightEnabled = true
     let logHighlightConfig = mergeLogHighlightConfig(null)
     let tuiModeDepth = 0
+    let localEchoState = createLocalEchoState()
     let scrollbackLines = SHELL_TERMINAL_SCROLLBACK
     let cursorLineHighlightEnabled = false
     let lineTimestampsEnabled = false
@@ -572,6 +581,12 @@ export default {
       }
       tuiModeDepth = updateTuiModeDepth(tuiModeDepth, text)
       notePasswordPromptText(text)
+      if (tuiModeDepth > 0 || looksLikePasswordPrompt(passwordDetectTail) || passwordAssistVisible.value) {
+        resetLocalEchoState(localEchoState)
+      } else if (props.localEcho && suppressInputForwardDepth === 0) {
+        text = applyRemoteEchoSuppression(text, localEchoState)
+        if (!text) return Promise.resolve()
+      }
       if (!logHighlightEnabled) {
         return writeTerminal(terminal, applyLineTimestampsIfNeeded(text))
       }
@@ -700,6 +715,7 @@ export default {
     const reapplyLogHighlightToTerminal = () => {
       if (!term.value || !initialized) return
       tuiModeDepth = 0
+      resetLocalEchoState(localEchoState)
       lineTsState.atLineStart = true
       term.value.clear()
       resetShellWriterReplay(props.machineName)
@@ -1138,6 +1154,7 @@ export default {
       detachWriter()
       resetShellWriterReplay(props.machineName)
       tuiModeDepth = 0
+      resetLocalEchoState(localEchoState)
       lineTsState.atLineStart = true
       teardownObservers()
       inputListener?.dispose?.()
@@ -1377,6 +1394,17 @@ export default {
           return
         }
         trackInputLine(data)
+        if (
+          props.localEcho &&
+          tuiModeDepth === 0 &&
+          !passwordAssistVisible.value &&
+          !looksLikePasswordPrompt(passwordDetectTail)
+        ) {
+          const { display } = applyLocalEchoInput(data, localEchoState)
+          if (display) writeTerminal(terminal, display)
+        } else {
+          resetLocalEchoState(localEchoState)
+        }
         App.SendShellInput(props.machineName, data).catch(() => {})
       })
     }
@@ -1402,6 +1430,7 @@ export default {
             if (phase === 'start') {
               holdingReplaySuppress = true
               beginSuppressInputForward()
+              resetLocalEchoState(localEchoState)
               lineTsState.atLineStart = true
               return
             }
@@ -1543,7 +1572,12 @@ export default {
     })
 
     watch(() => props.connected, (ok) => {
+      resetLocalEchoState(localEchoState)
       if (!ok) dismissPasswordAssist()
+    })
+
+    watch(() => props.localEcho, () => {
+      resetLocalEchoState(localEchoState)
     })
 
     watch(() => props.terminalPresetOverride, () => {

@@ -81,6 +81,8 @@ type Machine struct {
 	StartupCommand string `yaml:"startupCommand,omitempty" json:"startupCommand,omitempty"`
 	// AgentForwarding 启用 SSH Agent 转发
 	AgentForwarding bool `yaml:"agentForwarding,omitempty" json:"agentForwarding,omitempty"`
+	// LocalEcho 终端本地回显：可打印字符由客户端立即显示，并抑制远端重复回显（高延迟输入优化；非 X11 转发）
+	LocalEcho bool `yaml:"localEcho,omitempty" json:"localEcho,omitempty"`
 	// TerminalPreset 本机终端配色覆盖（空=跟随全局主题）
 	TerminalPreset string `yaml:"terminalPreset,omitempty" json:"terminalPreset,omitempty"`
 	// Pinned 首页置顶
