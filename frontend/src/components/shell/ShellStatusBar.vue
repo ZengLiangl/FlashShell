@@ -54,7 +54,7 @@ export default {
     activeTabLabel: { type: String, default: '' },
     tunnels: { type: Array, default: () => [] },
     tunnelLoading: { type: Boolean, default: false },
-    appInfo: { type: String, default: 'FlashDock · Shell' },
+    appInfo: { type: String, default: 'FlashShell · Shell' },
     showChromeActions: { type: Boolean, default: false },
     filesExpanded: { type: Boolean, default: false },
   },

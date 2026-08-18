@@ -147,3 +147,15 @@ machines:
 		t.Fatalf("机器名称不匹配: %s", machine.Name)
 	}
 }
+
+func TestNormalizeWindowsName(t *testing.T) {
+	if got := NormalizeWindowsName(""); got != "FlashShell" {
+		t.Fatalf("empty = %q", got)
+	}
+	if got := NormalizeWindowsName("FlashDock"); got != "FlashShell" {
+		t.Fatalf("legacy default = %q", got)
+	}
+	if got := NormalizeWindowsName("我的运行器"); got != "我的运行器" {
+		t.Fatalf("custom = %q", got)
+	}
+}

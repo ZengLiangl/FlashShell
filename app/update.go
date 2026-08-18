@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"FlashDock/data"
 	"FlashDock/netproxy"
 	"FlashDock/utils"
 
@@ -122,7 +123,7 @@ func (a *App) CheckForUpdates() *UpdateCheckResult {
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	req.Header.Set("User-Agent", "FlashDock-UpdateCheck")
+	req.Header.Set("User-Agent", ProductName+"-UpdateCheck")
 	if token := resolveGitHubToken(); token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -177,7 +178,7 @@ func (a *App) CheckForUpdates() *UpdateCheckResult {
 	var stagedVersion string
 	if result.HasUpdate {
 		// 有新版本时始终把目标版本纳入保留集，避免异步 prune 与下载建目录竞态：
-		// 若 prune 先删掉 ~/.flashdock/updates 下暂存目录，随后写 .part 会报 no such file。
+		// 若 prune 先删掉 ~/.flashshell/updates 下暂存目录，随后写 .part 会报 no such file。
 		stagedVersion = result.LatestVersion
 		if reusable := resolveReusableStagedUpdate(result.LatestVersion, result.AssetName); reusable != nil {
 			setCurrentStaged(reusable)
@@ -455,7 +456,7 @@ func pickReleaseAsset(assets []githubAsset, tagOrVersion string) *githubAsset {
 	for i := range assets {
 		name := assets[i].Name
 		lower := strings.ToLower(name)
-		if !strings.HasPrefix(lower, "flashdock-") {
+		if !strings.HasPrefix(lower, "flashshell-") && !strings.HasPrefix(lower, "flashdock-") {
 			continue
 		}
 		if osKey != "" && !strings.Contains(lower, strings.ToLower(osKey)) {
@@ -482,7 +483,7 @@ func expectedReleaseAssetName(tagOrVersion string) string {
 	if osName == "" || archName == "" || ext == "" {
 		return ""
 	}
-	return fmt.Sprintf("FlashDock-%s-%s-%s%s", version, osName, archName, ext)
+	return fmt.Sprintf("%s-%s-%s-%s%s", ProductName, version, osName, archName, ext)
 }
 
 func platformAssetHints() (osName, archName, ext string) {
@@ -535,11 +536,11 @@ func resolveDownloadsDir() (string, error) {
 }
 
 func skippedUpdateVersionPath() string {
-	home, err := os.UserHomeDir()
+	dir, err := data.ConfigHomeDir()
 	if err != nil {
-		return filepath.Join(".", ".flashdock", "skipped_update_version")
+		return filepath.Join(".", data.ConfigHomeDirName, "skipped_update_version")
 	}
-	return filepath.Join(home, ".flashdock", "skipped_update_version")
+	return filepath.Join(dir, "skipped_update_version")
 }
 
 type updateDownloadSource struct {
@@ -644,7 +645,7 @@ func probeDownloadLatency(ctx context.Context, src updateDownloadSource) (time.D
 	if err != nil {
 		return 0, err
 	}
-	req.Header.Set("User-Agent", "FlashDock-Updater/"+formatVersionDisplay(Version))
+	req.Header.Set("User-Agent", ProductName+"-Updater/"+formatVersionDisplay(Version))
 	req.Header.Set("Accept", "application/octet-stream")
 	req.Header.Set("Range", "bytes=0-0")
 	if src.Direct {
@@ -699,7 +700,7 @@ func downloadFileWithProgress(ctx context.Context, url, dest string, knownSize i
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "FlashDock-Updater/"+formatVersionDisplay(Version))
+	req.Header.Set("User-Agent", ProductName+"-Updater/"+formatVersionDisplay(Version))
 	req.Header.Set("Accept", "application/octet-stream")
 	if startOffset > 0 {
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", startOffset))

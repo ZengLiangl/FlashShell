@@ -1325,7 +1325,7 @@ export default {
       quitConfirmOpen = true;
       try {
         await ElMessageBox.confirm(
-          "确定要退出 FlashDock 吗？",
+          "确定要退出 FlashShell 吗？",
           "退出应用",
           {
             confirmButtonText: "退出",

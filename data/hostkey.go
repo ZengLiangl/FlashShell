@@ -78,7 +78,7 @@ type KnownHostRecord struct {
 	Fingerprint string `json:"fingerprint"`
 }
 
-// HostKeyManager 管理 ~/.flashdock/app_data.json 中的 knownHosts
+// HostKeyManager 管理 ~/.flashshell/app_data.json 中的 knownHosts
 type HostKeyManager struct {
 	mu           sync.RWMutex
 	hosts        map[string]string // "host:port" -> SHA256 fingerprint（持久）

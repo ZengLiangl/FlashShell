@@ -1,5 +1,5 @@
 name: Release
-run-name: FlashDock ${{ github.ref_name }}
+run-name: FlashShell ${{ github.ref_name }}
 
 on:
   push:
@@ -11,7 +11,7 @@ permissions:
 
 env:
   NODE_OPTIONS: '--max-old-space-size=4096'
-  APP_NAME: FlashDock
+  APP_NAME: FlashShell
   WAILS_VERSION: v2.11.0
 
 jobs:
@@ -283,12 +283,12 @@ jobs:
           fi
           codesign --force --deep --sign - "$APP_PATH" || true
 
-          OUT_NAME="FlashDock-${APP_VERSION}-${{ matrix.os_name }}-${{ matrix.arch_name }}.dmg"
+          OUT_NAME="FlashShell-${APP_VERSION}-${{ matrix.os_name }}-${{ matrix.arch_name }}.dmg"
           # --app-drop-link 会写入 /Applications 软链，打开 DMG 即可拖拽安装
           # create-dmg 偶发因 Finder AppleScript 超时非 0 退出，但仍可能已生成 DMG
           set +e
           create-dmg \
-            --volname "FlashDock ${APP_VERSION}" \
+            --volname "FlashShell ${APP_VERSION}" \
             --window-pos 200 120 \
             --window-size 660 400 \
             --icon-size 100 \
@@ -341,7 +341,7 @@ jobs:
             $exe = Get-ChildItem -Path build/bin -Filter *.exe -Recurse | Select-Object -First 1
           }
           if (-not $exe) { throw "未找到 Windows 可执行文件" }
-          $outName = "FlashDock-$env:APP_VERSION-${{ matrix.os_name }}-${{ matrix.arch_name }}.exe"
+          $outName = "FlashShell-$env:APP_VERSION-${{ matrix.os_name }}-${{ matrix.arch_name }}.exe"
           Copy-Item $exe.FullName "dist/$outName" -Force
           Get-Item "dist/$outName"
           "RELEASE_ASSET=$outName" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
@@ -362,7 +362,7 @@ jobs:
             exit 1
           fi
           chmod +x "$TARGET"
-          OUT_NAME="FlashDock-${APP_VERSION}-${{ matrix.os_name }}-${{ matrix.arch_name }}.tar.gz"
+          OUT_NAME="FlashShell-${APP_VERSION}-${{ matrix.os_name }}-${{ matrix.arch_name }}.tar.gz"
           tar -C "$(dirname "$TARGET")" -czvf "dist/${OUT_NAME}" "$(basename "$TARGET")"
           ls -lah "dist/${OUT_NAME}"
           echo "RELEASE_ASSET=${OUT_NAME}" >> "$GITHUB_ENV"
@@ -398,9 +398,9 @@ jobs:
           set -euo pipefail
           mkdir -p upload
           find release-assets -type f \( \
-            -name 'FlashDock-*-Windows-*.exe' -o \
-            -name 'FlashDock-*-MacOS-*.dmg' -o \
-            -name 'FlashDock-*-Linux-*.tar.gz' \
+            -name 'FlashShell-*-Windows-*.exe' -o \
+            -name 'FlashShell-*-MacOS-*.dmg' -o \
+            -name 'FlashShell-*-Linux-*.tar.gz' \
           \) -exec cp -v {} upload/ \;
           echo "---- upload ----"
           ls -lah upload
@@ -652,7 +652,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
-          name: FlashDock ${{ github.ref_name }}
+          name: FlashShell ${{ github.ref_name }}
           draft: false
           make_latest: true
           body_path: changelog.md

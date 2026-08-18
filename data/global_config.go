@@ -221,17 +221,17 @@ type MachineGroupDefaults struct {
 
 // GlobalConfig 全局配置结构
 type GlobalConfig struct {
-	AppId          string            `yaml:"appId" json:"appId"`
-	WindowsName    string            `yaml:"windowsName" json:"windowsName"`
-	ConfigFiles    []string          `yaml:"configFile" json:"configFile"`
-	LastOpenedFile string            `yaml:"lastOpenedFile" json:"lastOpenedFile"`
-	WorkPaths      map[string]string `yaml:"workPaths" json:"workPaths"`
-	Machines       []define.Machine  `yaml:"machines,omitempty" json:"machines,omitempty"`
+	AppId                    string                 `yaml:"appId" json:"appId"`
+	WindowsName              string                 `yaml:"windowsName" json:"windowsName"`
+	ConfigFiles              []string               `yaml:"configFile" json:"configFile"`
+	LastOpenedFile           string                 `yaml:"lastOpenedFile" json:"lastOpenedFile"`
+	WorkPaths                map[string]string      `yaml:"workPaths" json:"workPaths"`
+	Machines                 []define.Machine       `yaml:"machines,omitempty" json:"machines,omitempty"`
 	MachineGroups            []string               `yaml:"machineGroups,omitempty" json:"machineGroups,omitempty"`
 	MachineGroupDefaultsList []MachineGroupDefaults `yaml:"machineGroupDefaults,omitempty" json:"machineGroupDefaults,omitempty"`
-	GlobalAccounts []GlobalAccount `yaml:"globalAccounts,omitempty" json:"globalAccounts,omitempty"`
-	ThemeSettings  ThemeSettings   `yaml:"themeSettings" json:"themeSettings"`
-	ProxySettings  ProxySettings     `yaml:"proxySettings" json:"proxySettings"`
+	GlobalAccounts           []GlobalAccount        `yaml:"globalAccounts,omitempty" json:"globalAccounts,omitempty"`
+	ThemeSettings            ThemeSettings          `yaml:"themeSettings" json:"themeSettings"`
+	ProxySettings            ProxySettings          `yaml:"proxySettings" json:"proxySettings"`
 	// ShellMonitorIntervalMs Shell 监控面板刷新间隔（毫秒），默认 1000
 	ShellMonitorIntervalMs int `yaml:"shellMonitorIntervalMs" json:"shellMonitorIntervalMs"`
 	// SSHHandshakeTimeoutSec SSH 握手超时（秒）：TCP 连接 + SSH 协商，Shell 与任务远程执行共用，默认 30
@@ -313,6 +313,15 @@ func NormalizeHomeMinimizedZone(zone string) string {
 	default:
 		return ""
 	}
+}
+
+// NormalizeWindowsName 窗口标题：空值或旧默认名 FlashDock 归一为 FlashShell
+func NormalizeWindowsName(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" || name == "FlashDock" {
+		return "FlashShell"
+	}
+	return name
 }
 
 // NormalizeAppIconPreset 校验 Dock 图标预设 id
@@ -554,7 +563,7 @@ func (gcm *GlobalConfigManager) createDefaultGlobalConfig() error {
 	defaultCfgPath := DefaultConfigPath()
 	defaultConfig := &GlobalConfig{
 		AppId:       "com.runner",
-		WindowsName: "FlashDock",
+		WindowsName: "FlashShell",
 		ConfigFiles: []string{
 			defaultCfgPath,
 		},

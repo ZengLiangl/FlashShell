@@ -11,11 +11,10 @@ import (
 )
 
 func pendingConnectPath() (string, error) {
-	home, err := os.UserHomeDir()
+	dir, err := data.ConfigHomeDir()
 	if err != nil {
 		return "", err
 	}
-	dir := filepath.Join(home, ".flashdock")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}

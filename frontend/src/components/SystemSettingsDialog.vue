@@ -47,7 +47,7 @@
                             <div class="system-setting-row">
                                 <div class="system-setting-text">
                                     <span class="system-setting-label">应用名称</span>
-                                    <span class="system-setting-hint">窗口标题栏显示名称，留空则使用 FlashDock</span>
+                                    <span class="system-setting-hint">窗口标题栏显示名称，留空则使用 FlashShell</span>
                                 </div>
                                 <div class="system-setting-control system-setting-control--wide">
                                     <el-input v-model="form.windowsName" class="system-setting-text-input" size="small"
@@ -70,7 +70,7 @@
                                 <div class="setting-card setting-card--padded">
                                 <div class="system-setting-text" style="margin-bottom: 10px">
                                     <span class="system-setting-hint">选择预设或上传自定义图片（PNG / JPG），立即更新程序坞/任务栏图标，并改写系统里的应用图标（macOS「应用程序」、Windows 开始菜单与快捷方式）；自定义图保存至
-                                        ~/.flashdock/icons/</span>
+                                        ~/.flashshell/icons/</span>
                                 </div>
                                 <div class="dock-icon-presets">
                                     <button v-for="preset in appIconPresets" :key="preset.id" type="button"
@@ -641,7 +641,7 @@
                             <div v-show="themePanel === 'ui'" class="preview-ui" :style="previewUiStyle">
                                 <div class="preview-bar">
                                     <span class="preview-dot"></span>
-                                    <span class="preview-title">FlashDock</span>
+                                    <span class="preview-title">FlashShell</span>
                                     <span class="preview-pill">{{ previewUiFontLabel }}</span>
                                 </div>
                                 <div class="preview-body">
@@ -990,7 +990,7 @@ export default {
 
         watch(() => props.panel, (p) => applyPanelRoute(p), { immediate: true })
         const form = reactive({
-            windowsName: 'FlashDock',
+            windowsName: 'FlashShell',
             appIconPreset: 'default',
             startupFullscreen: false,
             themeSettings: {
@@ -1139,7 +1139,7 @@ export default {
                 if (!id) return
                 form.appIconPreset = id
                 await loadAppIconPresets(true)
-                ElMessage.success('自定义图标已应用，并保存到 ~/.flashdock/icons/')
+                ElMessage.success('自定义图标已应用，并保存到 ~/.flashshell/icons/')
             } catch (e) {
                 ElMessage.error(`上传失败: ${e}`)
             } finally {
@@ -1312,7 +1312,7 @@ theme preview · ${theme.foreground}`
 
         const load = async () => {
             const config = await App.GetSystemSettings()
-            form.windowsName = (config.windowsName || 'FlashDock').trim() || 'FlashDock'
+            form.windowsName = (config.windowsName || 'FlashShell').trim() || 'FlashShell'
             form.appIconPreset = config.appIconPreset || 'default'
             form.startupFullscreen = !!config.startupFullscreen
             form.themeSettings = {
@@ -1740,7 +1740,7 @@ theme preview · ${theme.foreground}`
             saving.value = true
             try {
                 const config = await App.GetSystemSettings()
-                config.windowsName = (form.windowsName || '').trim() || 'FlashDock'
+                config.windowsName = (form.windowsName || '').trim() || 'FlashShell'
                 config.appIconPreset = form.appIconPreset || 'default'
                 config.startupFullscreen = !!form.startupFullscreen
                 config.themeSettings = { ...form.themeSettings }

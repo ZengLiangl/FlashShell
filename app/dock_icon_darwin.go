@@ -108,14 +108,19 @@ func isFlashDockAppBundle(path string) bool {
 	if path == "" {
 		return false
 	}
-	exe := filepath.Join(path, "Contents", "MacOS", "FlashDock")
-	st, err := os.Stat(exe)
-	return err == nil && !st.IsDir()
+	for _, name := range []string{ProductName, LegacyProductName} {
+		exe := filepath.Join(path, "Contents", "MacOS", name)
+		st, err := os.Stat(exe)
+		if err == nil && !st.IsDir() {
+			return true
+		}
+	}
+	return false
 }
 
 func candidateFlashDockAppBundles() []string {
 	seen := make(map[string]struct{})
-	out := make([]string, 0, 3)
+	out := make([]string, 0, 4)
 	add := func(p string) {
 		p = filepath.Clean(strings.TrimSpace(p))
 		if p == "" || p == "." || p == "/" {
@@ -136,9 +141,13 @@ func candidateFlashDockAppBundles() []string {
 		}
 		add(flashDockAppBundleFromExecutable(exe))
 	}
-	add("/Applications/FlashDock.app")
+	homes := []string{"/Applications"}
 	if home, err := os.UserHomeDir(); err == nil {
-		add(filepath.Join(home, "Applications", "FlashDock.app"))
+		homes = append(homes, filepath.Join(home, "Applications"))
+	}
+	for _, root := range homes {
+		add(filepath.Join(root, ProductName+".app"))
+		add(filepath.Join(root, LegacyProductName+".app"))
 	}
 	return out
 }

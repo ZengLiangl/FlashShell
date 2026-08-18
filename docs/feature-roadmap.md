@@ -1,4 +1,4 @@
-# FlashDock 功能与优化路线图
+# FlashShell 功能与优化路线图
 
 > 定位：桌面运维工作台 —— **任务流水线**（YAML 驱动）+ **多会话 Shell/SSH/SFTP**。  
 > 本文档基于 v1.0.8 代码现状整理，与 `memory-optimization.md` 互补：后者聚焦内存，本文聚焦功能补齐与产品演进。
@@ -25,7 +25,7 @@
 | `Step.when` 未实现 | schema 有字段，`step_runner.go` 未求值 |
 | 单 Command 执行缺失 | `ExecuteCommand` 实际跑整个 SubProject |
 | 远程步骤不可中断 | `USAGE.md` 已注明，前端无法强制终止 remote SSH 步骤 | **已实现**：`SSHClient.Stop()` 关闭活跃 session + `executeSteps` 轮询 stopChannel |
-| Host Key 未校验 | `ssh.InsecureIgnoreHostKey()`，无 known_hosts 管理 | **已实现**：`~/.flashdock/known_hosts.json` + 信任对话框 |
+| Host Key 未校验 | `ssh.InsecureIgnoreHostKey()`，无 known_hosts 管理 | **已实现**：`~/.flashshell/known_hosts.json` + 信任对话框 |
 
 ---
 

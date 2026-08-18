@@ -1,8 +1,8 @@
 {
-    "name": "FlashDock-frontend",
+    "name": "FlashShell-frontend",
     "version": "1.0.0",
     "type": "module",
-    "description": "FlashDock Frontend",
+    "description": "FlashShell Frontend",
     "main": "index.js",
     "scripts": {
         "build": "vite build",

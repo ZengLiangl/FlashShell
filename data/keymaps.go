@@ -60,7 +60,7 @@ func normalizeKeyMapSettings(s *KeyMapSettings) {
 	}
 }
 
-// LoadKeyMapSettings 从 ~/.flashdock/keymaps.json 加载
+// LoadKeyMapSettings 从 ~/.flashshell/keymaps.json 加载
 func LoadKeyMapSettings() (KeyMapSettings, error) {
 	path, err := keyMapSettingsPath()
 	if err != nil {
@@ -81,7 +81,7 @@ func LoadKeyMapSettings() (KeyMapSettings, error) {
 	return s, nil
 }
 
-// SaveKeyMapSettings 保存到 ~/.flashdock/keymaps.json
+// SaveKeyMapSettings 保存到 ~/.flashshell/keymaps.json
 func SaveKeyMapSettings(s KeyMapSettings) error {
 	normalizeKeyMapSettings(&s)
 	path, err := keyMapSettingsPath()

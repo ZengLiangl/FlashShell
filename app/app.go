@@ -1015,10 +1015,10 @@ func (a *App) UpdateApplicationMenu() error {
 		wailsRuntime.EventsEmit(a.ctx, "menu:refresh", nil)
 	}
 	globalConfig, _ := a.GetGlobalConfig()
-	if globalConfig.WindowsName != "" {
-		wailsRuntime.WindowSetTitle(a.ctx, globalConfig.WindowsName)
+	if globalConfig != nil {
+		wailsRuntime.WindowSetTitle(a.ctx, NormalizeWindowTitle(globalConfig.WindowsName))
 	} else {
-		wailsRuntime.WindowSetTitle(a.ctx, "FlashDock")
+		wailsRuntime.WindowSetTitle(a.ctx, ProductName)
 	}
 	return nil
 }
@@ -1400,9 +1400,7 @@ func (a *App) GetSystemSettings() (*data.GlobalConfig, error) {
 		cfg.TaskOutputMaxLines = normalizeTaskOutputMaxLines(cfg.TaskOutputMaxLines)
 		cfg.ShellCommandHistoryMax = data.NormalizeShellCommandHistoryMax(cfg.ShellCommandHistoryMax)
 		cfg.AppIconPreset = resolveAppIconPreset(cfg.AppIconPreset)
-		if strings.TrimSpace(cfg.WindowsName) == "" {
-			cfg.WindowsName = "FlashDock"
-		}
+		cfg.WindowsName = data.NormalizeWindowsName(cfg.WindowsName)
 		normalizeProxySettings(&cfg.ProxySettings)
 		cfg.ProxySettings.HydrateProxyPassword()
 		if cfg.ShellLogHighlight == nil {
@@ -1429,7 +1427,7 @@ func (a *App) GetSystemSettings() (*data.GlobalConfig, error) {
 	return cfg, nil
 }
 
-// GetShortcutSettings 获取快捷键配置（~/.flashdock/app_data.json → shortcuts）
+// GetShortcutSettings 获取快捷键配置（~/.flashshell/app_data.json → shortcuts）
 func (a *App) GetShortcutSettings() (data.ShortcutSettings, error) {
 	return data.LoadShortcutSettings()
 }
@@ -1450,7 +1448,7 @@ func (a *App) SaveShortcutSettings(settings data.ShortcutSettings) error {
 	return nil
 }
 
-// GetKeyMapSettings 获取按键映射配置（~/.flashdock/keymaps.json）
+// GetKeyMapSettings 获取按键映射配置（~/.flashshell/keymaps.json）
 func (a *App) GetKeyMapSettings() (data.KeyMapSettings, error) {
 	return data.LoadKeyMapSettings()
 }
@@ -1479,10 +1477,7 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	config.ShellCommandHistoryMax = data.NormalizeShellCommandHistoryMax(config.ShellCommandHistoryMax)
 	config.HomeMinimizedZone = data.NormalizeHomeMinimizedZone(config.HomeMinimizedZone)
 	config.AppIconPreset = resolveAppIconPreset(config.AppIconPreset)
-	config.WindowsName = strings.TrimSpace(config.WindowsName)
-	if config.WindowsName == "" {
-		config.WindowsName = "FlashDock"
-	}
+	config.WindowsName = data.NormalizeWindowsName(config.WindowsName)
 	config.ShellMonitorIntervalSec = 0
 	config.ShellLogHighlightColors = data.NormalizeShellLogHighlightColors(config.ShellLogHighlightColors)
 	config.ShellLogHighlightDisabled = data.NormalizeShellLogHighlightDisabled(config.ShellLogHighlightDisabled)

@@ -41,7 +41,7 @@ type appIconPresetDef struct {
 
 var appIconPresetDefs = []appIconPresetDef{
 	{ID: "default", Label: "默认"},
-	{ID: "helm", Label: "闪舵", FileName: "dock-helm.png"},
+	{ID: "helm", Label: "Helm", FileName: "dock-helm.png"},
 	{ID: "pipeline", Label: "任务流水线", FileName: "dock-pipeline.png"},
 	{ID: "shell", Label: "Shell 终端", FileName: "dock-shell.png"},
 	{ID: "split", Label: "分屏", FileName: "dock-split.png"},

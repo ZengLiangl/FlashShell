@@ -57,7 +57,7 @@ export default {
         status: { type: Object, required: true },
         selectedProject: { type: Object, default: null },
         remoteFailure: { type: Object, default: null },
-        appInfo: { type: String, default: 'FlashDock' }
+        appInfo: { type: String, default: 'FlashShell' }
     },
     emits: ['stop-all', 'open-failure-shell']
 }

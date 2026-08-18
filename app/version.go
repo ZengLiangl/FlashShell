@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"FlashDock/data"
 )
 
 // Version 当前应用版本（不含 v 前缀）。可通过构建 ldflags 注入：
@@ -99,8 +101,10 @@ func resolveGitHubToken() string {
 	}
 	if home, err := os.UserHomeDir(); err == nil {
 		candidates = append(candidates,
-			filepath.Join(home, ".flashdock", "github_pat"),
-			filepath.Join(home, ".flashdock", "github_token"),
+			filepath.Join(home, data.ConfigHomeDirName, "github_pat"),
+			filepath.Join(home, data.ConfigHomeDirName, "github_token"),
+			filepath.Join(home, data.LegacyConfigHomeDirName, "github_pat"),
+			filepath.Join(home, data.LegacyConfigHomeDirName, "github_token"),
 		)
 	}
 	for _, p := range candidates {

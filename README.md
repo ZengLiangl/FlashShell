@@ -1,9 +1,9 @@
 <p align="center">
-  <img src="build/appicon.png" alt="FlashDock" width="144" height="144" />
+  <img src="build/appicon.png" alt="FlashShell" width="144" height="144" />
 </p>
 
-<h1 align="center">FlashDock</h1>
-<h3 align="center">闪舵 · 一次停靠，全域运维</h3>
+<h1 align="center">FlashShell</h1>
+<h3 align="center">多会话 SSH / SFTP 桌面终端</h3>
 
 <p align="center">
   <strong>YAML 驱动任务流水线 × 多会话 SSH / SFTP 终端 × 本地 Shell</strong><br/>
@@ -31,7 +31,7 @@
 ---
 
 ```text
-                         ╔════════════════ FlashDock ════════════════╗
+                         ╔════════════════ FlashShell ════════════════╗
                          ║                                           ║
     config.yaml ────────►║   任务模式          Shell 模式            ║◄──── SSH / SFTP / PTY
     本地 & 远程混排       ║   一键流水线        多 Tab · 分屏 · 广播    ║      本机终端
@@ -40,11 +40,11 @@
                          ╚══════════════════ 同港出海 ═════════════════╝
 ```
 
-## 闪舵是什么
+## FlashShell 是什么
 
-**FlashDock（闪舵）** 是一款跨平台桌面运维工作台。它不是又一个终端模拟器，而是把「可重复的发布流水线」和「即兴的 Shell 交互」焊在同一艘船上：
+**FlashShell** 是一款跨平台桌面 Shell 工作台。多会话 SSH / SFTP 是主业，YAML 任务流水线是边上的一键脚本：
 
-| | 传统做法 | FlashDock |
+| | 传统做法 | FlashShell |
 |:--|:--|:--|
 | 发布脚本 | 散落各处的 shell / bat | **YAML 编排**，图形化一键执行 |
 | 远程运维 | 另开 Xshell / iTerm | **内置多会话 Shell**，Tab / 分屏 / 广播 |
@@ -52,8 +52,7 @@
 | 配置管理 | 环境变量靠记忆 | **全局变量表** + `${KEY}` 自动替换 |
 | 任务与终端 | 二选一，来回切窗口 | **并行不互斥**，左跑任务右登舰 |
 
-> **闪** — 配置即执行，点一下流水线起飞，ANSI 彩色日志实时回港。  
-> **舵** — 任务与 Shell 同舵掌控，多机、多 Tab、监控与文件同屏调度。
+> 远程会话、分屏、广播、SFTP 和隧道都在同一个窗口里；任务流水线需要时再开。
 
 ---
 
@@ -104,7 +103,7 @@
 
 - SSH 密钥 / 密码**加密落盘**，列表不以明文展示
 - **Host Key 信任**管理（`known_hosts.json` + 指纹确认）
-- 业务 YAML 与 `~/.flashdock/` 全局配置**双层分离**
+- 业务 YAML 与 `~/.flashshell/` 全局配置**双层分离**
 - HTTP / SOCKS **代理**贯通 SSH、SFTP 与更新请求
 - 机器分组、全局账号模板、环境变量中心
 
@@ -152,7 +151,7 @@ flowchart TB
 | 桌面壳 | **Go 1.23+** · [Wails v2](https://wails.io) | 原生窗口、系统 API、Go 并发 |
 | 舰桥 UI | **Vue 3** · Element Plus · Vite · **xterm.js** | 任务 / Shell 双模式界面 |
 | 执行引擎 | SSH · SFTP · PTY · `cmds/` | 本地命令、远程步骤、文件传输 |
-| 数据层 | YAML · `~/.flashdock/` | 业务配置、机器、主题、快捷键 |
+| 数据层 | YAML · `~/.flashshell/` | 业务配置、机器、主题、快捷键 |
 
 ---
 
@@ -160,11 +159,11 @@ flowchart TB
 
 | 平台 | 状态 | 构建产物 |
 |:---|:---:|:---|
-| Windows | ✅ | `FlashDock.exe` / NSIS 安装包 |
-| macOS | ✅ | `FlashDock.app` |
-| Linux | ✅ | `FlashDock` 可执行文件 |
+| Windows | ✅ | `FlashShell.exe` / NSIS 安装包 |
+| macOS | ✅ | `FlashShell.app` |
+| Linux | ✅ | `FlashShell` 可执行文件 |
 
-打 tag 发布时，GitHub Actions 自动构建多平台产物，命名格式：`FlashDock-<tag>-<os>-<arch>.*`
+打 tag 发布时，GitHub Actions 自动构建多平台产物，命名格式：`FlashShell-<tag>-<os>-<arch>.*`
 
 ---
 
@@ -193,12 +192,12 @@ wails dev
 wails build
 ```
 
-构建产物位于 `build/bin/`（macOS 为 `FlashDock.app`）。
+构建产物位于 `build/bin/`（macOS 为 `FlashShell.app`）。
 
 ### 全局数据目录
 
 ```text
-~/.flashdock/
+~/.flashshell/
 ├── global_config.yaml    # 机器、主题、代理、环境变量…
 ├── shortcuts.json        # 快捷键绑定
 ├── shell_history.json    # Shell 连接历史
@@ -209,13 +208,13 @@ wails build
 
 ## 配置体系
 
-FlashDock 采用**业务与全局双层配置**，职责清晰、互不覆盖：
+FlashShell 采用**业务与全局双层配置**，职责清晰、互不覆盖：
 
 | 配置 | 路径 | 作用 |
 |:---|:---|:---|
 | 业务配置 | `config.yaml`（可多文件切换） | 项目、子项目、命令流水线 |
-| 全局配置 | `~/.flashdock/global_config.yaml` | 窗口、机器清单、主题、代理、`workPaths` |
-| 快捷键 | `~/.flashdock/shortcuts.json` | 系统级快捷键自定义 |
+| 全局配置 | `~/.flashshell/global_config.yaml` | 窗口、机器清单、主题、代理、`workPaths` |
+| 快捷键 | `~/.flashshell/shortcuts.json` | 系统级快捷键自定义 |
 
 业务配置中的 `${KEY}` 由全局 `workPaths` 环境变量表替换。全局配置**仅在文件不存在时写入默认值**，不会覆盖已有内容。
 
@@ -271,7 +270,7 @@ go fmt ./... && go vet ./...       # 格式化 & 静态检查
 | `-reg=desk` | 前台运行（默认） |
 | `-reg=back` | 后台守护进程 |
 
-后台模式日志：`/tmp/FlashDock.out`、`/tmp/FlashDock.err`。
+后台模式日志：`/tmp/FlashShell.out`、`/tmp/FlashShell.err`。
 
 ---
 
@@ -281,7 +280,7 @@ go fmt ./... && go vet ./...       # 格式化 & 静态检查
 |:---|:---|
 | Wails 构建失败 | 更新 Wails CLI；确认 Go / Node 版本满足要求 |
 | SSH 连接失败 | 设置中心「测试连接」；检查密钥权限（`chmod 600`）与网络 |
-| 全局配置被改写 | 用户数据在 `~/.flashdock/global_config.yaml`，非业务 `config.yaml` |
+| 全局配置被改写 | 用户数据在 `~/.flashshell/global_config.yaml`，非业务 `config.yaml` |
 | 配置不生效 | 顶部配置文件菜单 → 刷新；或切换配置文件后重载 |
 | 快捷键不生效 | 系统设置 → 快捷键保存后重试；输入框聚焦时默认不抢快捷键 |
 | 代理不生效 | 系统设置 → HTTP 代理 → 启用手动模式并测试连通性 |
@@ -297,5 +296,5 @@ go fmt ./... && go vet ./...       # 格式化 & 静态检查
 ---
 
 <p align="center">
-  <sub><b>FlashDock · 闪舵</b> — 把运维留在港里，把时间留给真正要开的船。</sub>
+  <sub><b>FlashShell</b> — 把会话留在一个窗口里，把时间留给真正要敲的命令。</sub>
 </p>

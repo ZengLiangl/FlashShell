@@ -159,7 +159,7 @@ func fillShortcutDefaults(s *ShortcutSettings) {
 	}
 }
 
-// LoadShortcutSettings 从 ~/.flashdock/app_data.json 的 shortcuts 加载
+// LoadShortcutSettings 从 ~/.flashshell/app_data.json 的 shortcuts 加载
 func LoadShortcutSettings() (ShortcutSettings, error) {
 	d, err := loadAppDataSection()
 	if err != nil {
@@ -235,7 +235,7 @@ func migrateKeyMapsIntoSnippets(s *ShortcutSettings) bool {
 	return true
 }
 
-// SaveShortcutSettings 保存到 ~/.flashdock/app_data.json 的 shortcuts
+// SaveShortcutSettings 保存到 ~/.flashshell/app_data.json 的 shortcuts
 func SaveShortcutSettings(s ShortcutSettings) error {
 	fillShortcutDefaults(&s)
 	return updateAppData(func(d *AppDataFile) {

@@ -104,14 +104,17 @@ func TestPruneHistoricalUpdateArtifacts(t *testing.T) {
 
 func TestParseFlashDockArtifactVersion(t *testing.T) {
 	cases := map[string]string{
-		"FlashDock-1.2.3":                        "1.2.3",
-		"FlashDock-1.2.3-Windows-Amd64.exe":      "1.2.3",
-		"FlashDock-1.2.3-MacOS-Arm64.dmg":        "1.2.3",
-		"FlashDock-1.2.3-Linux-Amd64.tar.gz":     "1.2.3",
-		"FlashDock.app":                          "",
-		"FlashDock.exe":                          "",
-		"FlashDock-README":                       "",
-		".flashdock-update-windows-1.2.3":        "",
+		"FlashShell-1.2.3":                   "1.2.3",
+		"FlashShell-1.2.3-Windows-Amd64.exe": "1.2.3",
+		"FlashDock-1.2.3":                    "1.2.3",
+		"FlashDock-1.2.3-Windows-Amd64.exe":  "1.2.3",
+		"FlashDock-1.2.3-MacOS-Arm64.dmg":    "1.2.3",
+		"FlashDock-1.2.3-Linux-Amd64.tar.gz": "1.2.3",
+		"FlashShell.app":                     "",
+		"FlashDock.app":                      "",
+		"FlashDock.exe":                      "",
+		"FlashDock-README":                   "",
+		".flashdock-update-windows-1.2.3":    "",
 	}
 	for name, want := range cases {
 		if got := parseFlashDockArtifactVersion(name); got != want {

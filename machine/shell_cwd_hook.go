@@ -6,7 +6,7 @@ import (
 )
 
 // shellCwdHookScript 写入远端 ~/.flashdock_cwd.sh，由 bashrc/zshrc source。
-const shellCwdHookScript = `# FlashDock: report cwd via OSC 777 + sidecar file
+const shellCwdHookScript = `# FlashShell: report cwd via OSC 777 + sidecar file
 __fd_cwd() {
   printf '\033]777;cwd;%s\007' "$PWD"
   [ -n "$HOME" ] && printf '%s' "$PWD" > "$HOME/.flashdock_pwd" 2>/dev/null

@@ -20,7 +20,7 @@ type ConfigManager struct {
 }
 
 // NewConfigManager 创建配置管理器。
-// 全局配置默认落在 ConfigHomeDir()（可用 FLASHDOCK_CONFIG_HOME 覆盖，测试勿写真实 ~/.flashdock）。
+// 全局配置默认落在 ConfigHomeDir()（可用 FLASHSHELL_CONFIG_HOME 覆盖，测试勿写真实 ~/.flashshell）。
 func NewConfigManager(configPath string, sessionManager *SessionManager) *ConfigManager {
 	gcm := NewGlobalConfigManager("")
 
@@ -431,7 +431,7 @@ func (cm *ConfigManager) SaveGlobalConfig(config *GlobalConfig) error {
 	return cm.globalConfigManager.SaveGlobalConfig(config)
 }
 
-// SetGlobalConfigManagerForTest 仅测试使用：注入临时全局配置路径，避免写真实 ~/.flashdock
+// SetGlobalConfigManagerForTest 仅测试使用：注入临时全局配置路径，避免写真实 ~/.flashshell
 func (cm *ConfigManager) SetGlobalConfigManagerForTest(gcm *GlobalConfigManager) {
 	if cm != nil {
 		cm.globalConfigManager = gcm

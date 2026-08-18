@@ -10,9 +10,11 @@ func TestIsWindowsReleaseAssetFileName(t *testing.T) {
 		name string
 		want bool
 	}{
+		{"FlashShell-1.1.13-Windows-Amd64.exe", true},
 		{"FlashDock-1.1.13-Windows-Amd64.exe", true},
 		{"FlashDock-1.1.13-Windows-Arm64.exe", true},
 		{"flashdock-2.0.0-windows-amd64.exe", true},
+		{"FlashShell.exe", false},
 		{"FlashDock.exe", false},
 		{"FlashDock2222.exe", false},
 		{"FlashDock-1.1.13-MacOS-Arm64.dmg", false},
@@ -57,7 +59,7 @@ func TestParseApplyUpdateArgs(t *testing.T) {
 func TestWindowsFinalExePath(t *testing.T) {
 	input := filepath.Join("Users", "a", "Desktop", "FlashDock2222.exe")
 	got := windowsFinalExePath(input)
-	want := filepath.Join("Users", "a", "Desktop", "FlashDock.exe")
+	want := filepath.Join("Users", "a", "Desktop", "FlashShell.exe")
 	if got != want {
 		t.Fatalf("got %q want %q", got, want)
 	}

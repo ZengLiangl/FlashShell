@@ -488,7 +488,7 @@ html.fd-hide-hover-tooltips .el-popper.is-pure.is-light {
   pointer-events: none !important;
 }
 
-/* macOS TitleBarHidden：顶栏与红绿灯同排，去掉独立「FlashDock」标题行 */
+/* macOS TitleBarHidden：顶栏与红绿灯同排，去掉独立标题行 */
 html.is-mac-hidden-titlebar {
   /* 红绿灯 x=12 + 三颗按钮宽度，留给内容的左侧安全区 */
   --mac-traffic-inset: 76px;

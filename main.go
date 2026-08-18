@@ -46,8 +46,8 @@ func main() {
 				}
 			}
 
-			stdoutFile, _ := os.OpenFile("/tmp/FlashDock.out", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-			stderrFile, _ := os.OpenFile("/tmp/FlashDock.err", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+			stdoutFile, _ := os.OpenFile("/tmp/FlashShell.out", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+			stderrFile, _ := os.OpenFile("/tmp/FlashShell.err", os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 
 			cmd := exec.Command(exePath, childArgs...)
 			cmd.Env = append(os.Environ(), "FLASHDOCK_DAEMONIZED=1")
@@ -71,9 +71,9 @@ func main() {
 
 	// 获取窗口名称
 	globalConfig, err := appInstance.GetGlobalConfig()
-	windowsName := "FlashDock" // 默认窗口名称
-	if err == nil && globalConfig != nil && strings.TrimSpace(globalConfig.WindowsName) != "" {
-		windowsName = strings.TrimSpace(globalConfig.WindowsName)
+	windowsName := app.ProductName
+	if err == nil && globalConfig != nil {
+		windowsName = app.NormalizeWindowTitle(globalConfig.WindowsName)
 	}
 
 	// 按主题初始化窗口背景，避免标题栏/边缘与主题不一致
@@ -101,9 +101,9 @@ func main() {
 		WindowStartState: options.Normal,
 		// Windows 无边框，顶栏与内容合一；macOS 用 TitleBarHidden，勿开 Frameless
 		Frameless: runtime.GOOS == "windows",
-		MinWidth:   1200,
-		MinHeight:  768,
-		Menu:             nil,
+		MinWidth:  1200,
+		MinHeight: 768,
+		Menu:      nil,
 		Mac: &mac.Options{
 			// 隐藏系统标题文字行，内容顶到窗口最上沿；红绿灯垂直位置由 setTrafficLightPosition 对齐顶栏
 			TitleBar:             mac.TitleBarHidden(),

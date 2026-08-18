@@ -145,8 +145,8 @@ func ensureOriginalExeIconBackup(exe string) {
 }
 
 func isFlashDockShortcutName(name string) bool {
-	base := strings.TrimSuffix(name, filepath.Ext(name))
-	return strings.Contains(strings.ToLower(base), "flashdock")
+	base := strings.ToLower(strings.TrimSuffix(name, filepath.Ext(name)))
+	return strings.Contains(base, "flashshell") || strings.Contains(base, "flashdock")
 }
 
 func windowsShortcutSearchRoots(exePath string) []string {

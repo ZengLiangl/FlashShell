@@ -12,7 +12,7 @@ import (
 
 const appDataFileName = "app_data.json"
 
-// AppDataFile ~/.flashdock/app_data.json：用顶层 key 区分原多个独立 JSON
+// AppDataFile ~/.flashshell/app_data.json：用顶层 key 区分原多个独立 JSON
 type AppDataFile struct {
 	KnownHosts          []KnownHostRecord           `json:"knownHosts"`
 	ShellCommandHistory shellCmdHistoryFile         `json:"shellCommandHistory"`

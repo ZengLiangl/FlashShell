@@ -263,7 +263,7 @@ func sameWindowsFile(a, b string) (bool, error) {
 }
 
 // maybeRelaunchNormalizedWindowsPortable 处理旧版 PS1 留下的版本号文件名：
-// 复制为 FlashDock.exe 并拉起，再退出自身（由新进程删除旧文件）。
+// 复制为 FlashShell.exe 并拉起，再退出自身（由新进程删除旧文件）。
 // 仅匹配发布资源名；自定义名不自动改名。
 func maybeRelaunchNormalizedWindowsPortable(args []string) bool {
 	if _, isApply := parseApplyUpdateArgs(args); isApply {

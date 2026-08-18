@@ -141,7 +141,7 @@ func Test(ctx context.Context, s Settings, testURL string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("User-Agent", "FlashDock-ProxyCheck/1.0")
+	req.Header.Set("User-Agent", "FlashShell-ProxyCheck/1.0")
 	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("连接失败: %w", err)

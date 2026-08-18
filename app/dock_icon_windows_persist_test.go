@@ -10,6 +10,9 @@ import (
 )
 
 func TestIsFlashDockShortcutName(t *testing.T) {
+	if !isFlashDockShortcutName("FlashShell.lnk") {
+		t.Fatal("expected FlashShell.lnk")
+	}
 	if !isFlashDockShortcutName("FlashDock.lnk") {
 		t.Fatal("expected FlashDock.lnk")
 	}

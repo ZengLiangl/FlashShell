@@ -26,7 +26,7 @@ func (a *App) ListAppIconPresets() []AppIconPresetInfo {
 	return listAppIconPresets()
 }
 
-// PickCustomAppIcon 选择图片并保存到 ~/.flashdock/icons/custom.png，返回预设 id "custom"
+// PickCustomAppIcon 选择图片并保存到 ~/.flashshell/icons/custom.png，返回预设 id "custom"
 func (a *App) PickCustomAppIcon() (string, error) {
 	if a.ctx == nil {
 		return "", fmt.Errorf("应用未就绪")
@@ -94,11 +94,11 @@ func (a *App) applyWindowTitle(windowsName string) {
 	if a.ctx == nil {
 		return
 	}
-	title := strings.TrimSpace(windowsName)
-	if title == "" {
-		title = "FlashDock"
-	}
-	wailsRuntime.WindowSetTitle(a.ctx, title)
+	wailsRuntime.WindowSetTitle(a.ctx, NormalizeWindowTitle(windowsName))
+}
+
+func NormalizeWindowTitle(name string) string {
+	return data.NormalizeWindowsName(name)
 }
 
 func (a *App) applyAppIcon(preset string) {
@@ -122,7 +122,7 @@ func retryApplicationDockIcon(pngBytes []byte) {
 
 func (a *App) applyAppBranding(cfg *data.GlobalConfig) {
 	if cfg == nil {
-		a.applyWindowTitle("FlashDock")
+		a.applyWindowTitle(ProductName)
 		a.applyAppIcon("default")
 		return
 	}

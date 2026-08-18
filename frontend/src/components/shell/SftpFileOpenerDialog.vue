@@ -17,7 +17,7 @@
         @click="pickBuiltin"
       >
         <div class="opener-option-title">内置编辑器</div>
-        <div class="opener-option-desc">在 FlashDock 中编辑文本文件</div>
+        <div class="opener-option-desc">在 FlashShell 中编辑文本文件</div>
       </button>
       <button
         type="button"

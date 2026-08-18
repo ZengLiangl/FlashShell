@@ -4,7 +4,7 @@
     <aside v-if="hasProjects" class="home-rail" aria-label="首页分区">
       <div class="rail-brand" @dblclick="onChromeTitleDblActivate" @mousedown="onChromeTitlePointerDown">
         <img class="rail-brand-mark" :src="brandIconUrl" alt="" aria-hidden="true" />
-        <span class="rail-brand-text">FlashDock</span>
+        <span class="rail-brand-text">FlashShell</span>
       </div>
       <nav class="rail-nav">
         <button type="button" class="rail-item" :class="{ active: homeSection === 'task' }"

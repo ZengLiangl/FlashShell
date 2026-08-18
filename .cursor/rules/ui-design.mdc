@@ -1,5 +1,5 @@
 ---
-description: FlashDock UI 设计规范：主题令牌、组件布局、图标按钮与设置面板模式
+description: FlashShell UI 设计规范：主题令牌、组件布局、图标按钮与设置面板模式
 globs: frontend/src/**/*.{vue,css}
 alwaysApply: false
 ---

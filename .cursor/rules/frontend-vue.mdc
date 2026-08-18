@@ -1,5 +1,5 @@
 ---
-description: FlashDock 前端 Vue/Wails 约定：组件结构、绑定调用、事件与状态
+description: FlashShell 前端 Vue/Wails 约定：组件结构、绑定调用、事件与状态
 globs: frontend/src/**/*.{vue,js,ts}
 alwaysApply: false
 ---

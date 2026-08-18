@@ -1,4 +1,4 @@
-# FlashDock 内存优化方案
+# FlashShell 内存优化方案
 
 > 目标：减少应用启动后的常驻内存占用，同时保持现有功能与用户体验。  
 > 技术栈：Go + Wails v2 后端，Vue 3 + Element Plus + xterm.js 前端。

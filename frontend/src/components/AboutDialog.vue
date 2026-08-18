@@ -1,7 +1,7 @@
 <template>
     <el-dialog
         v-model="visibleProxy"
-        :title="promptMode ? '发现新版本' : '关于 FlashDock'"
+        :title="promptMode ? '发现新版本' : '关于 FlashShell'"
         width="720px"
         :before-close="handleClose"
     >
@@ -9,8 +9,8 @@
             <div class="brand">
                 <img class="brand-mark" src="../assets/appicon.png" alt="" aria-hidden="true" />
                 <div>
-                    <h2>FlashDock <span class="cn">闪舵</span></h2>
-                    <p class="subtitle">一次停靠 · 本地任务与远程 Shell 同港出海</p>
+                    <h2>FlashShell</h2>
+                    <p class="subtitle">多会话 SSH / SFTP 桌面终端</p>
                 </div>
             </div>
 
@@ -216,7 +216,7 @@ export default {
         }
 
         const defaultIntro = `
-      <p><strong>FlashDock（闪舵）</strong>：跨平台桌面运维工作台，任务流水线与远程 Shell 集于一体。</p>
+      <p><strong>FlashShell</strong>：跨平台桌面 Shell 工作台，多会话终端为主，任务流水线为辅。</p>
       <ul>
         <li><strong>任务模式</strong>：YAML 驱动本地 / 远程命令，一键执行并实时回传</li>
         <li><strong>Shell 模式</strong>：多会话 SSH、SFTP，支持导入 Xshell / FinalShell</li>

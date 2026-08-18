@@ -10,14 +10,14 @@ import (
 )
 
 const (
-	windowsFinalExeName           = "FlashDock.exe"
-	envCleanupStaged              = "FLASHDOCK_CLEANUP_STAGED"
-	envDeleteOldExe               = "FLASHDOCK_DELETE_OLD"
-	applyUpdateFlag               = "--apply-update"
-	applyUpdateTargetFlag         = "--update-target"
-	applyUpdatePIDFlag            = "--update-pid"
-	applyUpdateLogFlag            = "--update-log"
-	applyUpdateStagedFlag         = "--update-staged"
+	windowsFinalExeName   = ProductName + ".exe"
+	envCleanupStaged      = "FLASHDOCK_CLEANUP_STAGED"
+	envDeleteOldExe       = "FLASHDOCK_DELETE_OLD"
+	applyUpdateFlag       = "--apply-update"
+	applyUpdateTargetFlag = "--update-target"
+	applyUpdatePIDFlag    = "--update-pid"
+	applyUpdateLogFlag    = "--update-log"
+	applyUpdateStagedFlag = "--update-staged"
 )
 
 // HandleEarlyUpdateArgs 在启动 UI 前处理更新相关参数。
@@ -115,7 +115,7 @@ func isWindowsReleaseAssetFileName(name string) bool {
 		return false
 	}
 	lower := strings.ToLower(filepath.Base(name))
-	if !strings.HasPrefix(lower, "flashdock-") || !strings.HasSuffix(lower, ".exe") {
+	if (!strings.HasPrefix(lower, "flashshell-") && !strings.HasPrefix(lower, "flashdock-")) || !strings.HasSuffix(lower, ".exe") {
 		return false
 	}
 	if !strings.Contains(lower, "-windows-") {

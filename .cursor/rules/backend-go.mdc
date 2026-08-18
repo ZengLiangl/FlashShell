@@ -1,5 +1,5 @@
 ---
-description: FlashDock 后端 Go 约定：分层、Wails API、配置、错误与事件
+description: FlashShell 后端 Go 约定：分层、Wails API、配置、错误与事件
 globs: "**/*.go"
 alwaysApply: false
 ---

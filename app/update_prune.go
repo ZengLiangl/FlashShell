@@ -256,22 +256,24 @@ func parseMacUpdateDirVersion(dirName string) string {
 // parseFlashDockArtifactVersion 解析 FlashDock-{version}[ -平台后缀][.ext]
 // 例如：FlashDock-1.2.3、FlashDock-1.2.3-Windows-Amd64.exe、FlashDock-1.2.3-MacOS-Arm64.dmg
 func parseFlashDockArtifactVersion(name string) string {
-	const prefix = "FlashDock-"
 	name = strings.TrimSpace(name)
-	if !strings.HasPrefix(name, prefix) {
-		return ""
+	for _, prefix := range []string{ProductName + "-", LegacyProductName + "-"} {
+		if !strings.HasPrefix(name, prefix) {
+			continue
+		}
+		rest := strings.TrimPrefix(name, prefix)
+		rest = stripKnownReleaseAssetExt(rest)
+		parts := strings.Split(rest, "-")
+		if len(parts) == 0 {
+			continue
+		}
+		version := normalizeVersion(parts[0])
+		if !looksLikeSemver(version) {
+			continue
+		}
+		return version
 	}
-	rest := strings.TrimPrefix(name, prefix)
-	rest = stripKnownReleaseAssetExt(rest)
-	parts := strings.Split(rest, "-")
-	if len(parts) == 0 {
-		return ""
-	}
-	version := normalizeVersion(parts[0])
-	if !looksLikeSemver(version) {
-		return ""
-	}
-	return version
+	return ""
 }
 
 func stripKnownReleaseAssetExt(name string) string {

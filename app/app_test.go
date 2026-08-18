@@ -467,7 +467,7 @@ func TestSubProjectWorkDirGlobalConfigReplace(t *testing.T) {
 
 	globalConfig := &data.GlobalConfig{
 		AppId:       "com.runner",
-		WindowsName: "FlashDock",
+		WindowsName: "FlashShell",
 		WorkPaths: map[string]string{
 			"TEST_WORK_PATH": "/global/test/work",
 		},

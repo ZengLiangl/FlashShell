@@ -1,11 +1,11 @@
 ---
-description: FlashDock 项目总览：技术栈、目录职责与跨端协作约定
+description: FlashShell 项目总览：技术栈、目录职责与跨端协作约定
 alwaysApply: true
 ---
 
-# FlashDock 项目总览
+# FlashShell 项目总览
 
-桌面运维工作台：**Go + Wails v2** 后端，**Vue 3 + Element Plus + xterm.js** 前端。模块名 `FlashDock`。
+桌面 Shell 工作台：**Go + Wails v2** 后端，**Vue 3 + Element Plus + xterm.js** 前端。产品名 `FlashShell`，Go 模块名仍为 `FlashDock`。
 
 ## 目录职责
 

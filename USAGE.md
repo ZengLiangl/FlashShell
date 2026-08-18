@@ -1,6 +1,6 @@
-# FlashDock 使用手册
+# FlashShell 使用手册
 
-> **闪舵**完整操作指南 — 从安装到高阶玩法，与当前代码行为对齐。  
+> 完整操作指南 — 从安装到高阶玩法，与当前代码行为对齐。  
 > 项目概览与架构见 [README.md](README.md)。
 
 <p align="center">
@@ -42,8 +42,8 @@
 
 1. 打开 [GitHub Releases](https://github.com/ZengLiangl/first-cmd/releases)
 2. 下载对应平台的安装包或压缩包
-3. 安装 / 解压后启动 **FlashDock**
-4. 首次运行会在工作目录生成示例 `config.yaml`，全局数据写入 `~/.flashdock/`
+3. 安装 / 解压后启动 **FlashShell**
+4. 首次运行会在工作目录生成示例 `config.yaml`，全局数据写入 `~/.flashshell/`
 
 ### 从源码构建
 
@@ -70,7 +70,7 @@ wails build    # 产出在 build/bin/
 | `-reg=desk` | 前台运行（默认） |
 | `-reg=back` | 后台守护进程 |
 
-后台日志路径：`/tmp/FlashDock.out`、`/tmp/FlashDock.err`。
+后台日志路径：`/tmp/FlashShell.out`、`/tmp/FlashShell.err`。
 
 ---
 
@@ -98,9 +98,9 @@ flowchart LR
 
 ## 配置体系
 
-FlashDock 将配置分为**全局层**与**业务层**，快捷键单独存放。
+FlashShell 将配置分为**全局层**与**业务层**，快捷键单独存放。
 
-### 全局配置 `~/.flashdock/global_config.yaml`
+### 全局配置 `~/.flashshell/global_config.yaml`
 
 通过顶部 **配置文件** 菜单 →「打开全局配置」访问。
 
@@ -108,7 +108,7 @@ FlashDock 将配置分为**全局层**与**业务层**，快捷键单独存放�
 
 > 文件已存在时启动**不会覆盖**；仅通过 UI 保存或主动写盘时更新。
 
-### 快捷键 `~/.flashdock/shortcuts.json`
+### 快捷键 `~/.flashshell/shortcuts.json`
 
 在 **系统设置 → 快捷键** 中录制、重置、保存。macOS 展示 `Command+…`，Windows / Linux 展示 `Ctrl+…`。
 
@@ -144,7 +144,7 @@ Project（项目）
 | 📄 | 新建窗口 |
 | 📁 | 配置文件：切换 / 刷新业务配置，打开全局或当前配置 |
 | ⚙️ | 系统设置中心（左右分栏导航） |
-| ❓ | 关于 FlashDock · 检查更新 |
+| ❓ | 关于 FlashShell · 检查更新 |
 
 ### 首页双区
 
@@ -183,7 +183,7 @@ Project（项目）
 
 ## Shell 模式
 
-Shell 模式是 FlashDock 的**即兴运维甲板** — 多机并行、分屏对照、广播群发。
+Shell 模式是 FlashShell 的主界面 — 多机并行、分屏对照、广播群发。
 
 ### 会话管理
 
@@ -373,7 +373,7 @@ steps:
 - 主机 / 端口 / 用户 / 密码经 UI **加密写入**
 - 列表展示字段运行时填充，`yaml:"-"` 不落盘明文
 - 可配置**全局 SSH 账号模板**，添加机器时一键填充
-- **Host Key 信任**：首次连接展示指纹确认，信任库保存在 `~/.flashdock/known_hosts.json`
+- **Host Key 信任**：首次连接展示指纹确认，信任库保存在 `~/.flashshell/known_hosts.json`
 - 「测试连接」验证可达性与认证
 
 ### 机器分组
@@ -459,7 +459,7 @@ projects:
 ### 机器列表空白
 
 - 关闭系统设置后重新从首页打开
-- 确认 `~/.flashdock/global_config.yaml` 中确有 `machines` 数据
+- 确认 `~/.flashshell/global_config.yaml` 中确有 `machines` 数据
 
 ### upload 失败
 
@@ -478,7 +478,7 @@ projects:
 | 文件 | 位置 | 内容 |
 |:---|:---|:---|
 | 业务配置 | 工作目录 `config.yaml` | 项目与流水线 |
-| 全局配置 | `~/.flashdock/global_config.yaml` | 机器、主题、代理等 |
+| 全局配置 | `~/.flashshell/global_config.yaml` | 机器、主题、代理等 |
 
 ---
 
@@ -591,6 +591,6 @@ go vet ./...
 ---
 
 <p align="center">
-  <b>FlashDock · 闪舵</b> — 任务与 Shell，一港调度。<br/>
+  <b>FlashShell</b> — 多会话 SSH / SFTP 桌面终端。<br/>
   <sub>遇到问题？欢迎 <a href="https://github.com/ZengLiangl/first-cmd/issues">提交 Issue</a></sub>
 </p>
