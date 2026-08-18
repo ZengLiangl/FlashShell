@@ -59,6 +59,11 @@ void flashdockSetWindowIconPNG(const void *data, int length) {
 import "C"
 import "unsafe"
 
+func persistFinderAppIcon(pngBytes []byte, restoreDefault bool) {
+	_ = pngBytes
+	_ = restoreDefault
+}
+
 func setApplicationDockIconPNG(pngBytes []byte) {
 	if len(pngBytes) == 0 {
 		return

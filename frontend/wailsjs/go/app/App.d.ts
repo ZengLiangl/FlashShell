@@ -18,6 +18,8 @@ export function AddWorkPath(arg1:string,arg2:string):Promise<void>;
 
 export function AddWorkPathWithEvent(arg1:string,arg2:string):Promise<void>;
 
+export function ApplyAppIconPreset(arg1:string):Promise<void>;
+
 export function ApplyShellCd(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function BroadcastShellInput(arg1:Array<string>,arg2:string):Promise<void>;

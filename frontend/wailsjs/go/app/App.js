@@ -26,6 +26,10 @@ export function AddWorkPathWithEvent(arg1, arg2) {
   return window['go']['app']['App']['AddWorkPathWithEvent'](arg1, arg2);
 }
 
+export function ApplyAppIconPreset(arg1) {
+  return window['go']['app']['App']['ApplyAppIconPreset'](arg1);
+}
+
 export function ApplyShellCd(arg1, arg2, arg3) {
   return window['go']['app']['App']['ApplyShellCd'](arg1, arg2, arg3);
 }

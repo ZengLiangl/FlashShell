@@ -69,14 +69,14 @@
                                 <h3 class="setting-block-title">Dock 图标</h3>
                                 <div class="setting-card setting-card--padded">
                                 <div class="system-setting-text" style="margin-bottom: 10px">
-                                    <span class="system-setting-hint">选择预设或上传自定义图片（PNG / JPG），保存至
-                                        ~/.flashdock/icons/；保存后立即更新窗口/任务栏图标</span>
+                                    <span class="system-setting-hint">选择预设或上传自定义图片（PNG / JPG），立即更新程序坞/任务栏图标，并改写系统里的应用图标（macOS「应用程序」、Windows 开始菜单与快捷方式）；自定义图保存至
+                                        ~/.flashdock/icons/</span>
                                 </div>
                                 <div class="dock-icon-presets">
                                     <button v-for="preset in appIconPresets" :key="preset.id" type="button"
                                         class="dock-icon-card"
                                         :class="{ active: form.appIconPreset === preset.id }" :title="preset.label"
-                                        @click="form.appIconPreset = preset.id">
+                                        @click="selectAppIconPreset(preset.id)">
                                         <img :src="preset.preview" :alt="preset.label" class="dock-icon-img" />
                                         <span class="dock-icon-name">{{ preset.label }}</span>
                                     </button>
@@ -1122,6 +1122,16 @@ export default {
             }
         }
 
+        const selectAppIconPreset = async (id) => {
+            const presetId = id || 'default'
+            form.appIconPreset = presetId
+            try {
+                await App.ApplyAppIconPreset(presetId)
+            } catch (e) {
+                ElMessage.error(`应用图标失败: ${e}`)
+            }
+        }
+
         const uploadCustomAppIcon = async () => {
             uploadingAppIcon.value = true
             try {
@@ -1129,7 +1139,7 @@ export default {
                 if (!id) return
                 form.appIconPreset = id
                 await loadAppIconPresets(true)
-                ElMessage.success('自定义图标已保存到 ~/.flashdock/icons/')
+                ElMessage.success('自定义图标已应用，并保存到 ~/.flashdock/icons/')
             } catch (e) {
                 ElMessage.error(`上传失败: ${e}`)
             } finally {
@@ -1791,6 +1801,7 @@ theme preview · ${theme.foreground}`
             form,
             appIconPresets,
             uploadingAppIcon,
+            selectAppIconPreset,
             uploadCustomAppIcon,
             logColorItems,
             logColorPresets,

@@ -10,6 +10,12 @@ import (
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
+var dockIconRetryDelays = []time.Duration{
+	50 * time.Millisecond,
+	250 * time.Millisecond,
+	800 * time.Millisecond,
+}
+
 const (
 	defaultWindowWidth  = 1200
 	defaultWindowHeight = 768
@@ -41,8 +47,47 @@ func (a *App) PickCustomAppIcon() (string, error) {
 	if err := saveCustomAppIconFromFile(path); err != nil {
 		return "", err
 	}
-	a.applyAppIcon("custom")
+	if err := a.persistAndApplyAppIcon("custom"); err != nil {
+		a.applyAppIcon("custom")
+		return "custom", err
+	}
 	return "custom", nil
+}
+
+// ApplyAppIconPreset 立即切换 Dock/任务栏图标并写入全局配置，避免只改表单、未点保存就重启丢失。
+func (a *App) ApplyAppIconPreset(preset string) error {
+	return a.persistAndApplyAppIcon(preset)
+}
+
+func (a *App) persistAppIconPreset(preset string) (string, error) {
+	preset = resolveAppIconPreset(preset)
+	if a.configManager == nil {
+		return "", fmt.Errorf("配置管理器未初始化")
+	}
+	cfg, err := a.configManager.GetGlobalConfig()
+	if err != nil {
+		return "", err
+	}
+	if cfg == nil {
+		return "", fmt.Errorf("全局配置未加载")
+	}
+	cfg.AppIconPreset = preset
+	if err := a.configManager.SaveGlobalConfig(cfg); err != nil {
+		return "", err
+	}
+	return preset, nil
+}
+
+func (a *App) persistAndApplyAppIcon(preset string) error {
+	preset, err := a.persistAppIconPreset(preset)
+	if err != nil {
+		return err
+	}
+	a.applyAppIcon(preset)
+	if a.ctx != nil {
+		wailsRuntime.EventsEmit(a.ctx, "app-icon:changed", preset)
+	}
+	return nil
 }
 
 func (a *App) applyWindowTitle(windowsName string) {
@@ -62,7 +107,17 @@ func (a *App) applyAppIcon(preset string) {
 	if err != nil || len(pngBytes) == 0 {
 		return
 	}
-	setApplicationDockIconPNG(pngBytes)
+	copied := append([]byte(nil), pngBytes...)
+	setApplicationDockIconPNG(copied)
+	persistFinderAppIcon(copied, preset == "default")
+	go retryApplicationDockIcon(copied)
+}
+
+func retryApplicationDockIcon(pngBytes []byte) {
+	for _, d := range dockIconRetryDelays {
+		time.Sleep(d)
+		setApplicationDockIconPNG(pngBytes)
+	}
 }
 
 func (a *App) applyAppBranding(cfg *data.GlobalConfig) {

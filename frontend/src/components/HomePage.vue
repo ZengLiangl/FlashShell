@@ -557,6 +557,8 @@ export default {
 
     let offConfigChanged = null
     let offMinimizedZone = null
+    let offAppIconChanged = null
+    let offSystemSettingsChanged = null
 
     onMounted(() => {
       loadConfigMenu()
@@ -566,13 +568,23 @@ export default {
       // 用 EventsOn 返回的取消函数解绑，避免 EventsOff(事件名) 清掉 App 等同名监听
       offConfigChanged = EventsOn('config:changed', loadConfigMenu)
       offMinimizedZone = EventsOn('home:minimized-zone', onMinimizedZoneChanged)
+      offAppIconChanged = EventsOn('app-icon:changed', loadBrandIcon)
+      offSystemSettingsChanged = EventsOn('system-settings:changed', (payload) => {
+        if (payload && Object.prototype.hasOwnProperty.call(payload, 'appIconPreset')) {
+          loadBrandIcon()
+        }
+      })
     })
 
     onUnmounted(() => {
       offConfigChanged?.()
       offMinimizedZone?.()
+      offAppIconChanged?.()
+      offSystemSettingsChanged?.()
       offConfigChanged = null
       offMinimizedZone = null
+      offAppIconChanged = null
+      offSystemSettingsChanged = null
     })
 
     return {
