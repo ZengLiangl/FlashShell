@@ -573,7 +573,7 @@ export default {
       filePanelRef.value?.applyCwdHint?.(p)
     }
 
-    /** 终端 cd 后同步 SFTP（直接驱动面板，不依赖 shell:cwd 事件） */
+    /** 终端工作目录上报后同步 SFTP（直接驱动面板，不依赖 shell:cwd 事件） */
     const onCwdSync = async (payload) => {
       const machineName = payload?.machineName
       let cwd = payload?.cwd
@@ -783,15 +783,10 @@ export default {
       })
     }
 
-    watch(() => props.activeMachine, async (name) => {
+    watch(() => props.activeMachine, (name) => {
       if (!name || isLocalSessionName(name)) {
         filePanelExpanded.value = false
-        return
       }
-      const hint = cwdHints[name] || ptyCwds[name]
-      if (!hint) return
-      await nextTick()
-      filePanelRef.value?.applyCwdHint?.(hint)
     })
 
     watch(filePanelRef, (panel) => {

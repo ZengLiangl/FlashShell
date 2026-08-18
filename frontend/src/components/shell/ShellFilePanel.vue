@@ -71,9 +71,20 @@
         <el-checkbox v-model="showHidden" size="small" class="hidden-check" @change="reload">
           显示隐藏文件
         </el-checkbox>
-        <el-checkbox v-model="followCwd" size="small" class="follow-check" @change="onFollowCwdChange">
+        <el-checkbox
+          v-model="followCwd"
+          size="small"
+          class="follow-check"
+          :class="{ 'is-paused': followPaused }"
+          @change="onFollowCwdChange"
+        >
           跟随终端目录
         </el-checkbox>
+        <template v-if="followPaused">
+          <el-button size="small" text class="follow-resume-btn" @click="resumeFollowToTerminal">
+            回到终端目录
+          </el-button>
+        </template>
         <el-dropdown
           size="small"
           trigger="click"
@@ -551,9 +562,14 @@ export default {
     const expanded = ref(false)
     /** 按机器记住 SFTP 展开状态，切换会话互不影响 */
     const expandedByMachine = reactive({})
+    const lastFollowedByMachine = Object.create(null)
+    const browseCwdByMachine = Object.create(null)
+    const terminalCwdByMachine = Object.create(null)
     const panelRef = ref(null)
     const showHidden = ref(false)
     const followCwd = ref(true)
+    const lastFollowedCwd = ref('')
+    const terminalCwd = ref('')
     const bookmarksVersion = ref(0)
     const pathSuggestOpen = ref(false)
     const pathSuggestIndex = ref(-1)
@@ -716,6 +732,28 @@ export default {
       const p = cwd.value
       return !!p && p !== '/' && p !== '.'
     })
+
+    const followPaused = computed(() => {
+      if (!followCwd.value) return false
+      const term = normalizeAbs(terminalCwd.value || props.cwdHint)
+      const here = normalizeAbs(cwd.value)
+      return !!(term && here && term !== here)
+    })
+
+    const markFollowedCwd = (abs) => {
+      const p = normalizeAbs(abs)
+      if (!p) return
+      terminalCwd.value = p
+      lastFollowedCwd.value = p
+    }
+
+    const snapshotFollowState = (name) => {
+      const key = String(name || '').trim()
+      if (!key) return
+      lastFollowedByMachine[key] = lastFollowedCwd.value
+      browseCwdByMachine[key] = cwd.value
+      terminalCwdByMachine[key] = terminalCwd.value
+    }
 
     function readBodyHeight() {
       const n = Number(localStorage.getItem(HEIGHT_KEY))
@@ -1031,9 +1069,14 @@ export default {
 
     /** 供父组件在终端 cwd 变化后直接调用 */
     const applyCwdHint = async (hint) => {
-      if (!followCwd.value) return
       const abs = normalizeAbs(hint)
       if (!abs) return
+      terminalCwd.value = abs
+      if (!followCwd.value) return
+      // 终端上报的 cwd 没变（含 prompt / OSC / pwd）：尊重手动逛树，不要把 SFTP 拽回去
+      // 目录真的变了（不限于 cd）则继续跟随
+      if (abs === lastFollowedCwd.value) return
+      lastFollowedCwd.value = abs
       const seq = ++navSeq
       // 未展开时也记下路径，展开后使用
       if (!expanded.value) {
@@ -1044,7 +1087,6 @@ export default {
         }
         return
       }
-      // 同目录：不重复刷树/列表（真实 cwd 每个 prompt 都会上报）
       if (abs === normalizeAbs(cwd.value)) {
         return
       }
@@ -1087,6 +1129,7 @@ export default {
 
     const onFollowCwdChange = () => {
       saveFollowCwd(hostKey(), followCwd.value)
+      if (followCwd.value) void resumeFollowToTerminal()
     }
 
     const onBookmarkButtonClick = (e) => {
@@ -1366,10 +1409,34 @@ export default {
           ElMessage.warning('无法获取终端当前目录')
           return
         }
-        await navigateTo(abs, { alreadyAbsolute: true })
+        markFollowedCwd(abs)
+        await navigateTo(abs, { alreadyAbsolute: true, trustAbsolute: true })
       } catch (e) {
         ElMessage.error('获取终端目录失败: ' + e)
       }
+    }
+
+    const resumeFollowToTerminal = async () => {
+      const known = normalizeAbs(terminalCwd.value || props.cwdHint)
+      if (!expanded.value) {
+        if (known) {
+          markFollowedCwd(known)
+          cwd.value = known
+          pathDraft.value = known
+          emit('cwd-change', known)
+        }
+        return
+      }
+      if (props.machineName) {
+        await goToTerminalCwd()
+        return
+      }
+      if (!known) {
+        ElMessage.warning('无法获取终端当前目录')
+        return
+      }
+      markFollowedCwd(known)
+      await navigateTo(known, { alreadyAbsolute: true, trustAbsolute: true })
     }
 
     const reload = async () => {
@@ -1414,6 +1481,7 @@ export default {
         // 使用 cwdHint / home
       }
       await setCwd(start || await ensureHome())
+      markFollowedCwd(cwd.value)
       startPwdTimer()
     }
 
@@ -2247,7 +2315,8 @@ export default {
       }
     }
 
-    watch(() => props.machineName, async (name) => {
+    watch(() => props.machineName, async (name, prev) => {
+      snapshotFollowState(prev)
       cwd.value = ''
       pathDraft.value = ''
       entries.value = []
@@ -2257,7 +2326,10 @@ export default {
       expandedKeys.value = ['/']
       closeMenu()
       stopPwdTimer()
-      followCwd.value = loadFollowCwd(name || '')
+      const key = String(name || '').trim()
+      lastFollowedCwd.value = lastFollowedByMachine[key] || ''
+      terminalCwd.value = terminalCwdByMachine[key] || ''
+      followCwd.value = loadFollowCwd(key)
       refreshBookmarks()
       const shouldExpand = !!(name && expandedByMachine[name])
       if (expanded.value !== shouldExpand) {
@@ -2270,19 +2342,36 @@ export default {
       notifyLayout()
       if (!name || !shouldExpand) return
       try {
-        let start = ''
+        let liveTerm = ''
         try {
           const remote = await App.GetShellPtyCwd(name)
-          if (remote && String(remote).startsWith('/')) start = normalizeAbs(remote)
+          if (remote && String(remote).startsWith('/')) liveTerm = normalizeAbs(remote)
         } catch {
           // 使用 cwdHint / home
         }
-        if (!start) {
-          start = (props.cwdHint && String(props.cwdHint).startsWith('/'))
+        if (!liveTerm) {
+          liveTerm = (props.cwdHint && String(props.cwdHint).startsWith('/'))
             ? normalizeAbs(props.cwdHint)
-            : await ensureHome()
+            : ''
         }
-        await setCwd(start)
+        if (liveTerm) terminalCwd.value = liveTerm
+        const savedBrowse = normalizeAbs(browseCwdByMachine[key] || '')
+        const savedFollowed = normalizeAbs(lastFollowedCwd.value)
+        const stillPaused = !!(
+          followCwd.value
+          && savedFollowed
+          && savedBrowse
+          && savedBrowse !== savedFollowed
+          && (!liveTerm || liveTerm === savedFollowed)
+        )
+        if (stillPaused) {
+          await setCwd(savedBrowse)
+        } else if (followCwd.value && liveTerm) {
+          await setCwd(liveTerm)
+          markFollowedCwd(liveTerm)
+        } else {
+          await setCwd(savedBrowse || liveTerm || await ensureHome())
+        }
         startPwdTimer()
       } catch (e) {
         setPanelError(e)
@@ -2337,6 +2426,9 @@ export default {
       expanded,
       showHidden,
       followCwd,
+      followPaused,
+      lastFollowedCwd,
+      terminalCwd,
       bookmarks,
       isCurrentBookmarked,
       bookmarkButtonTitle,
@@ -2389,6 +2481,7 @@ export default {
       onOpen,
       goParent,
       goToTerminalCwd,
+      resumeFollowToTerminal,
       submitPathDraft,
       syncPathDraftFromCwd,
       onPathDraftInput,
@@ -2758,6 +2851,17 @@ export default {
 .follow-check {
   margin-left: 4px;
   white-space: nowrap;
+}
+
+.follow-check.is-paused {
+  opacity: 0.55;
+}
+
+.follow-resume-btn {
+  margin-left: 0;
+  height: 26px;
+  padding: 0 6px;
+  font-size: 12px;
 }
 
 .cwd-input :deep(.el-input__wrapper) {
