@@ -3,10 +3,16 @@ package app
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"FlashDock/data"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
+)
+
+const (
+	defaultWindowWidth  = 1200
+	defaultWindowHeight = 768
 )
 
 // ListAppIconPresets 返回 Dock 图标预设（含预览 data URL）
@@ -90,11 +96,13 @@ func (a *App) applyStartupFullscreen(enabled bool) {
 		wailsRuntime.WindowUnfullscreen(a.ctx)
 	}
 	if enabled {
+		a.rememberNormalWindowBounds()
 		wailsRuntime.WindowMaximise(a.ctx)
+		a.markChromeMaximised(true)
 		return
 	}
-	if wailsRuntime.WindowIsMaximised(a.ctx) {
-		wailsRuntime.WindowUnmaximise(a.ctx)
+	if a.windowIsEffectivelyMaximised() {
+		a.restoreNormalWindow()
 	}
 }
 
@@ -104,4 +112,120 @@ func (a *App) applyStartupFullscreenFromConfig() {
 		return
 	}
 	a.applyStartupFullscreen(true)
+}
+
+// ToggleWindowMaximised 顶栏空白双击：在最大化与还原之间切换。
+// 与「启动时全屏」相同，使用窗口最大化而非系统独占全屏。
+func (a *App) ToggleWindowMaximised() {
+	if a.ctx == nil {
+		return
+	}
+	a.winRestoreMu.Lock()
+	defer a.winRestoreMu.Unlock()
+	if time.Since(a.lastWinToggleAt) < 220*time.Millisecond {
+		return
+	}
+	a.lastWinToggleAt = time.Now()
+	if wailsRuntime.WindowIsFullscreen(a.ctx) {
+		wailsRuntime.WindowUnfullscreen(a.ctx)
+	}
+	if a.windowIsEffectivelyMaximised() {
+		a.restoreNormalWindowLocked()
+		return
+	}
+	a.rememberNormalWindowBoundsLocked()
+	wailsRuntime.WindowMaximise(a.ctx)
+	a.chromeMaximised = true
+}
+
+func (a *App) rememberNormalWindowBounds() {
+	a.winRestoreMu.Lock()
+	defer a.winRestoreMu.Unlock()
+	a.rememberNormalWindowBoundsLocked()
+}
+
+func (a *App) rememberNormalWindowBoundsLocked() {
+	if a.windowIsEffectivelyMaximised() {
+		return
+	}
+	w, h := wailsRuntime.WindowGetSize(a.ctx)
+	x, y := wailsRuntime.WindowGetPosition(a.ctx)
+	if w < 200 || h < 200 {
+		return
+	}
+	a.winRestoreX, a.winRestoreY = x, y
+	a.winRestoreW, a.winRestoreH = w, h
+	a.winRestoreSaved = true
+}
+
+func (a *App) restoreNormalWindow() {
+	a.winRestoreMu.Lock()
+	defer a.winRestoreMu.Unlock()
+	a.restoreNormalWindowLocked()
+}
+
+func (a *App) restoreNormalWindowLocked() {
+	a.chromeMaximised = false
+	// Wails 无边框 Windows 的 WindowUnmaximise 走 SW_SHOW，经常无法真正还原。
+	_ = nativeRestoreMaximisedWindow()
+	wailsRuntime.WindowUnmaximise(a.ctx)
+	screenW, screenH := 0, 0
+	if screens, err := wailsRuntime.ScreenGetAll(a.ctx); err == nil {
+		for _, screen := range screens {
+			if !screen.IsCurrent {
+				continue
+			}
+			screenW, screenH = screenLogicalSize(screen)
+			break
+		}
+	}
+	x, y, w, h := chooseRestoreBounds(a.winRestoreSaved, a.winRestoreX, a.winRestoreY, a.winRestoreW, a.winRestoreH, screenW, screenH)
+	wailsRuntime.WindowSetSize(a.ctx, w, h)
+	wailsRuntime.WindowSetPosition(a.ctx, x, y)
+}
+
+func (a *App) markChromeMaximised(max bool) {
+	a.winRestoreMu.Lock()
+	a.chromeMaximised = max
+	a.winRestoreMu.Unlock()
+}
+
+// WindowIsChromeMaximised 给窗口按钮用：含我们自己记下的最大化状态，
+// 不单依赖 Wails 在无边框窗口上经常不准的 WindowIsMaximised。
+func (a *App) WindowIsChromeMaximised() bool {
+	if a.ctx == nil {
+		return false
+	}
+	a.winRestoreMu.Lock()
+	defer a.winRestoreMu.Unlock()
+	return a.windowIsEffectivelyMaximised()
+}
+
+func (a *App) windowIsEffectivelyMaximised() bool {
+	return shouldTreatAsMaximised(nativeWindowIsMaximised(), wailsRuntime.WindowIsMaximised(a.ctx), a.chromeMaximised)
+}
+
+func shouldTreatAsMaximised(nativeMax, wailsMax, ourMax bool) bool {
+	return nativeMax || wailsMax || ourMax
+}
+
+func chooseRestoreBounds(saved bool, x, y, w, h, screenW, screenH int) (int, int, int, int) {
+	if saved && w >= 200 && h >= 200 {
+		return x, y, w, h
+	}
+	rw, rh := defaultWindowWidth, defaultWindowHeight
+	rx, ry := 0, 0
+	if screenW > rw && screenH > rh {
+		rx = (screenW - rw) / 2
+		ry = (screenH - rh) / 2
+	}
+	return rx, ry, rw, rh
+}
+
+func screenLogicalSize(screen wailsRuntime.Screen) (int, int) {
+	w, h := screen.Size.Width, screen.Size.Height
+	if w <= 0 || h <= 0 {
+		w, h = screen.Width, screen.Height
+	}
+	return w, h
 }

@@ -5,6 +5,8 @@
       :class="{ 'is-drop-unsplit': draggingSplitPane }"
       @dragover.prevent="onTabsBarDragOver"
       @drop.prevent="onTabsBarDrop"
+      @dblclick="onChromeTitleDblActivate"
+      @mousedown="onChromeTitlePointerDown"
     >
       <el-button class="home-btn" size="small" text title="返回首页" @click="$emit('back')">
         <el-icon :size="14">
@@ -240,6 +242,7 @@ import ShellComposeBar from './ShellComposeBar.vue'
 import ModeSwitcher from '../ModeSwitcher.vue'
 import AppChromeIcons from '../AppChromeIcons.vue'
 import { cwdBasename } from '../../utils/shellTerminalUx'
+import { onChromeTitleDblActivate, onChromeTitlePointerDown } from '../../utils/windowChrome'
 
 const MAX_SPLIT = 4
 const DRAG_REORDER_PX = 4
@@ -987,6 +990,8 @@ export default {
       tabMenuHasRight,
       hideTabMenu,
       hasSplitGroup,
+      onChromeTitleDblActivate,
+      onChromeTitlePointerDown,
       splitViewVisible,
       zoomedSessionId,
       setTerminalRef,

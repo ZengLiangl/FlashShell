@@ -1,5 +1,5 @@
 <template>
-  <div class="app-menu-bar">
+  <div class="app-menu-bar" @dblclick="onChromeTitleDblActivate" @mousedown="onChromeTitlePointerDown">
     <div class="menu-side menu-left" aria-hidden="true" />
 
     <div class="menu-center" />
@@ -31,6 +31,7 @@
 <script>
 import ModeSwitcher from './ModeSwitcher.vue'
 import AppChromeIcons from './AppChromeIcons.vue'
+import { onChromeTitleDblActivate, onChromeTitlePointerDown } from '../utils/windowChrome'
 
 export default {
   name: 'AppMenuBar',
@@ -52,6 +53,10 @@ export default {
     activeSessionId: { type: String, default: '' },
   },
   emits: ['change-view', 'select-project', 'focus-session'],
+  methods: {
+    onChromeTitleDblActivate,
+    onChromeTitlePointerDown,
+  },
 }
 </script>
 

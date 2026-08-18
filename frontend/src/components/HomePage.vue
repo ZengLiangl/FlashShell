@@ -2,7 +2,7 @@
   <div class="home-page" :class="{ 'has-rail': hasProjects }">
     <!-- 有任务配置时：左侧分区导航（对标 Netcatty Vault sidebar） -->
     <aside v-if="hasProjects" class="home-rail" aria-label="首页分区">
-      <div class="rail-brand">
+      <div class="rail-brand" @dblclick="onChromeTitleDblActivate" @mousedown="onChromeTitlePointerDown">
         <img class="rail-brand-mark" :src="brandIconUrl" alt="" aria-hidden="true" />
         <span class="rail-brand-text">FlashDock</span>
       </div>
@@ -38,7 +38,7 @@
     <div class="home-stage">
       <div class="home-surface">
         <!-- 顶栏：搜索 + 主操作（对标 VaultPageHeader） -->
-        <header class="home-header">
+        <header class="home-header" @dblclick="onChromeTitleDblActivate" @mousedown="onChromeTitlePointerDown">
           <el-input ref="searchInputRef" v-model="machineKeyword" clearable size="large" class="home-search"
             :placeholder="searchPlaceholder" @keydown.enter.exact.prevent="onSearchEnter">
             <template #prefix>
@@ -245,6 +245,7 @@ import * as App from '../../wailsjs/go/app/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
 import { machineMatchesKeyword, isMachineConnecting, collectMachineTags, machineMatchesTags } from '../utils/machineGroups'
 import { parseQuickConnectTarget, findMachineForQuickConnect } from '../utils/quickConnect'
+import { onChromeTitleDblActivate, onChromeTitlePointerDown } from '../utils/windowChrome'
 import MachineConnectList from './shell/MachineConnectList.vue'
 import defaultAppIcon from '../assets/appicon.png'
 
@@ -565,6 +566,8 @@ export default {
 
     return {
       machineKeyword,
+      onChromeTitleDblActivate,
+      onChromeTitlePointerDown,
       selectedTags,
       availableTags,
       toggleTagFilter,

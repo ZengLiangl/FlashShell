@@ -390,6 +390,8 @@ export function TestMachineDraftConnection(arg1:define.Machine,arg2:define.Sensi
 
 export function TestProxyConnection(arg1:data.ProxySettings,arg2:string):Promise<string>;
 
+export function ToggleWindowMaximised():Promise<void>;
+
 export function TrustHostKey(arg1:string,arg2:number,arg3:string):Promise<void>;
 
 export function TrustHostKeyOnce(arg1:string,arg2:number,arg3:string):Promise<void>;
@@ -407,3 +409,5 @@ export function UpdateWorkPath(arg1:string,arg2:string):Promise<void>;
 export function UpdateWorkPathWithEvent(arg1:string,arg2:string):Promise<void>;
 
 export function UpsertSftpFileAssociation(arg1:string,arg2:data.SftpFileAssociation):Promise<void>;
+
+export function WindowIsChromeMaximised():Promise<boolean>;

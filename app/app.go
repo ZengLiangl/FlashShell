@@ -51,6 +51,14 @@ type App struct {
 	executionBootstrapOnce sync.Once
 	quitMu                 sync.Mutex
 	allowQuit              bool
+	winRestoreMu           sync.Mutex
+	winRestoreX            int
+	winRestoreY            int
+	winRestoreW            int
+	winRestoreH            int
+	winRestoreSaved        bool
+	chromeMaximised        bool
+	lastWinToggleAt        time.Time
 }
 
 // NewApp creates a new App application struct

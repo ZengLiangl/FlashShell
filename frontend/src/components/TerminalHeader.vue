@@ -1,5 +1,5 @@
 <template>
-    <div class="terminal-header">
+    <div class="terminal-header" @dblclick="onChromeTitleDblActivate" @mousedown="onChromeTitlePointerDown">
         <h3>{{ title }}</h3>
         <div class="terminal-actions">
             <div class="actions-left">
@@ -83,6 +83,7 @@
 import { ref, watch, nextTick } from 'vue'
 import ModeSwitcher from './ModeSwitcher.vue'
 import AppChromeIcons from './AppChromeIcons.vue'
+import { onChromeTitleDblActivate, onChromeTitlePointerDown } from '../utils/windowChrome'
 
 export default {
     name: 'TerminalHeader',
@@ -124,7 +125,7 @@ export default {
             }
         })
 
-        return { localQuery, searchInputRef }
+        return { localQuery, searchInputRef, onChromeTitleDblActivate, onChromeTitlePointerDown }
     }
 }
 </script>

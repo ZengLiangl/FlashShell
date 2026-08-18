@@ -14,8 +14,10 @@
 
 <script>
 import { ref, onMounted, onUnmounted } from 'vue'
-import { WindowMinimise, WindowToggleMaximise, WindowIsMaximised, Quit } from '../../wailsjs/runtime/runtime'
+import { WindowMinimise, Quit } from '../../wailsjs/runtime/runtime'
 import { isWindowsPlatform } from '../utils/platform'
+import { toggleChromeWindowMaximise } from '../utils/windowChrome'
+import { WindowIsChromeMaximised } from '../../wailsjs/go/app/App'
 
 export default {
   name: 'WindowControls',
@@ -26,7 +28,7 @@ export default {
 
     const refresh = async () => {
       try {
-        maximised.value = !!(await WindowIsMaximised())
+        maximised.value = !!(await WindowIsChromeMaximised())
       } catch {
         maximised.value = false
       }
@@ -34,7 +36,7 @@ export default {
 
     const minimise = () => { WindowMinimise() }
     const toggleMax = async () => {
-      WindowToggleMaximise()
+      await toggleChromeWindowMaximise()
       setTimeout(refresh, 80)
     }
     const quit = () => { Quit() }

@@ -8,7 +8,8 @@
         :class="{ collapsed: leftCollapsed, resizing: isResizing }"
       >
         <!-- macOS 红绿灯占位：侧栏展开时顶栏安全区改到左侧，避免挡住内容、tabs 不再重复留白 -->
-        <div v-if="!leftCollapsed" class="shell-left-traffic-spacer" aria-hidden="true" />
+        <div v-if="!leftCollapsed" class="shell-left-traffic-spacer" aria-hidden="true"
+          @dblclick="onChromeTitleDblActivate" @mousedown="onChromeTitlePointerDown" />
         <ShellMonitorPanel
           v-if="monitorSession && !leftCollapsed"
           :active-machine="monitorMachineName"
@@ -221,6 +222,7 @@ import * as App from '../../wailsjs/go/app/App'
 import { EventsOn, EventsOff } from '../../wailsjs/runtime/runtime'
 import { remoteConfigName, buildKnownMachineNames } from '../utils/sessionId'
 import { resolveCopyToOtherTargets } from '../utils/sftpCopyToOther'
+import { onChromeTitleDblActivate, onChromeTitlePointerDown } from '../utils/windowChrome'
 import {
   normalizeSnippets,
   findMatchingSnippet,
@@ -977,6 +979,8 @@ export default {
       searchQuery,
       searchMatchSummary,
       pickerVisible,
+      onChromeTitleDblActivate,
+      onChromeTitlePointerDown,
       pickerInitialTab,
       openPicker,
       transferVisible,

@@ -770,6 +770,10 @@ export function TestProxyConnection(arg1, arg2) {
   return window['go']['app']['App']['TestProxyConnection'](arg1, arg2);
 }
 
+export function ToggleWindowMaximised() {
+  return window['go']['app']['App']['ToggleWindowMaximised']();
+}
+
 export function TrustHostKey(arg1, arg2, arg3) {
   return window['go']['app']['App']['TrustHostKey'](arg1, arg2, arg3);
 }
@@ -804,4 +808,8 @@ export function UpdateWorkPathWithEvent(arg1, arg2) {
 
 export function UpsertSftpFileAssociation(arg1, arg2) {
   return window['go']['app']['App']['UpsertSftpFileAssociation'](arg1, arg2);
+}
+
+export function WindowIsChromeMaximised() {
+  return window['go']['app']['App']['WindowIsChromeMaximised']();
 }

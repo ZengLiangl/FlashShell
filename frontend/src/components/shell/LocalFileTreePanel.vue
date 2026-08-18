@@ -1,7 +1,8 @@
 <template>
   <div class="local-file-tree">
-    <div class="panel-header">
+    <div class="panel-header" @dblclick="onChromeTitleDblActivate" @mousedown="onChromeTitlePointerDown">
       <h3>本机文件</h3>
+      <div class="panel-header-spacer" aria-hidden="true" />
     </div>
     <div class="tree-toolbar">
       <el-checkbox v-model="showHidden" size="small" @change="reloadTree">隐藏文件</el-checkbox>
@@ -32,6 +33,7 @@
 import { ref, computed, onMounted, nextTick } from 'vue'
 import { RefreshRight } from '@element-plus/icons-vue'
 import * as App from '../../../wailsjs/go/app/App'
+import { onChromeTitleDblActivate, onChromeTitlePointerDown } from '../../utils/windowChrome'
 
 export default {
   name: 'LocalFileTreePanel',
@@ -205,6 +207,8 @@ export default {
 
     return {
       loading,
+      onChromeTitleDblActivate,
+      onChromeTitlePointerDown,
       showHidden,
       cwd,
       treeData,
@@ -235,6 +239,12 @@ export default {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 8px;
+}
+
+.panel-header-spacer {
+  flex: 1;
+  min-width: 8px;
+  align-self: stretch;
 }
 
 .panel-header h3 {

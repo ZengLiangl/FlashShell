@@ -1,7 +1,8 @@
 <template>
   <div class="shell-monitor">
-    <div class="monitor-header">
+    <div class="monitor-header" @dblclick="onChromeTitleDblActivate" @mousedown="onChromeTitlePointerDown">
       <h3>机器监控</h3>
+      <div class="monitor-header-spacer" aria-hidden="true" />
       <el-button v-if="activeMachine" class="conn-toggle" size="small" :type="activeConnected ? 'danger' : 'primary'"
         plain :title="activeConnected ? '断开连接（保留终端）' : '重新连接'" :loading="connecting"
         @click="$emit('toggle-connection')">
@@ -213,6 +214,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Connection, SwitchButton, ArrowDown } from '@element-plus/icons-vue'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import * as App from '../../../wailsjs/go/app/App'
+import { onChromeTitleDblActivate, onChromeTitlePointerDown } from '../../utils/windowChrome'
 
 const isAuxMissingError = (msg) => /辅助连接(未建立|不存在)/.test(String(msg || ''))
 const DEFAULT_INTERVAL_MS = 1000
@@ -666,6 +668,8 @@ export default {
 
     return {
       snapshot,
+      onChromeTitleDblActivate,
+      onChromeTitlePointerDown,
       loading,
       displayError,
       hasSwap,
@@ -726,6 +730,12 @@ export default {
   justify-content: space-between;
   gap: 8px;
   margin-bottom: 10px;
+}
+
+.monitor-header-spacer {
+  flex: 1;
+  min-width: 8px;
+  align-self: stretch;
 }
 
 .monitor-header h3 {

@@ -511,12 +511,29 @@ html.is-mac-hidden-titlebar .shell-workspace.has-left-chrome .shell-left-traffic
   --wails-draggable: drag;
 }
 
+html.is-windows-frameless .shell-left-traffic-spacer,
+html.is-mac-hidden-titlebar .shell-monitor .monitor-header,
+html.is-windows-frameless .shell-monitor .monitor-header,
+html.is-mac-hidden-titlebar .local-file-tree .panel-header,
+html.is-windows-frameless .local-file-tree .panel-header {
+  --wails-draggable: drag;
+}
+
 /* Windows 无边框：顶栏可拖拽，右侧留给窗口按钮 */
 html.is-windows-frameless .app-menu-bar,
 html.is-windows-frameless .shell-terminal-tabs .tabs-bar,
 html.is-windows-frameless .terminal-header {
   --wails-draggable: drag;
   padding-right: 0;
+}
+
+html.is-windows-frameless .home-header,
+html.is-mac-hidden-titlebar .home-header,
+html.is-windows-frameless .home-rail .rail-brand,
+html.is-mac-hidden-titlebar .home-rail .rail-brand,
+html.is-windows-frameless .subproject-section .section-header,
+html.is-mac-hidden-titlebar .subproject-section .section-header {
+  --wails-draggable: drag;
 }
 
 html.is-mac-hidden-titlebar .app-menu-bar button,
@@ -559,6 +576,26 @@ html.is-windows-frameless .terminal-header .el-dropdown,
 html.is-windows-frameless .terminal-header .mode-switcher-host,
 html.is-windows-frameless .terminal-header .app-chrome-icons,
 html.is-windows-frameless .terminal-header .icon-actions,
-html.is-windows-frameless .window-controls {
+html.is-mac-hidden-titlebar .home-header button,
+html.is-mac-hidden-titlebar .home-header a,
+html.is-mac-hidden-titlebar .home-header input,
+html.is-mac-hidden-titlebar .home-header .el-input,
+html.is-mac-hidden-titlebar .home-header .el-dropdown,
+html.is-mac-hidden-titlebar .home-header .home-search,
+html.is-mac-hidden-titlebar .home-header .home-header-actions,
+html.is-mac-hidden-titlebar .subproject-section .section-header button,
+html.is-windows-frameless .home-header button,
+html.is-windows-frameless .home-header a,
+html.is-windows-frameless .home-header input,
+html.is-windows-frameless .home-header .el-input,
+html.is-windows-frameless .home-header .el-dropdown,
+html.is-windows-frameless .home-header .home-search,
+html.is-windows-frameless .home-header .home-header-actions,
+html.is-windows-frameless .subproject-section .section-header button,
+html.is-windows-frameless .window-controls,
+html.is-mac-hidden-titlebar .shell-monitor .monitor-header button,
+html.is-windows-frameless .shell-monitor .monitor-header button,
+html.is-mac-hidden-titlebar .local-file-tree .panel-header button,
+html.is-windows-frameless .local-file-tree .panel-header button {
   --wails-draggable: no-drag;
 }

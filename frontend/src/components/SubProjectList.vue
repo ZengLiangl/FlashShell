@@ -1,6 +1,6 @@
 <template>
     <div class="panel-section subproject-section">
-        <div class="section-header">
+        <div class="section-header" @dblclick="onChromeTitleDblActivate" @mousedown="onChromeTitlePointerDown">
             <div class="header-left">
                 <el-tooltip content="返回项目列表" placement="top">
                     <el-button size="small" text circle class="back-btn" @click="$emit('back')">
@@ -142,6 +142,8 @@
 </template>
 
 <script>
+import { onChromeTitleDblActivate, onChromeTitlePointerDown } from '../utils/windowChrome'
+
 export default {
     name: 'SubProjectList',
     props: {
@@ -161,6 +163,8 @@ export default {
         this.cmdRefs = Object.create(null)
     },
     methods: {
+        onChromeTitleDblActivate,
+        onChromeTitlePointerDown,
         setBlockRef(name, el) {
             if (el) this.blockRefs[name] = el
             else delete this.blockRefs[name]
