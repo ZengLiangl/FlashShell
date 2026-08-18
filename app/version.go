@@ -22,8 +22,16 @@ var GitHubToken = ""
 
 const (
 	githubOwner = "ZengLiangl"
-	githubRepo  = "FlashDock"
+	githubRepo  = "FlashShell"
 )
+
+func githubRepoURL() string {
+	return "https://github.com/" + githubOwner + "/" + githubRepo
+}
+
+func githubReleasesLatestAPIURL() string {
+	return "https://api.github.com/repos/" + githubOwner + "/" + githubRepo + "/releases/latest"
+}
 
 // GetAppVersion 返回展示用版本号（带 v 前缀）
 func (a *App) GetAppVersion() string {

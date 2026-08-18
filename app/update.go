@@ -115,7 +115,7 @@ func (a *App) CheckForUpdates() *UpdateCheckResult {
 		CheckedAt:      time.Now().Format(time.RFC3339),
 	}
 
-	url := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", githubOwner, githubRepo)
+	url := githubReleasesLatestAPIURL()
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		result.Error = err.Error()

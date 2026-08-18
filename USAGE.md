@@ -40,7 +40,7 @@
 
 ### 下载安装（推荐）
 
-1. 打开 [GitHub Releases](https://github.com/ZengLiangl/first-cmd/releases)
+1. 打开 [GitHub Releases](https://github.com/ZengLiangl/FlashShell/releases)
 2. 下载对应平台的安装包或压缩包
 3. 安装 / 解压后启动 **FlashShell**
 4. 首次运行会在工作目录生成示例 `config.yaml`，全局数据写入 `~/.flashshell/`
@@ -55,7 +55,7 @@
 
 ```bash
 go install github.com/wailsapp/wails/v2/cmd/wails@latest
-git clone https://github.com/ZengLiangl/first-cmd.git && cd first-cmd
+git clone https://github.com/ZengLiangl/FlashShell.git && cd FlashShell
 cd frontend && npm install && cd ..
 go mod tidy
 
@@ -592,5 +592,5 @@ go vet ./...
 
 <p align="center">
   <b>FlashShell</b> — 多会话 SSH / SFTP 桌面终端。<br/>
-  <sub>遇到问题？欢迎 <a href="https://github.com/ZengLiangl/first-cmd/issues">提交 Issue</a></sub>
+  <sub>遇到问题？欢迎 <a href="https://github.com/ZengLiangl/FlashShell/issues">提交 Issue</a></sub>
 </p>

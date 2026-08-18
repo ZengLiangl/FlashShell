@@ -28,3 +28,17 @@ func TestFormatVersionDisplay(t *testing.T) {
 		t.Fatal(formatVersionDisplay("v1.0.0"))
 	}
 }
+
+func TestGitHubReleaseAPIUsesFlashShellRepo(t *testing.T) {
+	if githubOwner != "ZengLiangl" || githubRepo != "FlashShell" {
+		t.Fatalf("repo = %s/%s", githubOwner, githubRepo)
+	}
+	wantAPI := "https://api.github.com/repos/ZengLiangl/FlashShell/releases/latest"
+	if got := githubReleasesLatestAPIURL(); got != wantAPI {
+		t.Fatalf("latest API = %q want %q", got, wantAPI)
+	}
+	wantHome := "https://github.com/ZengLiangl/FlashShell"
+	if got := githubRepoURL(); got != wantHome {
+		t.Fatalf("repo URL = %q want %q", got, wantHome)
+	}
+}

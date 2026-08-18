@@ -11,7 +11,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/ZengLiangl/first-cmd/releases"><img src="https://img.shields.io/github/v/release/ZengLiangl/first-cmd?style=for-the-badge&label=Release&color=2f9e6a" alt="release" /></a>
+  <a href="https://github.com/ZengLiangl/FlashShell/releases"><img src="https://img.shields.io/github/v/release/ZengLiangl/FlashShell?style=for-the-badge&label=Release&color=2f9e6a" alt="release" /></a>
   <a href="#平台支持"><img src="https://img.shields.io/badge/平台-Windows%20·%20macOS%20·%20Linux-1a1a2e?style=for-the-badge" alt="platforms" /></a>
   <a href="#技术架构"><img src="https://img.shields.io/badge/Backend-Go%201.23%20+%20Wails%20v2-00ADD8?style=for-the-badge&logo=go&logoColor=white" alt="go" /></a>
   <a href="#技术架构"><img src="https://img.shields.io/badge/Frontend-Vue%203%20+%20xterm.js-42b883?style=for-the-badge&logo=vuedotjs&logoColor=white" alt="vue" /></a>
@@ -25,7 +25,7 @@
   &nbsp;·&nbsp;
   <a href="#核心能力">🧭 核心能力</a>
   &nbsp;·&nbsp;
-  <a href="https://github.com/ZengLiangl/first-cmd/releases">⬇️ 下载安装包</a>
+  <a href="https://github.com/ZengLiangl/FlashShell/releases">⬇️ 下载安装包</a>
 </p>
 
 ---
@@ -171,7 +171,7 @@ flowchart TB
 
 ### 用户：直接下载
 
-前往 [Releases](https://github.com/ZengLiangl/first-cmd/releases) 下载对应平台安装包，解压即用。首次启动若当前目录无 `config.yaml`，会自动生成示例业务配置。
+前往 [Releases](https://github.com/ZengLiangl/FlashShell/releases) 下载对应平台安装包，解压即用。首次启动若当前目录无 `config.yaml`，会自动生成示例业务配置。
 
 ### 开发者：本地构建
 
@@ -182,8 +182,8 @@ flowchart TB
 go install github.com/wailsapp/wails/v2/cmd/wails@latest
 
 # 克隆 & 依赖
-git clone https://github.com/ZengLiangl/first-cmd.git
-cd first-cmd
+git clone https://github.com/ZengLiangl/FlashShell.git
+cd FlashShell
 cd frontend && npm install && cd ..
 go mod tidy
 
@@ -225,7 +225,7 @@ FlashShell 采用**业务与全局双层配置**，职责清晰、互不覆盖�
 ## 项目结构
 
 ```text
-first-cmd/
+FlashShell/
 ├── app/              # Wails 绑定：菜单、事件、API 编排
 ├── data/             # 配置读写、会话、快捷键、会话导入
 ├── define/           # 领域类型与跨包契约
