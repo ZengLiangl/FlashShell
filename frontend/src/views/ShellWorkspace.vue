@@ -189,10 +189,10 @@
       @connect="onPickerConnect"
       @focus-session="onPickerFocusSession"
       @connect-machines="onPickerConnectMachines"
-      @edit-machine="(m) => $emit('edit-machine', m)"
+      @edit-machine="onPickerEditMachine"
       @copy-machine="(m) => $emit('copy-machine', m)"
       @delete-machine="(m) => $emit('delete-machine', m)"
-      @add-machine="$emit('add-machine')"
+      @add-machine="onPickerAddMachine"
       @add-local="onPickerAddLocal"
       @add-local-command="onPickerAddLocalCommand"
       @open-window="onOpenWindow"
@@ -678,6 +678,16 @@ export default {
       emit('add-local')
     }
 
+    const onPickerAddMachine = () => {
+      pickerVisible.value = false
+      emit('add-machine')
+    }
+
+    const onPickerEditMachine = (machine) => {
+      pickerVisible.value = false
+      emit('edit-machine', machine)
+    }
+
     const onPickerAddLocal = () => {
       pickerVisible.value = false
       emit('add-local')
@@ -996,6 +1006,8 @@ export default {
       onPickerConnect,
       onPickerFocusSession,
       onPickerConnectMachines,
+      onPickerAddMachine,
+      onPickerEditMachine,
       onReconnect,
       onAddLocal,
       onPickerAddLocal,
