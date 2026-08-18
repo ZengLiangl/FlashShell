@@ -41,7 +41,7 @@
           </el-icon>
         </button>
         <div v-show="sysinfoOpen" class="sysinfo-body">
-          <div v-if="sysinfoLoading" class="empty-sm">加载中…</div>
+          <div v-if="sysinfoLoading && !sysinfo" class="empty-sm">加载中…</div>
           <div v-else-if="sysinfoError" class="error-sm">{{ sysinfoError }}</div>
           <template v-else-if="sysinfo">
             <div v-for="row in sysinfoRows" :key="row.label" class="sysinfo-row">
@@ -215,6 +215,12 @@ import { Connection, SwitchButton, ArrowDown } from '@element-plus/icons-vue'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
 import * as App from '../../../wailsjs/go/app/App'
 import { onChromeTitleDblActivate, onChromeTitlePointerDown } from '../../utils/windowChrome'
+import {
+  hasUsefulMonitorSnapshot,
+  shouldDiscardMonitorResult,
+  shouldKeepCurrentMonitorSnapshot,
+  shouldReplaceMonitorCache,
+} from '../../utils/shellTabViewCache'
 
 const isAuxMissingError = (msg) => /辅助连接(未建立|不存在)/.test(String(msg || ''))
 const DEFAULT_INTERVAL_MS = 1000
@@ -258,6 +264,8 @@ export default {
     const diskError = ref('')
     let timer = null
     const NET_HISTORY_LEN = 24
+    /** 按会话记住上次监控画面，切 tab 先展示缓存再后台刷新 */
+    const cacheByMachine = Object.create(null)
 
     /** 占用 ≥80% 视为过高，标红提示 */
     const HIGH_USAGE = 80
@@ -294,6 +302,50 @@ export default {
 
     /** 连接中 / 未连接：不拉监控，全部归零 */
     const isIdle = () => !props.activeConnected || props.connecting
+
+    const hasUsefulSnapshot = hasUsefulMonitorSnapshot
+
+    const captureMonitorCache = (name) => {
+      const key = String(name || '').trim()
+      if (!key) return
+      if (!shouldReplaceMonitorCache({
+        current: snapshot.value,
+        hasExisting: !!cacheByMachine[key],
+      })) return
+      cacheByMachine[key] = {
+        snapshot: snapshot.value,
+        netHistory: netHistory.value.slice(),
+        selectedNetIface: selectedNetIface.value,
+        netIfaces: netIfaces.value.slice(),
+        sysinfo: sysinfo.value,
+        sysinfoError: sysinfoError.value,
+        processList: processList.value.slice(),
+        processError: processError.value,
+        portList: portList.value.slice(),
+        portsError: portsError.value,
+        diskList: diskList.value.slice(),
+        diskError: diskError.value,
+      }
+    }
+
+    const restoreMonitorCache = (name) => {
+      const key = String(name || '').trim()
+      const cached = key ? cacheByMachine[key] : null
+      if (!cached || !hasUsefulSnapshot(cached.snapshot)) return false
+      snapshot.value = cached.snapshot
+      netHistory.value = cached.netHistory.slice()
+      selectedNetIface.value = cached.selectedNetIface
+      netIfaces.value = cached.netIfaces.slice()
+      sysinfo.value = cached.sysinfo
+      sysinfoError.value = cached.sysinfoError
+      processList.value = cached.processList.slice()
+      processError.value = cached.processError
+      portList.value = cached.portList.slice()
+      portsError.value = cached.portsError
+      diskList.value = cached.diskList.slice()
+      diskError.value = cached.diskError
+      return true
+    }
 
     const resetToZero = (host = '') => {
       stopTimer()
@@ -386,19 +438,25 @@ export default {
 
     const loadSystemInfo = async () => {
       if (!props.activeMachine || isIdle()) {
-        sysinfo.value = null
-        sysinfoError.value = ''
+        if (!sysinfo.value) sysinfoError.value = ''
         return
       }
-      sysinfoLoading.value = true
-      sysinfoError.value = ''
+      const machineAtStart = props.activeMachine
+      const had = !!(sysinfo.value && sysinfo.value.machineName === props.activeMachine)
+      sysinfoLoading.value = !had
+      if (!had) sysinfoError.value = ''
       try {
         const data = await App.GetShellSystemInfo(props.activeMachine)
+        if (shouldDiscardMonitorResult({
+          idle: isIdle(),
+          activeMachine: props.activeMachine,
+          machineAtStart,
+        })) return
         if (data?.error) {
           // 辅助通道短暂缺失：不直接刷红，稍后由连接态变化 / 展开时重试
           if (isAuxMissingError(data.error)) {
             sysinfoError.value = ''
-            sysinfo.value = null
+            if (!had) sysinfo.value = null
           } else {
             sysinfoError.value = data.error
             sysinfo.value = data
@@ -407,12 +465,17 @@ export default {
           sysinfo.value = data
         }
       } catch (e) {
+        if (shouldDiscardMonitorResult({
+          idle: isIdle(),
+          activeMachine: props.activeMachine,
+          machineAtStart,
+        })) return
         if (isAuxMissingError(e)) {
           sysinfoError.value = ''
-          sysinfo.value = null
+          if (!had) sysinfo.value = null
         } else {
           sysinfoError.value = String(e)
-          sysinfo.value = null
+          if (!had) sysinfo.value = null
         }
       } finally {
         sysinfoLoading.value = false
@@ -444,14 +507,24 @@ export default {
       const machineAtStart = props.activeMachine
       try {
         const data = await App.GetShellProcessList(props.activeMachine)
-        if (isIdle() || props.activeMachine !== machineAtStart) return
-        if (data?.error && !isAuxMissingError(data.error)) {
+        if (shouldDiscardMonitorResult({
+          idle: isIdle(),
+          activeMachine: props.activeMachine,
+          machineAtStart,
+        })) return
+        if (isAuxMissingError(data?.error)) return
+        if (data?.error) {
           processError.value = data.error
           processList.value = []
         } else {
           processList.value = data?.processes || []
         }
       } catch (e) {
+        if (shouldDiscardMonitorResult({
+          idle: isIdle(),
+          activeMachine: props.activeMachine,
+          machineAtStart,
+        })) return
         if (!isAuxMissingError(e)) processError.value = String(e)
         processList.value = []
       } finally {
@@ -470,14 +543,24 @@ export default {
       const machineAtStart = props.activeMachine
       try {
         const data = await App.GetShellListenPorts(props.activeMachine)
-        if (isIdle() || props.activeMachine !== machineAtStart) return
-        if (data?.error && !isAuxMissingError(data.error)) {
+        if (shouldDiscardMonitorResult({
+          idle: isIdle(),
+          activeMachine: props.activeMachine,
+          machineAtStart,
+        })) return
+        if (isAuxMissingError(data?.error)) return
+        if (data?.error) {
           portsError.value = data.error
           portList.value = []
         } else {
           portList.value = data?.ports || []
         }
       } catch (e) {
+        if (shouldDiscardMonitorResult({
+          idle: isIdle(),
+          activeMachine: props.activeMachine,
+          machineAtStart,
+        })) return
         if (!isAuxMissingError(e)) portsError.value = String(e)
         portList.value = []
       } finally {
@@ -496,14 +579,24 @@ export default {
       const machineAtStart = props.activeMachine
       try {
         const data = await App.GetShellDiskList(props.activeMachine)
-        if (isIdle() || props.activeMachine !== machineAtStart) return
-        if (data?.error && !isAuxMissingError(data.error)) {
+        if (shouldDiscardMonitorResult({
+          idle: isIdle(),
+          activeMachine: props.activeMachine,
+          machineAtStart,
+        })) return
+        if (isAuxMissingError(data?.error)) return
+        if (data?.error) {
           diskError.value = data.error
           diskList.value = []
         } else {
           diskList.value = data?.disks || []
         }
       } catch (e) {
+        if (shouldDiscardMonitorResult({
+          idle: isIdle(),
+          activeMachine: props.activeMachine,
+          machineAtStart,
+        })) return
         if (!isAuxMissingError(e)) diskError.value = String(e)
         diskList.value = []
       } finally {
@@ -530,45 +623,67 @@ export default {
       const machineAtStart = props.activeMachine
       try {
         const snap = await App.GetShellMonitor(props.activeMachine, selectedNetIface.value || '')
-        // 轮询返回时若已断开/改切机器，丢弃结果
-        if (isIdle() || props.activeMachine !== machineAtStart) {
-          resetToZero(snap?.host || '')
+        // 轮询返回时若已断开/改切机器，丢弃结果，切勿把当前画面清零
+        if (shouldDiscardMonitorResult({
+          idle: isIdle(),
+          activeMachine: props.activeMachine,
+          machineAtStart,
+        })) {
           return
         }
-        // 辅助通道缺失：保留标题布局，数值归零
-        if (isAuxMissingError(snap?.error)) {
+        const nextSnap = {
+          ...zeroSnapshot(props.activeMachine),
+          ...snap,
+          uptimeText: snap?.uptimeText || '0',
+          memUsed: snap?.memUsed || '0',
+          memTotal: snap?.memTotal || '0',
+          swapPercent: snap?.swapPercent || 0,
+          swapUsed: snap?.swapUsed || '0',
+          swapTotal: snap?.swapTotal || '0',
+          topMem: snap?.topMem || [],
+          netIface: snap?.netIface || '',
+          netIfaces: snap?.netIfaces || [],
+          netRxText: snap?.netRxText || '0B/s',
+          netTxText: snap?.netTxText || '0B/s',
+          error: isAuxMissingError(snap?.error) ? '' : (snap?.error || ''),
+        }
+        // 辅助通道短暂缺失或空快照：只保住当前这台机器的上次有效画面
+        if (shouldKeepCurrentMonitorSnapshot({
+          current: snapshot.value,
+          activeMachine: props.activeMachine,
+          incoming: nextSnap,
+          auxMissing: isAuxMissingError(snap?.error),
+        })) {
+          return
+        }
+        if (isAuxMissingError(snap?.error) || !hasUsefulSnapshot(nextSnap)) {
           snapshot.value = {
             ...zeroSnapshot(props.activeMachine, snap?.host || ''),
             host: snap?.host || '',
           }
-        } else {
-          snapshot.value = {
-            ...zeroSnapshot(props.activeMachine),
-            ...snap,
-            uptimeText: snap?.uptimeText || '0',
-            memUsed: snap?.memUsed || '0',
-            memTotal: snap?.memTotal || '0',
-            swapPercent: snap?.swapPercent || 0,
-            swapUsed: snap?.swapUsed || '0',
-            swapTotal: snap?.swapTotal || '0',
-            topMem: snap?.topMem || [],
-            netIface: snap?.netIface || '',
-            netIfaces: snap?.netIfaces || [],
-            netRxText: snap?.netRxText || '0B/s',
-            netTxText: snap?.netTxText || '0B/s',
-            error: snap?.error || '',
-          }
-          syncNetIfaces(snap)
-          if (snap?.netIface) {
-            pushNetHistory(snap.netRxRate, snap.netTxRate)
-          }
+          return
         }
+        snapshot.value = nextSnap
+        syncNetIfaces(snap)
+        if (snap?.netIface) {
+          pushNetHistory(snap.netRxRate, snap.netTxRate)
+        }
+        captureMonitorCache(props.activeMachine)
       } catch (e) {
-        if (isIdle() || props.activeMachine !== machineAtStart) {
-          resetToZero()
+        if (shouldDiscardMonitorResult({
+          idle: isIdle(),
+          activeMachine: props.activeMachine,
+          machineAtStart,
+        })) {
           return
         }
         if (isAuxMissingError(e)) {
+          if (shouldKeepCurrentMonitorSnapshot({
+            current: snapshot.value,
+            activeMachine: props.activeMachine,
+            incoming: null,
+            auxMissing: true,
+          })) return
           snapshot.value = zeroSnapshot(props.activeMachine, snapshot.value?.host || '')
         } else {
           snapshot.value = {
@@ -623,22 +738,16 @@ export default {
 
     watch(
       () => [props.activeMachine, props.activeConnected, props.connecting],
-      () => {
+      ([name], prevTuple) => {
+        const prevName = prevTuple?.[0]
+        if (prevName && prevName !== name) captureMonitorCache(prevName)
         if (isIdle()) {
           resetToZero()
           return
         }
-        netHistory.value = []
-        selectedNetIface.value = ''
-        netIfaces.value = []
-        sysinfo.value = null
-        sysinfoError.value = ''
-        processList.value = []
-        processError.value = ''
-        portList.value = []
-        portsError.value = ''
-        diskList.value = []
-        diskError.value = ''
+        if (name && name !== prevName) {
+          restoreMonitorCache(name)
+        }
         loadSystemInfo()
         startTimer()
         if (monitorTab.value === 'processes') loadProcesses()

@@ -524,6 +524,10 @@ import {
   clearSftpClipboard,
   extractClipboardLocalPaths,
 } from '../../utils/sftpClipboard'
+import {
+  canRestoreSftpBrowseView,
+  shouldSilentSftpRefresh,
+} from '../../utils/shellTabViewCache'
 
 export default {
   name: 'ShellFilePanel',
@@ -753,6 +757,46 @@ export default {
       lastFollowedByMachine[key] = lastFollowedCwd.value
       browseCwdByMachine[key] = cwd.value
       terminalCwdByMachine[key] = terminalCwd.value
+    }
+
+    /** 按会话记住目录树/文件列表，切 tab 先还原画面再静默刷新 */
+    const viewByMachine = Object.create(null)
+
+    const liveExpandedKeys = () => {
+      const keys = treeRef.value?.getExpandedKeys?.()
+      if (Array.isArray(keys) && keys.length) return keys.slice()
+      return Array.isArray(expandedKeys.value) ? expandedKeys.value.slice() : ['/']
+    }
+
+    const snapshotBrowseView = (name) => {
+      const key = String(name || '').trim()
+      if (!key) return
+      viewByMachine[key] = {
+        cwd: cwd.value,
+        pathDraft: pathDraft.value,
+        entries: entries.value,
+        selectedPath: selectedRow.value?.path || '',
+        nameFilter: nameFilter.value,
+        treeRoot: treeRoot.value,
+        expandedKeys: liveExpandedKeys(),
+      }
+    }
+
+    const restoreBrowseView = (name) => {
+      const key = String(name || '').trim()
+      const cached = key ? viewByMachine[key] : null
+      if (!canRestoreSftpBrowseView(cached)) return false
+      cwd.value = cached.cwd
+      pathDraft.value = cached.pathDraft || cached.cwd
+      entries.value = cached.entries || []
+      nameFilter.value = cached.nameFilter || ''
+      treeRoot.value = cached.treeRoot || []
+      expandedKeys.value = cached.expandedKeys?.length ? cached.expandedKeys : ['/']
+      selectedRow.value = cached.selectedPath
+        ? (entries.value || []).find((e) => e.path === cached.selectedPath) || null
+        : null
+      treeRenderKey.value += 1
+      return true
     }
 
     function readBodyHeight() {
@@ -2317,13 +2361,7 @@ export default {
 
     watch(() => props.machineName, async (name, prev) => {
       snapshotFollowState(prev)
-      cwd.value = ''
-      pathDraft.value = ''
-      entries.value = []
-      selectedRow.value = null
-      nameFilter.value = ''
-      treeRoot.value = []
-      expandedKeys.value = ['/']
+      snapshotBrowseView(prev)
       closeMenu()
       stopPwdTimer()
       const key = String(name || '').trim()
@@ -2337,6 +2375,16 @@ export default {
       } else if (name) {
         // 展开态未变时也同步状态栏指示
         emit('update:expanded', shouldExpand)
+      }
+      const restored = restoreBrowseView(key)
+      if (!restored) {
+        cwd.value = ''
+        pathDraft.value = ''
+        entries.value = []
+        selectedRow.value = null
+        nameFilter.value = ''
+        treeRoot.value = []
+        expandedKeys.value = ['/']
       }
       await nextTick()
       notifyLayout()
@@ -2355,7 +2403,8 @@ export default {
             : ''
         }
         if (liveTerm) terminalCwd.value = liveTerm
-        const savedBrowse = normalizeAbs(browseCwdByMachine[key] || '')
+        if (props.machineName !== name) return
+        const savedBrowse = normalizeAbs(browseCwdByMachine[key] || cwd.value || '')
         const savedFollowed = normalizeAbs(lastFollowedCwd.value)
         const stillPaused = !!(
           followCwd.value
@@ -2364,14 +2413,31 @@ export default {
           && savedBrowse !== savedFollowed
           && (!liveTerm || liveTerm === savedFollowed)
         )
-        if (stillPaused) {
-          await setCwd(savedBrowse)
-        } else if (followCwd.value && liveTerm) {
-          await setCwd(liveTerm)
-          markFollowedCwd(liveTerm)
-        } else {
-          await setCwd(savedBrowse || liveTerm || await ensureHome())
+        const applyTarget = async (target, { markFollowed = false } = {}) => {
+          if (props.machineName !== name) return
+          const abs = normalizeAbs(target)
+          if (!abs) return
+          if (shouldSilentSftpRefresh({
+            restored,
+            cwd: normalizeAbs(cwd.value),
+            target: abs,
+            treeHasNodes: (treeRoot.value || []).length > 0,
+          })) {
+            await calibrateList()
+          } else {
+            await setCwd(abs)
+          }
+          if (props.machineName !== name) return
+          if (markFollowed) markFollowedCwd(abs)
         }
+        if (stillPaused) {
+          await applyTarget(savedBrowse)
+        } else if (followCwd.value && liveTerm) {
+          await applyTarget(liveTerm, { markFollowed: true })
+        } else {
+          await applyTarget(savedBrowse || liveTerm || await ensureHome())
+        }
+        if (props.machineName !== name) return
         startPwdTimer()
       } catch (e) {
         setPanelError(e)
