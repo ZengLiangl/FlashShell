@@ -324,7 +324,7 @@ export default {
     broadcastEnabled: { type: Boolean, default: false },
     broadcastTargets: { type: Array, default: () => [] },
     splitSessionIds: { type: Array, default: () => [] },
-    /** SFTP 面板高度拖拽中：终端 ResizeObserver 不 fit，松手后 workspace 统一 fit */
+    /** SFTP 面板高度拖拽 / 左侧监控栏展开收起中：终端 ResizeObserver 不 fit，布局稳定后 workspace 统一 fit */
     filePanelLayoutDragging: { type: Boolean, default: false },
     hasTask: { type: Boolean, default: false },
     hasProjects: { type: Boolean, default: false },

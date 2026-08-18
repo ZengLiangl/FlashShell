@@ -127,7 +127,7 @@ export default {
     inSplit: { type: Boolean, default: false },
     /** 是否曾成功连接过（用于区分「尚未连上」与「已断开」） */
     everConnected: { type: Boolean, default: false },
-    /** SFTP 面板拖拽改高中：抑制 ResizeObserver fit，松手后由 layout-change 统一 fit */
+    /** SFTP 面板拖拽改高 / 左侧监控栏展开收起中：抑制 ResizeObserver fit，布局稳定后再统一 fit */
     suppressResizeObserverFit: { type: Boolean, default: false },
     /** 自动重连中 */
     reconnecting: { type: Boolean, default: false },

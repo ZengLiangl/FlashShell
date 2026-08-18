@@ -82,3 +82,57 @@ MiB Swap:      0.0 total,      0.0 free,      0.0 used.   7000.0 avail Mem
 		t.Fatalf("row1=%+v", procs[1])
 	}
 }
+
+func TestParseTopBatchFullCommandLine(t *testing.T) {
+	raw := `
+top - 22:00:00 up 1 day,  1:00,  1 user,  load average: 0.00, 0.01, 0.05
+Tasks: 100 total,   1 running,  99 sleeping,   0 stopped,   0 zombie
+%Cpu(s):  3.0 us,  1.0 sy,  0.0 ni, 95.5 id,  0.5 wa,  0.0 hi,  0.0 si,  0.0 st
+MiB Mem :  15800.0 total,   7000.0 free,   8000.0 used,    800.0 buff/cache
+MiB Swap:      0.0 total,      0.0 free,      0.0 used.   7000.0 avail Mem
+
+  PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+31522 root      20   0  222222  33333   4444 S 282.4   8.5   9:99.99 java -Xms2g -Xmx4g -jar /opt/app/service.jar --spring.profiles.active=prod
+ 3295 root      20   0  111111  22222   3333 S   3.9   0.0   1:11.11 sshd: root@pts/0
+`
+	_, procs := parseTopBatch(raw, 5)
+	if len(procs) < 2 {
+		t.Fatalf("procs=%d %+v", len(procs), procs)
+	}
+	want := "java -Xms2g -Xmx4g -jar /opt/app/service.jar --spring.profiles.active=prod"
+	if procs[0].Command != want {
+		t.Fatalf("cmd=%q, want %q", procs[0].Command, want)
+	}
+	if procs[1].Command != "sshd: root@pts/0" {
+		t.Fatalf("cmd1=%q", procs[1].Command)
+	}
+}
+
+func TestParseTopBatchLastFrameWinsWhenOutputConcatenated(t *testing.T) {
+	// top -c 失败时脚本会再跑一遍无 -c 的 top，两段输出拼在 __TOPRAW__ 里。
+	raw := `
+top - 22:00:00 up 1 day,  1:00,  1 user,  load average: 0.00, 0.01, 0.05
+%Cpu(s):  1.0 us,  0.0 sy,  0.0 ni, 99.0 id,  0.0 wa
+  PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+  100 root      20   0  111111  22222   3333 S  99.0   1.0   0:00.01 stale-first
+
+top - 22:00:01 up 1 day,  1:00,  1 user,  load average: 0.00, 0.01, 0.05
+%Cpu(s):  3.0 us,  1.0 sy,  0.0 ni, 95.5 id,  0.5 wa
+  PID USER      PR  NI    VIRT    RES    SHR S  %CPU  %MEM     TIME+ COMMAND
+31522 root      20   0  222222  33333   4444 S  12.5   8.5   9:99.99 java -jar /opt/app/service.jar
+ 3295 root      20   0  111111  22222   3333 S   3.9   0.0   1:11.11 sshd: root@pts/0
+`
+	sysCPU, procs := parseTopBatch(raw, 5)
+	if math.Abs(sysCPU-4.5) > 0.01 {
+		t.Fatalf("sysCPU=%v, want 4.5 from last frame", sysCPU)
+	}
+	if len(procs) < 2 {
+		t.Fatalf("procs=%d %+v", len(procs), procs)
+	}
+	if procs[0].PID != "31522" {
+		t.Fatalf("should keep last frame pid, got %+v", procs[0])
+	}
+	if procs[0].Command != "java -jar /opt/app/service.jar" {
+		t.Fatalf("cmd=%q", procs[0].Command)
+	}
+}

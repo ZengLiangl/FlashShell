@@ -192,7 +192,7 @@ func (a *ShellAuxManager) execBashPath(bash, script string) (string, error) {
 	return string(out), err
 }
 
-// shellMonitorScript 远端监控：uptime/mem 直读；CPU 与 TOP 用 top -bn2 第二帧（瞬时占用）。
+// shellMonitorScript 远端监控：uptime/mem 直读；CPU 与 TOP 用 top -bn2 -c 第二帧（瞬时占用 + 完整命令行）。
 const shellMonitorScript = `set +e
 echo __UP__
 awk '{print $1; exit}' /proc/uptime 2>/dev/null
@@ -218,7 +218,8 @@ if [ -n "$iface" ]; then
   awk -v d="$iface" '$1 ~ d":" {print $2, $10; exit}' /proc/net/dev 2>/dev/null
 fi
 echo __TOPRAW__
-LC_ALL=C top -bn2 -d 0.5 -w 512 2>/dev/null
+# -c 输出完整命令行（默认只显示进程名如 java）；-w 512 尽量拉宽，避免命令被终端宽度截断
+COLUMNS=512 LC_ALL=C top -bn2 -c -d 0.5 -w 512 2>/dev/null || COLUMNS=512 LC_ALL=C top -bn2 -d 0.5 -w 512 2>/dev/null
 `
 
 const shellSystemInfoScript = `set +e

@@ -107,7 +107,20 @@
           <div class="top-pid">{{ p.pid }}</div>
           <div class="top-mem" :class="{ 'is-danger': isHighUsage(p.mem) }">{{ formatPct1(p.mem) }}</div>
           <div class="top-cpu" :class="{ 'is-danger': isHighUsage(p.cpu) }">{{ formatPct1(p.cpu) }}</div>
-          <div class="top-cmd" :title="p.command">{{ p.command }}</div>
+          <div class="top-cmd">
+            <el-tooltip
+              :disabled="!p.command"
+              placement="top"
+              :show-after="250"
+              :hide-after="0"
+              popper-class="shell-monitor-cmd-tip"
+            >
+              <template #content>
+                <div class="top-cmd-tip">{{ p.command }}</div>
+              </template>
+              <span class="top-cmd-text">{{ p.command }}</span>
+            </el-tooltip>
+          </div>
         </div>
       </div>
 
@@ -945,7 +958,7 @@ export default {
 .top-head,
 .top-row {
   display: grid;
-  grid-template-columns: 56px 52px 52px minmax(0, 1fr);
+  grid-template-columns: 48px 48px 52px minmax(0, 1fr);
   gap: 6px;
   align-items: center;
   padding: 6px 0;
@@ -972,9 +985,28 @@ export default {
 
 .top-cmd {
   min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.top-cmd-text,
+.top-cmd :deep(.el-tooltip__trigger) {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  cursor: default;
+}
+
+.top-cmd-tip {
+  max-width: min(420px, 70vw);
+  word-break: break-all;
+  white-space: pre-wrap;
+  line-height: 1.45;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
 }
 
 .empty,
@@ -1216,5 +1248,11 @@ export default {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+</style>
+
+<style>
+.shell-monitor-cmd-tip {
+  max-width: min(420px, 70vw) !important;
 }
 </style>

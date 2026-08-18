@@ -3,6 +3,7 @@
     <el-container class="shell-body main-container">
       <el-aside
         v-if="showLeftPanel"
+        ref="leftAsideRef"
         :width="leftCollapsed ? '0px' : leftPanelWidth + 'px'"
         class="left-panel shell-left-panel"
         :class="{ collapsed: leftCollapsed, resizing: isResizing }"
@@ -284,9 +285,62 @@ export default {
   setup(props, { emit }) {
     const tabsRef = ref(null)
     const filePanelRef = ref(null)
+    const leftAsideRef = ref(null)
     const filePanelExpanded = ref(false)
     const filePanelLayoutDragging = ref(false)
     const leftCollapsed = ref(false)
+    /** 与 SFTP 高度动画一致：左侧栏 width 过渡 0.2s，再留一点余量等布局落稳 */
+    const LEFT_PANEL_WIDTH_TRANSITION_MS = 240
+    let leftPanelFitToken = 0
+
+    /** 布局变动期间抑制终端 ResizeObserver fit，稳定后再统一 fit（与 SFTP 栏相同） */
+    const beginTerminalLayoutLock = () => {
+      filePanelLayoutDragging.value = true
+    }
+
+    const endTerminalLayoutLockAndFit = async () => {
+      filePanelLayoutDragging.value = false
+      await nextTick()
+      requestAnimationFrame(() => {
+        tabsRef.value?.fitActive?.()
+      })
+    }
+
+    const waitLeftPanelWidthTransition = () => new Promise((resolve) => {
+      const aside = leftAsideRef.value?.$el || leftAsideRef.value
+      if (!(aside instanceof HTMLElement)) {
+        setTimeout(resolve, LEFT_PANEL_WIDTH_TRANSITION_MS)
+        return
+      }
+      const cs = window.getComputedStyle(aside)
+      if (!cs.transitionDuration || cs.transitionDuration.split(',').every((d) => d.trim() === '0s')) {
+        resolve()
+        return
+      }
+      let settled = false
+      const finish = () => {
+        if (settled) return
+        settled = true
+        aside.removeEventListener('transitionend', onEnd)
+        resolve()
+      }
+      const onEnd = (e) => {
+        if (e.target !== aside) return
+        if (e.propertyName && e.propertyName !== 'width') return
+        finish()
+      }
+      aside.addEventListener('transitionend', onEnd)
+      setTimeout(finish, LEFT_PANEL_WIDTH_TRANSITION_MS)
+    })
+
+    const settleLeftPanelThenFit = async () => {
+      const token = ++leftPanelFitToken
+      beginTerminalLayoutLock()
+      await nextTick()
+      await waitLeftPanelWidthTransition()
+      if (token !== leftPanelFitToken) return
+      await endTerminalLayoutLockAndFit()
+    }
     const edgeHover = ref(false)
     const searchVisible = ref(false)
     const searchQuery = ref('')
@@ -415,9 +469,8 @@ export default {
       return (props.workspaceSessions || []).some((s) => s.machineName === name && s.connected)
     })
 
-    watch(showLeftPanel, async () => {
-      await nextTick()
-      tabsRef.value?.fitActive?.()
+    watch(showLeftPanel, () => {
+      void settleLeftPanelThenFit()
     })
 
     const findMonitorMachineRecord = () => {
@@ -431,7 +484,11 @@ export default {
 
     const syncLeftCollapsedFromMachine = () => {
       if (!monitorSession.value) return
-      leftCollapsed.value = !isMachineMonitorOpen(findMonitorMachineRecord())
+      const next = !isMachineMonitorOpen(findMonitorMachineRecord())
+      if (next === leftCollapsed.value) return
+      beginTerminalLayoutLock()
+      leftCollapsed.value = next
+      void settleLeftPanelThenFit()
     }
 
     watch(
@@ -633,9 +690,11 @@ export default {
     }
 
     const toggleLeftPanel = async () => {
+      beginTerminalLayoutLock()
       leftCollapsed.value = !leftCollapsed.value
       edgeHover.value = false
       const open = !leftCollapsed.value
+      const fitPromise = settleLeftPanelThenFit()
       const m = findMonitorMachineRecord()
       if (m?.id || m?.name) {
         try {
@@ -645,8 +704,7 @@ export default {
           console.warn('保存监控栏展开状态失败:', e)
         }
       }
-      await nextTick()
-      tabsRef.value?.fitActive?.()
+      await fitPromise
     }
 
     const onHistoryConnect = async (name) => {
@@ -767,7 +825,7 @@ export default {
     })
 
     const onFilePanelLayoutResizeStart = () => {
-      filePanelLayoutDragging.value = true
+      beginTerminalLayoutLock()
     }
 
     const onFilePanelLayoutResizeEnd = () => {
@@ -775,12 +833,8 @@ export default {
     }
 
     const onFilePanelLayout = async () => {
-      filePanelLayoutDragging.value = false
       // 等一帧再 fit，合并展开瞬间的多次布局变化
-      await nextTick()
-      requestAnimationFrame(() => {
-        tabsRef.value?.fitActive?.()
-      })
+      await endTerminalLayoutLockAndFit()
     }
 
     watch(() => props.activeMachine, (name) => {
@@ -823,8 +877,19 @@ export default {
 
     watch(() => props.leftPanelWidth, async () => {
       if (leftCollapsed.value) return
+      if (props.isResizing || filePanelLayoutDragging.value) return
       await nextTick()
-      tabsRef.value?.fitActive?.()
+      requestAnimationFrame(() => {
+        tabsRef.value?.fitActive?.()
+      })
+    })
+
+    watch(() => props.isResizing, async (dragging) => {
+      if (dragging) {
+        beginTerminalLayoutLock()
+        return
+      }
+      await endTerminalLayoutLockAndFit()
     })
 
     watch(() => props.active, async (visible) => {
@@ -965,6 +1030,7 @@ export default {
     return {
       tabsRef,
       filePanelRef,
+      leftAsideRef,
       filePanelExpanded,
       filePanelLayoutDragging,
       onLocalPathChange,
