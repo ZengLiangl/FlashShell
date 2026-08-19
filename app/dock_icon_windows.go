@@ -39,6 +39,7 @@ var (
 	procGetWindow        = user32.NewProc("GetWindow")
 	procGetDpiForWindow  = user32.NewProc("GetDpiForWindow")
 	procGetSystemMetrics = user32.NewProc("GetSystemMetrics")
+	procIsWindow         = user32.NewProc("IsWindow")
 
 	gwOwner = uintptr(4)
 
@@ -46,7 +47,20 @@ var (
 	winIconSmall windows.Handle
 	winIconBig   windows.Handle
 	winIconTemp  string
+
+	// EnumWindows 回调只能创建一次：syscall.NewCallback 永不释放，热路径反复创建会撑爆进程。
+	mainHWNDMu       sync.Mutex
+	cachedMainHWND   windows.HWND
+	enumMainWindowMu sync.Mutex
+	enumMainWindowQ  *enumMainWindowQuery
+	enumMainWindowCB uintptr
+	enumMainWindowOnce sync.Once
 )
+
+type enumMainWindowQuery struct {
+	pid   uint32
+	found windows.HWND
+}
 
 func setApplicationDockIconPNG(pngBytes []byte) {
 	if len(pngBytes) == 0 {
@@ -135,27 +149,65 @@ func loadIconFromFile(path string, size int) windows.Handle {
 }
 
 func findMainWindowHWND() windows.HWND {
-	pid := windows.GetCurrentProcessId()
-	var found windows.HWND
-	cb := syscall.NewCallback(func(hwnd windows.HWND, _ uintptr) uintptr {
-		var windowPID uint32
-		procGetWindowThread.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&windowPID)))
-		if windowPID != pid {
-			return 1
-		}
-		vis, _, _ := procIsWindowVisible.Call(uintptr(hwnd))
-		if vis == 0 {
-			return 1
-		}
-		owner, _, _ := procGetWindow.Call(uintptr(hwnd), gwOwner)
-		if owner != 0 {
-			return 1
-		}
-		found = hwnd
-		return 0
+	mainHWNDMu.Lock()
+	defer mainHWNDMu.Unlock()
+	if cachedMainHWND != 0 && isWindow(cachedMainHWND) {
+		return cachedMainHWND
+	}
+	cachedMainHWND = enumMainWindowHWND()
+	return cachedMainHWND
+}
+
+func isWindow(hwnd windows.HWND) bool {
+	if hwnd == 0 {
+		return false
+	}
+	r, _, _ := procIsWindow.Call(uintptr(hwnd))
+	return r != 0
+}
+
+func enumMainWindowHWND() windows.HWND {
+	enumMainWindowOnce.Do(func() {
+		enumMainWindowCB = syscall.NewCallback(enumMainWindowProc)
 	})
-	procEnumWindows.Call(cb, 0)
+	q := &enumMainWindowQuery{pid: windows.GetCurrentProcessId()}
+	enumMainWindowMu.Lock()
+	enumMainWindowQ = q
+	enumMainWindowMu.Unlock()
+	procEnumWindows.Call(enumMainWindowCB, 0)
+	enumMainWindowMu.Lock()
+	found := enumMainWindowQ.found
+	enumMainWindowQ = nil
+	enumMainWindowMu.Unlock()
 	return found
+}
+
+func enumMainWindowProc(hwnd windows.HWND, _ uintptr) uintptr {
+	enumMainWindowMu.Lock()
+	q := enumMainWindowQ
+	enumMainWindowMu.Unlock()
+	if q == nil {
+		return 0
+	}
+	var windowPID uint32
+	procGetWindowThread.Call(uintptr(hwnd), uintptr(unsafe.Pointer(&windowPID)))
+	if windowPID != q.pid {
+		return 1
+	}
+	vis, _, _ := procIsWindowVisible.Call(uintptr(hwnd))
+	if vis == 0 {
+		return 1
+	}
+	owner, _, _ := procGetWindow.Call(uintptr(hwnd), gwOwner)
+	if owner != 0 {
+		return 1
+	}
+	enumMainWindowMu.Lock()
+	if enumMainWindowQ != nil {
+		enumMainWindowQ.found = hwnd
+	}
+	enumMainWindowMu.Unlock()
+	return 0
 }
 
 func windowsIconPixelSizes(hwnd windows.HWND) (small, big int) {

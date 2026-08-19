@@ -251,13 +251,19 @@ func (a *App) WindowIsChromeMaximised() bool {
 	if a.ctx == nil {
 		return false
 	}
+	// 先查 native / Wails，再短持锁读标记，避免持锁回调 UI 线程导致挂起
+	nativeMax := nativeWindowIsMaximised()
+	wailsMax := wailsRuntime.WindowIsMaximised(a.ctx)
 	a.winRestoreMu.Lock()
-	defer a.winRestoreMu.Unlock()
-	return a.windowIsEffectivelyMaximised()
+	ourMax := a.chromeMaximised
+	a.winRestoreMu.Unlock()
+	return shouldTreatAsMaximised(nativeMax, wailsMax, ourMax)
 }
 
+// windowIsEffectivelyMaximised 仅在已持有 winRestoreMu 时调用。
+// 不在锁内调用 Wails（可能派发到 UI 线程），避免与绑定调用互相等待。
 func (a *App) windowIsEffectivelyMaximised() bool {
-	return shouldTreatAsMaximised(nativeWindowIsMaximised(), wailsRuntime.WindowIsMaximised(a.ctx), a.chromeMaximised)
+	return shouldTreatAsMaximised(nativeWindowIsMaximised(), false, a.chromeMaximised)
 }
 
 func shouldTreatAsMaximised(nativeMax, wailsMax, ourMax bool) bool {

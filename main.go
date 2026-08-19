@@ -10,6 +10,7 @@ import (
 	_ "syscall"
 
 	"FlashDock/app"
+	"FlashDock/data"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -65,6 +66,19 @@ func main() {
 		}
 		os.Exit(0)
 	}
+
+	// 运行日志固定在全局配置目录 logs/，按天滚动并清理过期文件
+	if _, err := data.InitAppLog(); err != nil {
+		println("初始化运行日志失败:", err.Error())
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			data.LogPanic(r)
+			data.CloseAppLog()
+			panic(r)
+		}
+		data.CloseAppLog()
+	}()
 
 	// Create an instance of the app structure
 	appInstance := app.NewApp(*sessionID)

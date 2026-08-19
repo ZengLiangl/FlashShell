@@ -44,7 +44,7 @@ export default {
     onMounted(() => {
       if (!isWindows) return
       refresh()
-      timer = setInterval(refresh, 800)
+      timer = setInterval(refresh, 2000)
       window.addEventListener('resize', refresh)
     })
     onUnmounted(() => {

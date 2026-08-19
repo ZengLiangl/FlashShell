@@ -95,6 +95,7 @@ func NewApp(sessionID string) *App {
 // Startup is called when the app starts up
 func (a *App) Startup(ctx context.Context) {
 	a.ctx = ctx
+	data.AppLogf("Startup: session=%s log=%s", a.sessionManager.GetSessionID(), data.CurrentAppLogPath())
 	define.SetHostKeyCallback(data.GlobalHostKeyManager().Callback())
 	cmds.SetTransferReporter(a.reportTaskTransfer)
 	a.initExecutionFeatures()
@@ -197,6 +198,7 @@ func (a *App) ConfirmQuit() {
 
 // Shutdown is called during application termination
 func (a *App) Shutdown(ctx context.Context) {
+	data.AppLogf("Shutdown")
 	close(a.outputIngress)
 }
 
