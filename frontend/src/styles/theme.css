@@ -46,9 +46,15 @@
 
   /* Shell 底部 chrome：介于终端与纯白面板之间，减轻硬切 */
   --shell-chrome-bg: #f3f5f9;
+  --shell-chrome-bg-2: #eceff4;
+  --shell-chrome-fg: var(--app-text);
+  --shell-chrome-muted: var(--app-text-muted);
   --shell-chrome-border: color-mix(in srgb, var(--app-border) 72%, transparent);
   --shell-chrome-divider: color-mix(in srgb, var(--app-border) 55%, transparent);
-  --shell-chrome-highlight: color-mix(in srgb, #ffffff 55%, transparent);
+  --shell-chrome-highlight: #ffffff;
+  --shell-chrome-hover: color-mix(in srgb, var(--app-text) 6%, var(--shell-chrome-bg));
+  --shell-chrome-tab-active-bg: #ffffff;
+  --shell-chrome-tab-active-fg: var(--app-text);
 }
 
 html.dark {
@@ -86,9 +92,15 @@ html.dark {
   --step-border: #414243;
 
   --shell-chrome-bg: #1a1b1c;
+  --shell-chrome-bg-2: #151617;
+  --shell-chrome-fg: var(--app-text-secondary);
+  --shell-chrome-muted: var(--app-text-muted);
   --shell-chrome-border: color-mix(in srgb, var(--app-border) 48%, transparent);
   --shell-chrome-divider: color-mix(in srgb, var(--app-border) 36%, transparent);
   --shell-chrome-highlight: color-mix(in srgb, #ffffff 4%, transparent);
+  --shell-chrome-hover: color-mix(in srgb, #ffffff 6%, transparent);
+  --shell-chrome-tab-active-bg: var(--terminal-bg);
+  --shell-chrome-tab-active-fg: var(--terminal-fg);
 }
 
 html.dark .terminal-preset-monokai {
@@ -494,16 +506,21 @@ html.is-mac-hidden-titlebar {
   --mac-traffic-inset: 76px;
 }
 
-html.is-mac-hidden-titlebar .app-menu-bar,
-html.is-mac-hidden-titlebar .shell-terminal-tabs .tabs-bar,
-html.is-mac-hidden-titlebar .terminal-header {
+html.is-mac-hidden-titlebar .topbar,
+html.is-mac-hidden-titlebar .app-menu-bar {
   padding-left: max(8px, var(--mac-traffic-inset));
   --wails-draggable: drag;
 }
 
-/* 侧栏展开时红绿灯落在左侧面板顶区，tabs 不再重复留 76px 空位 */
-html.is-mac-hidden-titlebar .shell-workspace.has-left-chrome .shell-terminal-tabs .tabs-bar {
-  padding-left: 4px;
+/* Shell 模式：全宽顶栏标签行与红绿灯同排（在 app-body 之上） */
+html.is-mac-hidden-titlebar .shell-top-chrome-host .tabs-bar.shell-top-chrome {
+  padding-left: max(8px, var(--mac-traffic-inset));
+  --wails-draggable: drag;
+}
+
+html.is-mac-hidden-titlebar .terminal-header {
+  padding-left: 12px;
+  --wails-draggable: drag;
 }
 
 html.is-mac-hidden-titlebar .shell-workspace.has-left-chrome .shell-left-traffic-spacer {
@@ -520,8 +537,13 @@ html.is-windows-frameless .local-file-tree .panel-header {
 }
 
 /* Windows 无边框：顶栏可拖拽，右侧留给窗口按钮 */
-html.is-windows-frameless .app-menu-bar,
-html.is-windows-frameless .shell-terminal-tabs .tabs-bar,
+html.is-windows-frameless .topbar,
+html.is-windows-frameless .app-menu-bar {
+  --wails-draggable: drag;
+  padding-right: 0;
+}
+
+html.is-windows-frameless .shell-top-chrome-host .tabs-bar.shell-top-chrome,
 html.is-windows-frameless .terminal-header {
   --wails-draggable: drag;
   padding-right: 0;
@@ -536,12 +558,21 @@ html.is-mac-hidden-titlebar .subproject-section .section-header {
   --wails-draggable: drag;
 }
 
+html.is-mac-hidden-titlebar .topbar button,
+html.is-mac-hidden-titlebar .topbar a,
+html.is-mac-hidden-titlebar .topbar input,
+html.is-mac-hidden-titlebar .topbar .el-dropdown,
 html.is-mac-hidden-titlebar .app-menu-bar button,
 html.is-mac-hidden-titlebar .app-menu-bar a,
 html.is-mac-hidden-titlebar .app-menu-bar input,
 html.is-mac-hidden-titlebar .app-menu-bar .el-dropdown,
 html.is-mac-hidden-titlebar .app-menu-bar .mode-switcher-host,
 html.is-mac-hidden-titlebar .app-menu-bar .app-chrome-icons,
+html.is-mac-hidden-titlebar .shell-top-chrome-host .tabs-bar button,
+html.is-mac-hidden-titlebar .shell-top-chrome-host .tabs-bar a,
+html.is-mac-hidden-titlebar .shell-top-chrome-host .tabs-bar input,
+html.is-mac-hidden-titlebar .shell-top-chrome-host .tabs-bar .el-dropdown,
+html.is-mac-hidden-titlebar .shell-top-chrome-host .tabs-bar .session-tab,
 html.is-mac-hidden-titlebar .shell-terminal-tabs .tabs-bar button,
 html.is-mac-hidden-titlebar .shell-terminal-tabs .tabs-bar a,
 html.is-mac-hidden-titlebar .shell-terminal-tabs .tabs-bar input,
@@ -556,12 +587,21 @@ html.is-mac-hidden-titlebar .terminal-header .el-dropdown,
 html.is-mac-hidden-titlebar .terminal-header .mode-switcher-host,
 html.is-mac-hidden-titlebar .terminal-header .app-chrome-icons,
 html.is-mac-hidden-titlebar .terminal-header .icon-actions,
+html.is-windows-frameless .topbar button,
+html.is-windows-frameless .topbar a,
+html.is-windows-frameless .topbar input,
+html.is-windows-frameless .topbar .el-dropdown,
 html.is-windows-frameless .app-menu-bar button,
 html.is-windows-frameless .app-menu-bar a,
 html.is-windows-frameless .app-menu-bar input,
 html.is-windows-frameless .app-menu-bar .el-dropdown,
 html.is-windows-frameless .app-menu-bar .mode-switcher-host,
 html.is-windows-frameless .app-menu-bar .app-chrome-icons,
+html.is-windows-frameless .shell-top-chrome-host .tabs-bar button,
+html.is-windows-frameless .shell-top-chrome-host .tabs-bar a,
+html.is-windows-frameless .shell-top-chrome-host .tabs-bar input,
+html.is-windows-frameless .shell-top-chrome-host .tabs-bar .el-dropdown,
+html.is-windows-frameless .shell-top-chrome-host .tabs-bar .session-tab,
 html.is-windows-frameless .shell-terminal-tabs .tabs-bar button,
 html.is-windows-frameless .shell-terminal-tabs .tabs-bar a,
 html.is-windows-frameless .shell-terminal-tabs .tabs-bar input,

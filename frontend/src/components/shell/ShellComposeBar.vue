@@ -103,12 +103,28 @@ export default {
 .shell-compose-bar {
   flex-shrink: 0;
   display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  border-bottom: 1px solid var(--app-border);
-  background: transparent;
-  padding: 6px 10px 8px;
+  align-items: center;
+  gap: 10px;
+  border-bottom: 1px solid var(--term-border);
+  background: oklch(24% 0.02 240);
+  padding: 6px 12px;
   box-sizing: border-box;
+  font-size: 12.5px;
+}
+
+.compose-label {
+  color: var(--term-dim);
+  font-family: var(--font-mono);
+}
+
+.compose-input {
+  border: 1px solid var(--term-border);
+  border-radius: 7px;
+  background: var(--term-bg);
+  color: var(--term-fg);
+  font-family: var(--font-mono);
+  min-height: 26px;
+  max-height: 120px;
 }
 
 .compose-main {

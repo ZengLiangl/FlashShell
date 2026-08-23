@@ -1,14 +1,18 @@
 <template>
   <div class="shell-terminal-tabs">
+    <Teleport to="#shell-top-chrome-host" :disabled="!hideAppChrome">
     <div
       class="tabs-bar"
-      :class="{ 'is-drop-unsplit': draggingSplitPane }"
+      :class="{
+        'is-drop-unsplit': draggingSplitPane,
+        'shell-top-chrome': hideAppChrome,
+      }"
       @dragover.prevent="onTabsBarDragOver"
       @drop.prevent="onTabsBarDrop"
       @dblclick="onChromeTitleDblActivate"
       @mousedown="onChromeTitlePointerDown"
     >
-      <el-button class="home-btn" size="small" text title="返回首页" @click="$emit('back')">
+      <el-button v-if="!hideAppChrome" class="home-btn" size="small" text title="返回首页" @click="$emit('back')">
         <el-icon :size="14">
           <ArrowLeft />
         </el-icon>
@@ -18,6 +22,7 @@
         <div v-if="sessions.length" class="custom-session-tabs">
           <div v-for="session in orderedSessions" :key="session.machineName" class="session-tab" :class="{
             active: activeTab === session.machineName,
+            'is-connected': session?.connected,
             'in-split': hasSplitGroup && splitSessionIds.includes(session.machineName),
             'drop-before': dropReorderTarget === session.machineName && !dropReorderAfter,
             'drop-after': dropReorderTarget === session.machineName && dropReorderAfter,
@@ -60,7 +65,7 @@
       <div class="tabs-bar-spacer" aria-hidden="true">
         <span v-if="draggingSplitPane" class="unsplit-hint">拖到此处移出分屏</span>
       </div>
-      <div class="tabs-bar-right">
+      <div v-if="!hideAppChrome" class="tabs-bar-right">
         <ModeSwitcher
           v-if="hasProjects || hasTask"
           compact
@@ -81,7 +86,10 @@
         />
         <AppChromeIcons />
       </div>
+
+      <WindowControls v-if="hideAppChrome && isWindows" class="tabs-bar-win-controls" />
     </div>
+    </Teleport>
 
     <div v-if="sessions.length === 0" class="empty-slot">
       <slot name="empty" />
@@ -104,42 +112,8 @@
             :session-id="activeTab"
             :broadcast-enabled="broadcastEnabled"
             :broadcast-targets="broadcastTargets"
-            @update:enabled="(v) => (composeEnabled = v)"
+            @update:enabled="(v) => $emit('update:compose-enabled', v)"
           />
-        </div>
-
-        <div v-if="sessions.length" class="terminal-inline-actions">
-          <el-tooltip v-if="connectedCount >= 1"
-            :content="broadcastEnabled ? '关闭命令广播 (Esc)' : '开启命令广播'" placement="bottom">
-            <el-button class="broadcast-toggle" size="small" text :class="{ active: broadcastEnabled }"
-              @click="toggleBroadcast">
-              <el-icon :size="15">
-                <Promotion />
-              </el-icon>
-            </el-button>
-          </el-tooltip>
-          <el-tooltip :content="composeEnabled ? '关闭撰写栏' : '开启撰写栏（多行命令）'" placement="bottom">
-            <el-button class="compose-toggle" size="small" text :class="{ active: composeEnabled }"
-              @click="toggleCompose">
-              <el-icon :size="15">
-                <EditPen />
-              </el-icon>
-            </el-button>
-          </el-tooltip>
-          <el-tooltip content="命令面板 (历史/片段，默认 Ctrl/⌘+Shift+P)" placement="bottom">
-            <el-button size="small" text title="命令面板"
-              @click="$emit('open-command-palette')">
-              <el-icon :size="15"><Memo /></el-icon>
-            </el-button>
-          </el-tooltip>
-          <el-button v-if="!isLocalSession(activeTab)" class="transfer-btn" size="small" text
-            title="文件传输" @click="$emit('open-transfer')">
-            <el-badge :value="transferActiveCount" :hidden="!transferActiveCount" :max="99">
-              <el-icon :size="15">
-                <Upload />
-              </el-icon>
-            </el-badge>
-          </el-button>
         </div>
 
         <div class="terminal-stack"
@@ -234,13 +208,15 @@
 </template>
 
 <script>
-import { ref, reactive, watch, computed, onMounted, onUnmounted, nextTick } from 'vue'
-import { ArrowLeft, ArrowDown, Upload, Plus, Promotion, Memo, EditPen } from '@element-plus/icons-vue'
+import { ref, reactive, watch, computed, onMounted, onUnmounted, nextTick, Teleport } from 'vue'
+import { ArrowLeft, ArrowDown, Plus } from '@element-plus/icons-vue'
 import ShellTerminal from './ShellTerminal.vue'
 import ShellBroadcastBar from './ShellBroadcastBar.vue'
 import ShellComposeBar from './ShellComposeBar.vue'
 import ModeSwitcher from '../ModeSwitcher.vue'
 import AppChromeIcons from '../AppChromeIcons.vue'
+import WindowControls from '../WindowControls.vue'
+import { isWindowsPlatform } from '../../utils/platform'
 import { cwdBasename } from '../../utils/shellTerminalUx'
 import { onChromeTitleDblActivate, onChromeTitlePointerDown } from '../../utils/windowChrome'
 
@@ -306,13 +282,10 @@ export default {
     ShellComposeBar,
     ModeSwitcher,
     AppChromeIcons,
+    WindowControls,
     ArrowLeft,
     ArrowDown,
-    Upload,
     Plus,
-    Promotion,
-    Memo,
-    EditPen,
   },
   props: {
     sessions: { type: Array, default: () => [] },
@@ -323,6 +296,7 @@ export default {
     transferActiveCount: { type: Number, default: 0 },
     broadcastEnabled: { type: Boolean, default: false },
     broadcastTargets: { type: Array, default: () => [] },
+    composeEnabled: { type: Boolean, default: false },
     splitSessionIds: { type: Array, default: () => [] },
     /** SFTP 面板高度拖拽 / 左侧监控栏展开收起中：终端 ResizeObserver 不 fit，布局稳定后 workspace 统一 fit */
     filePanelLayoutDragging: { type: Boolean, default: false },
@@ -332,16 +306,23 @@ export default {
     taskRunning: { type: Boolean, default: false },
     projects: { type: Array, default: () => [] },
     selectedProjectName: { type: String, default: '' },
+    hideAppChrome: { type: Boolean, default: false },
+    showLeftPanel: { type: Boolean, default: false },
+    leftPanelOpen: { type: Boolean, default: false },
+    leftPanelLabel: { type: String, default: '监控' },
+    filePanelExpanded: { type: Boolean, default: false },
   },
   emits: [
     'update:activeMachine', 'close-session', 'close-sessions', 'clear', 'open-picker', 'add-local',
     'back', 'open-search', 'reconnect', 'search-result', 'open-transfer', 'open-command-palette', 'cwd-sync',
     'duplicate-session',
-    'update:broadcast-enabled', 'update:broadcast-targets', 'update:split-session-ids',
+    'update:broadcast-enabled', 'update:broadcast-targets', 'update:split-session-ids', 'update:compose-enabled',
     'reorder-tabs',
     'change-view', 'select-project', 'focus-session',
+    'toggle-left-panel', 'toggle-files', 'toggle-search', 'open-tunnels',
   ],
   setup(props, { emit, expose }) {
+    const isWindows = isWindowsPlatform()
     const activeTab = ref(props.activeMachine)
     const terminalRefs = ref({})
     const draggingTab = ref('')
@@ -668,11 +649,6 @@ export default {
         const ids = (props.sessions || []).filter((s) => s.connected).map((s) => s.machineName)
         emit('update:broadcast-targets', ids)
       }
-    }
-
-    const composeEnabled = ref(false)
-    const toggleCompose = () => {
-      composeEnabled.value = !composeEnabled.value
     }
 
     const splitGridStyle = computed(() => {
@@ -1031,9 +1007,8 @@ export default {
       exitSplit,
       togglePaneZoom,
       toggleBroadcast,
-      composeEnabled,
-      toggleCompose,
       connectedCount,
+      isWindows,
     }
   },
 }
@@ -1053,15 +1028,46 @@ export default {
 
 .tabs-bar {
   display: flex;
-  align-items: center;
-  gap: 2px;
+  align-items: stretch;
+  gap: 0;
   flex-shrink: 0;
-  background: var(--app-panel-bg);
-  border-bottom: 1px solid var(--app-border);
-  padding: 0 6px 0 4px;
-  min-height: 36px;
-  height: 36px;
+  background: var(--shell-chrome-bg);
+  border-bottom: 1px solid var(--shell-chrome-border);
+  padding: 0 12px;
+  min-height: 38px;
+  height: 38px;
   box-sizing: border-box;
+}
+
+.tabs-bar.shell-top-chrome {
+  padding-right: 10px;
+  /* padding-left 由 theme.css mac-traffic-inset 控制 */
+}
+
+.shell-top-chrome-host .tabs-bar.shell-top-chrome .tabs-bar-left,
+.tabs-bar.shell-top-chrome .tabs-bar-left {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: none;
+}
+
+.shell-top-chrome-host .tabs-bar.shell-top-chrome .tabs-bar-spacer {
+  flex: 1;
+  min-width: 8px;
+  width: auto;
+  overflow: visible;
+}
+
+.tabs-bar.shell-top-chrome .tabs-bar-spacer {
+  flex: 0 0 0;
+  min-width: 0;
+  width: 0;
+  overflow: hidden;
+}
+
+.tabs-bar-win-controls {
+  flex-shrink: 0;
+  margin-left: 4px;
 }
 
 .tabs-bar.is-drop-unsplit {
@@ -1154,37 +1160,33 @@ export default {
 .session-tab {
   display: inline-flex;
   align-items: center;
+  gap: 7px;
   box-sizing: border-box;
-  gap: 0;
-  height: 28px;
-  padding: 0 10px;
-  font-size: 12px;
-  font-weight: 500;
+  height: 38px;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: 400;
   line-height: 1;
-  color: var(--app-text-muted);
+  color: var(--shell-chrome-muted);
   background: transparent;
   border: none;
-  border-radius: 7px;
+  border-right: 1px solid var(--shell-chrome-border);
+  border-radius: 0;
   cursor: grab;
   user-select: none;
   flex-shrink: 0;
-  max-width: 200px;
+  max-width: 220px;
   position: relative;
-  transition: color 0.15s ease;
+  transition: background 0.12s ease, color 0.12s ease;
 }
 
 .session-tab:hover::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--app-text) 7%, transparent);
-  pointer-events: none;
-  z-index: 0;
+  content: none;
 }
 
 .session-tab:hover {
-  color: var(--app-text-secondary);
+  background: var(--shell-chrome-hover);
+  color: var(--shell-chrome-fg);
 }
 
 .session-tab:active {
@@ -1192,34 +1194,77 @@ export default {
 }
 
 .session-tab.active {
-  color: var(--app-text);
-  font-weight: 600;
+  color: var(--shell-chrome-tab-active-fg, var(--shell-chrome-fg));
+  font-weight: 500;
+  background: transparent;
+}
+
+/* 浅色：圆角标签 + 底部下划线指示激活 */
+html:not(.dark) .custom-session-tabs {
+  align-items: center;
+  padding: 0 4px;
+  gap: 4px;
+}
+
+html:not(.dark) .session-tab {
+  height: 28px;
+  margin-top: 0;
+  border-radius: 8px;
+  border: none;
+  border-right: none;
+  padding: 0 10px;
+  background: transparent;
+}
+
+html:not(.dark) .session-tab:hover {
+  background: var(--shell-chrome-hover);
+}
+
+html:not(.dark) .session-tab.active {
+  background: color-mix(in srgb, var(--shell-chrome-fg) 5%, var(--shell-chrome-bg));
+  border: none;
+  margin-bottom: 0;
+  z-index: 1;
+}
+
+html:not(.dark) .session-tab.active.is-connected {
+  background: color-mix(in srgb, var(--shell-chrome-fg) 5%, var(--shell-chrome-bg));
+  border: none;
+  box-shadow: none;
+  color: var(--shell-chrome-fg);
+}
+
+html:not(.dark) .session-tab.active .session-tab-close {
+  color: var(--shell-chrome-muted);
+}
+
+html.dark .session-tab.active {
+  color: var(--shell-chrome-fg);
+  background: color-mix(in srgb, var(--shell-chrome-fg) 6%, var(--shell-chrome-bg));
+}
+
+html.dark .session-tab.active.is-connected {
+  background: color-mix(in srgb, var(--shell-chrome-fg) 6%, var(--shell-chrome-bg));
+  box-shadow: none;
 }
 
 .session-tab.active::before {
-  content: '';
+  content: "";
   position: absolute;
-  inset: 0;
-  border-radius: 7px;
-  background: color-mix(in srgb, var(--app-text) 9%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--app-text) 8%, transparent);
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  top: auto;
+  height: 2px;
+  background: var(--accent);
+  border-radius: 2px 2px 0 0;
+  box-shadow: none;
   pointer-events: none;
-  z-index: 0;
+  z-index: 2;
 }
 
-/* 选中指示：底边短线，和连接状态点解耦 */
 .session-tab.active::after {
-  content: '';
-  position: absolute;
-  left: 10px;
-  right: 10px;
-  bottom: 2px;
-  height: 2px;
-  border-radius: 1px;
-  background: var(--app-accent-color);
-  opacity: 0.9;
-  pointer-events: none;
-  z-index: 1;
+  content: none;
 }
 
 .session-tab-main,
@@ -1261,10 +1306,8 @@ export default {
 }
 
 .session-tab-status.is-connected {
-  background: var(--app-success-color, #67c23a);
-  box-shadow:
-    0 0 0 2px color-mix(in srgb, var(--app-success-color, #67c23a) 22%, transparent),
-    0 0 6px color-mix(in srgb, var(--app-success-color, #67c23a) 35%, transparent);
+  background: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in oklch, var(--accent) 25%, transparent);
 }
 
 @keyframes shell-tab-status-pulse {
@@ -1317,21 +1360,45 @@ export default {
   margin-left: 2px;
 }
 
+html:not(.dark) .tabs-bar.shell-top-chrome .tabs-bar-left,
+html:not(.dark) .shell-top-chrome-host .tabs-bar .tabs-bar-left {
+  align-items: center;
+}
+
+html:not(.dark) .tabs-bar.shell-top-chrome .add-session-wrap,
+html:not(.dark) .shell-top-chrome-host .tabs-bar .add-session-wrap {
+  height: 28px;
+  margin-top: 0;
+  align-self: center;
+}
+
+html.dark .tabs-bar.shell-top-chrome .add-session-wrap,
+html.dark .shell-top-chrome-host .tabs-bar .add-session-wrap {
+  height: 38px;
+  align-self: stretch;
+}
+
 .add-session-btn {
   color: var(--app-text-secondary);
-  padding: 2px 4px !important;
-  width: 26px !important;
-  height: 26px !important;
-  min-width: 26px !important;
+  padding: 0 !important;
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
 .add-session-more {
   color: var(--app-text-secondary);
-  padding: 2px 2px !important;
-  width: 18px !important;
-  height: 26px !important;
-  min-width: 18px !important;
+  padding: 0 !important;
+  width: 22px !important;
+  height: 28px !important;
+  min-width: 22px !important;
   margin-left: -2px;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
 }
 
 .add-session-btn:hover,
@@ -1426,7 +1493,7 @@ export default {
   position: absolute;
   top: 8px;
   left: 8px;
-  right: 118px;
+  right: 8px;
   z-index: 5;
   display: flex;
   flex-direction: column;
@@ -1453,54 +1520,6 @@ export default {
 .shell-aux-bars :deep(.shell-compose-bar:last-child),
 .shell-aux-bars :deep(.shell-broadcast-bar:last-child) {
   border-bottom: none;
-}
-
-.terminal-body.has-aux-bars .terminal-inline-actions {
-  /* 避开浮层右侧，避免与关闭/发送按钮叠在一起 */
-  top: 8px;
-  z-index: 7;
-}
-
-.terminal-inline-actions {
-  position: absolute;
-  top: 8px;
-  right: 12px;
-  z-index: 6;
-  display: inline-flex;
-  align-items: center;
-  gap: 1px;
-  padding: 2px;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--app-panel-bg, #1e1e1e) 72%, transparent);
-  backdrop-filter: blur(8px);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-}
-
-.terminal-inline-actions :deep(.el-tooltip__trigger),
-.terminal-inline-actions :deep(.el-badge) {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.terminal-inline-actions :deep(.el-button) {
-  box-sizing: border-box;
-  width: 26px;
-  height: 26px;
-  min-width: 26px;
-  min-height: 26px;
-  padding: 0;
-  margin: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--app-text-secondary);
-}
-
-.terminal-inline-actions :deep(.el-button:hover),
-.terminal-inline-actions :deep(.el-button.active) {
-  color: var(--app-accent-color);
-  background: color-mix(in srgb, var(--app-accent-color) 14%, transparent);
 }
 
 .terminal-stack {

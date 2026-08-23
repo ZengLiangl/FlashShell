@@ -209,11 +209,63 @@ export default {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  gap: 8px;
-  border-bottom: 1px solid var(--app-border);
-  background: transparent;
-  padding: 6px 10px;
+  gap: 10px;
+  border-bottom: 1px solid var(--term-border);
+  background: oklch(24% 0.02 240);
+  padding: 6px 12px;
   box-sizing: border-box;
+  font-size: 12.5px;
+}
+
+.broadcast-meta {
+  color: var(--term-green);
+  font-family: var(--font-mono);
+  border-right: none;
+  padding-right: 0;
+}
+
+.broadcast-label {
+  color: var(--term-green);
+  font-weight: 500;
+}
+
+.broadcast-count {
+  color: var(--term-dim);
+}
+
+.target-chip {
+  height: 20px;
+  padding: 0 9px;
+  border-radius: 6px;
+  border: 1px solid var(--term-border);
+  color: var(--term-dim);
+  font-size: 12px;
+  background: transparent;
+}
+
+.target-chip.selected {
+  background: oklch(30% 0.04 150);
+  border-color: oklch(38% 0.06 150);
+  color: var(--term-green);
+}
+
+.broadcast-command {
+  flex: 1;
+  background: var(--term-bg);
+  border: 1px solid var(--term-border);
+  border-radius: 7px;
+  height: 30px;
+}
+
+.cmd-prompt {
+  color: var(--term-green);
+  font-family: var(--font-mono);
+}
+
+.cmd-input {
+  color: var(--term-fg);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
 }
 
 .broadcast-main {

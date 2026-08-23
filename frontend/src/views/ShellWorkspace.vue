@@ -31,9 +31,9 @@
         >
           <div class="resize-handle" @mousedown="$emit('start-resize', $event)"></div>
           <button
-            v-show="edgeHover"
             type="button"
             class="panel-edge-btn"
+            :class="{ 'is-hovered': edgeHover }"
             title="收起侧栏"
             @mousedown.stop
             @click.stop="toggleLeftPanel"
@@ -43,34 +43,22 @@
         </div>
       </el-aside>
 
-      <!-- 收起后：贴左边悬停出现展开按钮 -->
-      <div
-        v-if="showLeftPanel && leftCollapsed"
-        class="left-edge-hotzone"
-        @mouseenter="edgeHover = true"
-        @mouseleave="edgeHover = false"
-      >
-        <button
-          v-show="edgeHover"
-          type="button"
-          class="panel-edge-btn panel-edge-btn--expand"
-          title="展开侧栏"
-          @click="toggleLeftPanel"
-        >
-          <el-icon><DArrowRight /></el-icon>
-        </button>
-      </div>
-
       <el-main class="terminal-container shell-terminal-container">
         <ShellTerminalTabs
           ref="tabsRef"
           class="shell-tabs-area"
+          :hide-app-chrome="hideAppChrome"
+          :show-left-panel="showLeftPanel"
+          :left-panel-open="showLeftPanel && !leftCollapsed"
+          :left-panel-label="leftPanelExpandLabel"
+          :file-panel-expanded="filePanelExpanded"
           :sessions="workspaceSessions"
           :machines="machines"
           :active-machine="activeMachine"
           :search-query="searchQuery"
           :view-visible="active"
           :transfer-active-count="transferActiveCount"
+          v-model:compose-enabled="composeEnabled"
           :broadcast-enabled="broadcastEnabled"
           :broadcast-targets="broadcastTargets"
           :split-session-ids="splitSessionIds"
@@ -89,7 +77,7 @@
           @close-sessions="(names) => $emit('close-sessions', names)"
           @duplicate-session="(name) => $emit('duplicate-session', name)"
           @reconnect="onReconnect"
-          @clear="onClear"
+          @clear="clearTerminal"
           @open-picker="() => openPicker()"
           @add-local="onAddLocal"
           @back="$emit('back')"
@@ -99,6 +87,10 @@
           @open-command-palette="commandPaletteVisible = true"
           @cwd-sync="onCwdSync"
           @reorder-tabs="(payload) => $emit('reorder-tabs', payload)"
+          @toggle-left-panel="toggleLeftPanel"
+          @toggle-files="toggleFilePanel"
+          @toggle-search="toggleSearch"
+          @open-tunnels="tunnelDialogVisible = true"
           @change-view="(v) => $emit('change-view', v)"
           @select-project="(p) => $emit('select-project', p)"
           @focus-session="(id) => $emit('focus-session', id)"
@@ -146,17 +138,28 @@
 
     <ShellStatusBar
       :connected-count="connectedCount"
-      :active-machine="activeMachine"
       :active-tab-label="activeTabLabel"
       :tunnels="tunnelStatuses"
-      :tunnel-loading="tunnelLoading"
       :app-info="appInfo"
-      :show-chrome-actions="!!activeMachine && !isLocalSessionName(activeMachine)"
+      :show-toolbar="workspaceSessions.length > 0"
+      :broadcast-enabled="broadcastEnabled"
+      :compose-enabled="composeEnabled"
+      :show-left-panel="showLeftPanel"
+      :left-panel-open="showLeftPanel && !leftCollapsed"
+      :left-panel-label="leftPanelExpandLabel"
       :files-expanded="filePanelExpanded"
+      :active-is-local="isLocalSessionName(activeMachine)"
+      :active-connected="activeConnected"
+      :transfer-active-count="transferActiveCount"
       @open-tunnels="tunnelDialogVisible = true"
       @toggle-files="toggleFilePanel"
       @toggle-search="toggleSearch"
       @clear="clearTerminal"
+      @toggle-broadcast="toggleBroadcast"
+      @toggle-compose="toggleCompose"
+      @toggle-left-panel="toggleLeftPanel"
+      @open-command-palette="commandPaletteVisible = true"
+      @open-transfer="transferVisible = true"
     />
 
     <ShellTunnelDialog
@@ -272,6 +275,7 @@ export default {
     taskRunning: { type: Boolean, default: false },
     projects: { type: Array, default: () => [] },
     selectedProjectName: { type: String, default: '' },
+    hideAppChrome: { type: Boolean, default: false },
   },
   emits: [
     'back', 'connect', 'disconnect', 'close-session', 'close-sessions', 'duplicate-session', 'reconnect', 'test', 'add-machine', 'edit-machine',
@@ -351,6 +355,7 @@ export default {
     const pickerInitialTab = ref('')
     const transferVisible = ref(false)
     const transferActiveCount = ref(0)
+    const composeEnabled = ref(false)
     const historyRecords = ref([])
     const cwdHints = reactive({})
     /** SFTP 面板手动浏览路径（与终端 cwd 分开，供跨会话复制目标） */
@@ -462,6 +467,12 @@ export default {
     })
 
     const monitorConnecting = computed(() => !!monitorSession.value?.connecting)
+
+    const leftPanelExpandLabel = computed(() => {
+      if (monitorSession.value) return '监控'
+      if (localFileSession.value) return '文件'
+      return '侧栏'
+    })
 
     const activeConnected = computed(() => {
       const name = props.activeMachine
@@ -1024,7 +1035,15 @@ export default {
     const closeActiveTab = () => tabsRef.value?.closeActiveTab?.()
     const focusSplitNeighbor = (dir) => tabsRef.value?.focusSplitNeighbor?.(dir)
     const toggleBroadcast = () => {
-      emit('update:broadcast-enabled', !props.broadcastEnabled)
+      const next = !props.broadcastEnabled
+      emit('update:broadcast-enabled', next)
+      if (next && !(props.broadcastTargets || []).length) {
+        const ids = (props.workspaceSessions || []).filter((s) => s.connected).map((s) => s.machineName)
+        emit('update:broadcast-targets', ids)
+      }
+    }
+    const toggleCompose = () => {
+      composeEnabled.value = !composeEnabled.value
     }
 
     return {
@@ -1046,6 +1065,7 @@ export default {
       openPicker,
       transferVisible,
       transferActiveCount,
+      composeEnabled,
       historyRecords,
       cwdHints,
       copyToOtherTargets,
@@ -1057,6 +1077,7 @@ export default {
       monitorMachineName,
       monitorConnected,
       monitorConnecting,
+      leftPanelExpandLabel,
       isLocalSessionName,
       clearTerminal,
       toggleFilePanel,
@@ -1067,6 +1088,8 @@ export default {
       findNext,
       findPrevious,
       toggleLeftPanel,
+      toggleBroadcast,
+      toggleCompose,
       onHistoryConnect,
       onPickerConnect,
       onPickerFocusSession,
@@ -1101,7 +1124,6 @@ export default {
       selectNextTab,
       closeActiveTab,
       focusSplitNeighbor,
-      toggleBroadcast,
       onCommandPaletteInsert,
       sendMappedInput,
       loadTunnels,
@@ -1118,7 +1140,7 @@ export default {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--app-bg);
+  background: var(--shell-chrome-bg);
 }
 
 .shell-connecting {
@@ -1131,23 +1153,6 @@ export default {
   min-height: 0;
   height: 100%;
   overflow: hidden;
-}
-
-.left-edge-hotzone {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 28px; /* 避开底部状态栏（与 ShellStatusBar 高度对齐） */
-  width: 10px;
-  z-index: 20;
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  pointer-events: auto;
-}
-
-.left-edge-hotzone:hover {
-  width: 28px;
 }
 
 .panel-edge-wrap {
@@ -1198,6 +1203,13 @@ export default {
   justify-content: center;
   padding: 0;
   box-shadow: -2px 0 8px color-mix(in srgb, #000 12%, transparent);
+  opacity: 0.42;
+  transition: opacity 0.14s ease, color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+}
+
+.panel-edge-btn.is-hovered,
+.panel-edge-wrap:hover .panel-edge-btn {
+  opacity: 1;
 }
 
 .panel-edge-btn--expand {
