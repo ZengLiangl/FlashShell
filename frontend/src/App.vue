@@ -1,11 +1,18 @@
 <template>
-  <div class="app-container" :class="themeClass">
-    <AppMenuBar v-show="activeView === 'home' || activeView === 'task'" :active-view="activeView"
-      :has-projects="projects.length > 0" :has-machines="shellMachines.length > 0" :has-task="!!selectedProject"
-      :task-running="status.isRunning" :connected-count="connectedCount" :projects="projects"
-      :selected-project-name="selectedProject?.name || ''" :sessions="workspaceSessions"
-      :active-session-id="activeMachine" @change-view="switchActiveView" @select-project="selectProject"
-      @focus-session="onQuickFocusSession" />
+  <div class="app-container app" :class="themeClass">
+    <AppMenuBar
+      v-show="activeView !== 'shell'"
+      :active-view="activeView"
+      :has-projects="projects.length > 0"
+      :has-task="!!selectedProject"
+      :task-running="status.isRunning"
+      :connected-count="connectedCount"
+      :open-session-count="openSessionCount"
+      :selected-project-name="selectedProject?.name || ''"
+      @change-view="switchActiveView"
+      @open-config-editor="configEditorVisible = true"
+      @refresh="refreshConfig"
+    />
 
     <!-- 全局加载遮罩 -->
     <div v-if="isReloading" class="global-loading">
@@ -17,95 +24,178 @@
       </div>
     </div>
 
-    <!-- 任务详情视图（与 Shell 可并行；用 v-show 保活，避免来回切换重挂） -->
     <div
-      v-if="selectedProject"
-      v-show="activeView === 'task'"
-      class="task-view-host"
-    >
-      <el-container class="main-container">
-        <!-- 左侧面板 -->
-        <el-aside :width="leftPanelWidth + 'px'" class="left-panel" :class="{ resizing: isResizing }">
-          <!-- 拖拽手柄 -->
-          <div class="resize-handle" @mousedown="startResize"></div>
-          <SubProjectList :selected-project="selectedProject" :sub-projects="subProjects"
-            :expanded-sub-projects="expandedSubProjects" :expanded-commands="expandedCommands" :status="status"
-            :get-command-tag-type="getCommandTagType" :get-command-type-text="getCommandTypeText"
-            :is-sub-project-running="isSubProjectRunning" @toggle-sub="toggleSubProject" @toggle-cmd="toggleCommand"
-            @execute-sub="executeSubProject" @execute-cmd="executeCommand" @stop-sub="stopSubProject"
-            @dry-run-sub="dryRunSubProject" @back="backToProjectList" />
-        </el-aside>
+      v-show="activeView === 'shell'"
+      id="shell-top-chrome-host"
+      class="shell-top-chrome-host"
+    />
 
-        <!-- 右侧终端输出 -->
-        <el-main class="terminal-container">
-          <TerminalHeader :show-back="false" :search-visible="terminalSearchVisible"
-            v-model:search-query="terminalSearchQuery" :match-summary="terminalMatchSummary"
+    <div class="app-body">
+      <AppRail
+        :active-view="activeView"
+        :has-projects="projects.length > 0"
+        :open-session-count="openSessionCount"
+        :connected-count="connectedCount"
+        @change-view="switchActiveView"
+        @open-settings="openSettingsHub('general')"
+      />
+
+      <!-- 首页：任务项目 + 主机单页 -->
+      <main v-show="activeView === 'home'" class="view home active">
+        <HomePage
+          ref="homePageRef"
+          :projects="projects"
+          :machines="shellMachines"
+          :connected-count="connectedCount"
+          :has-task="!!selectedProject"
+          :task-running="status.isRunning"
+          :connecting-name="connectingName"
+          :sessions="shellSessions"
+          :workspace-sessions="workspaceSessions"
+          @refresh="refreshConfig"
+          @select-project="selectProject"
+          @resume-task="resumeTaskView"
+          @open-shell="enterShellMode"
+          @connect-machine="openShellAndConnect"
+          @focus-session="onQuickFocusSession"
+          @add-machine="openShellMachineDialog"
+          @edit-machine="openShellMachineEdit"
+          @copy-machine="copyShellMachine"
+          @delete-machine="deleteShellMachine"
+        />
+      </main>
+
+      <!-- 任务详情（v-show 保活） -->
+      <main
+        v-if="selectedProject"
+        v-show="activeView === 'task'"
+        class="view task active"
+      >
+        <aside
+          class="task-left left-panel"
+          :class="{ resizing: isResizing }"
+          :style="{ flexBasis: leftPanelWidth + 'px', width: leftPanelWidth + 'px' }"
+        >
+          <div class="resize-handle" @mousedown="startResize" />
+          <SubProjectList
+            :selected-project="selectedProject"
+            :sub-projects="subProjects"
+            :expanded-sub-projects="expandedSubProjects"
+            :expanded-commands="expandedCommands"
+            :status="status"
+            :get-command-tag-type="getCommandTagType"
+            :get-command-type-text="getCommandTypeText"
+            :is-sub-project-running="isSubProjectRunning"
+            @toggle-sub="toggleSubProject"
+            @toggle-cmd="toggleCommand"
+            @execute-sub="executeSubProject"
+            @execute-cmd="executeCommand"
+            @stop-sub="stopSubProject"
+            @dry-run-sub="dryRunSubProject"
+            @back="backToProjectList"
+          />
+        </aside>
+
+        <div class="task-right">
+          <TerminalHeader
+            :show-back="false"
+            :search-visible="terminalSearchVisible"
+            v-model:search-query="terminalSearchQuery"
+            :match-summary="terminalMatchSummary"
             :show-chrome="false"
             :show-search-toggle="false"
             :show-inline-actions="false"
+            :status-running="status.isRunning"
             active-view="task"
-            @toggle-search="toggleTerminalSearch" @search-next="gotoNextSearchMatch"
-            @search-prev="gotoPrevSearchMatch" @close-search="closeTerminalSearch" />
-          <TerminalOutput ref="terminalOutputRef" :status="status" :output-lines="outputLines"
-            :progress-percentage="progressPercentage" :progress-status="progressStatus"
-            :search-query="terminalSearchQuery" :active-match-index="terminalActiveMatchIndex"
+            @toggle-search="toggleTerminalSearch"
+            @search-next="gotoNextSearchMatch"
+            @search-prev="gotoPrevSearchMatch"
+            @close-search="closeTerminalSearch"
+          />
+          <TerminalOutput
+            ref="terminalOutputRef"
+            :status="status"
+            :output-lines="outputLines"
+            :progress-percentage="progressPercentage"
+            :progress-status="progressStatus"
+            :search-query="terminalSearchQuery"
+            :active-match-index="terminalActiveMatchIndex"
             :remote-failure="lastRemoteFailure"
             :show-inline-actions="true"
-            @clear="clearOutput" @refresh="refreshOutput"
-            @search-matches="handleSearchMatches" @open-failure-shell="openFailureShell" />
-        </el-main>
-      </el-container>
+            @clear="clearOutput"
+            @refresh="refreshOutput"
+            @search-matches="handleSearchMatches"
+            @open-failure-shell="openFailureShell"
+          />
+          <StatusBar
+            :status="status"
+            :selected-project="selectedProject"
+            :app-info="statusBarInfo"
+            :progress-percentage="progressPercentage"
+            :remote-failure="lastRemoteFailure"
+            @stop-all="stopAllCommands"
+            @open-failure-shell="openFailureShell"
+          />
+        </div>
+      </main>
 
-      <!-- 状态栏（仅详情视图显示） -->
-      <StatusBar :status="status" :selected-project="selectedProject" :app-info="statusBarInfo"
-        :remote-failure="lastRemoteFailure"
-        @stop-all="stopAllCommands" @open-failure-shell="openFailureShell" />
-    </div>
-
-    <!-- Shell 视图：挂载后用 v-show 保留会话，可与任务并行 -->
-    <div v-show="activeView === 'shell'" class="shell-view-host shell-with-aside">
-      <ShellWorkspace ref="shellWorkspaceRef" v-if="shellMounted" :active="activeView === 'shell'"
-        :block-shortcuts="settingsHubVisible" :left-panel-width="Math.min(leftPanelWidth, 320)"
-        :is-resizing="isResizing" :app-info="statusBarInfo" :machines="shellMachines" :sessions="shellSessions"
-        :workspace-sessions="workspaceSessions" :connected-count="connectedCount" :open-session-count="openSessionCount"
-        v-model:active-machine="activeMachine" :connecting-name="connectingName" :testing-name="testingName"
-        :broadcast-enabled="broadcastEnabled" :broadcast-targets="broadcastTargets" :split-session-ids="splitSessionIds"
-        :has-task="!!selectedProject"
-        :has-projects="projects.length > 0"
-        :has-machines="shellMachines.length > 0"
-        :task-running="status.isRunning"
-        :projects="projects"
-        :selected-project-name="selectedProject?.name || ''"
-        @back="leaveShellMode" @connect="(name) => connectShell(name)" @disconnect="disconnectShell"
-        @close-session="closeShellSession" @close-sessions="closeShellSessions"
-        @duplicate-session="(id) => duplicateShellSession(id)"
-        @reconnect="(name) => connectOrReconnectShell(name)"
-        @add-local="() => connectLocalShell()"
-        @add-local-command="(cmd) => connectLocalShell('', cmd)"
-        @open-window="onOpenMachineWindow"
-        @focus-session="onQuickFocusSession" @connect-machines="onQuickConnectMachines"
-        @test="testShellConnection" @update:broadcast-enabled="(v) => (broadcastEnabled = v)"
-        @update:broadcast-targets="(v) => (broadcastTargets = v)"
-        @update:split-session-ids="(v) => (splitSessionIds = v)" @reorder-tabs="({ from, to }) => reorderTabs(from, to)"
-        @cwd-sync="({ machineName, cwd }) => updateTabLastCwd(machineName, cwd)"
-        @add-machine="openShellMachineDialog" @edit-machine="openShellMachineEdit" @copy-machine="copyShellMachine"
-        @delete-machine="deleteShellMachine" @start-resize="startResize" @machines-changed="onMachinesChanged"
-        @change-view="switchActiveView" @select-project="selectProject" />
-    </div>
-
-    <!-- 首页：任务模式 + Shell 模式入口 -->
-    <template v-if="activeView === 'home'">
-      <div class="projectlist-fullscreen home-with-aside">
-        <HomePage ref="homePageRef" :projects="projects" :machines="shellMachines" :connected-count="connectedCount"
-          :has-task="!!selectedProject" :task-running="status.isRunning" :connecting-name="connectingName"
-          :sessions="shellSessions" :workspace-sessions="workspaceSessions" @refresh="refreshConfig"
-          @select-project="selectProject" @resume-task="resumeTaskView" @open-shell="enterShellMode"
-          @connect-machine="openShellAndConnect" @focus-session="onQuickFocusSession"
+      <!-- Shell 视图 -->
+      <main v-show="activeView === 'shell'" class="view shell active">
+        <ShellWorkspace
+          ref="shellWorkspaceRef"
+          v-if="shellMounted"
+          hide-app-chrome
+          :active="activeView === 'shell'"
+          :block-shortcuts="settingsHubVisible"
+          :left-panel-width="Math.min(leftPanelWidth, 320)"
+          :is-resizing="isResizing"
+          :app-info="statusBarInfo"
+          :machines="shellMachines"
+          :sessions="shellSessions"
+          :workspace-sessions="workspaceSessions"
+          :connected-count="connectedCount"
+          :open-session-count="openSessionCount"
+          v-model:active-machine="activeMachine"
+          :connecting-name="connectingName"
+          :testing-name="testingName"
+          :broadcast-enabled="broadcastEnabled"
+          :broadcast-targets="broadcastTargets"
+          :split-session-ids="splitSessionIds"
+          :has-task="!!selectedProject"
+          :has-projects="projects.length > 0"
+          :has-machines="shellMachines.length > 0"
+          :task-running="status.isRunning"
+          :projects="projects"
+          :selected-project-name="selectedProject?.name || ''"
+          @back="leaveShellMode"
+          @connect="(name) => connectShell(name)"
+          @disconnect="disconnectShell"
+          @close-session="closeShellSession"
+          @close-sessions="closeShellSessions"
+          @duplicate-session="(id) => duplicateShellSession(id)"
+          @reconnect="(name) => connectOrReconnectShell(name)"
+          @add-local="() => connectLocalShell()"
+          @add-local-command="(cmd) => connectLocalShell('', cmd)"
+          @open-window="onOpenMachineWindow"
+          @focus-session="onQuickFocusSession"
+          @connect-machines="onQuickConnectMachines"
+          @test="testShellConnection"
+          @update:broadcast-enabled="(v) => (broadcastEnabled = v)"
+          @update:broadcast-targets="(v) => (broadcastTargets = v)"
+          @update:split-session-ids="(v) => (splitSessionIds = v)"
+          @reorder-tabs="({ from, to }) => reorderTabs(from, to)"
+          @cwd-sync="({ machineName, cwd }) => updateTabLastCwd(machineName, cwd)"
           @add-machine="openShellMachineDialog"
-          @edit-machine="openShellMachineEdit" @copy-machine="copyShellMachine" @delete-machine="deleteShellMachine"
-          @open-system-settings="openSettingsHub('general')" @open-config-editor="configEditorVisible = true" />
-      </div>
-    </template>
+          @edit-machine="openShellMachineEdit"
+          @copy-machine="copyShellMachine"
+          @delete-machine="deleteShellMachine"
+          @start-resize="startResize"
+          @machines-changed="onMachinesChanged"
+          @change-view="switchActiveView"
+          @select-project="selectProject"
+        />
+      </main>
+    </div>
 
     <SettingsHubDialog v-model="settingsHubVisible" :initial-section="settingsSection" :edit-machine-id="machineEditId"
       @machines-changed="onMachinesChanged" @machines-closed="machineEditId = ''"
@@ -144,6 +234,7 @@ import { useShell } from "./composables/useShell";
 import SubProjectList from "./components/SubProjectList.vue";
 import TerminalHeader from "./components/TerminalHeader.vue";
 import AppMenuBar from "./components/AppMenuBar.vue";
+import AppRail from "./components/layout/AppRail.vue";
 import { useTheme } from "./composables/useTheme";
 import { mergeShortcuts, matchesShortcut, isFormFieldTarget, isXtermInput } from "./utils/shortcuts";
 import {
@@ -169,7 +260,7 @@ const MachineAsidePanel = defineAsyncComponent(() => import("./components/Machin
 
 export default {
   name: "App",
-  components: { AppMenuBar, TerminalOutput, StatusBar, ProjectList, HomePage, ShellWorkspace, SubProjectList, TerminalHeader, AboutDialog, ConfigEditorDialog, SettingsHubDialog, HostKeyTrustDialog, MachineAsidePanel },
+  components: { AppMenuBar, AppRail, TerminalOutput, StatusBar, ProjectList, HomePage, ShellWorkspace, SubProjectList, TerminalHeader, AboutDialog, ConfigEditorDialog, SettingsHubDialog, HostKeyTrustDialog, MachineAsidePanel },
   setup() {
     const { isDark, themeMode, terminalPreset, shellFontSize, loadTheme, applyThemeSettings, saveTheme } = useTheme();
     const projects = ref([]);
@@ -1854,19 +1945,46 @@ export default {
 </script>
 
 <style scoped>
-.home-with-aside,
-.shell-with-aside {
-  position: relative;
-}
-
 .app-container {
   height: 100vh;
   display: flex;
   flex-direction: column;
   position: relative;
-  /* 顶栏同色，避免与系统标题栏交界露灰缝；内容区各自铺 --app-bg */
-  background: var(--app-panel-bg);
-  color: var(--app-text);
+  background: var(--bg);
+  color: var(--fg);
+  overflow: hidden;
+}
+
+.app-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  min-width: 0;
+}
+
+.shell-top-chrome-host {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.view.active {
+  display: flex;
+}
+
+.view.shell {
+  background: var(--app-bg);
+}
+
+.view.home,
+.view.task {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
+.task-left.left-panel {
+  flex-shrink: 0;
+  min-width: 0;
 }
 
 /* 全局加载遮罩 */
@@ -1888,21 +2006,22 @@ export default {
   flex-direction: column;
   align-items: center;
   gap: 16px;
-  background: white;
+  background: var(--surface);
   padding: 32px;
-  border-radius: 8px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
 }
 
 .loading-icon {
   font-size: 32px;
-  color: var(--app-accent-color, #409eff);
+  color: var(--accent);
   animation: spin 1s linear infinite;
 }
 
 .loading-text {
   font-size: 16px;
-  color: #606266;
+  color: var(--fg-2);
   font-weight: 500;
 }
 

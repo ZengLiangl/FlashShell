@@ -1,0 +1,163 @@
+/* 将 OpenDesign 设计令牌桥接到既有 --app-* / Element Plus 变量，避免大规模改业务代码 */
+
+:root {
+  --app-bg: var(--bg);
+  --app-panel-bg: var(--surface);
+  --app-inset-bg: var(--surface-2);
+  --app-text: var(--fg);
+  --app-text-secondary: var(--fg-2);
+  --app-text-muted: var(--muted);
+  --app-border: var(--border);
+  --app-card-bg: var(--surface);
+  --app-card-border: var(--border);
+  --app-card-active-bg: color-mix(in oklch, var(--accent) 8%, var(--surface));
+  --app-card-hover-shadow: color-mix(in oklch, var(--accent) 14%, transparent);
+  --app-accent-color: var(--accent);
+  --app-accent-bg: var(--accent-soft);
+  --app-surface-shadow: var(--shadow-sm);
+
+  --app-radius-sm: var(--r-sm);
+  --app-radius-md: var(--r-md);
+  --app-radius-lg: var(--r-lg);
+  --app-radius-xl: var(--r-xl);
+  --app-radius-panel: var(--r-xl);
+
+  --terminal-bg: var(--term-bg);
+  --terminal-fg: var(--term-fg);
+  --terminal-success: var(--term-green);
+  --terminal-error: var(--term-red);
+  --terminal-progress: var(--term-blue);
+
+  --step-bg: var(--surface-2);
+  --step-border: var(--border);
+
+  /* Shell chrome 以 theme.css 为准，不在此覆盖 */
+
+  --app-font-family: var(--font-ui);
+  --app-font-mono: var(--font-mono);
+
+  /* Element Plus primary 同步绿色强调色 */
+  --el-color-primary: var(--accent);
+  --el-color-primary-light-3: color-mix(in oklch, var(--accent) 70%, var(--surface));
+  --el-color-primary-light-5: color-mix(in oklch, var(--accent) 50%, var(--surface));
+  --el-color-primary-light-7: color-mix(in oklch, var(--accent) 30%, var(--surface));
+  --el-color-primary-light-8: color-mix(in oklch, var(--accent) 20%, var(--surface));
+  --el-color-primary-light-9: color-mix(in oklch, var(--accent) 10%, var(--surface));
+  --el-color-primary-dark-2: color-mix(in oklch, var(--accent) 80%, oklch(10% 0 0));
+}
+
+html.dark {
+  --app-card-active-bg: color-mix(in oklch, var(--accent) 12%, var(--surface));
+  --app-card-hover-shadow: color-mix(in oklch, var(--accent) 25%, transparent);
+
+  --el-color-primary-light-3: color-mix(in oklch, var(--accent) 70%, oklch(15% 0.012 240));
+  --el-color-primary-light-5: color-mix(in oklch, var(--accent) 50%, oklch(15% 0.012 240));
+  --el-color-primary-light-7: color-mix(in oklch, var(--accent) 30%, oklch(15% 0.012 240));
+  --el-color-primary-light-8: color-mix(in oklch, var(--accent) 20%, oklch(15% 0.012 240));
+  --el-color-primary-light-9: color-mix(in oklch, var(--accent) 10%, oklch(15% 0.012 240));
+  --el-color-primary-dark-2: color-mix(in oklch, var(--accent) 80%, var(--surface));
+
+  /* Shell chrome 暗色以 theme.css 为准 */
+}
+
+/* 首页 rail 激活态（保留 HomePage 既有宽度布局） */
+.home-rail .rail-item {
+  position: relative;
+  transition: all 0.14s ease;
+}
+
+.home-rail .rail-item:hover {
+  color: var(--fg);
+  background: color-mix(in oklch, var(--fg) 7%, transparent);
+}
+
+.home-rail .rail-item.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.home-rail .rail-item.active::before {
+  content: "";
+  position: absolute;
+  left: -9px;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: var(--accent);
+}
+
+.home-rail .rail-count {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+  font-family: var(--font-mono);
+}
+
+/* 顶栏：AppMenuBar 映射 topbar */
+.app-menu-bar.topbar-style {
+  height: 42px;
+  padding: 0 12px 0 14px;
+  gap: 10px;
+  display: flex;
+  align-items: center;
+  grid-template-columns: none;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.app-menu-bar.topbar-style .menu-center {
+  flex: 1;
+  min-width: 0;
+  justify-content: flex-start;
+}
+
+.app-menu-bar.topbar-style .menu-side {
+  flex: 0 0 auto;
+}
+
+.app-menu-bar.topbar-style .tb-context {
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.app-menu-bar.topbar-style .tb-context b {
+  color: var(--fg-2);
+  font-weight: 500;
+}
+
+/* 任务状态栏映射 */
+.status-bar.task-status-style {
+  height: 34px;
+  padding: 0 14px;
+  font-size: 12.5px;
+  color: var(--muted);
+  gap: 12px;
+}
+
+.status-bar.task-status-style .status-progress {
+  flex: 1;
+  max-width: 320px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--surface-2);
+  overflow: hidden;
+}
+
+.status-bar.task-status-style .status-progress > i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}

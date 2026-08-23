@@ -1,6 +1,9 @@
 <template>
-    <div class="terminal-header" @dblclick="onChromeTitleDblActivate" @mousedown="onChromeTitlePointerDown">
-        <h3>{{ title }}</h3>
+    <div class="terminal-header term-toolbar" @dblclick="onChromeTitleDblActivate" @mousedown="onChromeTitlePointerDown">
+        <div class="t-title">
+            <StatusDot :state="statusRunning ? 'on' : 'off'" />
+            <span>{{ title }}</span>
+        </div>
         <div class="terminal-actions">
             <div class="actions-left">
                 <div v-if="searchVisible" class="search-bar">
@@ -30,27 +33,19 @@
                 </div>
             </div>
             <div class="actions-right icon-actions">
-                <el-tooltip v-if="showSearchToggle" content="搜索" placement="top">
-                    <el-button size="small" circle @click="$emit('toggle-search')">
-                        <el-icon><Search /></el-icon>
-                    </el-button>
-                </el-tooltip>
-                <el-tooltip v-if="showBack" content="返回" placement="top">
-                    <el-button size="small" circle @click="$emit('back')">
-                        <el-icon><ArrowLeft /></el-icon>
-                    </el-button>
-                </el-tooltip>
+                <AppIconBtn v-if="showSearchToggle" title="搜索" @click="$emit('toggle-search')">
+                    <el-icon :size="14"><Search /></el-icon>
+                </AppIconBtn>
+                <AppIconBtn v-if="showBack" title="返回" @click="$emit('back')">
+                    <el-icon :size="14"><ArrowLeft /></el-icon>
+                </AppIconBtn>
                 <template v-if="showInlineActions">
-                    <el-tooltip content="清空" placement="top">
-                        <el-button size="small" circle @click="$emit('clear')">
-                            <el-icon><Delete /></el-icon>
-                        </el-button>
-                    </el-tooltip>
-                    <el-tooltip content="刷新" placement="top">
-                        <el-button size="small" circle @click="$emit('refresh')">
-                            <el-icon><Refresh /></el-icon>
-                        </el-button>
-                    </el-tooltip>
+                    <AppIconBtn title="清空" @click="$emit('clear')">
+                        <el-icon :size="14"><Delete /></el-icon>
+                    </AppIconBtn>
+                    <AppIconBtn title="刷新" @click="$emit('refresh')">
+                        <el-icon :size="14"><Refresh /></el-icon>
+                    </AppIconBtn>
                 </template>
                 <template v-if="showChrome">
                     <span class="chrome-sep" aria-hidden="true" />
@@ -83,13 +78,15 @@
 import { ref, watch, nextTick } from 'vue'
 import ModeSwitcher from './ModeSwitcher.vue'
 import AppChromeIcons from './AppChromeIcons.vue'
+import { AppIconBtn, StatusDot } from './ui'
 import { onChromeTitleDblActivate, onChromeTitlePointerDown } from '../utils/windowChrome'
 
 export default {
     name: 'TerminalHeader',
-    components: { ModeSwitcher, AppChromeIcons },
+    components: { ModeSwitcher, AppChromeIcons, AppIconBtn, StatusDot },
     props: {
         title: { type: String, default: '终端输出' },
+        statusRunning: { type: Boolean, default: false },
         showBack: { type: Boolean, default: false },
         searchVisible: { type: Boolean, default: false },
         searchQuery: { type: String, default: '' },
@@ -131,115 +128,94 @@ export default {
 </script>
 
 <style scoped>
-.terminal-header {
+.terminal-header.term-toolbar {
     flex-shrink: 0;
     overflow: visible;
     position: relative;
     z-index: 20;
     display: flex;
-    justify-content: space-between;
     align-items: center;
-    padding: 4px 10px;
-    min-height: 36px;
-    height: 36px;
-    box-sizing: border-box;
-    border-bottom: 1px solid var(--app-border, #e4e7ed);
-    background: var(--app-panel-bg, #f5f7fa);
     gap: 8px;
+    height: 38px;
+    min-height: 38px;
+    padding: 0 10px;
+    box-sizing: border-box;
+    background: color-mix(in oklch, var(--term-bg) 96%, white);
+    border-bottom: 1px solid var(--term-border);
+    color: var(--term-dim);
 }
 
-.terminal-header h3 {
-    margin: 0;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--app-text, #303133);
+.t-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    font-family: var(--font-mono);
+    font-size: 12.5px;
+    color: var(--term-fg);
     white-space: nowrap;
+    flex-shrink: 0;
 }
 
 .terminal-actions {
     display: flex;
-    gap: 8px;
+    gap: 4px;
     flex: 1;
     justify-content: flex-end;
     align-items: center;
     min-width: 0;
 }
 
-.actions-left {
-    flex: 1;
-    min-width: 0;
-}
+.actions-left { flex: 1; min-width: 0; }
 
 .actions-right {
     display: inline-flex;
     align-items: center;
-    gap: 4px;
+    gap: 2px;
     flex-shrink: 0;
+}
+
+.actions-right :deep(.icon-btn) {
+    color: var(--term-dim);
+    width: 26px;
+    height: 26px;
+}
+
+.actions-right :deep(.icon-btn:hover) {
+    background: var(--term-hover);
+    color: var(--term-fg);
 }
 
 .chrome-sep {
     width: 1px;
     height: 14px;
-    margin: 0 2px 0 4px;
-    background: color-mix(in srgb, var(--app-text-muted, #909399) 35%, transparent);
-    flex-shrink: 0;
+    margin: 0 4px;
+    background: var(--term-border);
 }
 
 .search-bar {
     display: flex;
     align-items: center;
     gap: 8px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0 8px;
+    height: 30px;
 }
 
 .search-count {
+    font-family: var(--font-mono);
     font-size: 12px;
-    color: var(--app-text-secondary, #909399);
-    white-space: nowrap;
-    min-width: 2.5em;
-}
-
-.search-actions {
-    display: inline-flex;
-    align-items: center;
-    gap: 2px;
-    padding: 0;
-    border-radius: 0;
-    background: transparent;
-}
-
-.search-sep {
-    width: 1px;
-    height: 12px;
-    margin: 0 2px;
-    background: color-mix(in srgb, var(--app-text-muted, #909399) 35%, transparent);
+    color: var(--muted);
 }
 
 .search-icon-btn {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 26px;
-    height: 26px;
-    padding: 0;
-    border: none;
-    border-radius: 6px;
-    background: transparent;
-    color: var(--app-text-secondary, #909399);
-    cursor: pointer;
-    transition: color 0.15s ease, background 0.15s ease;
+    width: 24px;
+    height: 24px;
+    color: var(--fg-2);
 }
 
 .search-icon-btn:hover {
-    color: var(--app-accent-color, #409eff);
-    background: color-mix(in srgb, var(--app-accent-color, #409eff) 14%, transparent);
-}
-
-.search-icon-btn:active {
-    transform: translateY(0.5px);
-}
-
-.search-close:hover {
-    color: #f56c6c;
-    background: rgba(245, 108, 108, 0.12);
+    background: var(--surface-2);
 }
 </style>

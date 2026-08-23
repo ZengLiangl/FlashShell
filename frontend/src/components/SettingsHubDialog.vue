@@ -251,15 +251,15 @@ export default {
   height: min(72vh, 680px);
   min-height: 440px;
   margin: -8px -12px -4px;
-  border-top: 1px solid var(--app-border);
+  border-top: 1px solid var(--border);
 }
 
 .hub-nav {
-  width: 188px;
+  width: 200px;
   flex-shrink: 0;
-  padding: 12px 10px;
-  border-right: 1px solid var(--app-border);
-  background: color-mix(in srgb, var(--app-bg) 92%, var(--app-panel-bg));
+  padding: 12px 8px;
+  border-right: 1px solid var(--border);
+  background: var(--surface-2);
   display: flex;
   flex-direction: column;
   gap: 2px;
@@ -269,35 +269,35 @@ export default {
 .hub-nav-sep {
   height: 1px;
   margin: 8px 8px;
-  background: var(--app-border);
+  background: var(--border);
   flex-shrink: 0;
 }
 
 .hub-nav-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   width: 100%;
-  padding: 9px 12px;
+  padding: 7px 10px;
   border: none;
   border-radius: 8px;
   background: transparent;
-  color: var(--app-text-secondary, var(--app-text));
-  font-size: 13px;
+  color: var(--fg-2);
+  font-size: 13.5px;
   cursor: pointer;
   text-align: left;
   transition: background 0.12s ease, color 0.12s ease;
 }
 
 .hub-nav-item:hover {
-  background: color-mix(in srgb, var(--app-accent-bg) 70%, transparent);
-  color: var(--app-accent-color);
+  background: color-mix(in oklch, var(--fg) 6%, transparent);
+  color: var(--fg);
 }
 
 .hub-nav-item.active {
-  background: var(--app-accent-bg);
-  color: var(--app-accent-color);
-  font-weight: 600;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 500;
 }
 
 .hub-main {
@@ -305,16 +305,16 @@ export default {
   min-width: 0;
   display: flex;
   flex-direction: column;
-  background: var(--app-panel-bg);
+  background: var(--surface);
 }
 
 .hub-main-title {
   flex-shrink: 0;
-  padding: 14px 20px 6px;
+  padding: 16px 20px 14px;
   font-size: 16px;
-  font-weight: 650;
-  color: var(--app-text);
-  letter-spacing: 0.01em;
+  font-weight: 600;
+  color: var(--fg);
+  border-bottom: 1px solid var(--border);
 }
 
 .hub-main-body {

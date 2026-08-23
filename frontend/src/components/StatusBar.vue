@@ -1,104 +1,118 @@
 <template>
-    <div class="status-bar">
-        <div class="status-info">
-            <div class="status-container">
-                <transition name="status-fade" mode="out-in">
-                    <el-tag v-if="status.isRunning" key="running" type="warning" size="small">
-                        <el-icon>
-                            <Loading />
-                        </el-icon>
-                        <span class="status-text">
-                            执行中:
-                            <span v-if="status.currentCommand"> - {{ status.currentCommand }}</span>
-                        </span>
-                    </el-tag>
-                    <el-tag v-else key="ready" type="primary" effect="plain" size="small">
-                        <el-icon>
-                            <Check />
-                        </el-icon>
-                        <span class="status-text">就绪</span>
-                    </el-tag>
-                </transition>
-            </div>
+  <div class="status-bar task-status-style">
+    <span class="st-label">
+      <StatusDot :state="status.isRunning ? 'on' : 'off'" />
+      <span class="status-text">
+        <template v-if="status.isRunning">
+          执行中<template v-if="status.currentCommand"> · {{ status.currentCommand }}</template>
+        </template>
+        <template v-else>就绪</template>
+      </span>
+    </span>
 
-            <transition name="project-fade">
-                <el-tag v-if="selectedProject" size="small" type="info">
-                    项目: {{ selectedProject.name }}
-                </el-tag>
-            </transition>
-        </div>
+    <AppProgress v-if="status.isRunning" :value="progressValue" />
 
-        <div class="status-actions">
-            <transition name="button-slide">
-                <el-tooltip v-if="remoteFailure && !status.isRunning" content="进入失败机器 Shell" placement="top">
-                    <el-button size="small" type="warning" circle @click="$emit('open-failure-shell')">
-                        <el-icon><Monitor /></el-icon>
-                    </el-button>
-                </el-tooltip>
-            </transition>
+    <span v-if="status.isRunning && status.totalSteps" class="st-label">
+      {{ status.completedSteps }} / {{ status.totalSteps }} 步
+    </span>
 
-            <transition name="button-slide">
-                <el-tooltip content="停止执行" placement="top">
-                    <el-button v-if="status.isRunning" size="small" type="danger" circle @click="$emit('stop-all')">
-                        <el-icon><VideoPause /></el-icon>
-                    </el-button>
-                </el-tooltip>
-            </transition>
+    <span v-if="selectedProject && !status.isRunning" class="st-label project-tag">
+      项目: {{ selectedProject.name }}
+    </span>
 
-            <span class="app-info">{{ appInfo }}</span>
-        </div>
+    <div class="tb-spacer" />
+
+    <div class="status-actions">
+      <AppIconBtn
+        v-if="remoteFailure && !status.isRunning"
+        title="进入失败机器 Shell"
+        @click="$emit('open-failure-shell')"
+      >
+        <el-icon :size="14"><Monitor /></el-icon>
+      </AppIconBtn>
+
+      <AppButton
+        v-if="status.isRunning"
+        variant="danger"
+        size="sm"
+        @click="$emit('stop-all')"
+      >
+        <el-icon :size="12"><VideoPause /></el-icon>
+        停止
+      </AppButton>
+
+      <span v-if="appInfo" class="app-info">{{ appInfo }}</span>
     </div>
+  </div>
 </template>
 
 <script>
+import { computed } from 'vue'
+import { AppIconBtn, AppButton, AppProgress, StatusDot } from './ui'
+
 export default {
-    name: 'StatusBar',
-    props: {
-        status: { type: Object, required: true },
-        selectedProject: { type: Object, default: null },
-        remoteFailure: { type: Object, default: null },
-        appInfo: { type: String, default: 'FlashShell' }
-    },
-    emits: ['stop-all', 'open-failure-shell']
+  name: 'StatusBar',
+  components: { AppIconBtn, AppButton, AppProgress, StatusDot },
+  props: {
+    status: { type: Object, required: true },
+    selectedProject: { type: Object, default: null },
+    remoteFailure: { type: Object, default: null },
+    appInfo: { type: String, default: '' },
+    progressPercentage: { type: Number, default: 0 },
+  },
+  emits: ['stop-all', 'open-failure-shell'],
+  setup(props) {
+    const progressValue = computed(() => {
+      if (!props.status?.isRunning) return 0
+      if (props.progressPercentage > 0) return props.progressPercentage
+      const total = Number(props.status.totalSteps) || 0
+      const done = Number(props.status.completedSteps) || 0
+      if (!total) return 0
+      return Math.round((Math.max(1, done + 1) / total) * 95)
+    })
+    return { progressValue }
+  },
 }
 </script>
 
 <style scoped>
-.status-bar {
-    flex-shrink: 0;
-    height: 40px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0 16px;
-    border-top: 1px solid var(--app-border);
-    background: var(--app-panel-bg);
-    color: var(--app-text);
-    box-sizing: border-box;
+.tb-spacer {
+  flex: 1;
 }
 
-.status-info {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-
-.status-container {
-    min-width: 180px;
+.st-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
 }
 
 .status-text {
-    margin-left: 6px;
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-tag {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .status-actions {
-    display: flex;
-    align-items: center;
-    gap: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
 .app-info {
-    color: var(--app-text-muted);
-    font-size: 12px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .project-tag,
+  .app-info {
+    display: none;
+  }
 }
 </style>

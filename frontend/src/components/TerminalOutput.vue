@@ -273,20 +273,56 @@ export default {
     flex: 1;
     min-height: 0;
     overflow: hidden;
-    background: var(--app-panel-bg);
+    background: var(--term-bg);
     position: relative;
 }
 
 .terminal-inline-actions {
     position: absolute;
-    top: 10px;
-    right: 22px;
+    top: 8px;
+    right: 12px;
     z-index: 5;
-    padding: 2px;
-    border-radius: 8px;
-    background: color-mix(in srgb, var(--app-panel-bg, #1e1e1e) 78%, transparent);
-    backdrop-filter: blur(8px);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+    display: flex;
+    gap: 3px;
+    padding: 0;
+    border-radius: 0;
+    background: transparent;
+    backdrop-filter: none;
+    box-shadow: none;
+}
+
+.terminal-output {
+    flex: 1;
+    min-height: 0;
+    margin: 0;
+    padding: 12px 16px;
+    background: var(--term-bg);
+    color: var(--term-fg);
+    font-family: var(--font-mono);
+    font-size: 13.5px;
+    line-height: 1.6;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+}
+
+.error-line {
+    color: var(--term-red);
+}
+
+.success-line {
+    color: var(--term-green);
+}
+
+.progress-line {
+    color: var(--term-cyan);
+    font-weight: 500;
+}
+
+.empty-output {
+    color: var(--term-dim);
 }
 
 .failure-banner {
@@ -347,23 +383,6 @@ export default {
     margin: 0;
 }
 
-.terminal-output {
-    flex: 1;
-    min-height: 0;
-    margin: 0 12px 12px;
-    padding: 16px;
-    background: var(--terminal-bg, #1e1e1e);
-    color: var(--terminal-fg, #d4d4d4);
-    font-family: "Consolas", "Monaco", "Courier New", monospace;
-    font-size: 13px;
-    line-height: 1.4;
-    overflow-y: auto;
-    white-space: pre-wrap;
-    border: 1px solid var(--app-border);
-    border-radius: var(--app-radius-lg, 10px);
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.18);
-}
-
 .virtual-spacer {
     width: 100%;
     flex-shrink: 0;
@@ -374,28 +393,10 @@ export default {
     margin-bottom: 0;
     overflow: hidden;
     word-break: break-all;
-}
-
-.error-line {
-    color: var(--terminal-error, #f56c6c);
-}
-
-.success-line {
-    color: var(--terminal-success, #67c23a);
-}
-
-.progress-line {
-    color: var(--terminal-progress, #409eff);
-    font-weight: 500;
+    min-height: 1.6em;
 }
 
 :deep(.search-active-line) {
-    outline: 1px solid var(--terminal-search-active, #1f6feb);
-}
-
-.empty-output {
-    color: color-mix(in srgb, var(--terminal-fg, #d4d4d4) 45%, transparent);
-    text-align: center;
-    margin-top: 50px;
+    outline: 1px solid var(--term-amber);
 }
 </style>

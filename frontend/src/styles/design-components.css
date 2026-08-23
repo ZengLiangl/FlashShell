@@ -1,0 +1,393 @@
+/* ==========================================================================
+   FlashShell — 既有 Vue 组件 → OpenDesign 视觉映射（全局层）
+   配合 design-system.css 令牌；不改动业务逻辑。
+   ========================================================================== */
+
+/* ---------- Element Plus 全局对齐 ---------- */
+.el-dialog {
+  --el-dialog-bg-color: var(--surface);
+  --el-dialog-border-radius: var(--r-xl);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+}
+
+.el-dialog__header {
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid var(--border);
+  margin-right: 0;
+}
+
+.el-dialog__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.el-dialog__body {
+  padding: 20px;
+  color: var(--fg-2);
+}
+
+.el-dialog__footer {
+  padding: 12px 20px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.el-input__wrapper {
+  border-radius: 7px;
+  box-shadow: 0 0 0 1px var(--border) inset;
+  background: var(--surface);
+}
+
+.el-input__wrapper.is-focus {
+  box-shadow: 0 0 0 1px var(--accent) inset, 0 0 0 3px color-mix(in oklch, var(--accent) 15%, transparent);
+}
+
+.el-button {
+  border-radius: 7px;
+  font-weight: 500;
+}
+
+.el-button--primary {
+  --el-button-bg-color: var(--accent);
+  --el-button-border-color: var(--accent);
+  --el-button-text-color: var(--on-accent);
+  --el-button-hover-bg-color: var(--accent-strong);
+  --el-button-hover-border-color: var(--accent-strong);
+}
+
+.el-dropdown-menu {
+  border-radius: var(--r-lg);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  padding: 6px;
+}
+
+.el-dropdown-menu__item {
+  border-radius: 7px;
+  font-size: 13.5px;
+  color: var(--fg-2);
+}
+
+.el-dropdown-menu__item:not(.is-disabled):hover {
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.el-empty__description {
+  color: var(--muted);
+}
+
+.el-tag {
+  border-radius: 5px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+/* ---------- Shell 工作区 ---------- */
+.shell-workspace,
+.shell-view-host {
+  background: var(--shell-chrome-bg);
+}
+
+.view.shell {
+  background: var(--app-bg);
+}
+
+.shell-terminal-tabs {
+  background: var(--shell-chrome-bg);
+}
+
+.shell-top-chrome-host .tabs-bar,
+.shell-terminal-tabs .tabs-bar {
+  background: var(--shell-chrome-bg);
+  border-bottom-color: var(--shell-chrome-border);
+}
+
+.shell-terminal-tabs .terminal-body {
+  background: var(--term-bg);
+}
+
+.shell-terminal-tabs .terminal-inline-actions {
+  height: 36px;
+  padding: 0 10px;
+  background: var(--shell-chrome-bg);
+  border-bottom: 1px solid var(--shell-chrome-border);
+  position: static;
+  top: auto;
+  right: auto;
+  justify-content: flex-start;
+}
+
+.shell-terminal-tabs .terminal-inline-actions :deep(.el-button) {
+  color: var(--shell-chrome-muted);
+  width: 26px;
+  height: 26px;
+}
+
+.shell-terminal-tabs .terminal-inline-actions :deep(.el-button:hover),
+.shell-terminal-tabs .terminal-inline-actions :deep(.el-button.active) {
+  background: var(--shell-chrome-hover);
+  color: var(--shell-chrome-fg);
+}
+
+.shell-terminal-tabs .terminal-inline-actions :deep(.broadcast-toggle.active),
+.shell-terminal-tabs .terminal-inline-actions :deep(.compose-toggle.active) {
+  color: var(--accent);
+  background: oklch(30% 0.04 150);
+}
+
+/* ---------- 首页：顶栏与滚动区 ---------- */
+.home-header {
+  padding: 14px 18px 10px;
+  border-bottom: none;
+  background: transparent;
+  min-height: auto;
+}
+
+.home-scroll {
+  padding: 4px 18px 24px;
+}
+
+.home-section-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  letter-spacing: 0.02em;
+  margin: 20px 2px 10px;
+}
+
+/* ---------- 任务视图布局 ---------- */
+.task-view-host .left-panel {
+  flex: 0 0 auto;
+  background: var(--surface-2) !important;
+  border-right: 1px solid var(--border) !important;
+}
+
+.task-view-host .terminal-container {
+  background: var(--term-bg);
+}
+
+/* ---------- 命令面板（ShellCommandPalette） ---------- */
+.cmd-palette-dialog.el-dialog {
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.cmd-palette-dialog .el-dialog__header {
+  display: none;
+}
+
+.cmd-palette-dialog .el-dialog__body {
+  padding: 0;
+}
+
+.cmd-palette-dialog .el-input__wrapper {
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  border-bottom: 1px solid var(--border);
+  min-height: 48px;
+  padding: 0 14px;
+}
+
+.cmd-palette-dialog .snippet-list,
+.cmd-palette-dialog .palette-tabs {
+  max-height: 380px;
+  overflow-y: auto;
+}
+
+.cmd-palette-dialog .snippet-card {
+  border-radius: 8px;
+  transition: background 0.12s ease;
+}
+
+.cmd-palette-dialog .snippet-card:hover,
+.cmd-palette-dialog .snippet-card.selected {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+/* ---------- 设置 Hub → modal ---------- */
+.settings-hub-dialog.el-dialog .el-dialog__header {
+  padding: 16px 20px 14px;
+}
+
+.settings-hub-dialog .el-dialog__body {
+  padding: 0;
+}
+
+.settings-hub-dialog .hub-nav-item.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 500;
+}
+
+/* ---------- 主机密钥信任 ---------- */
+.hk-desc {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 0 0 16px;
+}
+
+.hk-info {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 8px 12px;
+  margin: 0 0 8px;
+  font-size: 13px;
+}
+
+.hk-info dt {
+  color: var(--muted);
+}
+
+.hk-info dd {
+  margin: 0;
+  color: var(--fg-2);
+}
+
+.hk-fp {
+  font-family: var(--font-mono);
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-2);
+  word-break: break-all;
+}
+
+/* ---------- 机器列表卡片模式 → machine-grid ---------- */
+.ml-stack--cards .ml-list--grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 10px;
+  border: none;
+  background: transparent;
+  padding: 0;
+}
+
+.ml-stack--cards .ml-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  transition: all 0.14s ease;
+  grid-template-columns: none;
+}
+
+.ml-stack--cards .ml-item:hover {
+  border-color: color-mix(in oklch, var(--accent) 45%, var(--border));
+  box-shadow: var(--shadow-sm);
+}
+
+.ml-stack--cards .ml-machine-icon {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--fg-2);
+}
+
+.ml-stack--cards .ml-name {
+  font-weight: 500;
+  font-size: 13.5px;
+}
+
+.ml-stack--cards .ml-addr {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ---------- 连接选择器 / 迷你弹窗 ---------- */
+.shell-machine-picker .el-dialog__body {
+  padding: 14px 16px;
+}
+
+/* ---------- 全局加载 ---------- */
+.global-loading .loading-content {
+  background: var(--surface);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.global-loading .loading-text {
+  color: var(--fg-2);
+}
+
+.global-loading .loading-icon {
+  color: var(--accent);
+}
+
+/* ---------- 响应式：任务侧栏 / Shell ---------- */
+@media (max-width: 920px) {
+  .task-view-host .left-panel {
+    max-width: 240px;
+  }
+
+  .ml-stack--cards .ml-list--grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
+}
+
+.machine-picker-dialog .picker-segment-btn.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: color-mix(in oklch, var(--accent) 50%, var(--border));
+}
+
+.machine-picker-dialog .ml-item:hover {
+  background: var(--surface-2);
+}
+
+.machine-aside-panel,
+.machine-config-dialog .el-dialog__body {
+  color: var(--fg-2);
+}
+
+.machine-table,
+.ml-list {
+  border-color: var(--border);
+  background: var(--surface);
+}
+
+/* ---------- 关于 / 配置编辑器 ---------- */
+.about-dialog .el-dialog__body,
+.config-editor-dialog .el-dialog__body {
+  color: var(--fg-2);
+}
+
+/* ---------- 任务流水线编辑器 ---------- */
+.config-editor-dialog .el-dialog {
+  border-radius: var(--r-xl);
+}
+
+/* ---------- Host Key ---------- */
+.host-key-trust-dialog .hk-fp,
+.hk-info dd.hk-fp {
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 720px) {
+  .task-view-host .left-panel {
+    max-width: 200px;
+  }
+
+  .ml-stack--cards .ml-list--grid {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-hub-dialog.el-dialog {
+    width: calc(100vw - 24px) !important;
+  }
+}
