@@ -149,10 +149,32 @@
     </div>
 
     <footer class="machine-aside-footer">
-      <el-button @click="$emit('close')">取消</el-button>
-      <el-button :loading="testing" @click="testDraft">测试连接</el-button>
-      <el-button v-if="editing" type="success" :loading="connecting" @click="saveAndConnect">保存并连接</el-button>
-      <el-button type="primary" :loading="saving" @click="save">保存</el-button>
+      <div class="machine-aside-footer-left">
+        <el-button
+          v-if="!editing"
+          class="machine-aside-footer-btn"
+          :loading="importing"
+          title="从 ~/.ssh/config 导入"
+          @click="importLocalSSHConfig"
+        >
+          导入本地 SSH
+        </el-button>
+      </div>
+      <div class="machine-aside-footer-right">
+        <el-button class="machine-aside-footer-btn" @click="$emit('close')">取消</el-button>
+        <el-button class="machine-aside-footer-btn" :loading="testing" @click="testDraft">测试连接</el-button>
+        <el-button
+          v-if="editing"
+          class="machine-aside-footer-btn"
+          type="primary"
+          plain
+          :loading="connecting"
+          @click="saveAndConnect"
+        >
+          保存并连接
+        </el-button>
+        <el-button class="machine-aside-footer-btn" type="primary" :loading="saving" @click="save">保存</el-button>
+      </div>
     </footer>
   </aside>
 </template>
@@ -171,6 +193,7 @@ import {
   SetMachineSensitiveData,
   TestMachineDraftConnection,
   SelectKeyFile,
+  ImportOpenSSHConfigDefault,
 } from '../../wailsjs/go/app/App'
 import {
   DEFAULT_MACHINE_GROUP,
@@ -195,6 +218,7 @@ export default {
     const saving = ref(false)
     const testing = ref(false)
     const connecting = ref(false)
+    const importing = ref(false)
     const globalAccounts = ref([])
     const machineGroups = ref([])
     const groupDefaults = ref([])
@@ -437,6 +461,22 @@ export default {
       }
     }
 
+    const importLocalSSHConfig = async () => {
+      importing.value = true
+      try {
+        const result = await ImportOpenSSHConfigDefault('', normalizeGroup(form.group))
+        if (!result) return
+        const errors = result?.errors?.length ? `\n失败: ${result.errors.join('\n')}` : ''
+        ElMessage.success(`导入完成：新增 ${result?.added || 0}，更新 ${result?.updated || 0}，跳过 ${result?.skipped || 0}${errors}`)
+        emit('saved')
+        emit('close')
+      } catch (error) {
+        ElMessage.error('导入失败: ' + (error?.message || error))
+      } finally {
+        importing.value = false
+      }
+    }
+
     watch(() => props.open, async (open) => {
       if (!open) return
       await loadMeta()
@@ -458,6 +498,7 @@ export default {
       saving,
       testing,
       connecting,
+      importing,
       globalAccounts,
       groupOptions,
       knownTagOptions,
@@ -465,6 +506,7 @@ export default {
       applyGlobalAccount,
       applyGroupDefaults,
       selectKeyFile,
+      importLocalSSHConfig,
       terminalPresetOptions: TERMINAL_PRESETS,
       save,
       testDraft,
@@ -537,13 +579,45 @@ export default {
 
 .machine-aside-footer {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
+  flex-wrap: nowrap;
+  justify-content: space-between;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   padding: 12px 16px 14px;
   border-top: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent);
   background: color-mix(in srgb, var(--app-panel-bg) 92%, transparent);
   flex-shrink: 0;
+}
+
+.machine-aside-footer-left,
+.machine-aside-footer-right {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.machine-aside-footer-left {
+  flex: 1 1 auto;
+  min-width: 0;
+  justify-content: flex-start;
+}
+
+.machine-aside-footer-right {
+  flex: 0 0 auto;
+  justify-content: flex-end;
+}
+
+.machine-aside-footer-btn {
+  margin: 0 !important;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.machine-aside-footer :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 </style>

@@ -188,6 +188,8 @@ export function ImportMachinesCSVPick():Promise<data.MachineImportResult>;
 
 export function ImportMobaXtermPick(arg1:string,arg2:string):Promise<data.MachineImportResult>;
 
+export function ImportOpenSSHConfigDefault(arg1:string,arg2:string):Promise<data.OpenSSHImportResult>;
+
 export function ImportOpenSSHConfigPick(arg1:string,arg2:string):Promise<data.OpenSSHImportResult>;
 
 export function ImportPuttyPick(arg1:string,arg2:string):Promise<data.MachineImportResult>;

@@ -691,6 +691,18 @@ export function buildAccentFromHex(hex) {
   }
 }
 
+/**
+ * 同步 OpenDesign 令牌（--accent / --accent-soft 等）与用户选择的强调色。
+ * design-system.css 里仅为首屏回退值，运行时以此为准。
+ */
+export function buildAccentDesignTokens(accentHex, dark, lightBg) {
+  const accent = normalizeHex(accentHex || '#409eff')
+  const accentSoft = resolveAccentBg(accent, dark, lightBg)
+  const accentStrong = dark ? mixHex(accent, '#ffffff', 0.18) : mixHex(accent, '#000000', 0.15)
+  const onAccent = dark ? mixHex(accent, '#000000', 0.78) : '#ffffff'
+  return { accent, accentStrong, accentSoft, onAccent }
+}
+
 /** 深色模式强调底用半透明主题色，避免写死深紫/酒红底看不出主题色 */
 export function resolveAccentBg(accentHex, dark, lightBg) {
   if (!dark) return lightBg

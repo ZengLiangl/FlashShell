@@ -14,6 +14,20 @@ export function parseHostKeyError(errOrMsg) {
       raw: msg,
     }
   }
+  const conflict = msg.match(/主机\s+(\S+)\s+密钥已变更（期望\s+SHA256:[A-Za-z0-9+/=]+，实际\s+(SHA256:[A-Za-z0-9+/=]+)）/)
+  if (conflict) {
+    const hostPort = conflict[1].trim()
+    const [host, portStr] = hostPort.includes(':')
+      ? [hostPort.slice(0, hostPort.lastIndexOf(':')), hostPort.slice(hostPort.lastIndexOf(':') + 1)]
+      : [hostPort, '22']
+    return {
+      host: host.trim(),
+      port: parseInt(portStr, 10) || 22,
+      fingerprint: conflict[2],
+      raw: msg,
+      staleRemoved: false,
+    }
+  }
   return null
 }
 

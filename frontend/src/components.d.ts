@@ -12,6 +12,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AboutDialog: typeof import('./components/AboutDialog.vue')['default']
+    AppBrand: typeof import('./components/ui/AppBrand.vue')['default']
     AppButton: typeof import('./components/ui/AppButton.vue')['default']
     AppChip: typeof import('./components/ui/AppChip.vue')['default']
     AppChromeIcons: typeof import('./components/AppChromeIcons.vue')['default']

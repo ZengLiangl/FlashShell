@@ -36,7 +36,7 @@
   --app-font-family: var(--font-ui);
   --app-font-mono: var(--font-mono);
 
-  /* Element Plus primary 同步绿色强调色 */
+  /* Element Plus primary 同步强调色（--accent 由 useTheme 运行时覆盖） */
   --el-color-primary: var(--accent);
   --el-color-primary-light-3: color-mix(in oklch, var(--accent) 70%, var(--surface));
   --el-color-primary-light-5: color-mix(in oklch, var(--accent) 50%, var(--surface));
@@ -44,9 +44,31 @@
   --el-color-primary-light-8: color-mix(in oklch, var(--accent) 20%, var(--surface));
   --el-color-primary-light-9: color-mix(in oklch, var(--accent) 10%, var(--surface));
   --el-color-primary-dark-2: color-mix(in oklch, var(--accent) 80%, oklch(10% 0 0));
+
+  /* EP 边框/叠层与设计令牌对齐，避免弹框混用 #4c4d4f 与 --border */
+  --el-border-color: var(--border);
+  --el-border-color-light: var(--border);
+  --el-border-color-lighter: var(--border);
+  --el-border-color-extra-light: var(--border);
+  --el-border-color-dark: var(--border-strong);
+  --el-border-color-darker: var(--border-strong);
+  --el-bg-color: var(--bg);
+  --el-bg-color-page: var(--bg);
+  --el-bg-color-overlay: var(--surface);
+  --el-fill-color-blank: var(--surface);
 }
 
 html.dark {
+  /* theme.css 暗色仍写死 hex；bridge 在后加载，统一回设计令牌，避免 Hub 用 --surface 而面板用 --app-* 色差 */
+  --app-bg: var(--bg);
+  --app-panel-bg: var(--surface);
+  --app-inset-bg: var(--surface-2);
+  --app-text: var(--fg);
+  --app-text-secondary: var(--fg-2);
+  --app-text-muted: var(--muted);
+  --app-border: var(--border);
+  --app-card-bg: var(--surface);
+  --app-card-border: var(--border);
   --app-card-active-bg: color-mix(in oklch, var(--accent) 12%, var(--surface));
   --app-card-hover-shadow: color-mix(in oklch, var(--accent) 25%, transparent);
 
@@ -56,6 +78,17 @@ html.dark {
   --el-color-primary-light-8: color-mix(in oklch, var(--accent) 20%, oklch(15% 0.012 240));
   --el-color-primary-light-9: color-mix(in oklch, var(--accent) 10%, oklch(15% 0.012 240));
   --el-color-primary-dark-2: color-mix(in oklch, var(--accent) 80%, var(--surface));
+
+  --el-border-color: var(--border);
+  --el-border-color-light: var(--border);
+  --el-border-color-lighter: var(--border);
+  --el-border-color-extra-light: var(--border);
+  --el-border-color-dark: var(--border-strong);
+  --el-border-color-darker: var(--border-strong);
+  --el-bg-color: var(--bg);
+  --el-bg-color-page: var(--bg);
+  --el-bg-color-overlay: var(--surface);
+  --el-fill-color-blank: var(--surface);
 
   /* Shell chrome 暗色以 theme.css 为准 */
 }

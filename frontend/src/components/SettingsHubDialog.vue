@@ -250,8 +250,6 @@ export default {
   display: flex;
   height: min(72vh, 680px);
   min-height: 440px;
-  margin: -8px -12px -4px;
-  border-top: 1px solid var(--border);
 }
 
 .hub-nav {
@@ -338,17 +336,24 @@ export default {
   display: flex;
   flex-direction: column;
   max-height: 92vh;
+  /* 外框仅装饰，暗色下易在侧栏底角露出异色描边；靠阴影区分即可 */
+  border: none;
+  background: var(--surface);
+  --el-dialog-bg-color: var(--surface);
+  box-shadow: var(--shadow-lg);
 }
 
 .settings-hub-dialog .el-dialog__header {
   flex-shrink: 0;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
 
 .settings-hub-dialog .el-dialog__body {
-  padding-top: 8px;
-  padding-bottom: 12px;
+  padding: 0;
   flex: 1;
   min-height: 0;
   overflow: hidden;
+  background: var(--surface);
 }
 </style>

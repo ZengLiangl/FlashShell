@@ -5,13 +5,15 @@
       class="tabs-bar"
       :class="{
         'is-drop-unsplit': draggingSplitPane,
-        'shell-top-chrome': hideAppChrome,
+        'shell-top-chrome app-top-chrome': hideAppChrome,
       }"
       @dragover.prevent="onTabsBarDragOver"
       @drop.prevent="onTabsBarDrop"
       @dblclick="onChromeTitleDblActivate"
       @mousedown="onChromeTitlePointerDown"
     >
+      <AppBrand v-if="hideAppChrome" />
+
       <el-button v-if="!hideAppChrome" class="home-btn" size="small" text title="返回首页" @click="$emit('back')">
         <el-icon :size="14">
           <ArrowLeft />
@@ -87,7 +89,28 @@
         <AppChromeIcons />
       </div>
 
-      <WindowControls v-if="hideAppChrome && isWindows" class="tabs-bar-win-controls" />
+      <div v-if="hideAppChrome" class="tabs-bar-right shell-top-chrome-actions">
+        <AppSegmented
+          v-if="showModeSeg"
+          model-value="shell"
+          :options="segOptions"
+          aria-label="任务与终端"
+          @update:model-value="onSegChange"
+        />
+        <span v-if="showModeSeg" class="tb-sep" aria-hidden="true" />
+        <AppIconBtn title="系统设置" aria-label="系统设置" @click="openSettings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+        </AppIconBtn>
+        <AppIconBtn title="关于 FlashShell" aria-label="关于" @click="openAbout">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" /><path d="M12 11v5M12 8h.01" />
+          </svg>
+        </AppIconBtn>
+        <WindowControls v-if="isWindows" class="tabs-bar-win-controls" />
+      </div>
     </div>
     </Teleport>
 
@@ -208,14 +231,17 @@
 </template>
 
 <script>
-import { ref, reactive, watch, computed, onMounted, onUnmounted, nextTick, Teleport } from 'vue'
+import { ref, reactive, watch, computed, onMounted, onUnmounted, nextTick, Teleport, h } from 'vue'
 import { ArrowLeft, ArrowDown, Plus } from '@element-plus/icons-vue'
+import * as App from '../../../wailsjs/go/app/App'
 import ShellTerminal from './ShellTerminal.vue'
 import ShellBroadcastBar from './ShellBroadcastBar.vue'
 import ShellComposeBar from './ShellComposeBar.vue'
 import ModeSwitcher from '../ModeSwitcher.vue'
 import AppChromeIcons from '../AppChromeIcons.vue'
 import WindowControls from '../WindowControls.vue'
+import { AppBrand, AppIconBtn } from '../ui'
+import AppSegmented from '../ui/AppSegmented.vue'
 import { isWindowsPlatform } from '../../utils/platform'
 import { cwdBasename } from '../../utils/shellTerminalUx'
 import { onChromeTitleDblActivate, onChromeTitlePointerDown } from '../../utils/windowChrome'
@@ -274,6 +300,23 @@ const localTabLabel = (name) => {
   return n ? `本机-${n}` : '本机'
 }
 
+const TaskIcon = {
+  render() {
+    return h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+      h('rect', { x: '3', y: '4', width: '18', height: '16', rx: '3' }),
+      h('path', { d: 'M3 9h18M8 4v5' }),
+    ])
+  },
+}
+
+const ShellIcon = {
+  render() {
+    return h('svg', { viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', 'stroke-width': '2', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, [
+      h('path', { d: 'M5 7l4 5-4 5M11 17h6' }),
+    ])
+  },
+}
+
 export default {
   name: 'ShellTerminalTabs',
   components: {
@@ -283,6 +326,9 @@ export default {
     ModeSwitcher,
     AppChromeIcons,
     WindowControls,
+    AppBrand,
+    AppIconBtn,
+    AppSegmented,
     ArrowLeft,
     ArrowDown,
     Plus,
@@ -641,6 +687,28 @@ export default {
     const connectedCount = computed(() =>
       (props.sessions || []).filter((s) => s.connected).length,
     )
+
+    const showModeSeg = computed(() => props.hasProjects || props.hasTask)
+
+    const segOptions = computed(() => [
+      { value: 'task', label: '任务', icon: TaskIcon },
+      {
+        value: 'shell',
+        label: '终端',
+        icon: ShellIcon,
+        dot: true,
+        dotActive: connectedCount.value > 0 || (props.sessions?.length || 0) > 0,
+      },
+    ])
+
+    const onSegChange = (view) => {
+      if (view === 'task' || view === 'shell') {
+        emit('change-view', view)
+      }
+    }
+
+    const openSettings = () => App.OpenSystemSettings()
+    const openAbout = () => App.OpenAbout()
 
     const toggleBroadcast = () => {
       const next = !props.broadcastEnabled
@@ -1008,6 +1076,11 @@ export default {
       togglePaneZoom,
       toggleBroadcast,
       connectedCount,
+      showModeSeg,
+      segOptions,
+      onSegChange,
+      openSettings,
+      openAbout,
       isWindows,
     }
   },
@@ -1039,9 +1112,20 @@ export default {
   box-sizing: border-box;
 }
 
-.tabs-bar.shell-top-chrome {
-  padding-right: 10px;
-  /* padding-left 由 theme.css mac-traffic-inset 控制 */
+.tabs-bar.shell-top-chrome.app-top-chrome {
+  /* 与 AppMenuBar / .app-top-chrome 对齐：左 14px、间距 10px */
+  padding: 0 12px 0 14px;
+  gap: 10px;
+  align-items: center;
+  background: var(--surface);
+  border-bottom-color: var(--border);
+}
+
+.shell-top-chrome-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
 }
 
 .shell-top-chrome-host .tabs-bar.shell-top-chrome .tabs-bar-left,

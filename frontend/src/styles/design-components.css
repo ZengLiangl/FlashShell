@@ -100,8 +100,17 @@
   background: var(--shell-chrome-bg);
 }
 
-.shell-top-chrome-host .tabs-bar,
-.shell-terminal-tabs .tabs-bar {
+.shell-top-chrome-host .tabs-bar.app-top-chrome,
+.shell-terminal-tabs .tabs-bar.app-top-chrome {
+  padding: 0 12px 0 14px;
+  gap: 10px;
+  align-items: center;
+  background: var(--surface);
+  border-bottom-color: var(--border);
+}
+
+.shell-top-chrome-host .tabs-bar:not(.app-top-chrome),
+.shell-terminal-tabs .tabs-bar:not(.app-top-chrome) {
   background: var(--shell-chrome-bg);
   border-bottom-color: var(--shell-chrome-border);
 }
@@ -136,7 +145,7 @@
 .shell-terminal-tabs .terminal-inline-actions :deep(.broadcast-toggle.active),
 .shell-terminal-tabs .terminal-inline-actions :deep(.compose-toggle.active) {
   color: var(--accent);
-  background: oklch(30% 0.04 150);
+  background: var(--accent-soft);
 }
 
 /* ---------- 首页：顶栏与滚动区 ---------- */
@@ -214,18 +223,45 @@
 }
 
 /* ---------- 设置 Hub → modal ---------- */
+.settings-hub-dialog.el-dialog {
+  border: none;
+  background: var(--surface);
+  --el-dialog-bg-color: var(--surface);
+  --el-border-color: var(--border);
+  --el-border-color-light: var(--border);
+  --el-border-color-lighter: var(--border);
+  box-shadow: var(--shadow-lg);
+}
+
 .settings-hub-dialog.el-dialog .el-dialog__header {
   padding: 16px 20px 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
 
 .settings-hub-dialog .el-dialog__body {
   padding: 0;
+  background: var(--surface);
+}
+
+.settings-hub-dialog .hub-nav {
+  border-right-color: var(--border);
+  background: var(--surface-2);
+}
+
+.settings-hub-dialog .hub-main-title {
+  border-bottom-color: var(--border);
 }
 
 .settings-hub-dialog .hub-nav-item.active {
   background: var(--accent-soft);
   color: var(--accent);
   font-weight: 500;
+}
+
+.settings-hub-dialog .setting-card,
+.settings-hub-dialog .panel-actions {
+  border-color: var(--border);
 }
 
 /* ---------- 主机密钥信任 ---------- */

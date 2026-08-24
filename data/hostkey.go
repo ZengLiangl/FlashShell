@@ -196,12 +196,17 @@ func (m *HostKeyManager) ClearSessionTrust(host string, port int) {
 
 // Remove 移除信任
 func (m *HostKeyManager) Remove(host string, port int) error {
+	return m.revokeTrust(host, port)
+}
+
+// revokeTrust 移除持久与会话级信任并落盘
+func (m *HostKeyManager) revokeTrust(host string, port int) error {
 	addr := hostKeyAddr(host, port)
 	m.mu.Lock()
+	defer m.mu.Unlock()
 	delete(m.hosts, addr)
-	err := m.saveLocked()
-	m.mu.Unlock()
-	return err
+	delete(m.sessionHosts, addr)
+	return m.saveLocked()
 }
 
 // IsTrusted 检查是否已信任
@@ -228,7 +233,10 @@ func (m *HostKeyManager) Callback() ssh.HostKeyCallback {
 			return &HostKeyUnknownError{Host: host, Port: port, Fingerprint: fp}
 		}
 		if expected != fp {
-			return fmt.Errorf("主机 %s 密钥已变更（期望 %s，实际 %s）", hostname, expected, fp)
+			if err := m.revokeTrust(host, port); err != nil {
+				return fmt.Errorf("主机密钥冲突且无法更新本地记录: %w", err)
+			}
+			return &HostKeyUnknownError{Host: host, Port: port, Fingerprint: fp}
 		}
 		return nil
 	}

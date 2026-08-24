@@ -9,16 +9,65 @@
       v-model="machineKeyword"
       class="home-search-wrap"
       placeholder="查找主机或输入 SSH 地址快速连接…"
-      shortcut-hint="⌘K"
       @enter="onSearchEnter"
     />
     <div class="home-header-spacer" />
-    <AppButton variant="primary" @click="$emit('open-shell')">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M4 17l6-6-6-6M12 19h8" />
-      </svg>
-      打开终端
-    </AppButton>
+    <div class="home-header-actions">
+      <AppButton class="home-toolbar-btn home-toolbar-btn--icon" title="新建主机" aria-label="新建主机" @click="$emit('add-machine')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      </AppButton>
+      <AppButton
+        class="home-toolbar-btn home-toolbar-btn--icon"
+        :title="liveSessionCount > 0 ? '返回终端' : '打开终端'"
+        :aria-label="liveSessionCount > 0 ? '返回终端' : '打开终端'"
+        @click="$emit('open-shell')"
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M4 17l6-6-6-6M12 19h8" />
+        </svg>
+      </AppButton>
+      <AppButton class="home-toolbar-btn home-toolbar-btn--icon" title="配置文件" aria-label="配置文件" @click.stop="toggleConfigMenu">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
+          <path d="M6 3h9l4 4v14H6z" /><path d="M14 3v5h5" />
+        </svg>
+      </AppButton>
+    </div>
+
+    <div v-show="configMenuOpen" class="dropdown home-config-dropdown" @click.stop>
+      <div class="dd-label">业务配置文件</div>
+      <template v-if="configFiles.length">
+        <button
+          v-for="file in configFiles"
+          :key="file"
+          type="button"
+          class="dd-item"
+          :class="{ active: file === currentConfig }"
+          @click="onConfigCommand(`switch:${file}`)"
+        >
+          <svg
+            v-if="file === currentConfig"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.4"
+            aria-hidden="true"
+          >
+            <path d="M5 13l4 4L19 7" />
+          </svg>
+          {{ basename(file) }}
+        </button>
+      </template>
+      <button v-else type="button" class="dd-item" disabled>无法加载配置文件</button>
+      <div class="dd-sep" />
+      <button type="button" class="dd-item" @click="onConfigCommand('edit-pipeline')">编辑任务流水线</button>
+      <button type="button" class="dd-item" @click="onConfigCommand('reload')">刷新</button>
+      <button type="button" class="dd-item" @click="onConfigCommand('refresh')">刷新配置列表</button>
+      <div class="dd-sep" />
+      <button type="button" class="dd-item" @click="onConfigCommand('open-global')">打开全局配置</button>
+      <button type="button" class="dd-item" @click="onConfigCommand('open-current')">打开当前配置</button>
+    </div>
   </header>
 
   <div class="home-scroll">
@@ -74,6 +123,34 @@
         :filter-keyword="machineKeyword"
         layout="grid"
         variant="cards"
+        show-context-menu
+        empty-text="无匹配机器"
+        @connect="onConnectMachine"
+        @focus-session="(id) => $emit('focus-session', id)"
+        @edit-machine="(m) => $emit('edit-machine', m)"
+        @copy-machine="(m) => $emit('copy-machine', m)"
+        @delete-machine="(m) => $emit('delete-machine', m)"
+        @toggle-pin="onTogglePin"
+      />
+
+      <SectionTitle v-if="recentMachines.length" title="最近连接" :count="recentMachines.length">
+        <template #icon>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
+          </svg>
+        </template>
+      </SectionTitle>
+      <MachineConnectList
+        v-if="recentMachines.length"
+        class="machine-grid"
+        :machines="recentMachines"
+        :sessions="sessions"
+        :workspace-sessions="workspaceSessions"
+        :connecting-name="connectingName"
+        :filter-keyword="machineKeyword"
+        layout="grid"
+        variant="cards"
+        flat
         show-context-menu
         empty-text="无匹配机器"
         @connect="onConnectMachine"
@@ -142,6 +219,7 @@ import * as App from '../../wailsjs/go/app/App'
 import { machineMatchesKeyword, isMachineConnecting, collectMachineTags, machineMatchesTags } from '../utils/machineGroups'
 import { parseQuickConnectTarget, findMachineForQuickConnect } from '../utils/quickConnect'
 import { onChromeTitleDblActivate, onChromeTitlePointerDown } from '../utils/windowChrome'
+import { useConfigFileMenu } from '../composables/useConfigFileMenu'
 import MachineConnectList from './shell/MachineConnectList.vue'
 import { AppSearch, AppChip, AppButton, ProjectCard, SectionTitle } from './ui'
 
@@ -169,12 +247,28 @@ export default {
     'edit-machine',
     'copy-machine',
     'delete-machine',
+    'open-config-editor',
   ],
   setup(props, { emit }) {
     const machineKeyword = ref('')
     const selectedTags = ref([])
     const historyRecords = ref([])
     const searchInputRef = ref(null)
+
+    const {
+      configFiles,
+      currentConfig,
+      configMenuOpen,
+      basename,
+      toggleConfigMenu,
+      closeConfigMenu,
+      onConfigCommand: runConfigCommand,
+    } = useConfigFileMenu({
+      onEditPipeline: () => emit('open-config-editor'),
+      onReload: () => emit('refresh'),
+    })
+
+    const onConfigCommand = (cmd) => runConfigCommand(cmd)
 
     const focusSearchInput = async () => {
       await nextTick()
@@ -207,6 +301,34 @@ export default {
     const pinnedMachines = computed(() =>
       filteredMachines.value.filter((m) => !!m.pinned),
     )
+
+    const recentMachines = computed(() => {
+      const byName = new Map((props.machines || []).map((m) => [m.name, m]))
+      const out = []
+      const seen = new Set()
+      for (const rec of historyRecords.value || []) {
+        const name = rec?.machineName || rec?.configName || rec?.name
+        if (!name || seen.has(name)) continue
+        const m = byName.get(name)
+        if (!m) continue
+        if (!machineMatchesKeyword(m, machineKeyword.value) || !machineMatchesTags(m, selectedTags.value)) {
+          continue
+        }
+        seen.add(name)
+        out.push(m)
+        if (out.length >= 8) break
+      }
+      return out
+    })
+
+    const liveSessions = computed(() =>
+      (props.workspaceSessions || []).filter((s) => s?.machineName && !String(s.machineName).startsWith('__pending__')),
+    )
+
+    const liveSessionCount = computed(() => {
+      const live = liveSessions.value.filter((s) => s.connected || s.connecting).length
+      return live || liveSessions.value.length
+    })
 
     const showHomeEmpty = computed(() => {
       const kw = machineKeyword.value.trim()
@@ -294,6 +416,11 @@ export default {
 
     onMounted(() => {
       loadHistory()
+      document.addEventListener('click', closeConfigMenu)
+    })
+
+    onUnmounted(() => {
+      document.removeEventListener('click', closeConfigMenu)
     })
 
     return {
@@ -304,6 +431,8 @@ export default {
       filteredProjects,
       filteredMachines,
       pinnedMachines,
+      recentMachines,
+      liveSessionCount,
       quickConnectHint,
       showHomeEmpty,
       searchInputRef,
@@ -316,6 +445,12 @@ export default {
       onTogglePin,
       handleRefresh,
       focusSearchInput,
+      configFiles,
+      currentConfig,
+      configMenuOpen,
+      basename,
+      toggleConfigMenu,
+      onConfigCommand,
     }
   },
 }
@@ -326,20 +461,75 @@ export default {
   flex: 1;
 }
 
+.home-header {
+  position: relative;
+}
+
+.home-header-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.home-header-actions :deep(.home-toolbar-btn) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--fg-2);
+  font-size: 13px;
+  font-weight: 500;
+  box-shadow: none;
+  transition: background 0.13s ease, border-color 0.13s ease, color 0.13s ease;
+}
+
+.home-header-actions :deep(.home-toolbar-btn:hover) {
+  border-color: var(--border-strong);
+  background: var(--surface-2);
+  color: var(--fg);
+}
+
+.home-header-actions :deep(.home-toolbar-btn--icon) {
+  width: 36px;
+  min-width: 36px;
+  padding: 0;
+}
+
+.home-header-actions :deep(.home-toolbar-btn svg) {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.home-config-dropdown {
+  position: absolute;
+  top: calc(100% - 4px);
+  right: 18px;
+  min-width: 200px;
+  z-index: 200;
+}
+
+.home-config-dropdown .dd-item svg {
+  width: 12px;
+  height: 12px;
+  flex-shrink: 0;
+}
+
+.home-config-dropdown .dd-item:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .home-search-wrap {
   flex: 1;
   max-width: 560px;
-}
-
-.home-header :deep(.btn-primary) {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.home-header :deep(.btn-primary svg) {
-  width: 14px;
-  height: 14px;
 }
 
 .home-empty-title {

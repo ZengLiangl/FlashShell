@@ -44,12 +44,17 @@ export default {
     onMounted(() => {
       if (!isWindows) return
       refresh()
-      timer = setInterval(refresh, 2000)
+      timer = setInterval(refresh, 800)
       window.addEventListener('resize', refresh)
+      // 最大化窗口拖动还原后立即同步按钮图标
+      window.addEventListener('mouseup', refresh)
+      document.addEventListener('visibilitychange', refresh)
     })
     onUnmounted(() => {
       if (timer) clearInterval(timer)
       window.removeEventListener('resize', refresh)
+      window.removeEventListener('mouseup', refresh)
+      document.removeEventListener('visibilitychange', refresh)
     })
 
     return { isWindows, maximised, minimise, toggleMax, quit }

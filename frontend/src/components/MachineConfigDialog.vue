@@ -84,7 +84,8 @@
                                     <el-dropdown-item command="import-putty">导入 PuTTY</el-dropdown-item>
                                     <el-dropdown-item command="import-mobaxterm">导入 MobaXterm</el-dropdown-item>
                                     <el-dropdown-item command="import-securecrt">导入 SecureCRT</el-dropdown-item>
-                                    <el-dropdown-item command="import-openssh">导入 OpenSSH config</el-dropdown-item>
+                                    <el-dropdown-item command="import-openssh-default">导入本地 SSH 配置 (~/.ssh/config)</el-dropdown-item>
+                                    <el-dropdown-item command="import-openssh">从文件导入 OpenSSH config</el-dropdown-item>
                                     <el-dropdown-item command="import-csv">导入 CSV</el-dropdown-item>
                                     <el-dropdown-item command="export-csv">导出 CSV</el-dropdown-item>
                                     <el-dropdown-item command="export-template" divided>导出连接模板</el-dropdown-item>
@@ -739,6 +740,7 @@ import {
     ImportMobaXtermPick,
     ImportSecureCRTPick,
     ImportOpenSSHConfigPick,
+    ImportOpenSSHConfigDefault,
     ImportMachinesCSVPick,
     ExportMachinesCSVPick,
     ExportMachineTemplateToFile,
@@ -1572,6 +1574,19 @@ export default {
             ElMessage.success(`导入完成：新增 ${result?.added || 0}，更新 ${result?.updated || 0}，跳过 ${result?.skipped || 0}${errors}`)
         }
 
+        const importOpenSSHDefault = async () => {
+            if (!ensureImportApi(ImportOpenSSHConfigDefault, '本地 SSH 配置导入')) return
+            try {
+                const result = await ImportOpenSSHConfigDefault(importAccountId.value || '', normalizeGroup(importGroup.value))
+                if (!result) return
+                showOpenSSHImportResult(result)
+                await loadMachines()
+                emit('changed')
+            } catch (error) {
+                ElMessage.error('导入失败: ' + error)
+            }
+        }
+
         const importOpenSSH = async () => {
             if (!ensureImportApi(ImportOpenSSHConfigPick, 'OpenSSH 导入')) return
             try {
@@ -1620,6 +1635,7 @@ export default {
             else if (command === 'import-putty') importPutty()
             else if (command === 'import-mobaxterm') importMobaXterm()
             else if (command === 'import-securecrt') importSecureCRT()
+            else if (command === 'import-openssh-default') importOpenSSHDefault()
             else if (command === 'import-openssh') importOpenSSH()
             else if (command === 'import-csv') importCSV()
             else if (command === 'export-csv') exportCSV()

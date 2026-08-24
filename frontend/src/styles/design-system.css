@@ -1,6 +1,6 @@
 /* ==========================================================================
    FlashShell — UI 重设计 · 设计系统 (tech-utility)
-   语义: 数据密集的运维工作台。单一绿色强调色 + 深色终端 + 系统无衬线 + 等宽。
+   语义: 数据密集的运维工作台。强调色由 useTheme 运行时写入 --accent*；以下为未加载设置前的回退值。
    ========================================================================== */
 :root {
   --bg:            oklch(98% 0.005 250);
@@ -104,6 +104,21 @@ svg { display: block; }
 .app { display: flex; flex-direction: column; height: 100vh; background: var(--bg); }
 
 /* ---------- top bar ---------- */
+.app-top-chrome {
+  position: relative;
+  height: 42px;
+  min-height: 42px;
+  flex: 0 0 42px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px 0 14px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  box-sizing: border-box;
+  -webkit-app-region: drag;
+}
+
 .topbar {
   position: relative;
   height: 42px; flex: 0 0 42px;
@@ -114,6 +129,26 @@ svg { display: block; }
   -webkit-app-region: drag;
 }
 .topbar button, .topbar .tb-input, .topbar .seg { -webkit-app-region: no-drag; }
+.topbar.app-top-chrome,
+.tabs-bar.shell-top-chrome.app-top-chrome {
+  height: 42px;
+  min-height: 42px;
+  flex: 0 0 auto;
+  padding: 0 12px 0 14px;
+  gap: 10px;
+  align-items: center;
+  background: var(--surface);
+  border-bottom-color: var(--border);
+}
+.tabs-bar.shell-top-chrome.app-top-chrome button,
+.tabs-bar.shell-top-chrome.app-top-chrome a,
+.tabs-bar.shell-top-chrome.app-top-chrome input,
+.tabs-bar.shell-top-chrome.app-top-chrome .el-dropdown,
+.tabs-bar.shell-top-chrome.app-top-chrome .session-tab,
+.tabs-bar.shell-top-chrome.app-top-chrome .icon-btn,
+.tabs-bar.shell-top-chrome.app-top-chrome .seg {
+  -webkit-app-region: no-drag;
+}
 .traffic { display: flex; gap: 8px; align-items: center; margin-right: 2px; }
 .traffic i { width: 12px; height: 12px; border-radius: 50%; display: block; }
 .traffic i.r { background: oklch(66% 0.19 25); }
@@ -362,7 +397,7 @@ html.dark .rail-mode .i-moon { color: var(--accent); opacity: 1; }
 .shell-toolbar { flex: 0 0 auto; height: 36px; display: flex; align-items: center; gap: 3px; padding: 0 10px; background: var(--shell-chrome-bg); border-bottom: 1px solid var(--shell-chrome-border); color: var(--shell-chrome-muted); }
 .shell-toolbar .icon-btn { color: var(--shell-chrome-muted); width: 26px; height: 26px; }
 .shell-toolbar .icon-btn:hover { background: var(--shell-chrome-hover); color: var(--shell-chrome-fg); }
-.shell-toolbar .icon-btn.active { color: var(--accent); background: oklch(30% 0.04 150); }
+.shell-toolbar .icon-btn.active { color: var(--accent); background: var(--accent-soft); }
 .shell-toolbar .spacer { flex: 1; }
 .shell-toolbar .bc-bar { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-family: var(--font-mono); padding: 3px 10px; border-radius: 6px; background: oklch(30% 0.04 150); color: var(--term-green); border: 1px solid oklch(38% 0.06 150); }
 .shell-body { flex: 1; min-height: 0; display: flex; }

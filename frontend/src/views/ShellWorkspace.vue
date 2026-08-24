@@ -44,6 +44,24 @@
       </el-aside>
 
       <el-main class="terminal-container shell-terminal-container">
+        <!-- 侧栏收起后：悬停左缘显示展开按钮 -->
+        <div
+          v-if="showLeftPanel && leftCollapsed"
+          class="panel-edge-wrap panel-edge-wrap--expand"
+          @mouseenter="edgeHover = true"
+          @mouseleave="edgeHover = false"
+        >
+          <button
+            type="button"
+            class="panel-edge-btn panel-edge-btn--expand"
+            :class="{ 'is-hovered': edgeHover }"
+            title="展开侧栏"
+            @mousedown.stop
+            @click.stop="toggleLeftPanel"
+          >
+            <el-icon><DArrowRight /></el-icon>
+          </button>
+        </div>
         <ShellTerminalTabs
           ref="tabsRef"
           class="shell-tabs-area"
@@ -108,7 +126,7 @@
               @open-picker="(tab) => openPicker(tab)"
               @clear="clearHistory"
               @remove="removeHistory"
-              @back="$emit('back')"
+              @add-machine="$emit('add-machine')"
             />
           </template>
           <template #footer="{ activeMachine: am }">
@@ -151,6 +169,10 @@
       :active-is-local="isLocalSessionName(activeMachine)"
       :active-connected="activeConnected"
       :transfer-active-count="transferActiveCount"
+      :search-visible="searchVisible"
+      :transfer-visible="transferVisible"
+      :command-palette-visible="commandPaletteVisible"
+      :tunnel-dialog-visible="tunnelDialogVisible"
       @open-tunnels="tunnelDialogVisible = true"
       @toggle-files="toggleFilePanel"
       @toggle-search="toggleSearch"
@@ -1165,6 +1187,14 @@ export default {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+}
+
+.panel-edge-wrap--expand {
+  left: 0;
+  right: auto;
+  width: 14px;
+  justify-content: flex-start;
+  z-index: 30;
 }
 
 .panel-edge-wrap .resize-handle {

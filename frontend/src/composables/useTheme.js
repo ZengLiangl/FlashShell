@@ -1,7 +1,7 @@
 import { ref, watch } from 'vue'
 import * as App from '../../wailsjs/go/app/App'
 import { WindowSetDarkTheme, WindowSetLightTheme, WindowSetSystemDefaultTheme, WindowSetBackgroundColour } from '../../wailsjs/runtime/runtime'
-import { getUiAccent, getUiFont, isCustomUiAccent, applyElementPrimaryCssVars, resolveAccentBg, UI_ACCENTS, TERMINAL_PRESETS } from '../utils/themePresets'
+import { getUiAccent, getUiFont, isCustomUiAccent, applyElementPrimaryCssVars, buildAccentDesignTokens, UI_ACCENTS, TERMINAL_PRESETS } from '../utils/themePresets'
 import { clampShellFontSize, SHELL_FONT_SIZE_DEFAULT } from '../utils/shellTerminalUx'
 
 const isDark = ref(false)
@@ -55,15 +55,20 @@ function applyAccentAndFont(accentId, fontId, fontSize, dark) {
 
   const accent = getUiAccent(accentId)
   const palette = dark ? accent.dark : accent.light
-  root.style.setProperty('--app-accent-color', palette.accent)
-  root.style.setProperty('--app-accent-bg', resolveAccentBg(palette.accent, dark, palette.accentBg))
+  const tokens = buildAccentDesignTokens(palette.accent, dark, palette.accentBg)
+  root.style.setProperty('--accent', tokens.accent)
+  root.style.setProperty('--accent-strong', tokens.accentStrong)
+  root.style.setProperty('--accent-soft', tokens.accentSoft)
+  root.style.setProperty('--on-accent', tokens.onAccent)
+  root.style.setProperty('--app-accent-color', tokens.accent)
+  root.style.setProperty('--app-accent-bg', tokens.accentSoft)
   root.style.setProperty(
     '--app-card-hover-shadow',
     dark
-      ? `color-mix(in srgb, ${palette.accent} 25%, transparent)`
-      : `color-mix(in srgb, ${palette.accent} 15%, transparent)`,
+      ? `color-mix(in srgb, ${tokens.accent} 25%, transparent)`
+      : `color-mix(in srgb, ${tokens.accent} 15%, transparent)`,
   )
-  applyElementPrimaryCssVars(root, palette.accent, dark)
+  applyElementPrimaryCssVars(root, tokens.accent, dark)
 
   const font = getUiFont(fontId)
   root.style.setProperty('--app-font-family', font.value)

@@ -3,25 +3,33 @@
     <div class="tool-group tool-group-primary">
       <div class="tool-item">
         <el-tooltip content="查找" placement="top" :show-after="280">
-          <button type="button" class="tool-btn" @click="$emit('toggle-search')">
+          <button
+            type="button"
+            class="tool-btn"
+            :class="{ active: searchVisible }"
+            @click="$emit('toggle-search')"
+          >
             <el-icon class="tool-icon"><Search /></el-icon>
           </button>
         </el-tooltip>
       </div>
 
-      <div class="tool-item">
+      <div v-if="showLeftPanel" class="tool-item">
         <el-tooltip
-          :content="composeEnabled ? '关闭撰写栏' : '开启撰写栏（多行命令）'"
+          :content="leftPanelOpen ? `收起${leftPanelLabel}` : `展开${leftPanelLabel}`"
           placement="top"
           :show-after="280"
         >
           <button
             type="button"
             class="tool-btn"
-            :class="{ active: composeEnabled }"
-            @click="$emit('toggle-compose')"
+            :class="{ active: leftPanelOpen }"
+            @click="$emit('toggle-left-panel')"
           >
-            <el-icon class="tool-icon"><EditPen /></el-icon>
+            <el-icon class="tool-icon">
+              <Folder v-if="leftPanelLabel === '文件'" />
+              <TrendCharts v-else />
+            </el-icon>
           </button>
         </el-tooltip>
       </div>
@@ -45,43 +53,60 @@
             <button
               type="button"
               class="tool-btn"
-              :class="{ active: tunnelActive }"
+              :class="{ active: tunnelOpen }"
               @click="$emit('open-tunnels')"
             >
               <el-icon class="tool-icon"><Connection /></el-icon>
             </button>
           </el-tooltip>
         </div>
-      </template>
 
-      <div class="tool-item">
-        <el-tooltip content="命令面板 (Ctrl/⌘+Shift+P)" placement="top" :show-after="280">
-          <button type="button" class="tool-btn" @click="$emit('open-command-palette')">
-            <el-icon class="tool-icon"><Memo /></el-icon>
-          </button>
-        </el-tooltip>
-      </div>
+        <div class="tool-item">
+          <el-tooltip content="文件传输" placement="top" :show-after="280">
+            <button
+              type="button"
+              class="tool-btn tool-btn-badge"
+              :class="{ active: transferVisible }"
+              @click="$emit('open-transfer')"
+            >
+              <el-badge :value="transferActiveCount" :hidden="!transferActiveCount" :max="99">
+                <el-icon class="tool-icon"><Upload /></el-icon>
+              </el-badge>
+            </button>
+          </el-tooltip>
+        </div>
+      </template>
     </div>
 
     <span class="tool-divider" aria-hidden="true" />
 
     <div class="tool-group tool-group-secondary">
-      <div v-if="showLeftPanel" class="tool-item">
+      <div class="tool-item">
         <el-tooltip
-          :content="leftPanelOpen ? `收起${leftPanelLabel}` : `展开${leftPanelLabel}`"
+          :content="composeEnabled ? '关闭撰写栏' : '开启撰写栏（多行命令）'"
           placement="top"
           :show-after="280"
         >
           <button
             type="button"
             class="tool-btn"
-            :class="{ active: leftPanelOpen }"
-            @click="$emit('toggle-left-panel')"
+            :class="{ active: composeEnabled }"
+            @click="$emit('toggle-compose')"
           >
-            <el-icon class="tool-icon">
-              <Folder v-if="leftPanelLabel === '文件'" />
-              <TrendCharts v-else />
-            </el-icon>
+            <el-icon class="tool-icon"><EditPen /></el-icon>
+          </button>
+        </el-tooltip>
+      </div>
+
+      <div class="tool-item">
+        <el-tooltip content="命令面板 (Ctrl/⌘+Shift+P)" placement="top" :show-after="280">
+          <button
+            type="button"
+            class="tool-btn"
+            :class="{ active: commandPaletteVisible }"
+            @click="$emit('open-command-palette')"
+          >
+            <el-icon class="tool-icon"><Memo /></el-icon>
           </button>
         </el-tooltip>
       </div>
@@ -99,16 +124,6 @@
             @click="$emit('toggle-broadcast')"
           >
             <el-icon class="tool-icon"><Promotion /></el-icon>
-          </button>
-        </el-tooltip>
-      </div>
-
-      <div v-if="!activeIsLocal" class="tool-item">
-        <el-tooltip content="文件传输" placement="top" :show-after="280">
-          <button type="button" class="tool-btn tool-btn-badge" @click="$emit('open-transfer')">
-            <el-badge :value="transferActiveCount" :hidden="!transferActiveCount" :max="99">
-              <el-icon class="tool-icon"><Upload /></el-icon>
-            </el-badge>
           </button>
         </el-tooltip>
       </div>
@@ -162,8 +177,12 @@ export default {
     leftPanelLabel: { type: String, default: '监控' },
     filePanelExpanded: { type: Boolean, default: false },
     activeIsLocal: { type: Boolean, default: false },
-    tunnelActive: { type: Boolean, default: false },
+    tunnelDialogVisible: { type: Boolean, default: false },
+    hasActiveTunnel: { type: Boolean, default: false },
     transferActiveCount: { type: Number, default: 0 },
+    searchVisible: { type: Boolean, default: false },
+    transferVisible: { type: Boolean, default: false },
+    commandPaletteVisible: { type: Boolean, default: false },
   },
   emits: [
     'toggle-broadcast',
@@ -177,10 +196,11 @@ export default {
     'clear',
   ],
   setup(props) {
+    const tunnelOpen = computed(() => props.tunnelDialogVisible || props.hasActiveTunnel)
     const tunnelTooltip = computed(() => (
-      props.tunnelActive ? 'SSH 隧道（已连接）' : 'SSH 隧道'
+      props.hasActiveTunnel ? 'SSH 隧道（已连接）' : 'SSH 隧道'
     ))
-    return { tunnelTooltip }
+    return { tunnelOpen, tunnelTooltip }
   },
 }
 </script>

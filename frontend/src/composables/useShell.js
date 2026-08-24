@@ -519,6 +519,13 @@ export function useShell() {
       failPendingTab(pendingId, error)
       const hk = parseHostKeyError(error)
       if (hk) {
+        if (/密钥已变更/.test(hk.raw || '')) {
+          try {
+            await App.RemoveKnownHost(hk.host, hk.port)
+          } catch {
+            // 忽略删除失败，仍弹出信任框
+          }
+        }
         pendingHostKey.value = { ...hk, configName, pendingId }
       } else if (/私钥需要口令|passphrase/i.test(String(error || ''))) {
         try {
@@ -839,6 +846,9 @@ export function useShell() {
         markTabFailed(payload.machineName)
         const hk = parseHostKeyError(line)
         if (hk) {
+          if (/密钥已变更/.test(hk.raw || '')) {
+            App.RemoveKnownHost(hk.host, hk.port).catch(() => {})
+          }
           const tab = openTabs.value.find((t) => t.machineName === payload.machineName)
           pendingHostKey.value = {
             ...hk,

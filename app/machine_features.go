@@ -2,6 +2,7 @@ package app
 
 import (
 	"fmt"
+	"os"
 
 	"FlashDock/data"
 	"FlashDock/define"
@@ -33,6 +34,21 @@ func (a *App) ImportOpenSSHConfigPick(accountID, group string) (*data.OpenSSHImp
 	}
 	if path == "" {
 		return nil, nil
+	}
+	return a.configManager.ImportOpenSSHConfig(path, accountID, group)
+}
+
+// ImportOpenSSHConfigDefault 从默认 ~/.ssh/config 导入机器
+func (a *App) ImportOpenSSHConfigDefault(accountID, group string) (*data.OpenSSHImportResult, error) {
+	path, err := data.DefaultOpenSSHConfigPath()
+	if err != nil {
+		return nil, fmt.Errorf("获取默认 SSH 配置路径失败: %w", err)
+	}
+	if _, err := os.Stat(path); err != nil {
+		if os.IsNotExist(err) {
+			return nil, fmt.Errorf("未找到本地 SSH 配置：%s", path)
+		}
+		return nil, fmt.Errorf("读取本地 SSH 配置失败: %w", err)
 	}
 	return a.configManager.ImportOpenSSHConfig(path, accountID, group)
 }

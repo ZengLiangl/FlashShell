@@ -15,9 +15,9 @@
           </template>
         </el-input>
         <div class="icon-actions">
-          <el-tooltip content="返回首页" placement="top">
-            <el-button size="small" circle @click="$emit('back')">
-              <el-icon><ArrowLeft /></el-icon>
+          <el-tooltip content="新增机器" placement="top">
+            <el-button size="small" circle @click="$emit('add-machine')">
+              <el-icon><Plus /></el-icon>
             </el-button>
           </el-tooltip>
           <el-tooltip content="连接" placement="top">
@@ -49,7 +49,7 @@
 
 <script>
 import { computed, ref } from 'vue'
-import { Search, ArrowLeft, Monitor } from '@element-plus/icons-vue'
+import { Search, Plus, Monitor } from '@element-plus/icons-vue'
 import ShellHistoryList from './ShellHistoryList.vue'
 
 function filterHistoryRecords(records, keyword) {
@@ -64,12 +64,12 @@ function filterHistoryRecords(records, keyword) {
 
 export default {
   name: 'ShellConnectionHistory',
-  components: { Search, ArrowLeft, Monitor, ShellHistoryList },
+  components: { Search, Plus, Monitor, ShellHistoryList },
   props: {
     records: { type: Array, default: () => [] },
     sessions: { type: Array, default: () => [] },
   },
-  emits: ['connect', 'open-picker', 'clear', 'remove', 'back'],
+  emits: ['connect', 'open-picker', 'clear', 'remove', 'add-machine'],
   setup(props, { emit }) {
     const keyword = ref('')
 

@@ -8,17 +8,19 @@ import (
 
 func TestShouldTreatAsMaximised(t *testing.T) {
 	cases := []struct {
-		native, wails, ours, want bool
+		known, native, wails, ours, want bool
 	}{
-		{false, false, false, false},
-		{true, false, false, true},
-		{false, true, false, true},
-		{false, false, true, true},
-		{true, true, true, true},
+		{false, false, false, false, false},
+		{false, false, true, false, true},
+		{false, false, false, true, true},
+		{true, true, false, false, true},
+		{true, false, true, true, false}, // 已知未最大化时，忽略过期的内部标记
+		{true, true, false, true, true},
 	}
 	for _, c := range cases {
-		if got := shouldTreatAsMaximised(c.native, c.wails, c.ours); got != c.want {
-			t.Fatalf("shouldTreatAsMaximised(%v,%v,%v)=%v want %v", c.native, c.wails, c.ours, got, c.want)
+		if got := shouldTreatAsMaximised(c.known, c.native, c.wails, c.ours); got != c.want {
+			t.Fatalf("shouldTreatAsMaximised(%v,%v,%v,%v)=%v want %v",
+				c.known, c.native, c.wails, c.ours, got, c.want)
 		}
 	}
 }

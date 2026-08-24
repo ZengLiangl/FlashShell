@@ -1,22 +1,10 @@
 <template>
   <header
-    class="topbar"
+    class="topbar app-top-chrome"
     @dblclick="onChromeTitleDblActivate"
     @mousedown="onChromeTitlePointerDown"
   >
-    <div class="brand">
-      <span class="brand-mark" aria-hidden="true">
-        <svg viewBox="0 0 24 24" fill="currentColor">
-          <path d="M13.2 2 3 14h6.5l-1 8L20 10h-6.5l-.3-8z" />
-        </svg>
-      </span>
-      FlashShell
-    </div>
-
-    <template v-if="activeView !== 'home'">
-      <span class="tb-sep" aria-hidden="true" />
-      <div class="tb-context">{{ contextText }}</div>
-    </template>
+    <AppBrand />
 
     <div class="tb-spacer" />
 
@@ -30,13 +18,20 @@
       />
       <span v-if="showModeSeg" class="tb-sep" aria-hidden="true" />
 
+      <!-- 新建窗口暂隐藏
       <AppIconBtn title="新建窗口" :aria-label="`新建窗口 (${newWindowLabel})`" @click="onNewWindow">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
           <rect x="5" y="4" width="14" height="16" rx="2" /><path d="M3 9h2M3 15h2M19 9h2M19 15h2" />
         </svg>
       </AppIconBtn>
+      -->
 
-      <AppIconBtn title="配置文件" aria-label="配置文件" @click.stop="toggleConfigMenu">
+      <AppIconBtn
+        v-if="activeView !== 'home'"
+        title="配置文件"
+        aria-label="配置文件"
+        @click.stop="toggleConfigMenu"
+      >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" aria-hidden="true">
           <path d="M6 3h9l4 4v14H6z" /><path d="M14 3v5h5" />
         </svg>
@@ -44,7 +39,8 @@
 
       <AppIconBtn title="系统设置" aria-label="系统设置" @click="openSettings">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-          <circle cx="12" cy="12" r="3" /><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1" />
+          <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
+          <circle cx="12" cy="12" r="3" />
         </svg>
       </AppIconBtn>
 
@@ -102,7 +98,7 @@ import { isMacPlatform } from '../utils/platform'
 import { onChromeTitleDblActivate, onChromeTitlePointerDown } from '../utils/windowChrome'
 import { useConfigFileMenu } from '../composables/useConfigFileMenu'
 import WindowControls from './WindowControls.vue'
-import { AppIconBtn } from './ui'
+import { AppIconBtn, AppBrand } from './ui'
 import AppSegmented from './ui/AppSegmented.vue'
 
 const TaskIcon = {
@@ -124,7 +120,7 @@ const ShellIcon = {
 
 export default {
   name: 'AppMenuBar',
-  components: { AppIconBtn, AppSegmented, WindowControls },
+  components: { AppIconBtn, AppBrand, AppSegmented, WindowControls },
   props: {
     activeView: {
       type: String,
@@ -136,8 +132,6 @@ export default {
     taskRunning: { type: Boolean, default: false },
     connectedCount: { type: Number, default: 0 },
     openSessionCount: { type: Number, default: 0 },
-    selectedProjectName: { type: String, default: '' },
-    currentConfigLabel: { type: String, default: '' },
   },
   emits: ['change-view', 'open-config-editor', 'refresh'],
   setup(props, { emit }) {
@@ -167,7 +161,7 @@ export default {
 
     const newWindowLabel = computed(() => formatShortcut(shortcuts.value.newWindow))
 
-    const showModeSeg = computed(() => props.hasProjects || props.hasTask || props.openSessionCount > 0 || props.connectedCount > 0)
+    const showModeSeg = computed(() => props.hasProjects || props.hasTask)
 
     const segValue = computed(() => {
       if (props.activeView === 'task' || props.activeView === 'shell') return props.activeView
@@ -184,20 +178,6 @@ export default {
         dotActive: (props.connectedCount || props.openSessionCount) > 0,
       },
     ])
-
-    const contextText = computed(() => {
-      if (props.activeView === 'task' && props.selectedProjectName) {
-        return `${props.selectedProjectName} · 任务输出`
-      }
-      if (props.activeView === 'shell') {
-        const n = props.connectedCount || props.openSessionCount
-        if (n > 0) return `Shell 模式 · ${n} 个会话已连接`
-        return 'Shell 模式'
-      }
-      const cfg = props.currentConfigLabel || basename(currentConfig.value)
-      if (cfg) return `${cfg} · 任务与 Shell 并行`
-      return '任务与 Shell 并行'
-    })
 
     const onSegChange = (view) => {
       if (view === 'task' || view === 'shell') {
@@ -229,7 +209,6 @@ export default {
 
     return {
       isMac,
-      contextText,
       showModeSeg,
       segValue,
       segOptions,

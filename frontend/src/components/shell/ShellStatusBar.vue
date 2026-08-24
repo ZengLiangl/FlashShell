@@ -13,8 +13,12 @@
         :left-panel-label="leftPanelLabel"
         :file-panel-expanded="filesExpanded"
         :active-is-local="activeIsLocal"
-        :tunnel-active="tunnelActive"
+        :tunnel-dialog-visible="tunnelDialogVisible"
+        :has-active-tunnel="hasActiveTunnel"
         :transfer-active-count="transferActiveCount"
+        :search-visible="searchVisible"
+        :transfer-visible="transferVisible"
+        :command-palette-visible="commandPaletteVisible"
         @toggle-broadcast="$emit('toggle-broadcast')"
         @toggle-compose="$emit('toggle-compose')"
         @toggle-left-panel="$emit('toggle-left-panel')"
@@ -66,17 +70,15 @@ export default {
     activeIsLocal: { type: Boolean, default: false },
     activeConnected: { type: Boolean, default: false },
     transferActiveCount: { type: Number, default: 0 },
+    searchVisible: { type: Boolean, default: false },
+    transferVisible: { type: Boolean, default: false },
+    commandPaletteVisible: { type: Boolean, default: false },
+    tunnelDialogVisible: { type: Boolean, default: false },
   },
   setup(props) {
     const hasActiveTunnel = computed(() => (props.tunnels || []).some((t) => t.active))
 
-    const tunnelActive = computed(() => {
-      if (props.activeIsLocal) return false
-      if (hasActiveTunnel.value) return true
-      return props.activeConnected
-    })
-
-    return { tunnelActive }
+    return { hasActiveTunnel }
   },
 }
 </script>

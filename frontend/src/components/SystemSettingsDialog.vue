@@ -1936,9 +1936,9 @@ theme preview · ${theme.foreground}`
 }
 
 .setting-card {
-    border: 1px solid var(--app-border);
+    border: 1px solid var(--border, var(--app-border));
     border-radius: 10px;
-    background: var(--app-card-bg, var(--app-panel-bg));
+    background: var(--surface-2, var(--app-inset-bg, var(--app-card-bg)));
     padding: 0 14px;
     overflow: hidden;
 }
@@ -1951,7 +1951,7 @@ theme preview · ${theme.foreground}`
 }
 
 .setting-card > .system-setting-row {
-    border-bottom: 1px solid var(--app-border);
+    border-bottom: 1px solid var(--border, var(--app-border));
 }
 
 .setting-card > .system-setting-row:last-child {
@@ -2015,8 +2015,8 @@ theme preview · ${theme.foreground}`
     gap: 10px;
     margin: 0 -18px 0;
     padding: 12px 18px;
-    border-top: 1px solid var(--app-border);
-    background: var(--app-panel-bg);
+    border-top: 1px solid var(--border, var(--app-border));
+    background: var(--surface, var(--app-panel-bg));
 }
 
 .panel-actions.icon-actions {

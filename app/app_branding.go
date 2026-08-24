@@ -252,22 +252,30 @@ func (a *App) WindowIsChromeMaximised() bool {
 		return false
 	}
 	// 先查 native / Wails，再短持锁读标记，避免持锁回调 UI 线程导致挂起
-	nativeMax := nativeWindowIsMaximised()
+	nativeKnown, nativeMax := nativeWindowMaximisedState()
 	wailsMax := wailsRuntime.WindowIsMaximised(a.ctx)
 	a.winRestoreMu.Lock()
+	if nativeKnown {
+		// 拖动最大化窗口会由系统还原，必须同步清掉内部标记，否则按钮仍显示「还原」
+		a.chromeMaximised = nativeMax
+	}
 	ourMax := a.chromeMaximised
 	a.winRestoreMu.Unlock()
-	return shouldTreatAsMaximised(nativeMax, wailsMax, ourMax)
+	return shouldTreatAsMaximised(nativeKnown, nativeMax, wailsMax, ourMax)
 }
 
 // windowIsEffectivelyMaximised 仅在已持有 winRestoreMu 时调用。
 // 不在锁内调用 Wails（可能派发到 UI 线程），避免与绑定调用互相等待。
 func (a *App) windowIsEffectivelyMaximised() bool {
-	return shouldTreatAsMaximised(nativeWindowIsMaximised(), false, a.chromeMaximised)
+	nativeKnown, nativeMax := nativeWindowMaximisedState()
+	return shouldTreatAsMaximised(nativeKnown, nativeMax, false, a.chromeMaximised)
 }
 
-func shouldTreatAsMaximised(nativeMax, wailsMax, ourMax bool) bool {
-	return nativeMax || wailsMax || ourMax
+func shouldTreatAsMaximised(nativeKnown, nativeMax, wailsMax, ourMax bool) bool {
+	if nativeKnown {
+		return nativeMax
+	}
+	return wailsMax || ourMax
 }
 
 func chooseRestoreBounds(saved bool, x, y, w, h, screenW, screenH int) (int, int, int, int) {

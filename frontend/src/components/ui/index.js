@@ -1,3 +1,4 @@
+export { default as AppBrand } from './AppBrand.vue'
 export { default as StatusDot } from './StatusDot.vue'
 export { default as AppIconBtn } from './AppIconBtn.vue'
 export { default as AppButton } from './AppButton.vue'

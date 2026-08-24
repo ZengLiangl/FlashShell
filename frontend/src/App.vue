@@ -8,7 +8,6 @@
       :task-running="status.isRunning"
       :connected-count="connectedCount"
       :open-session-count="openSessionCount"
-      :selected-project-name="selectedProject?.name || ''"
       @change-view="switchActiveView"
       @open-config-editor="configEditorVisible = true"
       @refresh="refreshConfig"
@@ -62,6 +61,7 @@
           @edit-machine="openShellMachineEdit"
           @copy-machine="copyShellMachine"
           @delete-machine="deleteShellMachine"
+          @open-config-editor="configEditorVisible = true"
         />
       </main>
 
@@ -79,6 +79,7 @@
           <div class="resize-handle" @mousedown="startResize" />
           <SubProjectList
             :selected-project="selectedProject"
+            :projects="projects"
             :sub-projects="subProjects"
             :expanded-sub-projects="expandedSubProjects"
             :expanded-commands="expandedCommands"
@@ -92,7 +93,7 @@
             @execute-cmd="executeCommand"
             @stop-sub="stopSubProject"
             @dry-run-sub="dryRunSubProject"
-            @back="backToProjectList"
+            @select-project="selectProject"
           />
         </aside>
 
@@ -1525,15 +1526,18 @@ export default {
       // 启动进入首页时检查新版本并弹窗
       if (activeView.value === 'home') {
         maybePromptUpdateOnHome();
+        nextTick().then(() => homePageRef.value?.focusSearchInput?.());
       }
     });
 
-    watch(activeView, (view, prev) => {
+    watch(activeView, async (view, prev) => {
       if (prev === 'shell' && view !== 'shell') {
         notifyLeaveShellMode();
       }
       if (view === 'home') {
         maybePromptUpdateOnHome();
+        await nextTick();
+        homePageRef.value?.focusSearchInput?.();
       }
     });
 
@@ -1965,6 +1969,9 @@ export default {
 .shell-top-chrome-host {
   flex: 0 0 auto;
   min-width: 0;
+  min-height: 42px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
 }
 
 .view.active {

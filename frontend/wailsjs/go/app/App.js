@@ -366,6 +366,10 @@ export function ImportMobaXtermPick(arg1, arg2) {
   return window['go']['app']['App']['ImportMobaXtermPick'](arg1, arg2);
 }
 
+export function ImportOpenSSHConfigDefault(arg1, arg2) {
+  return window['go']['app']['App']['ImportOpenSSHConfigDefault'](arg1, arg2);
+}
+
 export function ImportOpenSSHConfigPick(arg1, arg2) {
   return window['go']['app']['App']['ImportOpenSSHConfigPick'](arg1, arg2);
 }
