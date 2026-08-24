@@ -1,6 +1,6 @@
 /**
  * SSH 本地回显（输入体验优化，不是 X11 转发）。
- * 可打印字符由客户端立即写入终端，远端相同回显被丢掉，避免双字符。
+ * 可打印字符由客户端立即显示，远端相同回显被丢掉，避免双字符。
  * 退格在仍有未确认预测时本地擦除；方向键 / Tab / 回车等控制序列交给远端。
  */
 
@@ -14,13 +14,14 @@ const BACKSPACE_ECHO_PATTERNS = [
 ]
 
 export function createLocalEchoState() {
-  return { pending: '', backspaces: 0 }
+  return { pending: '', backspaces: 0, suppressedSuffix: '' }
 }
 
 export function resetLocalEchoState(state) {
   if (!state) return
   state.pending = ''
   state.backspaces = 0
+  state.suppressedSuffix = ''
 }
 
 function popLastCodePoint(s) {
@@ -28,6 +29,12 @@ function popLastCodePoint(s) {
   if (!chars.length) return ''
   chars.pop()
   return chars.join('')
+}
+
+function lastCodePoint(s) {
+  const chars = Array.from(String(s || ''))
+  if (!chars.length) return ''
+  return chars[chars.length - 1]
 }
 
 function nextCodePoint(text, i) {
@@ -82,6 +89,27 @@ function eatBackspaceEcho(text, i) {
   return 0
 }
 
+function cellHasVisibleChar(cell) {
+  const chars = cell?.getChars?.() ?? ''
+  return !!chars && chars !== ' '
+}
+
+/** 光标后仍有可见字符时不做本地回显（行内插入/移动交给远端 readline）。 */
+export function isTerminalInputCursorAtLineEnd(terminal) {
+  if (!terminal?.buffer?.active) return false
+  try {
+    const buf = terminal.buffer.active
+    const line = buf.getLine(buf.cursorY)
+    if (!line) return true
+    for (let x = buf.cursorX; x < line.length; x += 1) {
+      if (cellHasVisibleChar(line.getCell(x))) return false
+    }
+    return true
+  } catch {
+    return false
+  }
+}
+
 /**
  * 根据键盘输入生成本地显示，并更新预测队列。
  * @returns {{ display: string }}
@@ -95,6 +123,7 @@ export function applyLocalEchoInput(data, state) {
     const ch = raw[i]
     const code = raw.charCodeAt(i)
     if (ch === '\r' || ch === '\n') {
+      resetLocalEchoState(state)
       break
     }
     if (ch === '\x1b' || ch === '\t') {
@@ -107,11 +136,13 @@ export function applyLocalEchoInput(data, state) {
     }
     if (ch === '\x7f' || ch === '\b') {
       if (state.pending) {
+        const deleted = lastCodePoint(state.pending)
         state.pending = popLastCodePoint(state.pending)
+        if (deleted) {
+          state.suppressedSuffix = deleted + state.suppressedSuffix
+        }
         display += '\b \b'
         state.backspaces += 1
-      } else {
-        resetLocalEchoState(state)
       }
       i += 1
       continue
@@ -134,24 +165,10 @@ export function applyLocalEchoInput(data, state) {
  */
 export function applyRemoteEchoSuppression(incoming, state) {
   const raw = String(incoming || '')
-  if (!state || (!state.pending && !state.backspaces) || !raw) return raw
+  if (!state || (!state.pending && !state.backspaces && !state.suppressedSuffix) || !raw) return raw
   let out = ''
   let i = 0
   while (i < raw.length) {
-    if (state.backspaces > 0) {
-      const seq = takeAnsiSeq(raw, i)
-      if (seq && isPassthroughSeq(seq)) {
-        out += seq
-        i += seq.length
-        continue
-      }
-      const n = eatBackspaceEcho(raw, i)
-      if (n > 0) {
-        state.backspaces -= 1
-        i += n
-        continue
-      }
-    }
     const seq = takeAnsiSeq(raw, i)
     if (seq) {
       if (isPassthroughSeq(seq)) {
@@ -163,18 +180,44 @@ export function applyRemoteEchoSuppression(incoming, state) {
       out += raw.slice(i)
       return out
     }
-    if (!state.pending) {
+    if (state.backspaces > 0) {
+      const n = eatBackspaceEcho(raw, i)
+      if (n > 0) {
+        state.backspaces -= 1
+        i += n
+        continue
+      }
+    }
+    if (state.pending) {
+      const one = nextCodePoint(raw, i)
+      const expect = nextCodePoint(state.pending, 0)
+      if (one && one === expect) {
+        state.pending = state.pending.slice(one.length)
+        i += one.length
+        continue
+      }
+      resetLocalEchoState(state)
       out += raw.slice(i)
       break
     }
-    const one = nextCodePoint(raw, i)
-    const expect = nextCodePoint(state.pending, 0)
-    if (one && one === expect) {
-      state.pending = state.pending.slice(one.length)
-      i += one.length
-      continue
+    if (state.suppressedSuffix) {
+      const one = nextCodePoint(raw, i)
+      const expect = nextCodePoint(state.suppressedSuffix, 0)
+      if (one && one === expect) {
+        state.suppressedSuffix = state.suppressedSuffix.slice(one.length)
+        if (state.backspaces > 0) state.backspaces -= 1
+        i += one.length
+        continue
+      }
+      resetLocalEchoState(state)
+      out += raw.slice(i)
+      break
     }
-    resetLocalEchoState(state)
+    if (state.backspaces > 0) {
+      resetLocalEchoState(state)
+      out += raw.slice(i)
+      break
+    }
     out += raw.slice(i)
     break
   }

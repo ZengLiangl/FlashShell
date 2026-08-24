@@ -102,6 +102,7 @@ import {
   resetLocalEchoState,
   applyLocalEchoInput,
   applyRemoteEchoSuppression,
+  isTerminalInputCursorAtLineEnd,
 } from '../../utils/shellLocalEcho'
 import { ClipboardSetText } from '../../../wailsjs/runtime/runtime'
 import ShellConnectionOverlay from './ShellConnectionOverlay.vue'
@@ -1394,12 +1395,13 @@ export default {
           return
         }
         trackInputLine(data)
-        if (
+        const canLocalEcho =
           props.localEcho &&
           tuiModeDepth === 0 &&
           !passwordAssistVisible.value &&
-          !looksLikePasswordPrompt(passwordDetectTail)
-        ) {
+          !looksLikePasswordPrompt(passwordDetectTail) &&
+          isTerminalInputCursorAtLineEnd(terminal)
+        if (canLocalEcho) {
           const { display } = applyLocalEchoInput(data, localEchoState)
           if (display) writeTerminal(terminal, display)
         } else {
