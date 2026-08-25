@@ -36,8 +36,8 @@
                             </span>
                         </transition>
                     </div>
-                    <div class="progress-stats">
-                        {{ Math.max(1, status.completedSteps + 1) }}/{{ status.totalSteps }} 命令
+                    <div v-if="stepProgressLabel" class="progress-stats">
+                        {{ stepProgressLabel }}
                     </div>
                 </div>
                 <el-progress :percentage="progressPercentage" :status="progressStatus" :stroke-width="8"
@@ -66,6 +66,7 @@
 
 <script>
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue'
+import { formatTaskStepProgress } from '../utils/taskProgress'
 
 const LINE_HEIGHT = 20
 const OVERSCAN = 20
@@ -90,6 +91,8 @@ export default {
         const containerHeight = ref(600)
         const stickToBottom = ref(true)
         let resizeObserver = null
+
+        const stepProgressLabel = computed(() => formatTaskStepProgress(props.status))
 
         const visibleRange = computed(() => {
             const total = props.outputLines.length
@@ -261,6 +264,7 @@ export default {
             bottomSpacerHeight,
             onScroll,
             renderLineHtml,
+            stepProgressLabel,
         }
     }
 }

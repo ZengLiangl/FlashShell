@@ -12,8 +12,8 @@
 
     <AppProgress v-if="status.isRunning" :value="progressValue" />
 
-    <span v-if="status.isRunning && status.totalSteps" class="st-label">
-      {{ status.completedSteps }} / {{ status.totalSteps }} 步
+    <span v-if="stepProgressLabel" class="st-label">
+      {{ stepProgressLabel }}
     </span>
 
     <span v-if="selectedProject && !status.isRunning" class="st-label project-tag">
@@ -49,6 +49,7 @@
 <script>
 import { computed } from 'vue'
 import { AppIconBtn, AppButton, AppProgress, StatusDot } from './ui'
+import { calcTaskProgressPercentage, formatTaskStepProgress } from '../utils/taskProgress'
 
 export default {
   name: 'StatusBar',
@@ -62,15 +63,16 @@ export default {
   },
   emits: ['stop-all', 'open-failure-shell'],
   setup(props) {
+    const stepProgressLabel = computed(() => {
+      if (!props.status?.isRunning) return ''
+      return formatTaskStepProgress(props.status)
+    })
     const progressValue = computed(() => {
       if (!props.status?.isRunning) return 0
       if (props.progressPercentage > 0) return props.progressPercentage
-      const total = Number(props.status.totalSteps) || 0
-      const done = Number(props.status.completedSteps) || 0
-      if (!total) return 0
-      return Math.round((Math.max(1, done + 1) / total) * 95)
+      return calcTaskProgressPercentage(props.status)
     })
-    return { progressValue }
+    return { progressValue, stepProgressLabel }
   },
 }
 </script>
