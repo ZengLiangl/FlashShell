@@ -139,7 +139,7 @@ html.dark {
 
 /* 顶栏：AppMenuBar 映射 topbar */
 .app-menu-bar.topbar-style {
-  height: 42px;
+  height: 38px;
   padding: 0 12px 0 14px;
   gap: 10px;
   display: flex;

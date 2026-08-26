@@ -275,7 +275,7 @@ export default {
   },
   props: {
     active: { type: Boolean, default: true },
-    leftPanelWidth: { type: Number, default: 280 },
+    leftPanelWidth: { type: Number, default: 256 },
     isResizing: { type: Boolean, default: false },
     appInfo: { type: String, default: '' },
     machines: { type: Array, default: () => [] },
@@ -1269,7 +1269,7 @@ export default {
 .shell-left-traffic-spacer {
   display: none;
   flex-shrink: 0;
-  height: 36px;
+  height: 38px;
   box-sizing: border-box;
 }
 

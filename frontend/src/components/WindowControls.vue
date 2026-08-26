@@ -73,9 +73,9 @@ export default {
 }
 
 .win-btn {
-  width: 42px;
+  width: 38px;
   height: 100%;
-  min-height: 36px;
+  min-height: 32px;
   border: none;
   padding: 0;
   margin: 0;

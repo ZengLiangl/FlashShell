@@ -148,7 +148,7 @@
           hide-app-chrome
           :active="activeView === 'shell'"
           :block-shortcuts="settingsHubVisible"
-          :left-panel-width="Math.min(leftPanelWidth, 320)"
+          :left-panel-width="leftPanelWidth"
           :is-resizing="isResizing"
           :app-info="statusBarInfo"
           :machines="shellMachines"
@@ -304,7 +304,7 @@ export default {
     };
 
     // 左侧面板宽度控制
-    const leftPanelWidth = ref(320);
+    const leftPanelWidth = ref(256);
     const minPanelWidth = 180;
     const maxPanelWidth = 640;
     const isResizing = ref(false);
@@ -1969,7 +1969,7 @@ export default {
 .shell-top-chrome-host {
   flex: 0 0 auto;
   min-width: 0;
-  min-height: 42px;
+  min-height: 38px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
 }

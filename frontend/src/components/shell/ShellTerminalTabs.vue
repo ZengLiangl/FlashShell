@@ -1107,8 +1107,8 @@ export default {
   background: var(--shell-chrome-bg);
   border-bottom: 1px solid var(--shell-chrome-border);
   padding: 0 12px;
-  min-height: 38px;
-  height: 38px;
+  min-height: 34px;
+  height: 34px;
   box-sizing: border-box;
 }
 
@@ -1246,7 +1246,7 @@ export default {
   align-items: center;
   gap: 7px;
   box-sizing: border-box;
-  height: 38px;
+  height: 34px;
   padding: 0 12px;
   font-size: 13px;
   font-weight: 400;

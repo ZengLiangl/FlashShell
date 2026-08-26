@@ -106,9 +106,9 @@ svg { display: block; }
 /* ---------- top bar ---------- */
 .app-top-chrome {
   position: relative;
-  height: 42px;
-  min-height: 42px;
-  flex: 0 0 42px;
+  height: 38px;
+  min-height: 38px;
+  flex: 0 0 38px;
   display: flex;
   align-items: center;
   gap: 10px;
@@ -121,7 +121,7 @@ svg { display: block; }
 
 .topbar {
   position: relative;
-  height: 42px; flex: 0 0 42px;
+  height: 38px; flex: 0 0 38px;
   display: flex; align-items: center; gap: 10px;
   padding: 0 12px 0 14px;
   background: var(--surface);
@@ -131,8 +131,8 @@ svg { display: block; }
 .topbar button, .topbar .tb-input, .topbar .seg { -webkit-app-region: no-drag; }
 .topbar.app-top-chrome,
 .tabs-bar.shell-top-chrome.app-top-chrome {
-  height: 42px;
-  min-height: 42px;
+  height: 38px;
+  min-height: 38px;
   flex: 0 0 auto;
   padding: 0 12px 0 14px;
   gap: 10px;
@@ -221,27 +221,27 @@ svg { display: block; }
 /* ---------- rail ---------- */
 .app-body { flex: 1; min-height: 0; display: flex; }
 .rail {
-  flex: 0 0 52px; display: flex; flex-direction: column; align-items: center;
-  gap: 4px; padding: 10px 0; background: var(--surface-2);
+  flex: 0 0 40px; display: flex; flex-direction: column; align-items: center;
+  gap: 3px; padding: 8px 0; background: var(--surface-2);
   border-right: 1px solid var(--border);
 }
-.rail .nav-item { width: 38px; height: 38px; border-radius: 9px; display: flex; align-items: center; justify-content: center; color: var(--muted); position: relative; transition: all .14s ease; }
-.rail .nav-item svg { width: 17px; height: 17px; }
+.rail .nav-item { width: 31px; height: 31px; border-radius: 7px; display: flex; align-items: center; justify-content: center; color: var(--muted); position: relative; transition: all .14s ease; }
+.rail .nav-item svg { width: 15px; height: 15px; }
 .rail .nav-item:hover { color: var(--fg); background: color-mix(in oklch, var(--fg) 7%, transparent); }
 .rail .nav-item.active { color: var(--accent); background: var(--accent-soft); }
-.rail .nav-item.active::before { content: ""; position: absolute; left: -9px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
-.rail .nav-item .ncount { position: absolute; top: -2px; right: -2px; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px; background: var(--accent); color: var(--on-accent); font-size: 12px; font-weight: 700; line-height: 15px; text-align: center; font-family: var(--font-mono); }
+.rail .nav-item.active::before { content: ""; position: absolute; left: -4px; top: 7px; bottom: 7px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
+.rail .nav-item .ncount { position: absolute; top: -2px; right: -2px; min-width: 13px; height: 13px; padding: 0 3px; border-radius: 7px; background: var(--accent); color: var(--on-accent); font-size: 10px; font-weight: 700; line-height: 13px; text-align: center; font-family: var(--font-mono); }
 .rail .rail-gap { flex: 1; }
-.rail .rail-tip { font-size: 12px; color: var(--muted); writing-mode: vertical-rl; letter-spacing: .06em; margin: 4px 0; }
-.rail .rail-sep { width: 30px; height: 1px; background: var(--border); margin: 2px 0 6px; flex: 0 0 auto; }
+.rail .rail-tip { font-size: 10px; color: var(--muted); writing-mode: vertical-rl; letter-spacing: .06em; margin: 4px 0; }
+.rail .rail-sep { width: 22px; height: 1px; background: var(--border); margin: 2px 0 6px; flex: 0 0 auto; }
 /* 界面模式切换：带边框的亮/暗双图标开关，区别于普通设置按钮 */
 .rail-mode {
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
-  width: 38px; padding: 5px 0 6px; border-radius: 10px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  width: 31px; padding: 4px 0 5px; border-radius: 7px;
   border: 1px solid var(--border); background: var(--surface);
   color: var(--muted); transition: all .14s ease;
 }
-.rail-mode svg { width: 15px; height: 15px; }
+.rail-mode svg { width: 13px; height: 13px; }
 .rail-mode .i-sun { color: var(--accent); }
 .rail-mode .i-moon { color: var(--muted); opacity: .5; }
 html.dark .rail-mode .i-sun { color: var(--muted); opacity: .5; }
@@ -401,7 +401,7 @@ html.dark .rail-mode .i-moon { color: var(--accent); opacity: 1; }
 .shell-toolbar .spacer { flex: 1; }
 .shell-toolbar .bc-bar { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-family: var(--font-mono); padding: 3px 10px; border-radius: 6px; background: oklch(30% 0.04 150); color: var(--term-green); border: 1px solid oklch(38% 0.06 150); }
 .shell-body { flex: 1; min-height: 0; display: flex; }
-.shell-monitor { flex: 0 0 240px; background: var(--term-bg2); border-right: 1px solid var(--term-border); display: none; flex-direction: column; min-width: 0; }
+.shell-monitor { flex: 0 0 192px; background: var(--term-bg2); border-right: 1px solid var(--term-border); display: none; flex-direction: column; min-width: 0; }
 .shell-monitor.open { display: flex; }
 .mon-header { display: flex; align-items: center; gap: 8px; padding: 12px 14px 8px; color: var(--term-fg); font-size: 13px; font-weight: 500; }
 .mon-header .mon-host { font-family: var(--font-mono); font-size: 12px; color: var(--term-dim); }
@@ -516,7 +516,7 @@ select.input { appearance: none; padding-right: 26px; background-image: linear-g
 }
 
 @media (max-width: 920px) {
-  .rail { flex: 0 0 44px; }
+  .rail { flex: 0 0 36px; }
   .proj-grid, .machine-grid { grid-template-columns: 1fr 1fr; }
   .task-left { flex-basis: 240px; }
   .shell-monitor { flex-basis: 180px; }
