@@ -1,6 +1,6 @@
 /**
- * 任务模式执行进度：顶部/底部/进度条共用同一套「已完成步数」口径。
- * 不把「当前正在跑的步」计入完成数，避免末步一开始就显示接近 100%。
+ * 任务模式执行进度：顶部/底部/进度条共用同一套步数口径。
+ * 运行中按「当前正在执行的步」（1 起算）展示，与终端日志「执行步骤 N」一致。
  */
 
 /**
@@ -9,9 +9,14 @@
  */
 export function getTaskStepCounts(status) {
   const total = Math.max(0, Number(status?.totalSteps) || 0)
-  const completed = Math.max(0, Number(status?.completedSteps) || 0)
+  const done = Math.max(0, Number(status?.completedSteps) || 0)
+  const clampedDone = total > 0 ? Math.min(done, total) : done
+  let current = clampedDone
+  if (status?.isRunning && total > 0) {
+    current = Math.min(clampedDone + 1, total)
+  }
   return {
-    completed: total > 0 ? Math.min(completed, total) : completed,
+    completed: current,
     total,
   }
 }
