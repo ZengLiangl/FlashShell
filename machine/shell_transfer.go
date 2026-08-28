@@ -283,6 +283,15 @@ func (a *ShellAuxManager) DownloadFile(ctx context.Context, remotePath, localPat
 
 // UploadFile 上传本地文件到远端路径（支持断点续传；SCP 模式不支持续传）
 func (a *ShellAuxManager) UploadFile(ctx context.Context, localPath, remotePath string, onProgress TransferProgressFunc) error {
+	return a.uploadFile(ctx, localPath, remotePath, onProgress, false)
+}
+
+// UploadFileOverwrite 强制覆盖上传（忽略远端同尺寸文件的跳过逻辑）
+func (a *ShellAuxManager) UploadFileOverwrite(ctx context.Context, localPath, remotePath string, onProgress TransferProgressFunc) error {
+	return a.uploadFile(ctx, localPath, remotePath, onProgress, true)
+}
+
+func (a *ShellAuxManager) uploadFile(ctx context.Context, localPath, remotePath string, onProgress TransferProgressFunc, forceOverwrite bool) error {
 	if err := ctxErr(ctx); err != nil {
 		return err
 	}
@@ -313,32 +322,38 @@ func (a *ShellAuxManager) UploadFile(ctx context.Context, localPath, remotePath 
 		var offset int64
 		useAtomic := total > 0
 		partRemote := uploadPartPath(remotePath)
+		if forceOverwrite {
+			_ = sftpClient.Remove(partRemote)
+			_ = sftpClient.Remove(remotePath)
+		}
 		// 优先续传远端隐藏 .part；兼容旧版直接写目标文件
-		if rst, err := sftpClient.Stat(partRemote); err == nil && rst.Size() > 0 {
-			if rst.Size() >= total && total > 0 {
-				_ = sftpClient.Remove(remotePath)
-				if err := sftpClient.Rename(partRemote, remotePath); err != nil {
-					return fmt.Errorf("完成上传改名失败: %w", err)
+		if !forceOverwrite {
+			if rst, err := sftpClient.Stat(partRemote); err == nil && rst.Size() > 0 {
+				if rst.Size() >= total && total > 0 {
+					_ = sftpClient.Remove(remotePath)
+					if err := sftpClient.Rename(partRemote, remotePath); err != nil {
+						return fmt.Errorf("完成上传改名失败: %w", err)
+					}
+					if onProgress != nil {
+						onProgress(total, total, 0)
+					}
+					return nil
 				}
-				if onProgress != nil {
-					onProgress(total, total, 0)
+				if rst.Size() < total {
+					offset = rst.Size()
+					useAtomic = false
 				}
-				return nil
-			}
-			if rst.Size() < total {
-				offset = rst.Size()
-				useAtomic = false
-			}
-		} else if rst, err := sftpClient.Stat(remotePath); err == nil && rst.Size() > 0 {
-			if rst.Size() >= total && total > 0 {
-				if onProgress != nil {
-					onProgress(total, total, 0)
+			} else if rst, err := sftpClient.Stat(remotePath); err == nil && rst.Size() > 0 {
+				if rst.Size() >= total && total > 0 {
+					if onProgress != nil {
+						onProgress(total, total, 0)
+					}
+					return nil
 				}
-				return nil
-			}
-			if rst.Size() < total {
-				offset = rst.Size()
-				useAtomic = false
+				if rst.Size() < total {
+					offset = rst.Size()
+					useAtomic = false
+				}
 			}
 		}
 		stagingPath := remotePath

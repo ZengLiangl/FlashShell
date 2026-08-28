@@ -442,29 +442,43 @@ func (a *App) startTransferWorker(cp *define.SftpTransferRecord) {
 				}
 			}
 		} else {
+			forceReplace := strings.EqualFold(cp.ConflictAction, "replace")
 			if cp.IsDir {
-				if strings.EqualFold(cp.ConflictAction, "replace") {
-					_ = aux.RemovePath(cp.RemotePath)
+				if forceReplace {
+					if rmErr := aux.RemovePathReliable(cp.RemotePath); rmErr != nil {
+						transferErr = fmt.Errorf("清除远端目录失败: %w", rmErr)
+					}
 				}
-				if cp.UseCompress {
-					a.setTransferPhase(cp.ID, "compressing")
-					// RemotePath 已是最终目标目录（含 duplicate 分配的唯一名）
-					transferErr = aux.UploadDirectoryZip(ctx, cp.LocalPath, cp.RemotePath, func(transferred, total int64, speedBPS float64) {
-						if transferred > 0 || total > 0 {
-							a.setTransferPhase(cp.ID, "uploading")
-						}
-						progress(transferred, total, speedBPS)
-					}, func(phase string) {
-						a.setTransferPhase(cp.ID, phase)
-					})
-				} else {
-					transferErr = aux.UploadDirectoryRecursive(ctx, cp.LocalPath, cp.RemotePath, progress)
+				if transferErr == nil {
+					if cp.UseCompress {
+						a.setTransferPhase(cp.ID, "compressing")
+						// RemotePath 已是最终目标目录（含 duplicate 分配的唯一名）
+						transferErr = aux.UploadDirectoryZip(ctx, cp.LocalPath, cp.RemotePath, func(transferred, total int64, speedBPS float64) {
+							if transferred > 0 || total > 0 {
+								a.setTransferPhase(cp.ID, "uploading")
+							}
+							progress(transferred, total, speedBPS)
+						}, func(phase string) {
+							a.setTransferPhase(cp.ID, phase)
+						})
+					} else {
+						transferErr = aux.UploadDirectoryRecursive(ctx, cp.LocalPath, cp.RemotePath, progress)
+					}
+				}
+				if transferErr == nil && forceReplace {
+					if pruneErr := aux.PruneRemoteDirToMirror(cp.LocalPath, cp.RemotePath); pruneErr != nil {
+						transferErr = fmt.Errorf("清理多余远端文件失败: %w", pruneErr)
+					} else if verifyErr := aux.VerifyRemoteDirMirror(cp.LocalPath, cp.RemotePath); verifyErr != nil {
+						transferErr = fmt.Errorf("上传完整性校验失败: %w", verifyErr)
+					}
 				}
 			} else {
 				skip := false
-				if cfg, err := a.GetGlobalConfig(); err == nil && data.SftpSkipUnchangedEnabled(cfg) {
-					if ok, _ := aux.ShouldSkipUnchangedUpload(cp.LocalPath, cp.RemotePath); ok {
-						skip = true
+				if !forceReplace {
+					if cfg, err := a.GetGlobalConfig(); err == nil && data.SftpSkipUnchangedEnabled(cfg) {
+						if ok, _ := aux.ShouldSkipUnchangedUpload(cp.LocalPath, cp.RemotePath); ok {
+							skip = true
+						}
 					}
 				}
 				if skip {
@@ -472,6 +486,13 @@ func (a *App) startTransferWorker(cp *define.SftpTransferRecord) {
 						a.updateTransferProgress(cp.ID, info.Size(), info.Size(), 0)
 					}
 					transferErr = nil
+				} else if forceReplace {
+					transferErr = aux.UploadFileOverwrite(ctx, cp.LocalPath, cp.RemotePath, progress)
+					if transferErr == nil {
+						if info, err := os.Stat(cp.LocalPath); err == nil {
+							aux.PreserveRemoteMtime(cp.RemotePath, info.ModTime())
+						}
+					}
 				} else {
 					transferErr = aux.UploadFile(ctx, cp.LocalPath, cp.RemotePath, progress)
 					if transferErr == nil {
