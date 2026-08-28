@@ -1,0 +1,104 @@
+:root {
+  --vp-c-brand-1: #409eff;
+  --vp-c-brand-2: #66b1ff;
+  --vp-c-brand-3: #337ecc;
+  --vp-c-brand-soft: rgba(64, 158, 255, 0.14);
+
+  --vp-home-hero-name-color: transparent;
+  --vp-home-hero-name-background: linear-gradient(120deg, #409eff 30%, #2f9e6a);
+  --vp-home-hero-image-background-image: linear-gradient(135deg, #409eff33 0%, #2f9e6a22 100%);
+  --vp-home-hero-image-filter: blur(44px);
+}
+
+.dark {
+  --vp-c-brand-1: #79bbff;
+  --vp-c-brand-2: #409eff;
+  --vp-c-brand-3: #337ecc;
+  --vp-c-brand-soft: rgba(121, 187, 255, 0.16);
+}
+
+.VPHero .image-src {
+  border-radius: 24px;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.12);
+}
+
+.feature-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 16px;
+  margin: 24px 0 8px;
+}
+
+.feature-card {
+  display: block;
+  padding: 18px 18px 16px;
+  border: 1px solid var(--vp-c-divider);
+  border-radius: 12px;
+  background: var(--vp-c-bg-soft);
+  text-decoration: none !important;
+  color: inherit !important;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
+}
+
+.feature-card:hover {
+  border-color: var(--vp-c-brand-1);
+  box-shadow: 0 8px 24px rgba(64, 158, 255, 0.12);
+  transform: translateY(-2px);
+}
+
+.feature-card h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  color: var(--vp-c-text-1);
+}
+
+.feature-card p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--vp-c-text-2);
+}
+
+.day-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 16px 0 8px;
+  font-size: 14px;
+}
+
+.day-table th,
+.day-table td {
+  border: 1px solid var(--vp-c-divider);
+  padding: 10px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.day-table th {
+  background: var(--vp-c-bg-soft);
+  color: var(--vp-c-text-1);
+}
+
+.cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.cta-row a {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--vp-c-brand-1);
+  color: var(--vp-c-brand-1);
+  text-decoration: none !important;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.cta-row a.primary {
+  background: var(--vp-c-brand-1);
+  color: #fff !important;
+}
