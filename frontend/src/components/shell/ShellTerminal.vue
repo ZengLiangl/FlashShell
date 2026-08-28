@@ -1717,6 +1717,8 @@ export default {
   padding: 4px 8px;
   box-sizing: border-box;
   overflow: hidden;
+  /* 终端区禁止被窗口拖拽区域吞掉鼠标 */
+  --wails-draggable: no-drag;
 }
 
 .terminal-bottom-gap {
@@ -1726,16 +1728,58 @@ export default {
 }
 
 .terminal-host :deep(.xterm),
-.terminal-host :deep(.xterm-viewport),
-.terminal-host :deep(.xterm-screen) {
+.terminal-host :deep(.xterm-viewport) {
   width: 100% !important;
   height: 100% !important;
 }
 
 .terminal-host :deep(.xterm-viewport) {
-  overflow-y: auto;
+  overflow-y: scroll !important;
   /* 预留滚动条槽，避免显隐导致可用宽度来回变、触发 fit 振荡 */
   scrollbar-gutter: stable;
+  /* 低于 screen 绘制；screen 不接鼠标后，滚动条事件落到这里 */
+  z-index: 1;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, #ffffff 28%, transparent) transparent;
+}
+
+/*
+ * xterm-screen / canvas 叠在 viewport 之上时会挡住右侧滚动条。
+ * screen 整层不接指针；仅 canvas 接选取/点击；并限制宽度不侵入滚动条槽。
+ */
+.terminal-host :deep(.xterm-screen) {
+  pointer-events: none !important;
+  max-width: calc(100% - 14px) !important;
+  overflow: hidden;
+  z-index: 2;
+}
+
+.terminal-host :deep(.xterm-screen canvas) {
+  pointer-events: auto !important;
+}
+
+/* 强制经典滚动条（非 overlay），加宽便于拖动 */
+.terminal-host :deep(.xterm-viewport)::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.terminal-host :deep(.xterm-viewport)::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.terminal-host :deep(.xterm-viewport)::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, #ffffff 28%, transparent);
+  border-radius: 6px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  min-height: 48px;
+}
+
+.terminal-host :deep(.xterm-viewport)::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, #ffffff 48%, transparent);
+  border: 2px solid transparent;
+  background-clip: padding-box;
 }
 
 .shell-password-assist {
