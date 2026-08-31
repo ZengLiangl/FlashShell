@@ -2140,17 +2140,18 @@ export default {
 }
 
 .view.home,
-.view.task,
+.view.task {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+}
+
 .view.audit {
   flex: 1;
   min-height: 0;
   min-width: 0;
   width: 100%;
   flex-direction: column;
-}
-
-.view.audit.active {
-  display: flex;
 }
 
 .task-left.left-panel {
