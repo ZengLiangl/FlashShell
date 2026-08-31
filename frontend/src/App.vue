@@ -237,7 +237,7 @@ import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick, defin
 import { ElMessage, ElMessageBox, ElNotification } from "element-plus";
 import { h } from "vue";
 import * as App from "../wailsjs/go/app/App";
-import { EventsOn, EventsOff, IsNotificationAvailable, SendNotification } from "../wailsjs/runtime/runtime";
+import { EventsOn, EventsOff } from "../wailsjs/runtime/runtime";
 import Convert from "ansi-to-html";
 import TerminalOutput from "./components/TerminalOutput.vue";
 import StatusBar from "./components/StatusBar.vue";
@@ -266,6 +266,19 @@ import {
   notifyLeaveShellMode,
   setShellAsciiInputEnabled,
 } from "./utils/shellAsciiInput";
+
+function sendOsNotification(opts) {
+  const rt = typeof window !== "undefined" ? window.runtime : null;
+  if (!rt || typeof rt.IsNotificationAvailable !== "function" || typeof rt.SendNotification !== "function") {
+    return;
+  }
+  Promise.resolve(rt.IsNotificationAvailable())
+    .then((ok) => {
+      if (!ok) return;
+      return rt.SendNotification(opts);
+    })
+    .catch(() => {});
+}
 
 const ShellWorkspace = defineAsyncComponent(() => import("./views/ShellWorkspace.vue"));
 const AboutDialog = defineAsyncComponent(() => import("./components/AboutDialog.vue"));
@@ -1638,17 +1651,11 @@ export default {
           showApprovalNotification(payload);
         }
         if (document.hidden) {
-          IsNotificationAvailable()
-            .then((ok) => {
-              if (!ok) return;
-              const body = `${payload?.tool || "MCP"}${payload?.server ? ` · ${payload.server}` : ""}`;
-              return SendNotification({
-                id: `mcp-approval-${payload?.id || Date.now()}`,
-                title: "FlashShell MCP 待审批",
-                body,
-              });
-            })
-            .catch(() => {});
+          sendOsNotification({
+            id: `mcp-approval-${payload?.id || Date.now()}`,
+            title: "FlashShell MCP 待审批",
+            body: `${payload?.tool || "MCP"}${payload?.server ? ` · ${payload.server}` : ""}`,
+          });
         }
       };
       const onApprovalResolved = () => {
