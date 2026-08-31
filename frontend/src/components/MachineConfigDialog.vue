@@ -271,38 +271,6 @@
                                 <el-option v-for="t in knownTagOptions" :key="t" :label="t" :value="t" />
                             </el-select>
                         </el-form-item>
-                        <el-form-item label="AI 策略">
-                            <el-select v-model="machineForm.aiPolicy" placeholder="trusted（默认）" clearable style="width: 100%">
-                                <el-option label="disabled · 禁止任何 MCP" value="disabled" />
-                                <el-option label="readonly · 只读自动放行，改动拒绝" value="readonly" />
-                                <el-option label="approval · 读写均需审批" value="approval" />
-                                <el-option label="allowlist · 命中正则 auto，否则审批" value="allowlist" />
-                                <el-option label="trusted · 自动放行（仍拦致命命令/sudo）" value="trusted" />
-                            </el-select>
-                        </el-form-item>
-                        <el-form-item v-if="machineForm.aiPolicy === 'allowlist'" label="AI 白名单">
-                            <el-input
-                                v-model="machineForm.aiAllowlistText"
-                                type="textarea"
-                                :rows="3"
-                                placeholder="每行一条命令前缀或正则，如 ^df\s 或 systemctl status"
-                            />
-                            <span class="form-hint">未命中白名单时升级为审批，不会直接拒绝</span>
-                        </el-form-item>
-                        <el-form-item label="允许 AI sudo">
-                            <el-switch v-model="machineForm.aiAllowSudo" />
-                            <span class="form-hint" style="margin-left: 8px">含 sudo 无视档位强制审批；关闭则直接拒绝</span>
-                        </el-form-item>
-                        <el-form-item label="备注">
-                            <el-input
-                                v-model="machineForm.notes"
-                                type="textarea"
-                                :rows="3"
-                                placeholder="运维备注（支持检索）"
-                                maxlength="4000"
-                                show-word-limit
-                            />
-                        </el-form-item>
                         <el-form-item label="主机图标">
                             <el-select v-model="machineForm.icon" filterable allow-create clearable placeholder="预设或自定义 emoji" style="width: 100%">
                                 <el-option
@@ -373,6 +341,38 @@
                         </el-form-item>
                         <el-form-item label="密钥口令">
                             <el-input v-model="machineForm.keyPassphrase" type="password" placeholder="加密私钥口令（可选）" show-password clearable />
+                        </el-form-item>
+                        <el-form-item label="AI 策略">
+                            <el-select v-model="machineForm.aiPolicy" placeholder="disabled（默认）" clearable style="width: 100%">
+                                <el-option label="disabled · 禁止任何 MCP" value="disabled" />
+                                <el-option label="readonly · 只读自动放行，改动拒绝" value="readonly" />
+                                <el-option label="approval · 读写均需审批" value="approval" />
+                                <el-option label="allowlist · 命中正则 auto，否则审批" value="allowlist" />
+                                <el-option label="trusted · 自动放行（仍拦致命命令/sudo）" value="trusted" />
+                            </el-select>
+                        </el-form-item>
+                        <el-form-item v-if="machineForm.aiPolicy === 'allowlist'" label="AI 白名单">
+                            <el-input
+                                v-model="machineForm.aiAllowlistText"
+                                type="textarea"
+                                :rows="3"
+                                placeholder="每行一条命令前缀或正则，如 ^df\s 或 systemctl status"
+                            />
+                            <span class="form-hint">未命中白名单时升级为审批，不会直接拒绝</span>
+                        </el-form-item>
+                        <el-form-item label="允许 AI sudo">
+                            <el-switch v-model="machineForm.aiAllowSudo" />
+                            <span class="form-hint" style="margin-left: 8px">含 sudo 无视档位强制审批；关闭则直接拒绝</span>
+                        </el-form-item>
+                        <el-form-item label="备注">
+                            <el-input
+                                v-model="machineForm.notes"
+                                type="textarea"
+                                :rows="3"
+                                placeholder="运维备注（支持检索）"
+                                maxlength="4000"
+                                show-word-limit
+                            />
                         </el-form-item>
                     </div>
                 </section>
@@ -897,7 +897,7 @@ export default {
             group: '',
             tags: [],
             notes: '',
-            aiPolicy: 'trusted',
+            aiPolicy: 'disabled',
             aiAllowSudo: false,
             aiAllowlistText: '',
             identityId: '',
@@ -1212,7 +1212,7 @@ export default {
             machineForm.group = ''
             machineForm.tags = []
             machineForm.notes = ''
-            machineForm.aiPolicy = 'trusted'
+            machineForm.aiPolicy = 'disabled'
             machineForm.aiAllowSudo = false
             machineForm.aiAllowlistText = ''
             machineForm.icon = ''

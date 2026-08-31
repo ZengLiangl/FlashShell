@@ -249,7 +249,7 @@
           </el-checkbox-group>
         </el-form-item>
         <el-form-item label="Token 名">
-          <el-input v-model="wizard.tokenName" placeholder="例如 Claude Code on Mac" />
+          <el-input v-model="wizard.tokenName" placeholder="例如 Cursor" />
         </el-form-item>
         <el-form-item label="可见服务器（空=全部）">
           <el-select v-model="wizard.servers" multiple filterable collapse-tags collapse-tags-tooltip placeholder="默认全选可见" style="width: 100%">
@@ -446,7 +446,7 @@ export default {
         wizard.clientIds = clients.value.map((c) => c.id)
       }
       const c = clients.value.find((x) => x.id === (clientId || wizard.clientIds[0]))
-      wizard.tokenName = c ? `${c.name} on Mac` : 'FlashShell Token'
+      wizard.tokenName = c ? c.name : 'FlashShell Token'
       wizard.servers = [...aliases.value]
       wizard.cidrs = ['127.0.0.1/32']
       wizardOpen.value = true
