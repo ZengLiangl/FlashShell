@@ -9,7 +9,7 @@ import (
 	"FlashDock/utils"
 )
 
-// ShellClientProvider 任务执行时复用 Shell 已连接 SSH
+// ShellClientProvider 任务执行时复用已连接 SSH（Shell 会话或 MCP 持有的连接）
 type ShellClientProvider interface {
 	SharedClientForConfig(configName string) *SSHClient
 }
@@ -372,7 +372,7 @@ func (spr *SubProjectRunner) executeCommand(runID uint64, command define.Command
 			if shared := spr.shellPool.SharedClientForConfig(command.Machine); shared != nil && shared.IsConnected() {
 				sshClient = NewSSHClient(machineConfig, ctx.WorkPathVars)
 				sshClient.AttachRemote(shared.SharedRemoteMachine(), machineConfig, ctx.WorkPathVars)
-				utils.SendOutput(output, fmt.Sprintf("复用 Shell 已连接 SSH: %s", command.Machine))
+				utils.SendOutput(output, fmt.Sprintf("复用已连接 SSH: %s", command.Machine))
 			}
 		}
 		if sshClient == nil {

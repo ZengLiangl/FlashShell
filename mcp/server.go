@@ -14,6 +14,7 @@ import (
 	"FlashDock/crypto"
 	"FlashDock/data"
 	"FlashDock/define"
+	"FlashDock/machine"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -69,6 +70,11 @@ type Service struct {
 	online    bool
 	startedAt time.Time
 	emit      func(event string, data any)
+
+	shareSSH func(configName string) *machine.SSHClient
+	sshMu    sync.Mutex
+	ownedSSH map[string]*machine.SSHClient
+	sshLocks sync.Map
 }
 
 func newService(cfg *data.ConfigManager) *Service {
@@ -234,6 +240,7 @@ func tokenFromCtx(ctx context.Context) (Token, bool) {
 }
 
 func (s *Service) Stop() {
+	s.closeOwnedSSH()
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.httpSrv != nil {

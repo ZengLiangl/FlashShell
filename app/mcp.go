@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"FlashDock/data"
+	"FlashDock/machine"
 	"FlashDock/mcp"
 
 	wailsRuntime "github.com/wailsapp/wails/v2/pkg/runtime"
@@ -19,6 +20,15 @@ func (a *App) startMCP() {
 		return
 	}
 	a.mcpSvc = mcp.New(a.configManager)
+	a.mcpSvc.SetSSHShare(func(configName string) *machine.SSHClient {
+		if a.shellPool == nil {
+			return nil
+		}
+		return a.shellPool.SharedClientForConfig(configName)
+	})
+	if a.subProjectRunner != nil {
+		a.subProjectRunner.SetShellClientProvider(a.sshShareProvider())
+	}
 	a.mcpSvc.SetEmitter(func(event string, payload any) {
 		if a.ctx != nil {
 			wailsRuntime.EventsEmit(a.ctx, event, payload)

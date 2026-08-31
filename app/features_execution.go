@@ -29,7 +29,7 @@ func (a *App) initExecutionFeatures() {
 
 func (a *App) rebuildSubProjectRunner() {
 	a.subProjectRunner = machine.NewSubProjectRunner(a.configManager)
-	a.subProjectRunner.SetShellClientProvider(a.shellPool)
+	a.subProjectRunner.SetShellClientProvider(a.sshShareProvider())
 	a.subProjectRunner.SetStatusChangeHandler(a.emitExecutionStatus)
 	a.subProjectRunner.SetRemoteFailureHandler(a.emitRemoteFailureOpenShell)
 }

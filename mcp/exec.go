@@ -65,6 +65,94 @@ func (s *Service) preparedMachine(m *define.Machine) (*define.Machine, error) {
 	return s.cfg.MachineForConnect(m)
 }
 
+func (s *Service) workVars() map[string]string {
+	if s.cfg == nil {
+		return nil
+	}
+	return s.cfg.GetWorkPathVars()
+}
+
+// SetSSHShare 注入已连接 SSH（如 Shell 会话池），MCP / 任务优先复用。
+func (s *Service) SetSSHShare(fn func(configName string) *machine.SSHClient) {
+	s.shareSSH = fn
+}
+
+// OwnedClient 返回 MCP 自己持有的空闲 SSH（供任务模式复用）。
+func (s *Service) OwnedClient(configName string) *machine.SSHClient {
+	configName = strings.TrimSpace(configName)
+	if configName == "" {
+		return nil
+	}
+	s.sshMu.Lock()
+	defer s.sshMu.Unlock()
+	c := s.ownedSSH[configName]
+	if c != nil && c.IsConnected() {
+		return c
+	}
+	return nil
+}
+
+func (s *Service) hostLock(name string) *sync.Mutex {
+	v, _ := s.sshLocks.LoadOrStore(name, &sync.Mutex{})
+	return v.(*sync.Mutex)
+}
+
+func (s *Service) rememberOwned(name string, cli *machine.SSHClient) {
+	if name == "" || cli == nil {
+		return
+	}
+	s.sshMu.Lock()
+	defer s.sshMu.Unlock()
+	if s.ownedSSH == nil {
+		s.ownedSSH = make(map[string]*machine.SSHClient)
+	}
+	if old := s.ownedSSH[name]; old != nil && old != cli {
+		_ = old.Close()
+	}
+	s.ownedSSH[name] = cli
+}
+
+func (s *Service) closeOwnedSSH() {
+	s.sshMu.Lock()
+	defer s.sshMu.Unlock()
+	for name, c := range s.ownedSSH {
+		if c != nil {
+			_ = c.Close()
+		}
+		delete(s.ownedSSH, name)
+	}
+}
+
+func (s *Service) liveShare(name string) *machine.SSHClient {
+	if s.shareSSH != nil {
+		if c := s.shareSSH(name); c != nil && c.IsConnected() {
+			return c
+		}
+	}
+	s.sshMu.Lock()
+	defer s.sshMu.Unlock()
+	c := s.ownedSSH[name]
+	if c != nil && c.IsConnected() {
+		return c
+	}
+	if c != nil {
+		_ = c.Close()
+		delete(s.ownedSSH, name)
+	}
+	return nil
+}
+
+func ensureSFTP(cli *machine.SSHClient, withSFTP bool) error {
+	if !withSFTP || cli == nil {
+		return nil
+	}
+	rm := cli.SharedRemoteMachine()
+	if rm == nil {
+		return fmt.Errorf("SSH 未连接")
+	}
+	return rm.EnsureSFTP()
+}
+
 func (s *Service) withSSH(alias string, withSFTP bool, fn func(*machine.SSHClient, *define.Machine) error) error {
 	raw, err := s.machineByAlias(alias)
 	if err != nil {
@@ -74,12 +162,45 @@ func (s *Service) withSSH(alias string, withSFTP bool, fn func(*machine.SSHClien
 	if err != nil {
 		return err
 	}
-	cli := machine.NewSSHClient(prep, nil)
-	if err := cli.ConnectAutoTrustOnce(prep, withSFTP); err != nil {
-		return fmt.Errorf("连接失败: %w", err)
+	vars := s.workVars()
+	name := strings.TrimSpace(raw.Name)
+	if name == "" {
+		name = strings.TrimSpace(alias)
 	}
-	defer cli.Close()
+
+	lk := s.hostLock(name)
+	lk.Lock()
+	cli, borrowed, err := s.acquireSSHLocked(name, prep, vars, withSFTP)
+	lk.Unlock()
+	if err != nil {
+		return err
+	}
+	if borrowed {
+		defer cli.Close()
+	}
 	return fn(cli, raw)
+}
+
+func (s *Service) acquireSSHLocked(name string, prep *define.Machine, vars map[string]string, withSFTP bool) (*machine.SSHClient, bool, error) {
+	if shared := s.liveShare(name); shared != nil {
+		cli := machine.NewSSHClient(prep, vars)
+		cli.AttachRemote(shared.SharedRemoteMachine(), prep, vars)
+		if err := ensureSFTP(cli, withSFTP); err != nil {
+			cli.Close()
+			return nil, false, err
+		}
+		return cli, true, nil
+	}
+
+	cli := machine.NewSSHClient(prep, vars)
+	if err := cli.ConnectAutoTrustOnce(prep, withSFTP); err != nil {
+		return nil, false, fmt.Errorf("连接失败: %w", err)
+	}
+	s.rememberOwned(name, cli)
+	if err := ensureSFTP(cli, withSFTP); err != nil {
+		return nil, false, err
+	}
+	return cli, false, nil
 }
 
 func (s *Service) execSSH(alias, command string, timeout time.Duration) (ExecResult, error) {
