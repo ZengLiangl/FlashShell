@@ -29,8 +29,8 @@
       </aside>
 
       <main class="hub-main">
-        <div class="hub-main-title">{{ currentTitle }}</div>
-        <div class="hub-main-body">
+        <div v-if="section !== 'mcp'" class="hub-main-title">{{ currentTitle }}</div>
+        <div class="hub-main-body" :class="{ 'hub-main-body--scroll': section === 'mcp', 'hub-main-body--mcp': section === 'mcp' }">
           <SystemSettingsDialog
             v-if="mountedPanels.system"
             v-show="isSystemSection"
@@ -70,6 +70,12 @@
             v-show="section === 'shortcuts'"
             :active="section === 'shortcuts'"
           />
+          <McpAccessView
+            v-if="mountedPanels.mcp"
+            v-show="section === 'mcp'"
+            embedded
+            :active="section === 'mcp'"
+          />
         </div>
       </main>
     </div>
@@ -91,6 +97,7 @@ import {
   Lock,
   InfoFilled,
   Box,
+  Link,
 } from '@element-plus/icons-vue'
 import MachineConfigDialog from './MachineConfigDialog.vue'
 import WorkPathConfigDialog from './WorkPathConfigDialog.vue'
@@ -98,6 +105,7 @@ import SystemSettingsDialog from './SystemSettingsDialog.vue'
 import ShortcutSettingsPanel from './ShortcutSettingsPanel.vue'
 import ProxySettingsPanel from './ProxySettingsPanel.vue'
 import PortForwardPanel from './PortForwardPanel.vue'
+import McpAccessView from './McpAccessView.vue'
 
 /** 偏好设置（对齐 Netcatty：应用 / 外观 / 终端 / …） */
 const PREFS_ITEMS = [
@@ -106,7 +114,8 @@ const PREFS_ITEMS = [
   { id: 'terminal', label: '终端', icon: Cpu },
   { id: 'sftp', label: 'SFTP', icon: FolderOpened },
   { id: 'accounts', label: '密钥库', icon: Key },
-  { id: 'security', label: '主机密钥', icon: Lock },
+  { id: 'credentials', label: '凭据安全', icon: Lock },
+  { id: 'security', label: '主机密钥', icon: Document },
 ]
 
 /** 运维资源 */
@@ -116,6 +125,7 @@ const OPS_ITEMS = [
   { id: 'portforwards', label: '端口转发', icon: Switch },
   { id: 'proxy', label: 'HTTP 代理', icon: Connection },
   { id: 'shortcuts', label: '快捷键', icon: Operation },
+  { id: 'mcp', label: 'MCP 接入', icon: Link },
 ]
 
 const META_ITEMS = [
@@ -123,7 +133,7 @@ const META_ITEMS = [
 ]
 
 const ALL_ITEMS = [...PREFS_ITEMS, ...OPS_ITEMS, ...META_ITEMS]
-const SYSTEM_SECTION_IDS = new Set(['app', 'appearance', 'terminal', 'sftp', 'accounts', 'security', 'about', 'general'])
+const SYSTEM_SECTION_IDS = new Set(['app', 'appearance', 'terminal', 'sftp', 'accounts', 'security', 'credentials', 'about', 'general'])
 
 export default {
   name: 'SettingsHubDialog',
@@ -134,6 +144,7 @@ export default {
     ShortcutSettingsPanel,
     ProxySettingsPanel,
     PortForwardPanel,
+    McpAccessView,
     Monitor,
     Key,
     Operation,
@@ -174,6 +185,7 @@ export default {
       proxy: false,
       portforwards: false,
       shortcuts: false,
+      mcp: false,
     })
     /** 离开 system 分区时保留上次 panel，避免 v-show 隐藏期间被误路由 */
     const panelCache = reactive({ system: 'app' })
@@ -218,6 +230,7 @@ export default {
           mountedPanels.proxy = false
           mountedPanels.portforwards = false
           mountedPanels.shortcuts = false
+          mountedPanels.mcp = false
         }
       },
       { immediate: true },
@@ -327,6 +340,20 @@ export default {
 .hub-main-body > * {
   flex: 1;
   min-height: 0;
+}
+
+.hub-main-body--mcp {
+  padding-top: 10px;
+}
+
+.hub-main-body--scroll {
+  overflow: hidden;
+  padding-right: 12px;
+}
+
+.hub-main-body--scroll > .mcp-hub {
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 </style>
 

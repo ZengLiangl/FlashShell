@@ -1,0 +1,137 @@
+package mcp
+
+import (
+	"context"
+	"fmt"
+	"strings"
+
+	"FlashDock/data"
+
+	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
+)
+
+// New 创建 MCP 服务（不启动 HTTP）
+func New(cfg *data.ConfigManager) *Service {
+	return newService(cfg)
+}
+
+// RunStdio 以 stdio 运行 MCP（给 Claude Code / Codex / OpenCode；Cursor 走 HTTP）
+func RunStdio() error {
+	cm := data.NewConfigManager("", nil)
+	_, _ = cm.LoadConfig()
+	s := newService(cm)
+	return s.mcp.Run(context.Background(), &mcpsdk.StdioTransport{})
+}
+
+// HasStdioFlag 是否以 MCP stdio 模式启动
+func HasStdioFlag(args []string) bool {
+	for _, a := range args {
+		if a == "--mcp-stdio" || a == "-mcp-stdio" {
+			return true
+		}
+	}
+	return false
+}
+
+func (s *Service) ListTokens() []Token { return s.tokens.List() }
+
+func (s *Service) IssueToken(opts IssueOpts) (Token, error) {
+	tok, err := s.tokens.Issue(opts)
+	if err != nil {
+		return Token{}, err
+	}
+	s.audit.Append(AuditEntry{
+		Source: "FlashShell UI", Caller: "human", Tool: "token_issue", Module: "token",
+		Params: mustJSON(map[string]any{"name": opts.Name, "client": opts.Client, "servers": opts.Servers, "cidrs": opts.CIDRs}),
+		Result: "ok", Decision: "auto", Reason: "手动签发 scoped token",
+	})
+	return tok, nil
+}
+
+func (s *Service) GenerateToken(name, client string) (Token, error) {
+	return s.IssueToken(IssueOpts{Name: name, Client: client})
+}
+
+func (s *Service) RevokeToken(id string) error {
+	removed, err := s.tokens.Revoke(id)
+	if err != nil {
+		return err
+	}
+	s.audit.Append(AuditEntry{
+		Source: "FlashShell UI", Caller: "human", Tool: "token_revoked", Module: "token",
+		Params: mustJSON(map[string]any{"id": removed.ID, "name": removed.Name, "client": removed.Client}),
+		Result: "revoked", Decision: "auto", Reason: "删除 scoped token",
+	})
+	return nil
+}
+
+func (s *Service) ClearTokens() error {
+	n := len(s.tokens.List())
+	if err := s.tokens.Clear(); err != nil {
+		return err
+	}
+	s.audit.Append(AuditEntry{
+		Source: "FlashShell UI", Caller: "human", Tool: "token_revoked", Module: "token",
+		Params: mustJSON(map[string]any{"count": n}),
+		Result: "cleared", Decision: "auto", Reason: "清空全部 scoped token",
+	})
+	return nil
+}
+
+func (s *Service) ListServerAliases() []string { return s.allAliases() }
+
+func (s *Service) QueryAudit(f AuditFilter) []AuditEntry { return s.audit.Query(f) }
+
+func (s *Service) AuditStats() AuditStats {
+	st := s.audit.Stats()
+	// 待审批以审批队列实时数为准（阻塞中尚未落审计的请求）
+	pendingLive := len(s.approvals.List())
+	if pendingLive > st.Pending {
+		st.Pending = pendingLive
+	}
+	return st
+}
+
+func (s *Service) AuditMeta() AuditMeta { return s.audit.Meta() }
+
+func (s *Service) ClearAudit() error { return s.audit.Clear() }
+
+func (s *Service) DeleteAuditIDs(ids []string) error { return s.audit.DeleteIDs(ids) }
+
+func (s *Service) ExportAuditJSONL(path string, f AuditFilter) error {
+	return s.audit.ExportJSONL(path, f)
+}
+
+func (s *Service) ExportAuditCSV(path string, f AuditFilter) error {
+	return s.audit.ExportCSV(path, f)
+}
+
+func (s *Service) ListApprovals() []ApprovalItem { return s.approvals.List() }
+
+func (s *Service) PurgeAuditByRetention() (int, error) {
+	days := s.GetSettings().AuditRetentionDays
+	if days <= 0 {
+		days = 90
+	}
+	return s.audit.PurgeOlderThan(days)
+}
+
+func (s *Service) ListSensitiveMeta() []map[string]any {
+	return s.vault.ListMeta("")
+}
+
+func (s *Service) AddOutboundHost(host string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	host = strings.TrimSpace(strings.ToLower(host))
+	if host == "" {
+		return fmt.Errorf("host 为空")
+	}
+	for _, h := range s.settings.OutboundHosts {
+		if strings.EqualFold(h, host) {
+			return nil
+		}
+	}
+	s.settings.OutboundHosts = append(s.settings.OutboundHosts, host)
+	return saveSettings(s.settings)
+}

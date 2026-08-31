@@ -17,11 +17,17 @@ func (a *App) GetMachineGroupDefaults() []data.MachineGroupDefaults {
 
 // SaveMachineGroupDefaults 保存分组默认配置
 func (a *App) SaveMachineGroupDefaults(def data.MachineGroupDefaults) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	return a.configManager.SaveMachineGroupDefaults(def)
 }
 
 // ImportOpenSSHConfigPick 选择并导入 OpenSSH config
 func (a *App) ImportOpenSSHConfigPick(accountID, group string) (*data.OpenSSHImportResult, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return nil, err
+	}
 	path, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
 		Title: "选择 OpenSSH config",
 		Filters: []wailsRuntime.FileFilter{
@@ -40,6 +46,9 @@ func (a *App) ImportOpenSSHConfigPick(accountID, group string) (*data.OpenSSHImp
 
 // ImportOpenSSHConfigDefault 从默认 ~/.ssh/config 导入机器
 func (a *App) ImportOpenSSHConfigDefault(accountID, group string) (*data.OpenSSHImportResult, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return nil, err
+	}
 	path, err := data.DefaultOpenSSHConfigPath()
 	if err != nil {
 		return nil, fmt.Errorf("获取默认 SSH 配置路径失败: %w", err)
@@ -55,6 +64,9 @@ func (a *App) ImportOpenSSHConfigDefault(accountID, group string) (*data.OpenSSH
 
 // ImportMachinesCSVPick 选择并导入 CSV 机器列表
 func (a *App) ImportMachinesCSVPick() (*data.MachineImportResult, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return nil, err
+	}
 	path, err := wailsRuntime.OpenFileDialog(a.ctx, wailsRuntime.OpenDialogOptions{
 		Title: "选择 CSV 文件",
 		Filters: []wailsRuntime.FileFilter{
@@ -93,6 +105,9 @@ func (a *App) ExportMachinesCSVPick() (string, error) {
 
 // ImportPuttyPick 选择并导入 PuTTY 注册表导出（*.reg）
 func (a *App) ImportPuttyPick(accountID, group string) (*data.MachineImportResult, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return nil, err
+	}
 	paths, err := a.pickImportSources("选择 PuTTY 注册表文件", []wailsRuntime.FileFilter{
 		{DisplayName: "PuTTY 注册表 (*.reg)", Pattern: "*.reg"},
 	})
@@ -107,6 +122,9 @@ func (a *App) ImportPuttyPick(accountID, group string) (*data.MachineImportResul
 
 // ImportMobaXtermPick 选择并导入 MobaXterm 会话文件
 func (a *App) ImportMobaXtermPick(accountID, group string) (*data.MachineImportResult, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return nil, err
+	}
 	paths, err := a.pickImportSources("选择 MobaXterm 会话文件", []wailsRuntime.FileFilter{
 		{DisplayName: "MobaXterm (*.mxtsessions)", Pattern: "*.mxtsessions"},
 		{DisplayName: "INI (*.ini)", Pattern: "*.ini"},
@@ -123,6 +141,9 @@ func (a *App) ImportMobaXtermPick(accountID, group string) (*data.MachineImportR
 
 // ImportSecureCRTPick 选择 SecureCRT Sessions 文件夹并导入
 func (a *App) ImportSecureCRTPick(accountID, group string) (*data.MachineImportResult, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return nil, err
+	}
 	dirPath, err := wailsRuntime.OpenDirectoryDialog(a.ctx, wailsRuntime.OpenDialogOptions{
 		Title: "选择 SecureCRT Sessions 文件夹",
 	})
@@ -136,5 +157,8 @@ func (a *App) ImportSecureCRTPick(accountID, group string) (*data.MachineImportR
 }
 
 func (a *App) machineForConnect(machine *define.Machine) (*define.Machine, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return nil, err
+	}
 	return a.configManager.MachineForConnect(machine)
 }

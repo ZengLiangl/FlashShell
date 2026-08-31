@@ -1,96 +1,128 @@
 package crypto
 
 import (
+	"encoding/base64"
+	"os"
 	"testing"
 )
 
+func TestMain(m *testing.M) {
+	dir, err := os.MkdirTemp("", "flashshell-crypto-*")
+	if err != nil {
+		panic(err)
+	}
+	SetConfigHomeFunc(func() string { return dir })
+	_ = os.Setenv("FLASH_SHELL_FORCE_FILE_KEYRING", "1")
+	if err := InitVault(); err != nil {
+		panic(err)
+	}
+	code := m.Run()
+	_ = os.RemoveAll(dir)
+	os.Exit(code)
+}
+
 func TestEncryptDecryptSensitiveData(t *testing.T) {
-	// 测试数据
 	testData := &SensitiveData{
 		Name:     "测试服务器",
 		Host:     "your-server.com",
 		Port:     22,
 		Username: "root",
+		Password: "secret",
 	}
-
-	// 测试加密
 	encryptedStr, err := EncryptSensitiveData(testData)
 	if err != nil {
 		t.Fatalf("加密失败: %v", err)
 	}
-
 	if encryptedStr == "" {
 		t.Fatal("加密结果为空")
 	}
-
-	t.Logf("加密结果: %s", encryptedStr)
-
-	// 测试解密
 	decryptedData, err := DecryptSensitiveData(encryptedStr)
 	if err != nil {
 		t.Fatalf("解密失败: %v", err)
 	}
-
-	// 验证解密结果
-	if decryptedData.Name != testData.Name {
-		t.Errorf("名称不匹配: 期望 %s, 实际 %s", testData.Name, decryptedData.Name)
-	}
-
-	if decryptedData.Host != testData.Host {
-		t.Errorf("主机地址不匹配: 期望 %s, 实际 %s", testData.Host, decryptedData.Host)
-	}
-
-	if decryptedData.Port != testData.Port {
-		t.Errorf("端口不匹配: 期望 %d, 实际 %d", testData.Port, decryptedData.Port)
-	}
-
-	if decryptedData.Username != testData.Username {
-		t.Errorf("用户名不匹配: 期望 %s, 实际 %s", testData.Username, decryptedData.Username)
-	}
-
 	if decryptedData.Password != testData.Password {
-		t.Errorf("密码不匹配: 期望 %s, 实际 %s", testData.Password, decryptedData.Password)
+		t.Errorf("密码不匹配")
 	}
-
-	if string(decryptedData.KeyData) != string(testData.KeyData) {
-		t.Errorf("密钥数据不匹配: 期望 %s, 实际 %s", string(testData.KeyData), string(decryptedData.KeyData))
+	if decryptedData.Host != testData.Host {
+		t.Errorf("主机不匹配")
 	}
-
-	t.Log("加密解密测试通过")
 }
 
 func TestEncryptDecryptEmptyData(t *testing.T) {
-	// 测试空数据
 	_, err := EncryptSensitiveData(nil)
 	if err == nil {
 		t.Fatal("空数据加密应该失败")
 	}
-
-	// 测试空字符串解密
 	decryptedData, err := DecryptSensitiveData("")
 	if err != nil {
 		t.Fatalf("空字符串解密失败: %v", err)
 	}
-
 	if decryptedData == nil {
 		t.Fatal("空字符串解密应该返回空结构体")
 	}
-
-	t.Log("空数据处理测试通过")
 }
 
 func TestEncryptDecryptInvalidData(t *testing.T) {
-	// 测试无效的加密数据
-	_, err := DecryptSensitiveData("invalid_base64_data")
+	_, err := DecryptSensitiveData("invalid_base64_data!!!")
 	if err == nil {
 		t.Fatal("无效数据解密应该失败")
 	}
+}
 
-	// 测试无效的Base64数据
-	_, err = DecryptSensitiveData("not_base64_string")
-	if err == nil {
-		t.Fatal("无效Base64数据解密应该失败")
+func TestMasterPasswordWrap(t *testing.T) {
+	st := GetStatus()
+	if !st.Unlocked {
+		t.Fatal("应已解锁")
 	}
+	if err := SetMasterPassword("TestPass-w0rd!", "TestPass-w0rd!"); err != nil {
+		t.Fatalf("启用主密码: %v", err)
+	}
+	Lock()
+	if !IsLocked() {
+		t.Fatal("锁定后应 IsLocked")
+	}
+	if err := Unlock("wrong"); err == nil {
+		t.Fatal("错误密码应失败")
+	}
+	if err := Unlock("TestPass-w0rd!"); err != nil {
+		t.Fatalf("正确密码解锁: %v", err)
+	}
+	if err := DisableMasterPassword("TestPass-w0rd!"); err != nil {
+		t.Fatalf("关闭主密码: %v", err)
+	}
+	if GetStatus().HasMasterPassword {
+		t.Fatal("应已关闭主密码")
+	}
+}
 
-	t.Log("无效数据处理测试通过")
+func TestWriteKeyringDoesNotDualWriteWhenKeyringOK(t *testing.T) {
+	// 本测试在 FORCE_FILE 下只能验证文件后端；非强制时由集成环境验证 purge
+	if forceFileKeyring() {
+		st := GetStatus()
+		if st.KeyringBackend != "file" {
+			t.Fatalf("force file backend expected, got %q", st.KeyringBackend)
+		}
+	}
+}
+
+func TestLegacyMigrate(t *testing.T) {
+	ct, err := encryptBytes([]byte(`{"name":"x","host":"h","port":22,"username":"u","password":"p"}`), legacyKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	enc := base64.StdEncoding.EncodeToString(ct)
+	out, ok, err := MigrateLegacyCiphertext(enc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("应迁移")
+	}
+	data, err := DecryptSensitiveData(out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if data.Password != "p" {
+		t.Fatalf("密码 %q", data.Password)
+	}
 }

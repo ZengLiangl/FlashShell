@@ -23,6 +23,9 @@ func pendingConnectPath() (string, error) {
 
 // OpenMachineInNewWindow 在新窗口中打开并自动连接指定机器
 func (a *App) OpenMachineInNewWindow(machineName string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	machineName = strings.TrimSpace(machineName)
 	if machineName == "" {
 		return fmt.Errorf("机器名为空")

@@ -271,6 +271,28 @@
                                 <el-option v-for="t in knownTagOptions" :key="t" :label="t" :value="t" />
                             </el-select>
                         </el-form-item>
+                        <el-form-item label="AI 策略">
+                            <el-select v-model="machineForm.aiPolicy" placeholder="trusted（默认）" clearable style="width: 100%">
+                                <el-option label="disabled · 禁止任何 MCP" value="disabled" />
+                                <el-option label="readonly · 只读自动放行，改动拒绝" value="readonly" />
+                                <el-option label="approval · 读写均需审批" value="approval" />
+                                <el-option label="allowlist · 命中正则 auto，否则审批" value="allowlist" />
+                                <el-option label="trusted · 自动放行（仍拦致命命令/sudo）" value="trusted" />
+                            </el-select>
+                        </el-form-item>
+                        <el-form-item v-if="machineForm.aiPolicy === 'allowlist'" label="AI 白名单">
+                            <el-input
+                                v-model="machineForm.aiAllowlistText"
+                                type="textarea"
+                                :rows="3"
+                                placeholder="每行一条命令前缀或正则，如 ^df\s 或 systemctl status"
+                            />
+                            <span class="form-hint">未命中白名单时升级为审批，不会直接拒绝</span>
+                        </el-form-item>
+                        <el-form-item label="允许 AI sudo">
+                            <el-switch v-model="machineForm.aiAllowSudo" />
+                            <span class="form-hint" style="margin-left: 8px">含 sudo 无视档位强制审批；关闭则直接拒绝</span>
+                        </el-form-item>
                         <el-form-item label="备注">
                             <el-input
                                 v-model="machineForm.notes"
@@ -875,6 +897,9 @@ export default {
             group: '',
             tags: [],
             notes: '',
+            aiPolicy: 'trusted',
+            aiAllowSudo: false,
+            aiAllowlistText: '',
             identityId: '',
             key_file: '',
             host: '',
@@ -1108,6 +1133,9 @@ export default {
             machineForm.group = machine.group || ''
             machineForm.tags = normalizeMachineTags(machine.tags)
             machineForm.notes = machine.notes || ''
+            machineForm.aiPolicy = machine.aiPolicy || 'trusted'
+            machineForm.aiAllowSudo = !!machine.aiAllowSudo
+            machineForm.aiAllowlistText = Array.isArray(machine.aiAllowlist) ? machine.aiAllowlist.join('\n') : ''
             machineForm.icon = machine.icon || ''
             machineForm.identityId = machine.identityId || ''
             machineForm.key_file = machine.key_file || ''
@@ -1184,6 +1212,9 @@ export default {
             machineForm.group = ''
             machineForm.tags = []
             machineForm.notes = ''
+            machineForm.aiPolicy = 'trusted'
+            machineForm.aiAllowSudo = false
+            machineForm.aiAllowlistText = ''
             machineForm.icon = ''
             machineForm.identityId = ''
             machineForm.key_file = ''
@@ -1299,6 +1330,12 @@ export default {
                     group: normalizeGroup(machineForm.group),
                     tags: normalizeMachineTags(machineForm.tags),
                     notes: String(machineForm.notes || '').trim(),
+                    aiPolicy: machineForm.aiPolicy || '',
+                    aiAllowSudo: !!machineForm.aiAllowSudo,
+                    aiAllowlist: String(machineForm.aiAllowlistText || '')
+                        .split(/\n+/)
+                        .map((s) => s.trim())
+                        .filter(Boolean),
                     icon: String(machineForm.icon || '').trim(),
                     identityId: machineForm.identityId || '',
                     key_file: machineForm.key_file,

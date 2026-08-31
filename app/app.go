@@ -14,10 +14,12 @@ import (
 	"time"
 
 	"FlashDock/cmds"
+	"FlashDock/crypto"
 	"FlashDock/data"
 	"FlashDock/define"
 	"FlashDock/inputmethod"
 	"FlashDock/machine"
+	"FlashDock/mcp"
 
 	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/menu/keys"
@@ -39,6 +41,7 @@ type App struct {
 	portForwardSSH         *portForwardRuntimeStore
 	transfers              *shellTransferStore
 	externalEdits          *externalEditStore
+	mcpSvc                 *mcp.Service
 	outputChannel          chan string
 	outputIngress          chan string
 	executionMutex         sync.RWMutex
@@ -121,8 +124,10 @@ func (a *App) Startup(ctx context.Context) {
 	a.applyWindowTheme(a.GetThemeSettings().Mode)
 	a.applyAppBrandingFromConfig()
 	a.applyStartupFullscreenFromConfig()
+	a.initCredentialVault()
 	a.StartAutoPortForwards()
 	warmAppIconPresetCache()
+	a.startMCP()
 }
 
 // DomReady is called after front-end resources have been loaded
@@ -184,6 +189,7 @@ func (a *App) cleanupBeforeQuit() {
 	if a.portForwardSSH != nil {
 		a.portForwardSSH.closeAll()
 	}
+	a.stopMCP()
 }
 
 // ConfirmQuit 用户确认退出后调用，关闭应用。
@@ -402,11 +408,17 @@ func (a *App) GetConfigForRefresh() (*define.Root, error) {
 
 // SaveConfig 保存配置
 func (a *App) SaveConfig(root *define.Root) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	return a.configManager.SaveConfig(root)
 }
 
 // ExecuteSubProject 执行 SubProject（可与 Shell 会话并行）
 func (a *App) ExecuteSubProject(projectName, subProjectName string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	a.executionMutex.Lock()
 	defer a.executionMutex.Unlock()
 
@@ -430,6 +442,9 @@ func (a *App) ExecuteSubProject(projectName, subProjectName string) error {
 
 // ExecuteCommand 仅执行 SubProject 中的单个 Command
 func (a *App) ExecuteCommand(projectName, subProjectName, commandName string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	a.executionMutex.Lock()
 	defer a.executionMutex.Unlock()
 
@@ -532,6 +547,9 @@ func (a *App) GetStatus() *define.CommandStatus {
 
 // TestMachineConnection 测试机器连接
 func (a *App) TestMachineConnection(machineID string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	machineConfig := a.configManager.GetMachineFromGlobal(machineID)
 	if machineConfig == nil {
 		return fmt.Errorf("未找到机器配置: %s", machineID)
@@ -546,6 +564,9 @@ func (a *App) TestMachineConnection(machineID string) error {
 
 // TestMachineDraftConnection 用表单中的连接信息测试，无需先保存到配置
 func (a *App) TestMachineDraftConnection(m define.Machine, sensitive define.SensitiveData) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	host := strings.TrimSpace(sensitive.Host)
 	user := strings.TrimSpace(sensitive.User)
 	if host == "" {
@@ -574,23 +595,30 @@ func (a *App) TestMachineDraftConnection(m define.Machine, sensitive define.Sens
 }
 
 // 返回副本并填充 host/port/user（优先 list hint，避免列表全量解密）。
+// 锁定时只读元数据 / List* hint，不解密、不落盘迁移。
 func (a *App) GetMachines() []define.Machine {
 	src := a.configManager.GetAllMachinesFromGlobal()
-	dirty := false
-	for i := range src {
-		if changed, _ := src[i].EnsureListHints(); changed {
-			dirty = true
+	locked := crypto.IsLocked()
+	if !locked {
+		dirty := false
+		for i := range src {
+			if changed, _ := src[i].EnsureListHints(); changed {
+				dirty = true
+			}
 		}
-	}
-	if dirty {
-		if err := a.configManager.SaveGlobalConfigMachines(src); err != nil {
-			a.pushOutput(fmt.Sprintf("迁移机器列表 hint 失败: %s", err.Error()))
+		if dirty {
+			if err := a.configManager.SaveGlobalConfigMachines(src); err != nil {
+				a.pushOutput(fmt.Sprintf("迁移机器列表 hint 失败: %s", err.Error()))
+			}
 		}
 	}
 	out := make([]define.Machine, len(src))
 	for i := range src {
 		out[i] = src[i]
 		if !out[i].ApplyListFieldsForDisplay() {
+			if locked {
+				continue
+			}
 			if s, err := src[i].GetSensitiveData(); err == nil && s != nil {
 				out[i].Host = s.Host
 				out[i].Port = s.Port
@@ -611,21 +639,33 @@ func (a *App) GetMachineGroups() []string {
 
 // AddMachineGroup 添加机器分组
 func (a *App) AddMachineGroup(name string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	return a.configManager.AddMachineGroup(name)
 }
 
 // RenameMachineGroup 重命名机器分组
 func (a *App) RenameMachineGroup(oldName, newName string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	return a.configManager.RenameMachineGroup(oldName, newName)
 }
 
 // DeleteMachineGroup 删除机器分组
 func (a *App) DeleteMachineGroup(name string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	return a.configManager.DeleteMachineGroup(name)
 }
 
 // UpdateMachineGroup 仅更新机器所属分组（保留凭证等其它字段）
 func (a *App) UpdateMachineGroup(machineID, group string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	return a.configManager.UpdateMachineGroup(machineID, group)
 }
 
@@ -641,6 +681,9 @@ func (a *App) SetMachinePinned(machineKey string, pinned bool) error {
 
 // AddMachine 添加机器配置（到全局配置）
 func (a *App) AddMachine(machine define.Machine) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	machine.EnsureID()
 	if err := prepareMachineForSave(&machine, nil); err != nil {
 		return err
@@ -650,6 +693,9 @@ func (a *App) AddMachine(machine define.Machine) error {
 
 // AddMachineWithEvent 添加机器配置（带事件通知）
 func (a *App) AddMachineWithEvent(machine define.Machine) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	err := a.configManager.AddMachineToGlobal(&machine)
 	if err != nil {
 		a.emitOperationEvent(define.OpTypeMachineConfig, fmt.Sprintf("添加机器配置失败: %s", err.Error()), define.MsgTypeError, false, nil)
@@ -664,6 +710,9 @@ func (a *App) AddMachineWithEvent(machine define.Machine) error {
 
 // UpdateMachine 更新机器配置（在全局配置中，按 ID）
 func (a *App) UpdateMachine(machineID string, machine define.Machine) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	existing := a.configManager.GetMachineFromGlobal(machineID)
 	if existing == nil {
 		return fmt.Errorf("未找到机器配置: %s", machineID)
@@ -698,11 +747,17 @@ func (a *App) UpdateMachineWithEvent(machineID string, machine define.Machine) e
 
 // DeleteMachine 删除机器配置（从全局配置，按 ID）
 func (a *App) DeleteMachine(machineID string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	return a.configManager.RemoveMachineFromGlobal(machineID)
 }
 
 // DeleteMachineWithEvent 删除机器配置（带事件通知）
 func (a *App) DeleteMachineWithEvent(machineID string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	machine := a.configManager.GetMachineFromGlobal(machineID)
 	err := a.configManager.RemoveMachineFromGlobal(machineID)
 	if err != nil {
@@ -737,6 +792,9 @@ func (a *App) GetGlobalConfigForRefresh() (*data.GlobalConfig, error) {
 
 // SaveGlobalConfig 保存全局配置
 func (a *App) SaveGlobalConfig(config *data.GlobalConfig) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	return a.configManager.SaveGlobalConfig(config)
 }
 
@@ -781,6 +839,9 @@ func (a *App) SwitchConfigFileWithEvent(configPath string) error {
 
 // SetMachineSensitiveData 设置机器敏感数据
 func (a *App) SetMachineSensitiveData(machineID string, sensitiveData define.SensitiveData) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	machine := a.configManager.GetMachineFromGlobal(machineID)
 	if machine == nil {
 		return fmt.Errorf("未找到机器: %s", machineID)
@@ -796,6 +857,9 @@ func (a *App) SetMachineSensitiveData(machineID string, sensitiveData define.Sen
 
 // GetMachineSensitiveData 获取机器敏感数据
 func (a *App) GetMachineSensitiveData(machineID string) (*define.SensitiveData, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return nil, err
+	}
 	machine := a.configManager.GetMachineFromGlobal(machineID)
 	if machine == nil {
 		return nil, fmt.Errorf("未找到机器: %s", machineID)
@@ -806,6 +870,9 @@ func (a *App) GetMachineSensitiveData(machineID string) (*define.SensitiveData, 
 
 // ClearMachineSensitiveData 清除机器敏感数据缓存
 func (a *App) ClearMachineSensitiveData(machineID string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	machine := a.configManager.GetMachineFromGlobal(machineID)
 	if machine == nil {
 		return fmt.Errorf("未找到机器: %s", machineID)
@@ -864,6 +931,9 @@ func (a *App) pickImportSources(title string, filters []wailsRuntime.FileFilter)
 
 // ImportXshellPick 选择并导入 Xshell 配置（支持多文件或文件夹）
 func (a *App) ImportXshellPick(accountID, group string) (*data.MachineImportResult, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return nil, err
+	}
 	paths, err := a.pickImportSources("选择 Xshell 文件或文件夹", []wailsRuntime.FileFilter{
 		{DisplayName: "Xshell 会话 (*.xsh)", Pattern: "*.xsh"},
 	})
@@ -878,6 +948,9 @@ func (a *App) ImportXshellPick(accountID, group string) (*data.MachineImportResu
 
 // ImportFinalShellPick 选择并导入 FinalShell 配置（支持多文件或文件夹）
 func (a *App) ImportFinalShellPick(accountID, group string) (*data.MachineImportResult, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return nil, err
+	}
 	// Pattern 使用 macOS UTType 声明，否则无法选择 *.json 等
 	// 使用 *_connect_config.json 这类通配会在 Wails OpenFileDialog 中
 	// 若 UTType 为 nil 会触发 insertObject: object cannot be nil
@@ -895,6 +968,9 @@ func (a *App) ImportFinalShellPick(accountID, group string) (*data.MachineImport
 
 // ImportXshellFromFile 从路径导入 Xshell
 func (a *App) ImportXshellFromFile(filePath, accountID, group string) (*data.MachineImportResult, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return nil, err
+	}
 	if filePath == "" {
 		return nil, fmt.Errorf("未选择文件")
 	}
@@ -903,6 +979,9 @@ func (a *App) ImportXshellFromFile(filePath, accountID, group string) (*data.Mac
 
 // ImportXshellFromFolder 从文件夹导入 Xshell
 func (a *App) ImportXshellFromFolder(dirPath, accountID, group string) (*data.MachineImportResult, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return nil, err
+	}
 	if dirPath == "" {
 		return nil, fmt.Errorf("未选择文件夹")
 	}
@@ -916,11 +995,17 @@ func (a *App) GetGlobalAccounts() []data.GlobalAccountDTO {
 
 // SaveGlobalAccounts 保存全局 SSH 帐号
 func (a *App) SaveGlobalAccounts(accounts []data.GlobalAccount) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	return a.configManager.SaveGlobalAccounts(accounts)
 }
 
 // SaveGlobalAccountsFromDTO 保存全局 SSH 帐号（前端明文密码）
 func (a *App) SaveGlobalAccountsFromDTO(accounts []data.GlobalAccountDTO) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	stored := make([]data.GlobalAccount, 0, len(accounts))
 	for _, dto := range accounts {
 		account := data.GlobalAccount{
@@ -943,6 +1028,9 @@ func (a *App) SaveGlobalAccountsFromDTO(accounts []data.GlobalAccountDTO) error 
 
 // CreateMachine 创建机器并保存连接信息
 func (a *App) CreateMachine(machine define.Machine, sensitiveData define.SensitiveData) (string, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return "", err
+	}
 	machine.EnsureID()
 	if err := machine.SetSensitiveData(&sensitiveData); err != nil {
 		return "", fmt.Errorf("设置敏感数据失败: %w", err)
@@ -1277,11 +1365,17 @@ func (a *App) GetWorkPaths() map[string]string {
 
 // AddWorkPath 添加工作路径
 func (a *App) AddWorkPath(key, value string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	return a.configManager.AddWorkPathToGlobal(key, value)
 }
 
 // AddWorkPathWithEvent 添加工作路径（带事件通知）
 func (a *App) AddWorkPathWithEvent(key, value string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	err := a.configManager.AddWorkPathToGlobal(key, value)
 	if err != nil {
 		a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("添加环境变量失败: %s", err.Error()), define.MsgTypeError, false, nil)
@@ -1294,11 +1388,17 @@ func (a *App) AddWorkPathWithEvent(key, value string) error {
 
 // UpdateWorkPath 更新工作路径
 func (a *App) UpdateWorkPath(key, value string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	return a.configManager.UpdateWorkPathInGlobal(key, value)
 }
 
 // UpdateWorkPathWithEvent 更新工作路径（带事件通知）
 func (a *App) UpdateWorkPathWithEvent(key, value string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	err := a.configManager.UpdateWorkPathInGlobal(key, value)
 	if err != nil {
 		a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("添加环境变量失败: %s", err.Error()), define.MsgTypeError, false, nil)
@@ -1311,11 +1411,17 @@ func (a *App) UpdateWorkPathWithEvent(key, value string) error {
 
 // DeleteWorkPath 删除工作路径
 func (a *App) DeleteWorkPath(key string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	return a.configManager.RemoveWorkPathFromGlobal(key)
 }
 
 // DeleteWorkPathWithEvent 删除工作路径（带事件通知）
 func (a *App) DeleteWorkPathWithEvent(key string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	err := a.configManager.RemoveWorkPathFromGlobal(key)
 	if err != nil {
 		a.emitOperationEvent(define.OpTypeEnvConfig, fmt.Sprintf("添加环境变量失败: %s", err.Error()), define.MsgTypeError, false, nil)
@@ -1468,6 +1574,9 @@ func (a *App) SaveKeyMapSettings(settings data.KeyMapSettings) error {
 
 // SaveSystemSettings 保存系统设置
 func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	a.normalizeThemeSettings(&config.ThemeSettings)
 	if err := prepareProxySettingsForSave(&config.ProxySettings); err != nil {
 		return fmt.Errorf("保存代理密码失败: %w", err)
@@ -1797,6 +1906,9 @@ func (a *App) onRemoteShellConnected(sessionID string, machineConfig *define.Mac
 
 // ConnectShell 连接远程 Shell，返回新会话 ID（同机可多开：web1 / web1-2）
 func (a *App) ConnectShell(configName string) (string, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return "", err
+	}
 	if machine.IsLocalShellID(configName) {
 		return "", fmt.Errorf("请使用 ConnectLocalShell 创建本地终端")
 	}
@@ -1834,6 +1946,9 @@ func (a *App) ReconnectShell(sessionID string) (string, error) {
 	}
 	if machine.IsLocalShellID(sessionID) {
 		return a.ConnectLocalShell(sessionID)
+	}
+	if err := a.requireUnlocked(); err != nil {
+		return "", err
 	}
 	configName := a.remoteConfigName(sessionID)
 	machineConfig := a.configManager.GetMachine(configName)
@@ -1913,6 +2028,11 @@ func (a *App) resolveAuxKey(sessionOrConfig string) string {
 }
 
 func (a *App) getShellAux(sessionOrConfig string) (*machine.ShellAuxManager, error) {
+	if !machine.IsLocalShellID(sessionOrConfig) {
+		if err := a.requireUnlocked(); err != nil {
+			return nil, err
+		}
+	}
 	key := a.resolveAuxKey(sessionOrConfig)
 	if aux, err := a.shellAuxPool.Get(key); err == nil {
 		return aux, nil
@@ -2151,6 +2271,9 @@ func (a *App) GetShellListenPorts(machineName string) *define.ShellListenPortLis
 
 // ListShellFiles 列出远端目录
 func (a *App) ListShellFiles(machineName, dirPath string, showHidden bool) ([]define.SftpEntry, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return nil, err
+	}
 	aux, err := a.getShellAux(machineName)
 	if err != nil {
 		return nil, err
@@ -2160,6 +2283,9 @@ func (a *App) ListShellFiles(machineName, dirPath string, showHidden bool) ([]de
 
 // DeleteShellFile 删除远端文件或目录
 func (a *App) DeleteShellFile(machineName, remotePath string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	if strings.TrimSpace(remotePath) == "" || remotePath == "/" {
 		return fmt.Errorf("非法路径")
 	}
@@ -2172,11 +2298,17 @@ func (a *App) DeleteShellFile(machineName, remotePath string) error {
 
 // GetShellRemoteHome 远端登录 home（SFTP 初始目录）
 func (a *App) GetShellRemoteHome(machineName string) (string, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return "", err
+	}
 	return a.getRemoteHome(machineName)
 }
 
 // GetShellRemotePwd 获取辅助通道 pwd（兼容旧调用；新逻辑请用 GetShellPtyCwd）
 func (a *App) GetShellRemotePwd(machineName string) (string, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return "", err
+	}
 	aux, err := a.getShellAux(machineName)
 	if err != nil {
 		return "", err

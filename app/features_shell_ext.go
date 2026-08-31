@@ -86,6 +86,9 @@ func (a *App) recordShellCommand(sessionID, input string) {
 
 // AddShellTemporaryTunnel 添加临时端口转发
 func (a *App) AddShellTemporaryTunnel(sessionID string, spec define.SSHTunnel) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	configName := a.remoteConfigName(sessionID)
 	machineConfig := a.configManager.GetMachine(configName)
 	if machineConfig == nil {
@@ -110,6 +113,9 @@ func (a *App) RemoveShellTunnel(sessionID, tunnelName string) error {
 
 // ReadShellRemoteFile 读取远端小文件（用于内置编辑）
 func (a *App) ReadShellRemoteFile(machineName, remotePath string) (string, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return "", err
+	}
 	aux, err := a.getShellAux(machineName)
 	if err != nil {
 		return "", err
@@ -145,6 +151,9 @@ func (a *App) ReadShellRemoteFile(machineName, remotePath string) (string, error
 
 // SaveShellRemoteFile 保存远端小文件
 func (a *App) SaveShellRemoteFile(machineName, remotePath, content string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	aux, err := a.getShellAux(machineName)
 	if err != nil {
 		return err
@@ -175,6 +184,9 @@ func (a *App) SelectSystemApplication() (*data.SftpSystemApp, error) {
 
 // OpenShellRemoteFileExternal 下载到临时目录并用关联/外置编辑器/系统默认打开；是否回传由 sftpAutoSync 决定
 func (a *App) OpenShellRemoteFileExternal(machineName, remotePath string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	cfg, _ := a.GetGlobalConfig()
 	enableWatch := data.SftpAutoSyncEnabled(cfg)
 	return a.openRemoteFileExternal(machineName, remotePath, "", false, enableWatch)
@@ -182,6 +194,9 @@ func (a *App) OpenShellRemoteFileExternal(machineName, remotePath string) error 
 
 // OpenShellRemoteFileWithApp 下载到临时目录并用指定应用程序打开
 func (a *App) OpenShellRemoteFileWithApp(machineName, remotePath, appPath string, enableWatch bool) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	appPath = strings.TrimSpace(appPath)
 	if appPath == "" {
 		return fmt.Errorf("请选择应用程序")
@@ -191,6 +206,9 @@ func (a *App) OpenShellRemoteFileWithApp(machineName, remotePath, appPath string
 
 // OpenShellRemoteFileSystemDefault 下载到临时目录并用操作系统默认程序打开
 func (a *App) OpenShellRemoteFileSystemDefault(machineName, remotePath string, enableWatch bool) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	return a.openRemoteFileExternal(machineName, remotePath, "", true, enableWatch)
 }
 
@@ -362,6 +380,9 @@ func openWithSystemDefault(path string) error {
 
 // StartShellFolderSync 文件夹同步（递归；按大小+修改时间跳过未变更）
 func (a *App) StartShellFolderSync(machineName, localDir, remoteDir, direction string) (string, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return "", err
+	}
 	localDir = strings.TrimSpace(localDir)
 	remoteDir = strings.TrimSpace(remoteDir)
 	if localDir == "" || remoteDir == "" {

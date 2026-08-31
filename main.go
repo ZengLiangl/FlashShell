@@ -11,6 +11,7 @@ import (
 
 	"FlashDock/app"
 	"FlashDock/data"
+	"FlashDock/mcp"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -24,6 +25,15 @@ var assets embed.FS
 
 // main is the entry point for the application
 func main() {
+	if mcp.HasStdioFlag(os.Args[1:]) {
+		if err := mcp.RunStdio(); err != nil {
+			println("MCP stdio:", err.Error())
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Windows：--apply-update / 版本号便携名归一，须在启动 UI 前处理并退出
 	// Windows：--apply-update / 版本号便携名归一，须在启动 UI 前处理并退出
 	if app.HandleEarlyUpdateArgs(os.Args[1:]) {
 		return

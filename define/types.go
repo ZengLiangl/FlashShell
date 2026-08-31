@@ -89,6 +89,12 @@ type Machine struct {
 	Pinned bool `yaml:"pinned,omitempty" json:"pinned,omitempty"`
 	// Tags 主机标签（检索与筛选）
 	Tags []string `yaml:"tags,omitempty" json:"tags,omitempty"`
+	// AIPolicy 该主机对 MCP/AI 的策略档：disabled | readonly | approval | allowlist | trusted；空=trusted
+	AIPolicy string `yaml:"aiPolicy,omitempty" json:"aiPolicy,omitempty"`
+	// AIAllowlist 当 AIPolicy=allowlist 时：命令前缀或正则，命中则 auto，否则审批
+	AIAllowlist []string `yaml:"aiAllowlist,omitempty" json:"aiAllowlist,omitempty"`
+	// AIAllowSudo 是否允许 AI 经审批后执行含 sudo 的命令；false 则 sudo 直接 [denied]
+	AIAllowSudo bool `yaml:"aiAllowSudo,omitempty" json:"aiAllowSudo,omitempty"`
 	// Notes 主机备注（纯文本/Markdown）
 	Notes string `yaml:"notes,omitempty" json:"notes,omitempty"`
 	// Icon 主机图标：预设 id 或单个 emoji

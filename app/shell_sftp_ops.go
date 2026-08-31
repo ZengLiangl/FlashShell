@@ -9,6 +9,9 @@ import (
 
 // MkdirShellRemotePath 创建远端目录
 func (a *App) MkdirShellRemotePath(sessionID, remotePath string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	aux, err := a.getShellAux(sessionID)
 	if err != nil {
 		return err
@@ -18,6 +21,9 @@ func (a *App) MkdirShellRemotePath(sessionID, remotePath string) error {
 
 // RenameShellRemotePath 重命名远端路径
 func (a *App) RenameShellRemotePath(sessionID, oldPath, newPath string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	aux, err := a.getShellAux(sessionID)
 	if err != nil {
 		return err
@@ -27,6 +33,9 @@ func (a *App) RenameShellRemotePath(sessionID, oldPath, newPath string) error {
 
 // ChmodShellRemotePath 修改远端权限（Unix mode，如 0755）
 func (a *App) ChmodShellRemotePath(sessionID, remotePath string, mode uint32) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	aux, err := a.getShellAux(sessionID)
 	if err != nil {
 		return err
@@ -36,6 +45,9 @@ func (a *App) ChmodShellRemotePath(sessionID, remotePath string, mode uint32) er
 
 // CopyShellRemotePath 同机复制远端文件或目录
 func (a *App) CopyShellRemotePath(sessionID, srcPath, dstPath string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	aux, err := a.getShellAux(sessionID)
 	if err != nil {
 		return err
@@ -45,6 +57,9 @@ func (a *App) CopyShellRemotePath(sessionID, srcPath, dstPath string) error {
 
 // MoveShellRemotePath 同机移动远端文件或目录
 func (a *App) MoveShellRemotePath(sessionID, srcPath, dstPath string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	aux, err := a.getShellAux(sessionID)
 	if err != nil {
 		return err
@@ -54,6 +69,9 @@ func (a *App) MoveShellRemotePath(sessionID, srcPath, dstPath string) error {
 
 // CheckShellUploadConflict 检测上传冲突
 func (a *App) CheckShellUploadConflict(sessionID, localPath, remotePath string) (*machine.SftpUploadConflict, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return nil, err
+	}
 	aux, err := a.getShellAux(sessionID)
 	if err != nil {
 		return nil, err
@@ -63,6 +81,9 @@ func (a *App) CheckShellUploadConflict(sessionID, localPath, remotePath string) 
 
 // SendShellCd 向终端发送 cd 到指定路径（路径自动加引号）
 func (a *App) SendShellCd(sessionID, remotePath string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	remotePath = strings.TrimSpace(remotePath)
 	if remotePath == "" {
 		return fmt.Errorf("路径为空")

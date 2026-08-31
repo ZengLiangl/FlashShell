@@ -65,6 +65,9 @@ func (a *App) ListPortForwards() []data.PortForwardRule {
 
 // SavePortForwards 保存独立端口转发规则
 func (a *App) SavePortForwards(rules []data.PortForwardRule) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	return data.GlobalPortForwardStore().SaveAll(rules)
 }
 
@@ -92,6 +95,9 @@ func (a *App) sshClientForPortForward(machineName string, machineConfig *define.
 
 // StartPortForward 启动独立端口转发
 func (a *App) StartPortForward(id string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return fmt.Errorf("规则 ID 不能为空")

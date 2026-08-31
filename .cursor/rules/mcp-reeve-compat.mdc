@@ -1,0 +1,22 @@
+---
+description: FlashShell MCP 工具的入参与返回必须与 Reeve 完全一致
+alwaysApply: true
+---
+
+# MCP 与 Reeve 契约一致
+
+FlashShell MCP 对外表面必须与 Reeve **一模一样**：工具名、JSON 入参名/类型/必填、返回 JSON 形态（含数组 vs 对象、字段名）。对照源是已接入的 Reeve MCP，不是 Cursor 客户端偏好。
+
+## 必须对齐
+
+- 工具名、参数名（如 `timeout_secs`、`vaultId`、`servers`）不得改名、拆合、改类型。
+- 返回保持 Reeve 同款：`list_servers` 等就是 **JSON 数组**，不要包成 `{ "servers": [...] }`。
+- 错误前缀、`[REDACTED:…]`、审批/策略语义与 Reeve 一致。
+
+## 禁止
+
+- 为迁就 Cursor `structuredContent` 必须是 object，去改业务返回（包一层、改成 record）。
+- 自造字段、少返回字段、把数组改对象「方便前端/方便 AI」。
+- 用 FlashShell 内部类型名替代 Reeve 的 JSON 字段名。
+
+产品文案里写 FlashShell、路径用 `~/.flashshell` 可以；**JSON 契约不行。**

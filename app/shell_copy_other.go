@@ -50,6 +50,9 @@ func CopyToOtherMode(sameHost bool) string {
 // StartShellCopyToOther 将源会话远端路径复制到目标会话目录。
 // 同机：远端直接复制（冲突则分配唯一名）；异机：本机中转下载再上传。
 func (a *App) StartShellCopyToOther(srcSession, srcPath, dstSession, dstDir string) (*ShellCopyToOtherResult, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return nil, err
+	}
 	srcSession = strings.TrimSpace(srcSession)
 	dstSession = strings.TrimSpace(dstSession)
 	srcPath = strings.TrimSpace(srcPath)

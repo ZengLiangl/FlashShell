@@ -70,6 +70,9 @@ export default {
   margin-left: 4px;
   flex-shrink: 0;
   --wails-draggable: no-drag;
+  /* 锁定遮罩 z-index:1800；窗口关闭按钮须可点 */
+  position: relative;
+  z-index: 1900;
 }
 
 .win-btn {

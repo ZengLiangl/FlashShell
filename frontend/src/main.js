@@ -17,6 +17,7 @@ import App from './App.vue'
 import { installPopperAutoClose } from './utils/popperAutoClose'
 import { registerAppIcons } from './utils/registerIcons'
 import { isMacPlatform, isWindowsPlatform } from './utils/platform'
+import { installVaultSafeInvoke } from './utils/vaultSafeInvoke'
 
 // 按钮点击获得焦点后，Enter/Space 会再次 toggle tooltip；图标按钮场景关闭该行为
 if (ElTooltip?.props?.triggerKeys) {
@@ -38,3 +39,4 @@ registerAppIcons(app)
 
 app.mount('#app')
 installPopperAutoClose()
+installVaultSafeInvoke().catch(() => {})

@@ -35,8 +35,9 @@
         :has-projects="projects.length > 0"
         :open-session-count="openSessionCount"
         :connected-count="connectedCount"
+        :show-audit="mcpServiceEnabled"
         @change-view="switchActiveView"
-        @open-settings="openSettingsHub('general')"
+        @open-settings="(section) => openSettingsHub(section || 'general')"
       />
 
       <!-- 首页：任务项目 + 主机单页 -->
@@ -140,6 +141,13 @@
         </div>
       </main>
 
+      <main
+        v-if="activeView === 'audit'"
+        class="view audit active"
+      >
+        <AuditLogView />
+      </main>
+
       <!-- Shell 视图 -->
       <main v-show="activeView === 'shell'" class="view shell active">
         <ShellWorkspace
@@ -198,6 +206,9 @@
       </main>
     </div>
 
+    <McpApprovalDialog />
+    <VaultUnlockOverlay />
+
     <SettingsHubDialog v-model="settingsHubVisible" :initial-section="settingsSection" :edit-machine-id="machineEditId"
       @machines-changed="onMachinesChanged" @machines-closed="machineEditId = ''"
       @connect-machine="onSettingsConnectMachine" />
@@ -223,14 +234,18 @@
 
 <script>
 import { ref, reactive, computed, watch, onMounted, onUnmounted, nextTick, defineAsyncComponent } from "vue";
-import { ElMessage, ElMessageBox } from "element-plus";
+import { ElMessage, ElMessageBox, ElNotification } from "element-plus";
+import { h } from "vue";
 import * as App from "../wailsjs/go/app/App";
-import { EventsOn, EventsOff } from "../wailsjs/runtime/runtime";
+import { EventsOn, EventsOff, IsNotificationAvailable, SendNotification } from "../wailsjs/runtime/runtime";
 import Convert from "ansi-to-html";
 import TerminalOutput from "./components/TerminalOutput.vue";
 import StatusBar from "./components/StatusBar.vue";
 import ProjectList from "./components/ProjectList.vue";
 import HomePage from "./components/HomePage.vue";
+import AuditLogView from "./components/AuditLogView.vue";
+import McpApprovalDialog from "./components/McpApprovalDialog.vue";
+import VaultUnlockOverlay from "./components/VaultUnlockOverlay.vue";
 import { useShell } from "./composables/useShell";
 import SubProjectList from "./components/SubProjectList.vue";
 import TerminalHeader from "./components/TerminalHeader.vue";
@@ -261,7 +276,7 @@ const MachineAsidePanel = defineAsyncComponent(() => import("./components/Machin
 
 export default {
   name: "App",
-  components: { AppMenuBar, AppRail, TerminalOutput, StatusBar, ProjectList, HomePage, ShellWorkspace, SubProjectList, TerminalHeader, AboutDialog, ConfigEditorDialog, SettingsHubDialog, HostKeyTrustDialog, MachineAsidePanel },
+  components: { AppMenuBar, AppRail, TerminalOutput, StatusBar, ProjectList, HomePage, AuditLogView, McpApprovalDialog, VaultUnlockOverlay, ShellWorkspace, SubProjectList, TerminalHeader, AboutDialog, ConfigEditorDialog, SettingsHubDialog, HostKeyTrustDialog, MachineAsidePanel },
   setup() {
     const { isDark, themeMode, terminalPreset, shellFontSize, loadTheme, applyThemeSettings, saveTheme } = useTheme();
     const projects = ref([]);
@@ -316,6 +331,7 @@ export default {
     // 统一系统设置 Hub
     const settingsHubVisible = ref(false);
     const settingsSection = ref('general');
+    const mcpServiceEnabled = ref(false);
     const machineEditId = ref('');
     const machineAsideOpen = ref(false);
     const machineAsideMachine = ref(null);
@@ -329,6 +345,10 @@ export default {
     const aboutInitialUpdate = ref(null);
     const updatePromptDismissedThisSession = ref(false);
     const configEditorVisible = ref(false);
+    let approvalNotif = null;
+    let approvalPendingCount = 0;
+    let offApprovalQueued = null;
+    let offApprovalResolved = null;
     // home | task | shell —— 任务与 Shell 互不打断，仅切换当前视图
     const activeView = ref('home');
     const shellMounted = ref(false);
@@ -740,6 +760,18 @@ export default {
         await resumeTaskView();
         return;
       }
+      if (view === 'audit') {
+        if (!mcpServiceEnabled.value) {
+          ElMessage.info('请先开启 MCP 服务');
+          openSettingsHub('mcp');
+          return;
+        }
+        if (activeView.value === 'shell') {
+          await leaveShellMode();
+        }
+        activeView.value = view;
+        return;
+      }
       if (view === 'shell') {
         await enterShellMode();
       }
@@ -806,6 +838,21 @@ export default {
       settingsSection.value = section || 'general';
       settingsHubVisible.value = true;
     };
+
+    const refreshMcpNavVisibility = async () => {
+      try {
+        const st = (await App.GetMCPStatus()) || {};
+        mcpServiceEnabled.value = !!(st.enabled || st.online);
+      } catch {
+        mcpServiceEnabled.value = false;
+      }
+    };
+
+    watch(mcpServiceEnabled, (enabled) => {
+      if (!enabled && activeView.value === 'audit') {
+        activeView.value = 'home';
+      }
+    });
 
     const openShellMachineDialog = async () => {
       machineAsideMachine.value = null;
@@ -1447,6 +1494,25 @@ export default {
       loadShortcutMap();
       loadShellMachines();
       loadTaskOutputLimit();
+      refreshMcpNavVisibility();
+      // 空闲锁定：真实用户活动重置计时；定时检查是否超时
+      let lastVaultTouch = 0;
+      const onUserActivity = () => {
+        const now = Date.now();
+        if (now - lastVaultTouch < 5000) return;
+        lastVaultTouch = now;
+        App.VaultTouchActivity?.().catch(() => {});
+      };
+      window.addEventListener('mousemove', onUserActivity, { passive: true });
+      window.addEventListener('keydown', onUserActivity, { passive: true });
+      const idleCheckTimer = setInterval(() => {
+        App.GetVaultStatus?.().catch(() => {});
+      }, 15000);
+      window.__flashshellVaultActivityCleanup = () => {
+        window.removeEventListener('mousemove', onUserActivity);
+        window.removeEventListener('keydown', onUserActivity);
+        clearInterval(idleCheckTimer);
+      };
       App.GetSessionInfo().then((info) => { sessionId.value = info.sessionId || ''; }).catch(() => { });
       App.GetAppVersion().then((v) => { appVersion.value = v || ''; }).catch(() => { appVersion.value = ''; });
 
@@ -1521,7 +1587,79 @@ export default {
       EventsOn("open:about", () => { openAbout(); });
       EventsOn("open:config-editor", () => { configEditorVisible.value = true; });
       EventsOn("open:system-settings", () => { openSettingsHub('general'); });
+      EventsOn("mcp:status-changed", (st) => {
+        mcpServiceEnabled.value = !!(st?.enabled || st?.online);
+      });
       EventsOn("app:confirm-quit", handleConfirmQuit);
+
+      const closeApprovalNotification = () => {
+        if (approvalNotif) {
+          approvalNotif.close();
+          approvalNotif = null;
+        }
+      };
+
+      const showApprovalNotification = (payload) => {
+        if (activeView.value === "audit") return;
+        const tool = payload?.tool || "MCP 工具";
+        const server = payload?.server ? ` · ${payload.server}` : "";
+        const summary = String(payload?.summary || payload?.preview || "").slice(0, 160);
+        closeApprovalNotification();
+        approvalNotif = ElNotification({
+          title: "MCP 待审批",
+          type: "warning",
+          duration: 0,
+          showClose: true,
+          customClass: "approval-queue-notif",
+          message: h("div", { class: "approval-notif-body" }, [
+            h("div", { class: "approval-notif-line" }, `${tool}${server}`),
+            h("div", { class: "approval-notif-summary" }, summary || "点击查看详情"),
+            h(
+              "button",
+              {
+                type: "button",
+                class: "approval-notif-go",
+                onClick: (ev) => {
+                  ev.stopPropagation();
+                  closeApprovalNotification();
+                  switchActiveView("audit");
+                },
+              },
+              "去审批 →",
+            ),
+          ]),
+        });
+      };
+
+      const onApprovalQueued = (payload) => {
+        approvalPendingCount += 1;
+        // 弹窗由 McpApprovalDialog 统一弹出；此处补应用内通知（人不在审计页时）
+        if (activeView.value !== "audit") {
+          showApprovalNotification(payload);
+        }
+        if (document.hidden) {
+          IsNotificationAvailable()
+            .then((ok) => {
+              if (!ok) return;
+              const body = `${payload?.tool || "MCP"}${payload?.server ? ` · ${payload.server}` : ""}`;
+              return SendNotification({
+                id: `mcp-approval-${payload?.id || Date.now()}`,
+                title: "FlashShell MCP 待审批",
+                body,
+              });
+            })
+            .catch(() => {});
+        }
+      };
+      const onApprovalResolved = () => {
+        approvalPendingCount = Math.max(0, approvalPendingCount - 1);
+        if (approvalPendingCount === 0) {
+          closeApprovalNotification();
+        }
+      };
+      // 保存 disposer，卸载时只解绑自己，勿用 EventsOff(事件名)
+      offApprovalQueued = EventsOn("approval:queued", onApprovalQueued);
+      offApprovalResolved = EventsOn("approval:resolved", onApprovalResolved);
 
       // 启动进入首页时检查新版本并弹窗
       if (activeView.value === 'home') {
@@ -1533,6 +1671,10 @@ export default {
     watch(activeView, async (view, prev) => {
       if (prev === 'shell' && view !== 'shell') {
         notifyLeaveShellMode();
+      }
+      if (view === 'audit' && approvalNotif) {
+        approvalNotif.close();
+        approvalNotif = null;
       }
       if (view === 'home') {
         maybePromptUpdateOnHome();
@@ -1795,6 +1937,12 @@ export default {
     onUnmounted(() => {
       document.removeEventListener('keydown', handleKeyDown, true);
       try {
+        offApprovalQueued?.();
+        offApprovalResolved?.();
+      } catch (e) {
+        // ignore
+      }
+      try {
         EventsOff(
           "operation:result",
           "config:changed",
@@ -1804,6 +1952,7 @@ export default {
           "open:about",
           "open:config-editor",
           "open:system-settings",
+          "mcp:status-changed",
           "theme:changed",
           "system-settings:changed",
           "shortcuts:changed",
@@ -1866,6 +2015,7 @@ export default {
       machinesLoading,
       settingsHubVisible,
       settingsSection,
+      mcpServiceEnabled,
       openSettingsHub,
       openMachineConfig,
       openWorkPathConfig,
@@ -1983,10 +2133,17 @@ export default {
 }
 
 .view.home,
-.view.task {
+.view.task,
+.view.audit {
   flex: 1;
   min-height: 0;
+  min-width: 0;
   width: 100%;
+  flex-direction: column;
+}
+
+.view.audit.active {
+  display: flex;
 }
 
 .task-left.left-panel {
@@ -2557,4 +2714,27 @@ body,
   padding: 0 !important;
   box-sizing: border-box;
 }
+
+.approval-queue-notif.el-notification {
+  min-width: 320px;
+  max-width: 420px;
+}
+.approval-notif-body { font-size: 13px; line-height: 1.45; }
+.approval-notif-line { font-weight: 600; margin-bottom: 4px; }
+.approval-notif-summary {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+  margin-bottom: 8px;
+  word-break: break-all;
+}
+.approval-notif-go {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--el-color-warning);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.approval-notif-go:hover { text-decoration: underline; }
 </style>

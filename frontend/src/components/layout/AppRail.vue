@@ -39,6 +39,20 @@
       </svg>
     </button>
 
+    <button
+      v-if="showAudit"
+      type="button"
+      class="nav-item"
+      :class="{ active: activeView === 'audit' }"
+      title="审计日志"
+      aria-label="审计日志"
+      @click="$emit('change-view', 'audit')"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+      </svg>
+    </button>
+
     <div class="rail-gap" />
 
     <span class="rail-tip">FlashShell</span>
@@ -78,11 +92,12 @@ export default {
     activeView: {
       type: String,
       default: 'home',
-      validator: (v) => ['home', 'task', 'shell'].includes(v),
+      validator: (v) => ['home', 'task', 'shell', 'audit'].includes(v),
     },
     openSessionCount: { type: Number, default: 0 },
     connectedCount: { type: Number, default: 0 },
     hasProjects: { type: Boolean, default: false },
+    showAudit: { type: Boolean, default: false },
   },
   emits: ['change-view', 'open-settings'],
   setup(props) {

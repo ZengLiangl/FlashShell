@@ -339,6 +339,124 @@
                                 </div>
                             </div>
                         </div>
+
+                        <!-- 凭据安全 -->
+                        <div v-show="systemPanel === 'credentials'" class="appear-pane-body settings-stack">
+                            <div class="setting-block">
+                                <h3 class="setting-block-title">当前状态</h3>
+                                <div class="setting-card setting-card--padded">
+                                    <p class="system-setting-hint vault-intro">
+                                        敏感凭据以 AES-256-GCM 加密；数据密钥（DEK）保存在系统钥匙串。启用主密码后，DEK 由 Argon2id 派生的密钥（KEK）包装，即使磁盘与钥匙串同时泄露也需爆破主密码。
+                                    </p>
+                                    <div class="vault-stat-grid">
+                                        <div class="vault-stat-item">
+                                            <span class="vault-stat-label">加密模式</span>
+                                            <span class="vault-stat-value">{{ vaultStatus.hasMasterPassword ? '主密码保护' : '基础（无主密码）' }}</span>
+                                        </div>
+                                        <div class="vault-stat-item">
+                                            <span class="vault-stat-label">运行状态</span>
+                                            <el-tag :type="vaultStatus.unlocked ? 'success' : 'warning'" size="small" effect="plain">
+                                                {{ vaultStatus.unlocked ? '已解锁' : '已锁定' }}
+                                            </el-tag>
+                                        </div>
+                                        <div class="vault-stat-item">
+                                            <span class="vault-stat-label">钥匙串后端</span>
+                                            <span class="vault-stat-value vault-stat-value--mono">{{ vaultStatus.keyringBackend || '—' }}</span>
+                                        </div>
+                                        <div v-if="vaultStatus.hasMasterPassword" class="vault-stat-item">
+                                            <span class="vault-stat-label">空闲锁定</span>
+                                            <span class="vault-stat-value">{{ vaultIdleMinutes ? `${vaultIdleMinutes} 分钟` : '未启用' }}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="setting-block">
+                                <h3 class="setting-block-title">锁定时行为</h3>
+                                <div class="setting-card setting-card--padded">
+                                    <div class="vault-lock-panel">
+                                        <div class="vault-lock-col vault-lock-col--allow">
+                                            <div class="vault-lock-col-head">仍可用</div>
+                                            <ul class="vault-lock-list">
+                                                <li v-for="item in vaultLockAllowed" :key="item">{{ item }}</li>
+                                            </ul>
+                                        </div>
+                                        <div class="vault-lock-col vault-lock-col--deny">
+                                            <div class="vault-lock-col-head">需解锁后</div>
+                                            <ul class="vault-lock-list">
+                                                <li v-for="item in vaultLockDenied" :key="item">{{ item }}</li>
+                                            </ul>
+                                        </div>
+                                    </div>
+                                    <p class="vault-lock-note">
+                                        解锁遮罩、后端闸门与前端 safeInvoke 三重拦截；锁定时自动断开远程会话并清空内存中的凭据缓存。
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div class="setting-block">
+                                <h3 class="setting-block-title">{{ vaultStatus.hasMasterPassword ? '主密码管理' : '启用主密码' }}</h3>
+                                <div class="setting-card setting-card--padded">
+                                    <template v-if="!vaultStatus.hasMasterPassword">
+                                        <p class="system-setting-hint vault-section-hint">
+                                            设置主密码后，每次启动或空闲超时需输入密码才能连接服务器与使用 MCP。
+                                        </p>
+                                        <div class="vault-form-grid">
+                                            <el-input v-model="vaultForm.password" type="password" show-password placeholder="主密码" />
+                                            <el-input v-model="vaultForm.confirm" type="password" show-password placeholder="确认主密码" />
+                                        </div>
+                                        <el-button type="primary" :loading="vaultBusy" @click="enableMasterPassword">设置主密码</el-button>
+                                    </template>
+                                    <template v-else>
+                                        <div class="vault-form-grid vault-form-grid--triple">
+                                            <el-input v-model="vaultForm.oldPass" type="password" show-password placeholder="当前主密码" />
+                                            <el-input v-model="vaultForm.password" type="password" show-password placeholder="新主密码（修改时填写）" />
+                                            <el-input v-model="vaultForm.confirm" type="password" show-password placeholder="确认新主密码" />
+                                        </div>
+                                        <div class="vault-form-actions">
+                                            <el-button type="primary" :loading="vaultBusy" @click="changeMasterPassword">修改主密码</el-button>
+                                            <el-button :loading="vaultBusy" @click="disableMasterPassword">关闭主密码</el-button>
+                                            <el-button :disabled="!vaultStatus.unlocked" @click="lockVaultNow">立即锁定</el-button>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <div v-if="vaultStatus.hasMasterPassword" class="setting-block">
+                                <h3 class="setting-block-title">空闲自动锁定</h3>
+                                <div class="setting-card">
+                                    <div class="system-setting-row">
+                                        <div class="system-setting-text">
+                                            <span class="system-setting-label">无操作后锁定</span>
+                                            <span class="system-setting-hint">达到设定时长后自动锁定，并断开所有远程 Shell 会话</span>
+                                        </div>
+                                        <div class="system-setting-control system-setting-control--wide">
+                                            <el-select v-model="vaultIdleMinutes" size="small" style="width: 100%" @change="saveIdleLock">
+                                                <el-option :value="0" label="关闭" />
+                                                <el-option :value="5" label="5 分钟" />
+                                                <el-option :value="10" label="10 分钟" />
+                                                <el-option :value="15" label="15 分钟" />
+                                                <el-option :value="30" label="30 分钟" />
+                                                <el-option :value="60" label="60 分钟" />
+                                            </el-select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="setting-block">
+                                <h3 class="setting-block-title">高级</h3>
+                                <div class="setting-card setting-card--padded vault-danger-zone">
+                                    <p class="system-setting-hint vault-section-hint">
+                                        以下操作不可恢复。重新加密会更换数据密钥；彻底清空将删除全部已保存的密码密文（服务器列表保留）。
+                                    </p>
+                                    <div class="vault-form-actions">
+                                        <el-button type="warning" plain :loading="vaultBusy" @click="resetReencrypt">重新加密</el-button>
+                                        <el-button type="danger" plain :loading="vaultBusy" @click="resetWipe">彻底清空凭据</el-button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -826,7 +944,7 @@
 <script>
 import { ref, reactive, watch, computed, onMounted, onUnmounted, nextTick } from 'vue'
 import { marked } from 'marked'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { Edit, Delete, Plus, Close, Check, Folder } from '@element-plus/icons-vue'
 import * as App from '../../wailsjs/go/app/App'
 import { EventsOn } from '../../wailsjs/runtime/runtime'
@@ -914,6 +1032,27 @@ export default {
         const knownHosts = ref([])
         const loadingKnownHosts = ref(false)
         const importingKnownHosts = ref(false)
+        const vaultStatus = reactive({
+            unlocked: true,
+            hasMasterPassword: false,
+            mode: 'basic',
+            idleLockMinutes: 0,
+            keyringBackend: '',
+        })
+        const vaultForm = reactive({ password: '', confirm: '', oldPass: '' })
+        const vaultIdleMinutes = ref(0)
+        const vaultBusy = ref(false)
+        const vaultLockAllowed = [
+            '查看服务器列表（仅元数据）',
+            '审计日志查看',
+            '配置只读浏览',
+        ]
+        const vaultLockDenied = [
+            '测试连接 / 终端 / SFTP',
+            '敏感凭据与密码字段',
+            'MCP 与 AI 远程操作',
+            '修改配置与主密码',
+        ]
         const accountEditVisible = ref(false)
         const editingAccountIndex = ref(-1)
         const accountForm = reactive({ id: '', name: '', user: '', password: '', keyFile: '', keyPassphrase: '' })
@@ -932,6 +1071,7 @@ export default {
             { id: 'app', label: '应用信息' },
             { id: 'shell', label: 'Shell' },
             { id: 'security', label: '主机密钥' },
+            { id: 'credentials', label: '凭据安全' },
         ]
         /** all | terminal | sftp — Hub 分栏时拆开终端与 SFTP */
         const shellMode = ref('all')
@@ -969,6 +1109,12 @@ export default {
             if (id === 'security') {
                 settingsTab.value = 'system'
                 systemPanel.value = 'security'
+                shellMode.value = 'all'
+                return
+            }
+            if (id === 'credentials') {
+                settingsTab.value = 'system'
+                systemPanel.value = 'credentials'
                 shellMode.value = 'all'
                 return
             }
@@ -1610,7 +1756,149 @@ theme preview · ${theme.foreground}`
 
         watch(systemPanel, (panel) => {
             if (panel === 'security') loadKnownHosts()
+            if (panel === 'credentials') loadVaultStatus()
         })
+
+        const loadVaultStatus = async () => {
+            try {
+                const st = await App.GetVaultStatus()
+                Object.assign(vaultStatus, st || {})
+                vaultIdleMinutes.value = st?.idleLockMinutes || 0
+            } catch {
+                /* ignore */
+            }
+        }
+
+        const clearVaultForm = () => {
+            vaultForm.password = ''
+            vaultForm.confirm = ''
+            vaultForm.oldPass = ''
+        }
+
+        const enableMasterPassword = async () => {
+            vaultBusy.value = true
+            try {
+                await App.SetVaultMasterPassword(vaultForm.password, vaultForm.confirm)
+                ElMessage.success('已启用主密码')
+                clearVaultForm()
+                await loadVaultStatus()
+            } catch (e) {
+                ElMessage.error(String(e))
+            } finally {
+                vaultBusy.value = false
+            }
+        }
+
+        const changeMasterPassword = async () => {
+            vaultBusy.value = true
+            try {
+                await App.ChangeVaultMasterPassword(vaultForm.oldPass, vaultForm.password, vaultForm.confirm)
+                ElMessage.success('主密码已修改')
+                clearVaultForm()
+                await loadVaultStatus()
+            } catch (e) {
+                ElMessage.error(String(e))
+            } finally {
+                vaultBusy.value = false
+            }
+        }
+
+        const disableMasterPassword = async () => {
+            try {
+                await ElMessageBox.confirm('关闭主密码后 DEK 将以明文形式存入钥匙串，确认？', '关闭主密码', { type: 'warning' })
+            } catch {
+                return
+            }
+            vaultBusy.value = true
+            try {
+                await App.DisableVaultMasterPassword(vaultForm.oldPass || vaultForm.password)
+                ElMessage.success('已关闭主密码')
+                clearVaultForm()
+                await loadVaultStatus()
+            } catch (e) {
+                ElMessage.error(String(e))
+            } finally {
+                vaultBusy.value = false
+            }
+        }
+
+        const lockVaultNow = async () => {
+            try {
+                await App.LockVault()
+                ElMessage.success('已锁定')
+                await loadVaultStatus()
+            } catch (e) {
+                ElMessage.error(String(e))
+            }
+        }
+
+        const saveIdleLock = async (v) => {
+            try {
+                await App.SetVaultIdleLockMinutes(Number(v) || 0)
+                ElMessage.success('已保存空闲锁定')
+                await loadVaultStatus()
+            } catch (e) {
+                ElMessage.error(String(e))
+            }
+        }
+
+        const resetReencrypt = async () => {
+            try {
+                await ElMessageBox.confirm('将生成新 DEK 并重加密全部凭据。若已启用主密码，请在下一步输入。', '重新加密', { type: 'warning' })
+            } catch {
+                return
+            }
+            let pass = ''
+            if (vaultStatus.hasMasterPassword) {
+                try {
+                    const { value } = await ElMessageBox.prompt('请输入主密码', '重新加密', { inputType: 'password' })
+                    pass = value || ''
+                } catch {
+                    return
+                }
+            }
+            vaultBusy.value = true
+            try {
+                await App.ResetVaultReencrypt(pass)
+                ElMessage.success('已重新加密')
+                await loadVaultStatus()
+            } catch (e) {
+                ElMessage.error(String(e))
+            } finally {
+                vaultBusy.value = false
+            }
+        }
+
+        const resetWipe = async () => {
+            try {
+                await ElMessageBox.confirm(
+                    '将删除全部服务器密码/私钥密文与全局账号密码，无法恢复。服务器列表与审计会保留。',
+                    '彻底清空凭据',
+                    { type: 'error', confirmButtonText: '清空' },
+                )
+            } catch {
+                return
+            }
+            let pass = ''
+            if (vaultStatus.hasMasterPassword) {
+                try {
+                    const { value } = await ElMessageBox.prompt('请输入主密码确认', '彻底清空', { inputType: 'password' })
+                    pass = value || ''
+                } catch {
+                    return
+                }
+            }
+            vaultBusy.value = true
+            try {
+                await App.ResetVaultWipeSecrets(pass)
+                ElMessage.success('凭据已清空')
+                await loadVaultStatus()
+            } catch (e) {
+                ElMessage.error(String(e))
+            } finally {
+                vaultBusy.value = false
+            }
+        }
 
         watch(() => props.modelValue, (open) => {
             if (!props.embedded && open) load()
@@ -1843,6 +2131,19 @@ theme preview · ${theme.foreground}`
             loadKnownHosts,
             importSystemKnownHosts,
             removeKnownHost,
+            vaultStatus,
+            vaultForm,
+            vaultIdleMinutes,
+            vaultBusy,
+            vaultLockAllowed,
+            vaultLockDenied,
+            enableMasterPassword,
+            changeMasterPassword,
+            disableMasterPassword,
+            lockVaultNow,
+            saveIdleLock,
+            resetReencrypt,
+            resetWipe,
             saving,
             savingAccount,
             sessionId,
@@ -2596,6 +2897,160 @@ theme preview · ${theme.foreground}`
     font-size: 12px;
     color: var(--app-text-muted);
     line-height: 1.4;
+}
+
+.vault-intro {
+    margin: 0 0 14px;
+    line-height: 1.55;
+}
+
+.vault-section-hint {
+    margin: 0 0 12px;
+    line-height: 1.5;
+}
+
+.vault-stat-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(148px, 1fr));
+    gap: 10px;
+}
+
+.vault-stat-item {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px 12px;
+    border: 1px solid var(--app-border);
+    border-radius: var(--app-radius-md, 8px);
+    background: color-mix(in srgb, var(--app-card-bg, var(--app-bg)) 92%, var(--app-accent-bg, transparent));
+}
+
+.vault-stat-label {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    color: var(--app-text-muted);
+}
+
+.vault-stat-value {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--app-text);
+    line-height: 1.35;
+}
+
+.vault-stat-value--mono {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    font-size: 12px;
+    word-break: break-all;
+}
+
+.vault-lock-panel {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+}
+
+@media (max-width: 560px) {
+    .vault-lock-panel {
+        grid-template-columns: 1fr;
+    }
+}
+
+.vault-lock-col {
+    padding: 12px 14px;
+    border-radius: var(--app-radius-md, 8px);
+    border: 1px solid var(--app-border);
+}
+
+.vault-lock-col--allow {
+    background: color-mix(in srgb, var(--el-color-success, #67c23a) 8%, var(--app-card-bg, var(--app-bg)));
+    border-color: color-mix(in srgb, var(--el-color-success, #67c23a) 28%, var(--app-border));
+}
+
+.vault-lock-col--deny {
+    background: color-mix(in srgb, var(--el-color-warning, #e6a23c) 8%, var(--app-card-bg, var(--app-bg)));
+    border-color: color-mix(in srgb, var(--el-color-warning, #e6a23c) 28%, var(--app-border));
+}
+
+.vault-lock-col-head {
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--app-text);
+}
+
+.vault-lock-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.vault-lock-list li {
+    position: relative;
+    padding-left: 14px;
+    font-size: 12px;
+    line-height: 1.45;
+    color: var(--app-text-muted);
+}
+
+.vault-lock-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.55em;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: currentColor;
+    opacity: 0.55;
+}
+
+.vault-lock-col--allow .vault-lock-list li {
+    color: color-mix(in srgb, var(--el-color-success, #67c23a) 70%, var(--app-text));
+}
+
+.vault-lock-col--deny .vault-lock-list li {
+    color: color-mix(in srgb, var(--el-color-warning, #e6a23c) 75%, var(--app-text));
+}
+
+.vault-lock-note {
+    margin: 12px 0 0;
+    font-size: 12px;
+    line-height: 1.5;
+    color: var(--app-text-muted);
+}
+
+.vault-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.vault-form-grid--triple {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+@media (max-width: 640px) {
+    .vault-form-grid,
+    .vault-form-grid--triple {
+        grid-template-columns: 1fr;
+    }
+}
+
+.vault-form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.vault-danger-zone {
+    border-color: color-mix(in srgb, var(--el-color-danger, #f56c6c) 22%, var(--app-border));
+    background: color-mix(in srgb, var(--el-color-danger, #f56c6c) 4%, var(--app-card-bg, var(--app-bg)));
 }
 
 .system-setting-control {

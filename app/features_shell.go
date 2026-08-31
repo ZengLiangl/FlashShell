@@ -50,6 +50,9 @@ func (a *App) ExportMachineTemplateToFile() (string, error) {
 
 // ImportMachineTemplateFromFile 从文件导入连接模板
 func (a *App) ImportMachineTemplateFromFile(merge bool) (data.ImportMachineTemplateResult, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return data.ImportMachineTemplateResult{}, err
+	}
 	if a.ctx == nil {
 		return data.ImportMachineTemplateResult{}, fmt.Errorf("应用未就绪")
 	}
@@ -71,6 +74,9 @@ func (a *App) ImportMachineTemplateFromFile(merge bool) (data.ImportMachineTempl
 
 // ImportMachineTemplate 导入连接模板 JSON
 func (a *App) ImportMachineTemplate(jsonData string, merge bool) (data.ImportMachineTemplateResult, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return data.ImportMachineTemplateResult{}, err
+	}
 	existing := a.configManager.GetAllMachinesFromGlobal()
 	updated, result, err := data.ImportMachineTemplate([]byte(jsonData), merge, existing)
 	if err != nil {

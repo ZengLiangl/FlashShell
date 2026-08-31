@@ -4,7 +4,11 @@ import {define} from '../models';
 import {app} from '../models';
 import {machine} from '../models';
 import {menu} from '../models';
+import {mcp} from '../models';
 import {data} from '../models';
+import {crypto} from '../models';
+
+export function AddMCPOutboundHost(arg1:string):Promise<void>;
 
 export function AddMachine(arg1:define.Machine):Promise<void>;
 
@@ -24,6 +28,8 @@ export function ApplyShellCd(arg1:string,arg2:string,arg3:string):Promise<string
 
 export function BroadcastShellInput(arg1:Array<string>,arg2:string):Promise<void>;
 
+export function ChangeVaultMasterPassword(arg1:string,arg2:string,arg3:string):Promise<void>;
+
 export function CheckForUpdates():Promise<app.UpdateCheckResult>;
 
 export function CheckShellUploadConflict(arg1:string,arg2:string,arg3:string):Promise<machine.SftpUploadConflict>;
@@ -31,6 +37,10 @@ export function CheckShellUploadConflict(arg1:string,arg2:string,arg3:string):Pr
 export function ChmodShellRemotePath(arg1:string,arg2:string,arg3:number):Promise<void>;
 
 export function ClearFinishedShellTransfers():Promise<void>;
+
+export function ClearMCPAudit():Promise<void>;
+
+export function ClearMCPTokens():Promise<void>;
 
 export function ClearMachineSensitiveData(arg1:string):Promise<void>;
 
@@ -58,6 +68,12 @@ export function CreateApplicationMenu():Promise<menu.Menu>;
 
 export function CreateMachine(arg1:define.Machine,arg2:define.SensitiveData):Promise<string>;
 
+export function DecideMCPApproval(arg1:string,arg2:boolean,arg3:boolean):Promise<void>;
+
+export function DecideMCPApprovalBatch(arg1:Array<string>,arg2:boolean):Promise<void>;
+
+export function DeleteMCPAudit(arg1:Array<string>):Promise<void>;
+
 export function DeleteMachine(arg1:string):Promise<void>;
 
 export function DeleteMachineGroup(arg1:string):Promise<void>;
@@ -71,6 +87,8 @@ export function DeleteShellFile(arg1:string,arg2:string):Promise<void>;
 export function DeleteWorkPath(arg1:string):Promise<void>;
 
 export function DeleteWorkPathWithEvent(arg1:string):Promise<void>;
+
+export function DisableVaultMasterPassword(arg1:string):Promise<void>;
 
 export function DisconnectShell(arg1:string):Promise<void>;
 
@@ -86,11 +104,15 @@ export function ExecuteSubProject(arg1:string,arg2:string):Promise<void>;
 
 export function ExportKnownHosts():Promise<string>;
 
+export function ExportMCPAudit(arg1:string,arg2:mcp.AuditFilter):Promise<string>;
+
 export function ExportMachineTemplate():Promise<string>;
 
 export function ExportMachineTemplateToFile():Promise<string>;
 
 export function ExportMachinesCSVPick():Promise<string>;
+
+export function GenerateMCPToken(arg1:string,arg2:string):Promise<mcp.Token>;
 
 export function GetAppVersion():Promise<string>;
 
@@ -115,6 +137,20 @@ export function GetKeyMapSettings():Promise<data.KeyMapSettings>;
 export function GetKnownHosts():Promise<Array<data.KnownHostRecord>>;
 
 export function GetLocalHomeDir():Promise<string>;
+
+export function GetMCPApprovalContext(arg1:string):Promise<Array<mcp.AuditEntry>>;
+
+export function GetMCPAuditMeta():Promise<mcp.AuditMeta>;
+
+export function GetMCPAuditStats():Promise<mcp.AuditStats>;
+
+export function GetMCPGuidancePreview(arg1:string):Promise<string>;
+
+export function GetMCPSettings():Promise<mcp.Settings>;
+
+export function GetMCPSnippets():Promise<mcp.ClientSnippet>;
+
+export function GetMCPStatus():Promise<mcp.Status>;
 
 export function GetMachineGroupDefaults():Promise<Array<data.MachineGroupDefaults>>;
 
@@ -174,6 +210,8 @@ export function GetSystemSettings():Promise<data.GlobalConfig>;
 
 export function GetThemeSettings():Promise<data.ThemeSettings>;
 
+export function GetVaultStatus():Promise<crypto.Status>;
+
 export function GetWorkPaths():Promise<Record<string, string>>;
 
 export function ImportFinalShellPick(arg1:string,arg2:string):Promise<data.MachineImportResult>;
@@ -204,13 +242,33 @@ export function ImportXshellFromFolder(arg1:string,arg2:string,arg3:string):Prom
 
 export function ImportXshellPick(arg1:string,arg2:string):Promise<data.MachineImportResult>;
 
+export function InstallCursorMCP():Promise<void>;
+
+export function InstallMCPClient(arg1:string):Promise<mcp.Token>;
+
+export function InstallMCPClientWith(arg1:string,arg2:mcp.InstallOpts):Promise<mcp.Token>;
+
 export function InstallUpdateAndRestart():Promise<app.UpdateInstallResult>;
+
+export function IssueMCPToken(arg1:mcp.IssueOpts):Promise<mcp.Token>;
 
 export function ListAppIconPresets():Promise<Array<app.AppIconPresetInfo>>;
 
 export function ListLocalFiles(arg1:string,arg2:boolean):Promise<Array<define.SftpEntry>>;
 
 export function ListLocalShells():Promise<Array<machine.LocalShellOption>>;
+
+export function ListMCPApprovals():Promise<Array<mcp.ApprovalItem>>;
+
+export function ListMCPClients():Promise<Array<mcp.ClientLink>>;
+
+export function ListMCPCustomDangerPatterns():Promise<Array<string>>;
+
+export function ListMCPSensitive():Promise<Array<Record<string, any>>>;
+
+export function ListMCPServerAliases():Promise<Array<string>>;
+
+export function ListMCPTokens():Promise<Array<mcp.Token>>;
 
 export function ListPortForwards():Promise<Array<data.PortForwardRule>>;
 
@@ -219,6 +277,10 @@ export function ListShellFiles(arg1:string,arg2:string,arg3:boolean):Promise<Arr
 export function ListShellTransfers():Promise<Array<define.SftpTransferRecord>>;
 
 export function ListSystemFonts():Promise<Array<app.SystemFontInfo>>;
+
+export function ListVaultGuardedMethods():Promise<Array<string>>;
+
+export function LockVault():Promise<void>;
 
 export function MkdirShellRemotePath(arg1:string,arg2:string):Promise<void>;
 
@@ -239,6 +301,8 @@ export function OpenDownloadedUpdatePackage():Promise<void>;
 export function OpenDownloadsDirectory():Promise<void>;
 
 export function OpenGlobalConfigWithEvent():Promise<void>;
+
+export function OpenMCPPath(arg1:string):Promise<void>;
 
 export function OpenMachineConfig():Promise<void>;
 
@@ -272,6 +336,10 @@ export function PickShellUploadPaths():Promise<Array<string>>;
 
 export function PrioritizeShellTransfer(arg1:string):Promise<void>;
 
+export function PurgeMCPAudit():Promise<number>;
+
+export function QueryMCPAudit(arg1:mcp.AuditFilter):Promise<Array<mcp.AuditEntry>>;
+
 export function ReadShellRemoteFile(arg1:string,arg2:string):Promise<string>;
 
 export function ReconnectShell(arg1:string):Promise<string>;
@@ -281,6 +349,10 @@ export function RecordShellCommandHistory(arg1:string,arg2:string):Promise<void>
 export function RefreshConfigMenu():Promise<void>;
 
 export function RefreshConfigMenuWithEvent():Promise<void>;
+
+export function RefreshCursorMCP():Promise<void>;
+
+export function RefreshMCPClient(arg1:string):Promise<mcp.Token>;
 
 export function RemoveKnownHost(arg1:string,arg2:number):Promise<void>;
 
@@ -294,6 +366,12 @@ export function RenameMachineGroup(arg1:string,arg2:string):Promise<void>;
 
 export function RenameShellRemotePath(arg1:string,arg2:string,arg3:string):Promise<void>;
 
+export function ResetVaultForgotMasterPassword():Promise<void>;
+
+export function ResetVaultReencrypt(arg1:string):Promise<void>;
+
+export function ResetVaultWipeSecrets(arg1:string):Promise<void>;
+
 export function ResizeShell(arg1:string,arg2:number,arg3:number):Promise<void>;
 
 export function ResolveShellPath(arg1:string,arg2:string,arg3:string):Promise<string>;
@@ -301,6 +379,8 @@ export function ResolveShellPath(arg1:string,arg2:string,arg3:string):Promise<st
 export function ResumeAllShellTransfers():Promise<number>;
 
 export function ResumeShellTransfer(arg1:string):Promise<void>;
+
+export function RevokeMCPToken(arg1:string):Promise<void>;
 
 export function SaveClipboardImageForUpload(arg1:string):Promise<string>;
 
@@ -313,6 +393,10 @@ export function SaveGlobalAccountsFromDTO(arg1:Array<data.GlobalAccountDTO>):Pro
 export function SaveGlobalConfig(arg1:data.GlobalConfig):Promise<void>;
 
 export function SaveKeyMapSettings(arg1:data.KeyMapSettings):Promise<void>;
+
+export function SaveMCPCustomDangerPatterns(arg1:Array<string>):Promise<void>;
+
+export function SaveMCPSettings(arg1:mcp.Settings):Promise<void>;
 
 export function SaveMachineGroupDefaults(arg1:data.MachineGroupDefaults):Promise<void>;
 
@@ -351,6 +435,10 @@ export function SetMachinePinned(arg1:string,arg2:boolean):Promise<void>;
 export function SetMachineSensitiveData(arg1:string,arg2:define.SensitiveData):Promise<void>;
 
 export function SetMachineShellMonitorOpen(arg1:string,arg2:boolean):Promise<void>;
+
+export function SetVaultIdleLockMinutes(arg1:number):Promise<void>;
+
+export function SetVaultMasterPassword(arg1:string,arg2:string):Promise<void>;
 
 export function ShellAsciiInputEnter():Promise<void>;
 
@@ -400,6 +488,12 @@ export function TrustHostKey(arg1:string,arg2:number,arg3:string):Promise<void>;
 
 export function TrustHostKeyOnce(arg1:string,arg2:number,arg3:string):Promise<void>;
 
+export function UninstallCursorMCP():Promise<void>;
+
+export function UninstallMCPClient(arg1:string):Promise<void>;
+
+export function UnlockVault(arg1:string):Promise<void>;
+
 export function UpdateApplicationMenu():Promise<void>;
 
 export function UpdateMachine(arg1:string,arg2:define.Machine):Promise<void>;
@@ -414,4 +508,8 @@ export function UpdateWorkPathWithEvent(arg1:string,arg2:string):Promise<void>;
 
 export function UpsertSftpFileAssociation(arg1:string,arg2:data.SftpFileAssociation):Promise<void>;
 
+export function VaultTouchActivity():Promise<void>;
+
 export function WindowIsChromeMaximised():Promise<boolean>;
+
+export function WriteMCPGuidance(arg1:string):Promise<mcp.GuidanceStatus>;

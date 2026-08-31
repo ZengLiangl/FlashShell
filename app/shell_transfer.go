@@ -577,6 +577,9 @@ func (a *App) ResumeAllShellTransfers() int {
 
 // StartShellDownload 下载远端路径到 Downloads/fddownload（异步）
 func (a *App) StartShellDownload(machineName, remotePath string) (string, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return "", err
+	}
 	remotePath = strings.TrimSpace(remotePath)
 	if machineName == "" || remotePath == "" || remotePath == "/" {
 		return "", fmt.Errorf("参数无效")
@@ -640,6 +643,9 @@ func (a *App) StartShellDownload(machineName, remotePath string) (string, error)
 // StartShellUpload 上传本地路径到远端目录（异步）。
 // conflictAction: replace | duplicate | merge | ""(默认 replace)；目录默认压缩上传（可在设置关闭）。
 func (a *App) StartShellUpload(machineName, localPath, remoteDir, conflictAction string) (string, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return "", err
+	}
 	localPath = strings.TrimSpace(localPath)
 	remoteDir = strings.TrimSpace(remoteDir)
 	conflictAction = strings.ToLower(strings.TrimSpace(conflictAction))
