@@ -345,6 +345,11 @@
           <li @click="promptNewFile">新建文件</li>
           <li class="ctx-sep" aria-hidden="true"></li>
           <li @click="openRowFromMenu">打开</li>
+          <template v-if="!ctx.row.isDir">
+            <li @click="openWithSystemDefaultEntry">系统默认</li>
+            <li @click="openWithEntry">打开方式</li>
+            <li v-if="!isBinaryRow(ctx.row)" @click="editEntry">编辑</li>
+          </template>
           <li class="ctx-sep" aria-hidden="true"></li>
           <li @click="copyEntry">复制</li>
           <li @click="cutEntry">剪切</li>
@@ -375,12 +380,6 @@
           <li class="ctx-sep" aria-hidden="true"></li>
           <li @click="promptRename">重命名</li>
           <li @click="promptChmod">修改权限</li>
-          <template v-if="!ctx.row.isDir">
-            <li class="ctx-sep" aria-hidden="true"></li>
-            <li @click="openWithSystemDefaultEntry">系统默认</li>
-            <li @click="openWithEntry">打开方式</li>
-            <li v-if="!isBinaryRow(ctx.row)" @click="editEntry">编辑</li>
-          </template>
           <li class="ctx-sep" aria-hidden="true"></li>
           <li @click="downloadEntry">下载</li>
           <li @click="copyPath">复制路径</li>
@@ -2455,6 +2454,8 @@ export default {
         if (!payload || payload.machineName !== props.machineName) return
         if (payload.status === 'uploaded') {
           reload()
+        } else if (payload.status === 'error' && payload.message) {
+          ElMessage.error(payload.message)
         }
       })
       offSystemSettings = EventsOn('system-settings:changed', (payload) => {

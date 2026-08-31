@@ -163,3 +163,82 @@ func TestJZUploadOverwriteSameSize(t *testing.T) {
 	}
 	t.Log("same-size overwrite ok")
 }
+
+// 模拟 SFTP「系统默认打开」：下载到本地、同尺寸改内容后回传。
+// UploadFile 会因远端尺寸≥本地而跳过；外置编辑必须走 UploadFileOverwrite。
+// 运行：go test ./machine -run TestJZExternalEditSameSizeSync -count=1 -v
+func TestJZExternalEditSameSizeSync(t *testing.T) {
+	if testing.Short() {
+		t.Skip("skip remote jz external-edit test in -short")
+	}
+
+	machine := loadJZMachine(t)
+	aux := NewShellAuxManager()
+	if err := aux.Connect(machine, nil); err != nil {
+		t.Fatalf("Connect jz aux: %v", err)
+	}
+	defer aux.Close()
+	if err := aux.EnsureFileBackend(); err != nil {
+		t.Fatalf("EnsureFileBackend: %v", err)
+	}
+
+	remotePath := path.Join("/tmp", fmt.Sprintf("flashdock-jz-extedit-%d.html", time.Now().UnixNano()))
+	defer func() { _ = aux.RemovePathReliable(remotePath) }()
+
+	ctx := context.Background()
+	seed := []byte("<html><title>jz-seed-aaaa</title></html>\n")
+	edited := []byte("<html><title>jz-edit-bbbb</title></html>\n")
+	if len(seed) != len(edited) {
+		t.Fatalf("fixture size mismatch: %d vs %d", len(seed), len(edited))
+	}
+
+	seedLocal := filepath.Join(t.TempDir(), "index.html")
+	if err := os.WriteFile(seedLocal, seed, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := aux.UploadFile(ctx, seedLocal, remotePath, nil); err != nil {
+		t.Fatalf("seed upload: %v", err)
+	}
+
+	localTemp := filepath.Join(t.TempDir(), "index.html")
+	if err := aux.DownloadFile(ctx, remotePath, localTemp, nil); err != nil {
+		t.Fatalf("download like system-default open: %v", err)
+	}
+	if err := os.WriteFile(localTemp, edited, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := aux.UploadFile(ctx, localTemp, remotePath, nil); err != nil {
+		t.Fatalf("legacy sync upload: %v", err)
+	}
+	stale := filepath.Join(t.TempDir(), "after-legacy.txt")
+	if err := aux.DownloadFile(ctx, remotePath, stale, nil); err != nil {
+		t.Fatalf("download after legacy sync: %v", err)
+	}
+	got, err := os.ReadFile(stale)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) == string(edited) {
+		t.Fatal("UploadFile unexpectedly replaced same-size content; resume skip may have been removed")
+	}
+	if string(got) != string(seed) {
+		t.Fatalf("legacy sync corrupted remote: got %q want seed %q", got, seed)
+	}
+
+	if err := aux.UploadFileOverwrite(ctx, localTemp, remotePath, nil); err != nil {
+		t.Fatalf("external-edit overwrite: %v", err)
+	}
+	verify := filepath.Join(t.TempDir(), "after-overwrite.txt")
+	if err := aux.DownloadFile(ctx, remotePath, verify, nil); err != nil {
+		t.Fatalf("download after overwrite: %v", err)
+	}
+	got, err = os.ReadFile(verify)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != string(edited) {
+		t.Fatalf("external-edit sync failed: got %q want %q", got, edited)
+	}
+	t.Log("external-edit same-size sync ok")
+}

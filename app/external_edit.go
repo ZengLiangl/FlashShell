@@ -132,7 +132,8 @@ func (a *App) runExternalEditWatch(ctx context.Context, w *externalEditWatch) {
 				return
 			}
 			remotePath := w.remotePath
-			if err := aux.UploadFile(context.Background(), w.localPath, remotePath, nil); err != nil {
+			// 外置编辑回传必须整文件覆盖：UploadFile 会把「远端尺寸≥本地」当成续传完成而跳过
+			if err := aux.UploadFileOverwrite(context.Background(), w.localPath, remotePath, nil); err != nil {
 				a.emitExternalEdit(w.machineName, w.remotePath, "error", err.Error())
 				return
 			}
