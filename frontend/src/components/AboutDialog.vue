@@ -1,8 +1,10 @@
 <template>
     <el-dialog
         v-model="visibleProxy"
+        class="about-dialog"
         :title="promptMode ? '发现新版本' : '关于 FlashShell'"
         width="720px"
+        align-center
         :before-close="handleClose"
     >
         <div class="about-container">
@@ -100,14 +102,25 @@
                 <div v-if="updateResult?.releaseNotes" class="release-section">
                     <div class="release-section-title">
                         <span>{{ updateResult.hasUpdate ? '更新说明' : '最新 Release' }}</span>
-                        <el-button
-                            v-if="updateResult.releaseURL && !updateResult.hasUpdate"
-                            size="small"
-                            text
-                            @click="openRelease"
-                        >
-                            查看 Release
-                        </el-button>
+                        <div class="release-section-actions">
+                            <el-button
+                                v-if="!promptMode"
+                                size="small"
+                                text
+                                :loading="checking"
+                                @click="() => checkUpdate(true)"
+                            >
+                                检查更新
+                            </el-button>
+                            <el-button
+                                v-if="updateResult.releaseURL && !updateResult.hasUpdate"
+                                size="small"
+                                text
+                                @click="openRelease"
+                            >
+                                查看 Release
+                            </el-button>
+                        </div>
                     </div>
                     <div
                         class="update-notes markdown-body"
@@ -116,20 +129,21 @@
                     ></div>
                 </div>
 
-                <el-button v-if="!promptMode" size="small" text :loading="checking" @click="() => checkUpdate(true)">
+                <el-button
+                    v-else-if="!promptMode"
+                    size="small"
+                    text
+                    class="check-update-lone"
+                    :loading="checking"
+                    @click="() => checkUpdate(true)"
+                >
                     检查更新
                 </el-button>
             </div>
         </div>
-        <template #footer>
+        <template v-if="promptMode && updateResult?.hasUpdate" #footer>
             <span class="dialog-footer">
-                <el-button
-                    v-if="promptMode && updateResult?.hasUpdate"
-                    @click="skipThisVersion"
-                >
-                    跳过此版本
-                </el-button>
-                <!-- <el-button type="primary" @click="handleClose">关闭</el-button> -->
+                <el-button @click="skipThisVersion">跳过此版本</el-button>
             </span>
         </template>
     </el-dialog>
@@ -491,7 +505,15 @@ export default {
 
 <style scoped>
 .about-container {
-    padding: 4px 8px;
+    padding: 0;
+    min-height: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.about-container :deep(.el-divider) {
+    margin: 12px 0;
 }
 
 .brand {
@@ -552,8 +574,11 @@ export default {
 }
 
 .update-block {
-    margin-top: 16px;
-    min-height: 36px;
+    margin-top: 12px;
+    min-height: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 .update-banner {
@@ -611,7 +636,11 @@ export default {
 }
 
 .release-section {
-    margin: 10px 0 8px;
+    margin: 10px 0 0;
+    min-height: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
 }
 
 .release-section-title {
@@ -619,24 +648,38 @@ export default {
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    margin-bottom: 6px;
+    flex-shrink: 0;
+    margin-bottom: 8px;
     font-size: 13px;
     font-weight: 650;
     color: var(--app-text, #303133);
 }
 
+.release-section-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+}
+
 .update-notes {
     margin: 0;
-    max-height: 240px;
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: min(36vh, 320px);
     overflow: auto;
-    padding: 10px 12px;
-    border-radius: 8px;
-    background: var(--app-card-bg, #fff);
-    border: 1px solid var(--app-border, #e4e7ed);
-    font-size: 12px;
-    line-height: 1.55;
+    overscroll-behavior: contain;
+    padding: 0 2px 4px 0;
+    border: none;
+    background: transparent;
+    font-size: 12.5px;
+    line-height: 1.6;
     word-break: break-word;
     color: var(--app-text-secondary, #606266);
+}
+
+.check-update-lone {
+    align-self: flex-start;
+    margin-top: 4px;
 }
 
 .update-notes :deep(h1),
@@ -698,7 +741,7 @@ export default {
 }
 
 .update-ok {
-    margin-bottom: 6px;
+    margin-bottom: 2px;
     font-size: 13px;
     color: #67c23a;
 }

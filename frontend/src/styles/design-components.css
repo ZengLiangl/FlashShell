@@ -398,9 +398,34 @@
 }
 
 /* ---------- 关于 / 配置编辑器 ---------- */
+.about-dialog.el-dialog {
+  max-height: min(78vh, 680px);
+  display: flex;
+  flex-direction: column;
+  margin: 6vh auto !important;
+}
+
+.about-dialog .el-dialog__header,
+.about-dialog .el-dialog__footer {
+  flex-shrink: 0;
+}
+
 .about-dialog .el-dialog__body,
 .config-editor-dialog .el-dialog__body {
   color: var(--fg-2);
+}
+
+.about-dialog .el-dialog__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  padding: 8px 20px 16px;
+}
+
+.about-dialog .el-dialog__footer {
+  padding-top: 0;
 }
 
 /* ---------- 任务流水线编辑器 ---------- */
