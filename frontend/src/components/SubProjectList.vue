@@ -357,6 +357,7 @@ export default {
 
 .sp-row,
 .cmd-row {
+    position: relative;
     border-radius: 8px;
 }
 
@@ -365,14 +366,32 @@ export default {
     background: color-mix(in oklch, var(--fg) 6%, transparent);
 }
 
+.row-text,
+.sp-main {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+}
+
 .row-actions {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
     opacity: 0;
+    pointer-events: none;
+    z-index: 2;
+    padding: 2px 0 2px 10px;
+    background: var(--surface-2);
+    border-radius: 8px;
     transition: opacity 0.12s ease;
 }
 
 .sp-row:hover .row-actions,
 .cmd-row:hover .row-actions {
     opacity: 1;
+    pointer-events: auto;
+    background: color-mix(in oklch, var(--fg) 6%, var(--surface-2));
 }
 
 .commands-tree {
@@ -431,6 +450,14 @@ export default {
 }
 
 .subproject-name,
+.sp-name,
+.command-name {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.subproject-name,
 .sp-name {
     font-size: 13.5px;
     font-weight: 500;
@@ -447,8 +474,9 @@ export default {
     font-size: 12px;
     color: var(--muted);
     margin-top: 2px;
-    display: block;
-    -webkit-line-clamp: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .chevron,
@@ -483,7 +511,6 @@ export default {
     flex-shrink: 0;
     display: flex;
     gap: 3px;
-    padding: 0 4px 0 0;
 }
 
 .row-actions :deep(.el-button) {
