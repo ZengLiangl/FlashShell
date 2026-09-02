@@ -12,8 +12,29 @@
   >
     <div class="settings-hub">
       <aside class="hub-nav">
-        <template v-for="(group, gi) in navGroups" :key="group.id">
-          <div v-if="gi > 0" class="hub-nav-sep" role="separator" />
+        <div class="hub-search">
+          <el-input
+            v-model="searchQuery"
+            clearable
+            size="small"
+            placeholder="搜索设置…"
+          />
+        </div>
+        <div v-if="searchQuery.trim() && catalogHits.length" class="hub-hits">
+          <button
+            v-for="hit in catalogHits"
+            :key="hit.id"
+            type="button"
+            class="hub-hit"
+            :class="{ active: focusSetting === hit.id && section === hit.section }"
+            @click="jumpTo(hit)"
+          >
+            <span class="hub-hit-label">{{ hit.label }}</span>
+            <span class="hub-hit-sec">{{ sectionLabel(hit.section) }}</span>
+          </button>
+        </div>
+        <template v-for="(group, gi) in filteredNavGroups" :key="group.id">
+          <div v-if="gi > 0 && group.items.length" class="hub-nav-sep" role="separator" />
           <button
             v-for="item in group.items"
             :key="item.id"
@@ -37,6 +58,7 @@
             embedded
             :active="isSystemSection"
             :panel="isSystemSection ? section : panelCache.system"
+            :focus-setting="focusSetting"
             @saved="visibleProxy = false"
           />
           <MachineConfigDialog
@@ -98,6 +120,7 @@ import {
   InfoFilled,
   Box,
   Link,
+  Paperclip,
 } from '@element-plus/icons-vue'
 import MachineConfigDialog from './MachineConfigDialog.vue'
 import WorkPathConfigDialog from './WorkPathConfigDialog.vue'
@@ -106,6 +129,7 @@ import ShortcutSettingsPanel from './ShortcutSettingsPanel.vue'
 import ProxySettingsPanel from './ProxySettingsPanel.vue'
 import PortForwardPanel from './PortForwardPanel.vue'
 import McpAccessView from './McpAccessView.vue'
+import { searchSettingsCatalog } from '../utils/settingsSearchCatalog'
 
 /** 偏好设置（对齐 Netcatty：应用 / 外观 / 终端 / …） */
 const PREFS_ITEMS = [
@@ -113,6 +137,7 @@ const PREFS_ITEMS = [
   { id: 'appearance', label: '外观', icon: Brush },
   { id: 'terminal', label: '终端', icon: Cpu },
   { id: 'sftp', label: 'SFTP', icon: FolderOpened },
+  { id: 'files', label: '文件关联', icon: Paperclip },
   { id: 'accounts', label: '密钥库', icon: Key },
   { id: 'credentials', label: '凭据安全', icon: Lock },
   { id: 'security', label: '主机密钥', icon: Document },
@@ -133,7 +158,7 @@ const META_ITEMS = [
 ]
 
 const ALL_ITEMS = [...PREFS_ITEMS, ...OPS_ITEMS, ...META_ITEMS]
-const SYSTEM_SECTION_IDS = new Set(['app', 'appearance', 'terminal', 'sftp', 'accounts', 'security', 'credentials', 'about', 'general'])
+const SYSTEM_SECTION_IDS = new Set(['app', 'appearance', 'terminal', 'sftp', 'files', 'accounts', 'security', 'credentials', 'about', 'general'])
 
 export default {
   name: 'SettingsHubDialog',
@@ -157,6 +182,8 @@ export default {
     Lock,
     InfoFilled,
     Box,
+    Link,
+    Paperclip,
   },
   props: {
     modelValue: { type: Boolean, default: false },
@@ -177,7 +204,37 @@ export default {
       return ALL_ITEMS.some((i) => i.id === raw) ? raw : 'app'
     }
 
+    const searchQuery = ref('')
+    const focusSetting = ref('')
     const section = ref(resolveSection(props.initialSection))
+
+    const catalogHits = computed(() => searchSettingsCatalog(searchQuery.value))
+
+    const sectionLabel = (id) => ALL_ITEMS.find((i) => i.id === id)?.label || id
+
+    const filteredNavGroups = computed(() => {
+      const q = searchQuery.value.trim().toLowerCase()
+      if (!q) return navGroups
+      const hitSections = new Set(catalogHits.value.map((h) => h.section))
+      return navGroups
+        .map((g) => ({
+          ...g,
+          items: g.items.filter(
+            (item) => item.label.toLowerCase().includes(q) || hitSections.has(item.id),
+          ),
+        }))
+        .filter((g) => g.items.length)
+    })
+
+    const jumpTo = (hit) => {
+      focusSetting.value = ''
+      section.value = resolveSection(hit.section)
+      markMounted(section.value)
+      requestAnimationFrame(() => {
+        focusSetting.value = hit.id
+      })
+    }
+
     const mountedPanels = reactive({
       system: false,
       machines: false,
@@ -223,6 +280,8 @@ export default {
         if (open) {
           section.value = resolveSection(initial)
           markMounted(section.value)
+          searchQuery.value = ''
+          focusSetting.value = ''
         } else {
           mountedPanels.system = false
           mountedPanels.machines = false
@@ -246,6 +305,12 @@ export default {
     return {
       visibleProxy,
       section,
+      searchQuery,
+      catalogHits,
+      filteredNavGroups,
+      focusSetting,
+      jumpTo,
+      sectionLabel,
       navGroups,
       currentTitle,
       isSystemSection,
@@ -275,6 +340,48 @@ export default {
   flex-direction: column;
   gap: 2px;
   overflow-y: auto;
+}
+
+.hub-search {
+  padding: 0 4px 8px;
+}
+
+.hub-hits {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 8px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.hub-hit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  width: 100%;
+  padding: 6px 10px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--fg);
+  cursor: pointer;
+  text-align: left;
+}
+
+.hub-hit:hover,
+.hub-hit.active {
+  background: var(--accent-soft);
+}
+
+.hub-hit-label {
+  font-size: 13px;
+}
+
+.hub-hit-sec {
+  font-size: 11px;
+  color: var(--fg-2);
 }
 
 .hub-nav-sep {

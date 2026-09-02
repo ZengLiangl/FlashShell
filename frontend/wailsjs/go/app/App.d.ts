@@ -26,6 +26,8 @@ export function ApplyAppIconPreset(arg1:string):Promise<void>;
 
 export function ApplyShellCd(arg1:string,arg2:string,arg3:string):Promise<string>;
 
+export function ApplyWindowOpacity(arg1:number):Promise<void>;
+
 export function BroadcastShellInput(arg1:Array<string>,arg2:string):Promise<void>;
 
 export function ChangeVaultMasterPassword(arg1:string,arg2:string,arg3:string):Promise<void>;
@@ -216,6 +218,8 @@ export function GetVaultStatus():Promise<crypto.Status>;
 
 export function GetWorkPaths():Promise<Record<string, string>>;
 
+export function HideMainWindow():Promise<void>;
+
 export function ImportFinalShellPick(arg1:string,arg2:string):Promise<data.MachineImportResult>;
 
 export function ImportKnownHosts(arg1:string):Promise<number>;
@@ -283,6 +287,8 @@ export function ListSystemFonts():Promise<Array<app.SystemFontInfo>>;
 export function ListVaultGuardedMethods():Promise<Array<string>>;
 
 export function LockVault():Promise<void>;
+
+export function MinimizeMainWindow():Promise<void>;
 
 export function MkdirShellRemotePath(arg1:string,arg2:string):Promise<void>;
 
@@ -450,6 +456,8 @@ export function ShellAsciiInputLeave():Promise<void>;
 
 export function ShellDirExists(arg1:string,arg2:string):Promise<boolean>;
 
+export function ShowMainWindow():Promise<void>;
+
 export function SkipUpdateVersion(arg1:string):Promise<void>;
 
 export function StartAutoPortForwards():Promise<void>;
@@ -485,6 +493,8 @@ export function TestMachineConnection(arg1:string):Promise<void>;
 export function TestMachineDraftConnection(arg1:define.Machine,arg2:define.SensitiveData):Promise<void>;
 
 export function TestProxyConnection(arg1:data.ProxySettings,arg2:string):Promise<string>;
+
+export function ToggleMainWindow():Promise<void>;
 
 export function ToggleWindowMaximised():Promise<void>;
 

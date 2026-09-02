@@ -38,6 +38,10 @@ export function ApplyShellCd(arg1, arg2, arg3) {
   return window['go']['app']['App']['ApplyShellCd'](arg1, arg2, arg3);
 }
 
+export function ApplyWindowOpacity(arg1) {
+  return window['go']['app']['App']['ApplyWindowOpacity'](arg1);
+}
+
 export function BroadcastShellInput(arg1, arg2) {
   return window['go']['app']['App']['BroadcastShellInput'](arg1, arg2);
 }
@@ -418,6 +422,10 @@ export function GetWorkPaths() {
   return window['go']['app']['App']['GetWorkPaths']();
 }
 
+export function HideMainWindow() {
+  return window['go']['app']['App']['HideMainWindow']();
+}
+
 export function ImportFinalShellPick(arg1, arg2) {
   return window['go']['app']['App']['ImportFinalShellPick'](arg1, arg2);
 }
@@ -552,6 +560,10 @@ export function ListVaultGuardedMethods() {
 
 export function LockVault() {
   return window['go']['app']['App']['LockVault']();
+}
+
+export function MinimizeMainWindow() {
+  return window['go']['app']['App']['MinimizeMainWindow']();
 }
 
 export function MkdirShellRemotePath(arg1, arg2) {
@@ -886,6 +898,10 @@ export function ShellDirExists(arg1, arg2) {
   return window['go']['app']['App']['ShellDirExists'](arg1, arg2);
 }
 
+export function ShowMainWindow() {
+  return window['go']['app']['App']['ShowMainWindow']();
+}
+
 export function SkipUpdateVersion(arg1) {
   return window['go']['app']['App']['SkipUpdateVersion'](arg1);
 }
@@ -956,6 +972,10 @@ export function TestMachineDraftConnection(arg1, arg2) {
 
 export function TestProxyConnection(arg1, arg2) {
   return window['go']['app']['App']['TestProxyConnection'](arg1, arg2);
+}
+
+export function ToggleMainWindow() {
+  return window['go']['app']['App']['ToggleMainWindow']();
 }
 
 export function ToggleWindowMaximised() {

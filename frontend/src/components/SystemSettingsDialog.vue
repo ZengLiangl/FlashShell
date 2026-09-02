@@ -1,31 +1,11 @@
 <template>
     <div class="general-settings-panel" :class="{ embedded, 'is-panel-routed': !!panel }">
-        <!-- 设置内搜索暂未发挥明显作用，先隐藏
-        <div v-if="!panel" class="settings-search-bar">
-            <el-input
-                v-model="settingsSearch"
-                clearable
-                size="small"
-                placeholder="搜索设置（标签 / 说明）…"
-            />
-        </div>
-        -->
         <div v-if="!panel" class="settings-subnav">
             <button v-for="tab in settingsTabs" :key="tab.id" type="button" class="subnav-item"
                 :class="{ active: settingsTab === tab.id }" @click="settingsTab = tab.id">
                 {{ tab.label }}
             </button>
         </div>
-        <!--
-        <div v-else class="settings-search-bar">
-            <el-input
-                v-model="settingsSearch"
-                clearable
-                size="small"
-                placeholder="搜索设置（标签 / 说明）…"
-            />
-        </div>
-        -->
 
         <div ref="panelScrollRef" class="panel-scroll">
             <!-- 系统设置 -->
@@ -54,13 +34,31 @@
                                         maxlength="64" placeholder="窗口标题" clearable />
                                 </div>
                             </div>
-                            <div class="system-setting-row">
+                            <div class="system-setting-row" data-settings-id="app-fullscreen">
                                 <div class="system-setting-text">
                                     <span class="system-setting-label">启动时全屏</span>
                                     <span class="system-setting-hint">开启后下次启动最大化窗口；保存设置时也会立即切换当前窗口</span>
                                 </div>
                                 <div class="system-setting-control">
                                     <el-switch v-model="form.startupFullscreen" size="small" />
+                                </div>
+                            </div>
+                            <div class="system-setting-row" data-settings-id="app-close-tray">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">关闭到托盘</span>
+                                    <span class="system-setting-hint">点窗口关闭时隐藏而不退出。Windows 进托盘，macOS 进菜单栏图标</span>
+                                </div>
+                                <div class="system-setting-control">
+                                    <el-switch v-model="form.closeToTray" size="small" />
+                                </div>
+                            </div>
+                            <div class="system-setting-row" data-settings-id="app-min-tray">
+                                <div class="system-setting-text">
+                                    <span class="system-setting-label">最小化到托盘</span>
+                                    <span class="system-setting-hint">点最小化时隐藏到托盘/菜单栏，而不是停在任务栏或 Dock</span>
+                                </div>
+                                <div class="system-setting-control">
+                                    <el-switch v-model="form.minimizeToTray" size="small" />
                                 </div>
                             </div>
                                 </div>
@@ -92,7 +90,7 @@
 
                         <!-- Shell / 终端 + SFTP -->
                         <div v-show="systemPanel === 'shell'" class="appear-pane-body settings-stack">
-                            <div v-show="shellMode !== 'sftp'" class="setting-block">
+                            <div v-show="shellMode !== 'sftp' && shellMode !== 'files'" class="setting-block">
                                 <h3 class="setting-block-title">连接与缓冲</h3>
                                 <div class="setting-card">
                             <div class="system-setting-row">
@@ -152,7 +150,7 @@
                             </div>
                                 </div>
                             </div>
-                            <div v-show="shellMode !== 'sftp'" class="setting-block">
+                            <div v-show="shellMode !== 'sftp' && shellMode !== 'files'" class="setting-block">
                                 <h3 class="setting-block-title">输入与显示</h3>
                                 <div class="setting-card">
                             <div class="system-setting-row">
@@ -193,7 +191,7 @@
                             </div>
                                 </div>
                             </div>
-                            <div v-show="shellMode !== 'terminal'" class="setting-block">
+                            <div v-show="shellMode !== 'terminal' && shellMode !== 'files'" class="setting-block">
                                 <h3 class="setting-block-title">SFTP</h3>
                                 <div class="setting-card">
                             <div class="system-setting-row">
@@ -238,7 +236,12 @@
                                     />
                                 </div>
                             </div>
-                            <div class="system-setting-row">
+                                </div>
+                            </div>
+                            <div v-show="shellMode === 'all' || shellMode === 'files'" class="setting-block">
+                                <h3 class="setting-block-title">文件关联</h3>
+                                <div class="setting-card">
+                            <div class="system-setting-row" data-settings-id="files-default">
                                 <div class="system-setting-text">
                                     <span class="system-setting-label">默认文件打开方式</span>
                                     <span class="system-setting-hint">选择没有特定文件关联时的默认打开方式</span>
@@ -269,7 +272,7 @@
                                     </el-button>
                                 </div>
                             </div>
-                            <div class="system-setting-row system-setting-row--stack">
+                            <div class="system-setting-row system-setting-row--stack" data-settings-id="files-assoc">
                                 <div class="system-setting-text">
                                     <span class="system-setting-label">SFTP 文件关联</span>
                                     <span class="system-setting-hint">配置按扩展名打开文件的默认应用程序；在「打开方式」中勾选记住后也会出现在此</span>
@@ -568,6 +571,23 @@
                                     <div class="term-font-hints ui-font-hints">
                                         <span>字体</span>
                                         <span>字号</span>
+                                    </div>
+                                </div>
+                                <div class="appear-field" data-settings-id="appearance-opacity">
+                                    <span class="appear-field-label">窗口透明度</span>
+                                    <div class="opacity-row">
+                                        <el-slider
+                                            v-model="form.windowOpacity"
+                                            :min="0.4"
+                                            :max="1"
+                                            :step="0.01"
+                                            :show-tooltip="false"
+                                            @input="onOpacityInput"
+                                        />
+                                        <span class="opacity-pct">{{ Math.round(form.windowOpacity * 100) }}%</span>
+                                    </div>
+                                    <div class="term-font-hints">
+                                        <span>降低透明度可透过窗口看到后面内容；100% 为不透明</span>
                                     </div>
                                 </div>
                                     </div>
@@ -1007,8 +1027,9 @@ export default {
         modelValue: { type: Boolean, default: false },
         embedded: { type: Boolean, default: false },
         active: { type: Boolean, default: false },
-        /** Hub 侧栏路由：app | terminal | sftp | security | accounts | appearance | about | general */
+        /** Hub 侧栏路由：app | terminal | sftp | files | security | accounts | appearance | about | general */
         panel: { type: String, default: '' },
+        focusSetting: { type: String, default: '' },
     },
     emits: ['update:modelValue', 'saved'],
     setup(props, { emit }) {
@@ -1106,6 +1127,12 @@ export default {
                 shellMode.value = 'sftp'
                 return
             }
+            if (id === 'files') {
+                settingsTab.value = 'system'
+                systemPanel.value = 'shell'
+                shellMode.value = 'files'
+                return
+            }
             if (id === 'security') {
                 settingsTab.value = 'system'
                 systemPanel.value = 'security'
@@ -1139,6 +1166,9 @@ export default {
             windowsName: 'FlashShell',
             appIconPreset: 'default',
             startupFullscreen: false,
+            closeToTray: false,
+            minimizeToTray: false,
+            windowOpacity: 1,
             themeSettings: {
                 mode: 'light',
                 uiAccent: 'blue',
@@ -1461,6 +1491,12 @@ theme preview · ${theme.foreground}`
             form.windowsName = (config.windowsName || 'FlashShell').trim() || 'FlashShell'
             form.appIconPreset = config.appIconPreset || 'default'
             form.startupFullscreen = !!config.startupFullscreen
+            form.closeToTray = !!config.closeToTray
+            form.minimizeToTray = !!config.minimizeToTray
+            {
+                const op = Number(config.windowOpacity)
+                form.windowOpacity = Number.isFinite(op) && op > 0 ? Math.min(1, Math.max(0.4, op)) : 1
+            }
             form.themeSettings = {
                 mode: config.themeSettings?.mode || 'light',
                 uiAccent: config.themeSettings?.uiAccent || 'blue',
@@ -1921,25 +1957,28 @@ theme preview · ${theme.foreground}`
             offDownloadProgress = null
         })
 
-        const applySettingsSearch = () => {
-            const root = panelScrollRef.value
-            if (!root) return
-            const q = String(settingsSearch.value || '').trim().toLowerCase()
-            const rows = root.querySelectorAll('.system-setting-row, .appear-field, .memory-saver-row, .section-head')
-            rows.forEach((el) => {
-                if (!q) {
-                    el.style.display = ''
-                    return
-                }
-                const label = el.querySelector?.('.system-setting-label, .appear-field-label, .memory-saver-label')
-                const hint = el.querySelector?.('.system-setting-hint')
-                const text = `${label?.textContent || ''} ${hint?.textContent || ''} ${el.textContent || ''}`.toLowerCase()
-                el.style.display = text.includes(q) ? '' : 'none'
-            })
+        const onOpacityInput = (v) => {
+            const n = Number(v)
+            if (!Number.isFinite(n)) return
+            App.ApplyWindowOpacity(n).catch(() => {})
         }
 
-        watch(settingsSearch, () => nextTick(applySettingsSearch))
-        watch([settingsTab, systemPanel, themePanel], () => nextTick(applySettingsSearch))
+        const applySettingsSearch = () => {}
+
+        const scrollToSetting = (id) => {
+            const root = panelScrollRef.value
+            if (!root || !id) return
+            const el = root.querySelector(`[data-settings-id="${id}"]`)
+            if (!el) return
+            el.scrollIntoView({ block: 'center', behavior: 'smooth' })
+            el.classList.add('settings-hit')
+            setTimeout(() => el.classList.remove('settings-hit'), 1600)
+        }
+
+        watch(
+            () => props.focusSetting,
+            (id) => nextTick(() => scrollToSetting(id)),
+        )
 
         const resetAccountForm = () => {
             accountForm.id = crypto.randomUUID()
@@ -2031,6 +2070,9 @@ theme preview · ${theme.foreground}`
                 config.windowsName = (form.windowsName || '').trim() || 'FlashShell'
                 config.appIconPreset = form.appIconPreset || 'default'
                 config.startupFullscreen = !!form.startupFullscreen
+                config.closeToTray = !!form.closeToTray
+                config.minimizeToTray = !!form.minimizeToTray
+                config.windowOpacity = form.windowOpacity
                 config.themeSettings = { ...form.themeSettings }
                 config.shellMonitorIntervalMs = form.shellMonitorIntervalMs
                 config.sshHandshakeTimeoutSec = form.sshHandshakeTimeoutSec
@@ -2087,6 +2129,7 @@ theme preview · ${theme.foreground}`
             themePanels,
             panel: computed(() => props.panel),
             form,
+            onOpacityInput,
             appIconPresets,
             uploadingAppIcon,
             selectAppIconPreset,
@@ -3079,6 +3122,31 @@ theme preview · ${theme.foreground}`
     grid-template-columns: none !important;
     align-items: center;
     gap: 8px;
+}
+
+.opacity-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+}
+
+.opacity-row :deep(.el-slider) {
+    flex: 1;
+}
+
+.opacity-pct {
+    width: 44px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    font-size: 13px;
+    color: var(--app-text-secondary, var(--app-text));
+}
+
+.settings-hit {
+    outline: 2px solid var(--el-color-primary);
+    outline-offset: 2px;
+    border-radius: 8px;
 }
 
 .sftp-assoc-list {

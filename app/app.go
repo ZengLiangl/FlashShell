@@ -121,9 +121,11 @@ func (a *App) Startup(ctx context.Context) {
 	} else {
 		println("配置文件加载成功")
 	}
+	a.bindDesktopChrome()
 	a.applyWindowTheme(a.GetThemeSettings().Mode)
 	a.applyAppBrandingFromConfig()
 	a.applyStartupFullscreenFromConfig()
+	a.applyDesktopChromeFromConfig()
 	a.initCredentialVault()
 	a.StartAutoPortForwards()
 	warmAppIconPresetCache()
@@ -137,6 +139,13 @@ func (a *App) DomReady(ctx context.Context) {
 	setTrafficLightPosition(12, 12)
 	// Startup 时窗口/Dock 往往还未就绪，Wails 随后会套上打包图标；窗口就绪后再贴一次配置里的图标
 	a.applyAppBrandingFromConfig()
+	a.applyDesktopChromeFromConfig()
+	go func() {
+		for i := 0; i < 8; i++ {
+			time.Sleep(200 * time.Millisecond)
+			a.applyDesktopChromeFromConfig()
+		}
+	}()
 }
 
 // BeforeClose 关闭窗口前触发；首次拦截并弹框确认，确认后再次关闭才真正退出。
@@ -145,6 +154,10 @@ func (a *App) BeforeClose(ctx context.Context) (prevent bool) {
 	allow := a.allowQuit
 	a.quitMu.Unlock()
 	if !allow {
+		if a.closeToTrayEnabled() {
+			a.HideMainWindow()
+			return true
+		}
 		if a.ctx != nil {
 			wailsRuntime.EventsEmit(a.ctx, "app:confirm-quit")
 		}
@@ -1614,6 +1627,7 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	}
 	config.SftpFileAssociations = data.NormalizeSftpFileAssociations(config.SftpFileAssociations)
 	config.SftpTransferMaxConcurrent = data.NormalizeSftpTransferMaxConcurrent(config.SftpTransferMaxConcurrent)
+	config.WindowOpacity = data.NormalizeWindowOpacity(config.WindowOpacity)
 	if err := a.configManager.SaveGlobalConfig(config); err != nil {
 		return err
 	}
@@ -1626,6 +1640,7 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 	a.applyWindowTheme(config.ThemeSettings.Mode)
 	a.applyAppBranding(config)
 	a.applyStartupFullscreen(config.StartupFullscreen)
+	a.applyDesktopChrome(config)
 	if !data.ShellAsciiInputEnabled(config) {
 		inputmethod.Leave()
 	}
@@ -1659,6 +1674,9 @@ func (a *App) SaveSystemSettings(config *data.GlobalConfig) error {
 			"windowsName":               config.WindowsName,
 			"appIconPreset":             config.AppIconPreset,
 			"startupFullscreen":         config.StartupFullscreen,
+			"windowOpacity":             config.WindowOpacity,
+			"closeToTray":               config.CloseToTray,
+			"minimizeToTray":            config.MinimizeToTray,
 		})
 	}
 	return nil

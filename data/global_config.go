@@ -247,6 +247,12 @@ type GlobalConfig struct {
 	AppIconPreset string `yaml:"appIconPreset" json:"appIconPreset"`
 	// StartupFullscreen 启动时最大化窗口（非系统独占全屏）
 	StartupFullscreen bool `yaml:"startupFullscreen" json:"startupFullscreen"`
+	// WindowOpacity 主窗口不透明度，0.4–1；0 或缺省视为 1
+	WindowOpacity float64 `yaml:"windowOpacity,omitempty" json:"windowOpacity"`
+	// CloseToTray 点关闭时隐藏到托盘而不是退出（Windows 托盘；其它平台隐藏窗口）
+	CloseToTray bool `yaml:"closeToTray,omitempty" json:"closeToTray"`
+	// MinimizeToTray 点最小化时隐藏到托盘
+	MinimizeToTray bool `yaml:"minimizeToTray,omitempty" json:"minimizeToTray"`
 	// HomeMinimizedZone 首页分区最小化："" 双栏；"task" 收起任务；"shell" 收起 Shell（另一侧多列展示）
 	HomeMinimizedZone string `yaml:"homeMinimizedZone,omitempty" json:"homeMinimizedZone"`
 	// ShellMonitorIntervalSec 旧字段（秒），仅用于迁移

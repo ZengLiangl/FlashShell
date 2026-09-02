@@ -457,6 +457,9 @@ export namespace data {
 	    shellCommandHistoryMax: number;
 	    appIconPreset: string;
 	    startupFullscreen: boolean;
+	    windowOpacity: number;
+	    closeToTray: boolean;
+	    minimizeToTray: boolean;
 	    homeMinimizedZone: string;
 	    shellLogHighlight?: boolean;
 	    shellLogHighlightColors: ShellLogHighlightColors;
@@ -502,6 +505,9 @@ export namespace data {
 	        this.shellCommandHistoryMax = source["shellCommandHistoryMax"];
 	        this.appIconPreset = source["appIconPreset"];
 	        this.startupFullscreen = source["startupFullscreen"];
+	        this.windowOpacity = source["windowOpacity"];
+	        this.closeToTray = source["closeToTray"];
+	        this.minimizeToTray = source["minimizeToTray"];
 	        this.homeMinimizedZone = source["homeMinimizedZone"];
 	        this.shellLogHighlight = source["shellLogHighlight"];
 	        this.shellLogHighlightColors = this.convertValues(source["shellLogHighlightColors"], ShellLogHighlightColors);
