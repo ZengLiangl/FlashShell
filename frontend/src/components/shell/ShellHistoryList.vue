@@ -1,5 +1,5 @@
 <template>
-  <div class="history-list-wrap">
+  <div class="history-list-wrap" :class="{ embedded }">
     <div v-if="showHead && records.length" class="app-section-head">
       <span class="app-section-label">{{ headLabel }}</span>
       <button
@@ -16,7 +16,7 @@
       <p class="app-empty-desc">暂无连接历史</p>
     </div>
 
-    <div v-else-if="!embedded && records.length && !filtered.length" class="app-empty compact">
+    <div v-else-if="records.length && !filtered.length" class="app-empty compact">
       <p class="app-empty-desc">没有匹配「{{ keyword }}」的记录</p>
     </div>
 
@@ -142,6 +142,12 @@ export default {
 <style scoped>
 .history-list-wrap {
   min-height: 0;
+}
+
+.history-list-wrap.embedded {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
 .history-scroll {

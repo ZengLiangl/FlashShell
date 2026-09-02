@@ -122,11 +122,14 @@
               v-else
               :records="historyRecords"
               :sessions="sessions"
+              :workspace-sessions="workspaceSessions"
+              :active="active"
               @connect="onHistoryConnect"
               @open-picker="(tab) => openPicker(tab)"
               @clear="clearHistory"
               @remove="removeHistory"
               @add-machine="$emit('add-machine')"
+              @add-local="onAddLocal"
             />
           </template>
           <template #footer="{ activeMachine: am }">
@@ -1166,7 +1169,8 @@ export default {
 }
 
 .shell-connecting {
-  min-height: 240px;
+  flex: 1;
+  min-height: 0;
   gap: 14px;
 }
 
