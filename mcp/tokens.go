@@ -20,16 +20,16 @@ import (
 
 // Token 作用域令牌。落盘只存 SHA256；明文仅在签发当次返回。
 type Token struct {
-	ID        string    `yaml:"id" json:"id"`
-	Name      string    `yaml:"name" json:"name"`
-	Client    string    `yaml:"client" json:"client"`
-	Hash      string    `yaml:"hash,omitempty" json:"-"`
-	Secret    string    `yaml:"secret,omitempty" json:"-"` // 旧版可逆密文，迁移后清空
-	Plain     string    `yaml:"-" json:"token,omitempty"`  // 仅签发响应
-	Servers   []string  `yaml:"servers,omitempty" json:"servers"`
-	CIDRs     []string  `yaml:"cidrs,omitempty" json:"cidrs"`
-	CreatedAt time.Time `yaml:"createdAt" json:"createdAt"`
-	LastUsed  time.Time `yaml:"lastUsedAt,omitempty" json:"lastUsedAt,omitempty"`
+	ID        string   `yaml:"id" json:"id"`
+	Name      string   `yaml:"name" json:"name"`
+	Client    string   `yaml:"client" json:"client"`
+	Hash      string   `yaml:"hash,omitempty" json:"-"`
+	Secret    string   `yaml:"secret,omitempty" json:"-"` // 旧版可逆密文，迁移后清空
+	Plain     string   `yaml:"-" json:"token,omitempty"`  // 仅签发响应
+	Servers   []string `yaml:"servers,omitempty" json:"servers"`
+	CIDRs     []string `yaml:"cidrs,omitempty" json:"cidrs"`
+	CreatedAt string   `yaml:"createdAt" json:"createdAt"`
+	LastUsed  string   `yaml:"lastUsedAt,omitempty" json:"lastUsedAt,omitempty"`
 }
 
 // IssueOpts 签发 / 一键接入参数
@@ -101,6 +101,50 @@ func (st *TokenStore) save() error {
 		return err
 	}
 	return os.WriteFile(join(root, tokensFile), b, 0600)
+}
+
+func nowRFC3339() string {
+	return time.Now().Format(time.RFC3339)
+}
+
+func decodeYAMLTime(n *yaml.Node) string {
+	if n == nil || n.Kind == 0 {
+		return ""
+	}
+	var ts time.Time
+	if err := n.Decode(&ts); err == nil && !ts.IsZero() {
+		return ts.Format(time.RFC3339)
+	}
+	return strings.TrimSpace(n.Value)
+}
+
+// UnmarshalYAML 兼容旧盘 YAML 把 createdAt 写成 timestamp 的情况。
+func (t *Token) UnmarshalYAML(value *yaml.Node) error {
+	type tokenYAML struct {
+		ID        string    `yaml:"id"`
+		Name      string    `yaml:"name"`
+		Client    string    `yaml:"client"`
+		Hash      string    `yaml:"hash,omitempty"`
+		Secret    string    `yaml:"secret,omitempty"`
+		Servers   []string  `yaml:"servers,omitempty"`
+		CIDRs     []string  `yaml:"cidrs,omitempty"`
+		CreatedAt yaml.Node `yaml:"createdAt"`
+		LastUsed  yaml.Node `yaml:"lastUsedAt,omitempty"`
+	}
+	var raw tokenYAML
+	if err := value.Decode(&raw); err != nil {
+		return err
+	}
+	t.ID = raw.ID
+	t.Name = raw.Name
+	t.Client = raw.Client
+	t.Hash = raw.Hash
+	t.Secret = raw.Secret
+	t.Servers = raw.Servers
+	t.CIDRs = raw.CIDRs
+	t.CreatedAt = decodeYAMLTime(&raw.CreatedAt)
+	t.LastUsed = decodeYAMLTime(&raw.LastUsed)
+	return nil
 }
 
 func hashToken(plain string) string {
@@ -257,7 +301,7 @@ func (st *TokenStore) issueLocked(opts IssueOpts) (Token, error) {
 		Plain:     plain,
 		Servers:   append([]string{}, opts.Servers...),
 		CIDRs:     append([]string{}, opts.CIDRs...),
-		CreatedAt: time.Now(),
+		CreatedAt: nowRFC3339(),
 	}
 	st.tokens = append(st.tokens, Token{
 		ID: t.ID, Name: t.Name, Client: t.Client, Hash: t.Hash,
@@ -376,7 +420,7 @@ func (st *TokenStore) ValidFrom(plain, remoteIP string) (Token, bool) {
 		if !ipAllowed(remoteIP, t.CIDRs) {
 			return Token{}, false
 		}
-		st.tokens[i].LastUsed = time.Now()
+		st.tokens[i].LastUsed = nowRFC3339()
 		_ = st.save()
 		out := st.tokens[i]
 		out.Plain = ""
