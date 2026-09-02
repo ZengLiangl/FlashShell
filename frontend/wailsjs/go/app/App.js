@@ -522,6 +522,10 @@ export function ListMCPApprovals() {
   return window['go']['app']['App']['ListMCPApprovals']();
 }
 
+export function ListMCPBuiltinDangerPatterns() {
+  return window['go']['app']['App']['ListMCPBuiltinDangerPatterns']();
+}
+
 export function ListMCPClients() {
   return window['go']['app']['App']['ListMCPClients']();
 }

@@ -183,11 +183,25 @@ func boolStr(b bool) string {
 }
 
 func BuiltinDangerPatternLabels() []string {
-	return []string{
-		"rm -rf /", "mkfs", "dd of=/dev", "fork bomb",
-		"DROP DATABASE", "FLUSHALL", "docker system prune -a --volumes",
-		"kubeadm reset", "pg_resetwal", "shutdown/reboot", "敏感路径写入",
+	rules := ListBuiltinDangerRules()
+	out := make([]string, 0, len(rules))
+	seen := map[string]struct{}{}
+	for _, r := range rules {
+		label := strings.TrimSpace(r.Label)
+		if label == "" {
+			continue
+		}
+		if _, ok := seen[label]; ok {
+			continue
+		}
+		seen[label] = struct{}{}
+		out = append(out, label)
 	}
+	return out
+}
+
+func (s *Service) ListBuiltinDangerPatterns() []DangerRule {
+	return ListBuiltinDangerRules()
 }
 
 func (s *Service) ListCustomDangerPatterns() []string {

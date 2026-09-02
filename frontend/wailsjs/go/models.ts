@@ -2049,6 +2049,22 @@ export namespace mcp {
 	        this.httpAuth = source["httpAuth"];
 	    }
 	}
+	export class DangerRule {
+	    pattern: string;
+	    label: string;
+	    kind: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new DangerRule(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.pattern = source["pattern"];
+	        this.label = source["label"];
+	        this.kind = source["kind"];
+	    }
+	}
 	export class GuidanceStatus {
 	    ok: boolean;
 	    stale: boolean;

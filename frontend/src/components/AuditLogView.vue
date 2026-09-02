@@ -206,8 +206,20 @@
           </el-select>
         </div>
 
+        <h4>危险黑名单（内置，只读）</h4>
+        <p class="tip">内置规则任何档位（含 trusted）都拦截，不可关闭或修改。命令正则与敏感路径一并列出。</p>
+        <el-table :data="builtinDanger" size="small" max-height="220" empty-text="加载中…" class="builtin-danger-table">
+          <el-table-column prop="label" label="规则" :min-width="140" show-overflow-tooltip />
+          <el-table-column prop="kind" label="类型" width="72">
+            <template #default="{ row }">{{ row.kind === 'path' ? '路径' : '命令' }}</template>
+          </el-table-column>
+          <el-table-column prop="pattern" label="匹配" :min-width="180" show-overflow-tooltip>
+            <template #default="{ row }"><code class="mono-cell">{{ row.pattern }}</code></template>
+          </el-table-column>
+        </el-table>
+
         <h4>危险黑名单（自定义）</h4>
-        <p class="tip">每行一条正则；命中后与内置 lethal 同级 → blocked。内置规则（rm -rf /、DROP DATABASE 等）不可关。</p>
+        <p class="tip">每行一条正则；命中后与内置同级 → blocked。仅可增删自定义项，不影响上方内置规则。</p>
         <el-input v-model="sec.customDangerText" type="textarea" :rows="4" placeholder="^rm\s+-rf\s+/data/" />
 
         <h4>敏感库（元数据）</h4>
@@ -241,6 +253,7 @@ import {
   PurgeMCPAudit,
   ListMCPSensitive,
   ListMCPCustomDangerPatterns,
+  ListMCPBuiltinDangerPatterns,
   SaveMCPCustomDangerPatterns,
   ListMCPApprovals,
   DecideMCPApproval,
@@ -273,6 +286,7 @@ export default {
     const rows = ref([])
     const meta = ref({ tools: [], modules: [], servers: [], sources: [] })
     const sensitive = ref([])
+    const builtinDanger = ref([])
     const pending = ref([])
     const selectedIds = ref([])
     let pendingTimer = null
@@ -457,6 +471,7 @@ export default {
         sec.httpPort = s.httpPort || 18765
         sec.bindLan = !!s.bindLan
         sensitive.value = (await ListMCPSensitive().catch(() => [])) || []
+        builtinDanger.value = (await ListMCPBuiltinDangerPatterns().catch(() => [])) || []
         const danger = (await ListMCPCustomDangerPatterns().catch(() => [])) || []
         sec.customDangerText = danger.join('\n')
       } finally {
@@ -618,7 +633,7 @@ export default {
 
     return {
       loading, settingsLoading, stats, filter, dateStart, dateEnd, rangePreset, onlyBlocked,
-      activeCard, settingsOpen, page, pageSize, cards, sec, sensitive, pending, selectedIds,
+      activeCard, settingsOpen, page, pageSize, cards, sec, sensitive, builtinDanger, pending, selectedIds,
       toolOptions, serverOptions, moduleOptions, total, pageRows, pageFrom, pageTo,
       reload, loadPending, fmtRemain, onSelChange, singleDecide, batchDecide, batchDecideAll,
       onCardClick, onDecisionSelect, onOnlyBlocked, onRangePreset, onDateParts,
@@ -708,6 +723,8 @@ h1 { margin: 0; font-size: 18px; font-weight: 650; }
 .settings-body h4 { margin: 14px 0 8px; font-size: 13px; }
 .settings-body .tip { font-size: 12px; color: var(--app-text-muted); margin: 0 0 8px; }
 .settings-body .row { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 12px; }
+.builtin-danger-table { margin-bottom: 4px; }
+.mono-cell { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; }
 @media (max-width: 1100px) {
   .status-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .expand { grid-template-columns: 1fr; }

@@ -268,6 +268,8 @@ export function ListLocalShells():Promise<Array<machine.LocalShellOption>>;
 
 export function ListMCPApprovals():Promise<Array<mcp.ApprovalItem>>;
 
+export function ListMCPBuiltinDangerPatterns():Promise<Array<mcp.DangerRule>>;
+
 export function ListMCPClients():Promise<Array<mcp.ClientLink>>;
 
 export function ListMCPCustomDangerPatterns():Promise<Array<string>>;

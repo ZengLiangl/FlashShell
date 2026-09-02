@@ -97,6 +97,62 @@ var dangerCommandRules = []struct {
 	{regexp.MustCompile(`(?i)\bFLUSHDB\b`), "命中危险黑名单: FLUSHDB"},
 }
 
+// DangerRule 危险黑名单规则（内置只读展示 / 自定义可编辑）
+type DangerRule struct {
+	Pattern string `json:"pattern"`
+	Label   string `json:"label"`
+	Kind    string `json:"kind"` // command | path
+}
+
+func stripDangerWhyPrefix(why string) string {
+	for _, p := range []string{"命中危险黑名单: ", "命中致命黑名单: ", "命中自定义危险黑名单: "} {
+		if strings.HasPrefix(why, p) {
+			return strings.TrimPrefix(why, p)
+		}
+	}
+	return why
+}
+
+func builtinSensitivePathRules() []DangerRule {
+	return []DangerRule{
+		{Pattern: "/etc/shadow", Label: "敏感路径禁止读写", Kind: "path"},
+		{Pattern: "/etc/sudoers", Label: "敏感路径禁止读写", Kind: "path"},
+		{Pattern: "/etc/passwd", Label: "敏感路径禁止读写", Kind: "path"},
+		{Pattern: "/etc/sudoers.d/*", Label: "敏感路径禁止读写", Kind: "path"},
+		{Pattern: "/boot/*", Label: "敏感路径禁止读写", Kind: "path"},
+		{Pattern: "~/.ssh 与 */.ssh/*", Label: "敏感路径禁止读写", Kind: "path"},
+		{Pattern: "*.pem / *.key / *.env / *.p12 / *.pfx", Label: "敏感路径禁止读写", Kind: "path"},
+	}
+}
+
+// ListBuiltinDangerRules 返回内置危险黑名单（命令正则 + 敏感路径），只读展示用。
+func ListBuiltinDangerRules() []DangerRule {
+	seen := map[string]struct{}{}
+	out := make([]DangerRule, 0, len(dangerCommandRules)+len(lethalCommandRules)+8)
+	appendRule := func(pattern, why, kind string) {
+		key := kind + "\x00" + pattern
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		out = append(out, DangerRule{
+			Pattern: pattern,
+			Label:   stripDangerWhyPrefix(why),
+			Kind:    kind,
+		})
+	}
+	for _, r := range lethalCommandRules {
+		appendRule(r.re.String(), r.why, "command")
+	}
+	for _, r := range dangerCommandRules {
+		appendRule(r.re.String(), r.why, "command")
+	}
+	for _, r := range builtinSensitivePathRules() {
+		appendRule(r.Pattern, r.Label, r.Kind)
+	}
+	return out
+}
+
 func commandBlocked(cmd string) (bool, string) {
 	s := strings.TrimSpace(cmd)
 	if s == "" {

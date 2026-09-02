@@ -425,6 +425,14 @@ func (a *App) ListMCPCustomDangerPatterns() []string {
 	return a.mcpSvc.ListCustomDangerPatterns()
 }
 
+// ListMCPBuiltinDangerPatterns 内置危险黑名单（只读展示，不可修改）
+func (a *App) ListMCPBuiltinDangerPatterns() []mcp.DangerRule {
+	if a.mcpSvc == nil {
+		return nil
+	}
+	return a.mcpSvc.ListBuiltinDangerPatterns()
+}
+
 // SaveMCPCustomDangerPatterns 保存自定义危险黑名单
 func (a *App) SaveMCPCustomDangerPatterns(patterns []string) error {
 	if err := a.requireUnlocked(); err != nil {

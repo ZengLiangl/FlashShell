@@ -74,3 +74,26 @@ func TestServerMCPEnabled(t *testing.T) {
 		t.Fatal("disabled should be hidden")
 	}
 }
+
+
+func TestListBuiltinDangerRules(t *testing.T) {
+	rules := ListBuiltinDangerRules()
+	if len(rules) < 10 {
+		t.Fatalf("expected builtin rules, got %d", len(rules))
+	}
+	hasCmd, hasPath := false, false
+	for _, r := range rules {
+		if r.Pattern == "" || r.Label == "" {
+			t.Fatalf("empty rule: %+v", r)
+		}
+		if r.Kind == "command" {
+			hasCmd = true
+		}
+		if r.Kind == "path" {
+			hasPath = true
+		}
+	}
+	if !hasCmd || !hasPath {
+		t.Fatalf("need both command and path rules")
+	}
+}

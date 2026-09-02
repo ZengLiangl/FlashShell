@@ -49,28 +49,30 @@ func (s *Service) evaluateGlobalAI() (ok bool, decision, reason string) {
 	return true, "", ""
 }
 
+// lethalCommandRules 永久拦截（任何档位，含 trusted）
+var lethalCommandRules = []struct {
+	re  *regexp.Regexp
+	why string
+}{
+	{regexp.MustCompile(`(?i)rm\s+(-[a-zA-Z]*f[a-zA-Z]*|--force).*/(\s|$)`), "命中致命黑名单: rm -rf /"},
+	{regexp.MustCompile(`(?i)rm\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\s+(/|/\*|/\s+\*)`), "命中致命黑名单: rm -rf /"},
+	{regexp.MustCompile(`(?i)mkfs(\.\w+)?\s`), "命中致命黑名单: mkfs"},
+	{regexp.MustCompile(`(?i)dd\s+.*\bof=/dev/`), "命中致命黑名单: dd of=/dev"},
+	{regexp.MustCompile(`:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;`), "命中致命黑名单: fork bomb"},
+	{regexp.MustCompile(`(?i)\bDROP\s+(DATABASE|SCHEMA)\b`), "命中致命黑名单: DROP DATABASE"},
+	{regexp.MustCompile(`(?i)\bFLUSHALL\b`), "命中致命黑名单: FLUSHALL"},
+	{regexp.MustCompile(`(?i)docker\s+system\s+prune\s+-a\s+--volumes`), "命中致命黑名单: docker prune volumes"},
+	{regexp.MustCompile(`(?i)\bkubeadm\s+reset\b`), "命中致命黑名单: kubeadm reset"},
+	{regexp.MustCompile(`(?i)\bpg_resetwal\b`), "命中致命黑名单: pg_resetwal"},
+}
+
 // lethalBlocked 永久拦截（任何档位）
 func lethalBlocked(cmd string) (bool, string) {
 	s := strings.TrimSpace(cmd)
 	if s == "" {
 		return false, ""
 	}
-	rules := []struct {
-		re  *regexp.Regexp
-		why string
-	}{
-		{regexp.MustCompile(`(?i)rm\s+(-[a-zA-Z]*f[a-zA-Z]*|--force).*/(\s|$)`), "命中致命黑名单: rm -rf /"},
-		{regexp.MustCompile(`(?i)rm\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\s+(/|/\*|/\s+\*)`), "命中致命黑名单: rm -rf /"},
-		{regexp.MustCompile(`(?i)mkfs(\.\w+)?\s`), "命中致命黑名单: mkfs"},
-		{regexp.MustCompile(`(?i)dd\s+.*\bof=/dev/`), "命中致命黑名单: dd of=/dev"},
-		{regexp.MustCompile(`:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;`), "命中致命黑名单: fork bomb"},
-		{regexp.MustCompile(`(?i)\bDROP\s+(DATABASE|SCHEMA)\b`), "命中致命黑名单: DROP DATABASE"},
-		{regexp.MustCompile(`(?i)\bFLUSHALL\b`), "命中致命黑名单: FLUSHALL"},
-		{regexp.MustCompile(`(?i)docker\s+system\s+prune\s+-a\s+--volumes`), "命中致命黑名单: docker prune volumes"},
-		{regexp.MustCompile(`(?i)\bkubeadm\s+reset\b`), "命中致命黑名单: kubeadm reset"},
-		{regexp.MustCompile(`(?i)\bpg_resetwal\b`), "命中致命黑名单: pg_resetwal"},
-	}
-	for _, r := range rules {
+	for _, r := range lethalCommandRules {
 		if r.re.MatchString(s) {
 			return true, r.why
 		}
