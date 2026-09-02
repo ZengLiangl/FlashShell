@@ -419,6 +419,10 @@ func (s *Service) policyOf(m *define.Machine) string {
 	if m != nil && strings.TrimSpace(m.AIPolicy) != "" {
 		return normalizePolicy(m.AIPolicy)
 	}
+	if m != nil {
+		// 历史机器未写 aiPolicy 时默认 disabled，避免默认可操作
+		return PolicyDisabled
+	}
 	return normalizePolicy(s.settings.DefaultPolicy)
 }
 

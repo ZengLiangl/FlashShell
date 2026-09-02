@@ -89,7 +89,7 @@ type Machine struct {
 	Pinned bool `yaml:"pinned,omitempty" json:"pinned,omitempty"`
 	// Tags 主机标签（检索与筛选）
 	Tags []string `yaml:"tags,omitempty" json:"tags,omitempty"`
-	// AIPolicy 该主机对 MCP/AI 的策略档：disabled | readonly | approval | allowlist | trusted；空=trusted
+	// AIPolicy 该主机对 MCP/AI 的策略档：disabled | readonly | approval | allowlist | trusted；空=disabled（历史机器）
 	AIPolicy string `yaml:"aiPolicy,omitempty" json:"aiPolicy,omitempty"`
 	// AIAllowlist 当 AIPolicy=allowlist 时：命令前缀或正则，命中则 auto，否则审批
 	AIAllowlist []string `yaml:"aiAllowlist,omitempty" json:"aiAllowlist,omitempty"`

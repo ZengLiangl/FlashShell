@@ -64,8 +64,11 @@ func TestPolicyDisabledDeniesMutating(t *testing.T) {
 
 func TestServerMCPEnabled(t *testing.T) {
 	s := &Service{settings: Settings{DefaultPolicy: PolicyTrusted}}
-	if !s.serverMCPEnabled(&define.Machine{Name: "web"}) {
-		t.Fatal("trusted default should be visible")
+	if s.serverMCPEnabled(&define.Machine{Name: "legacy"}) {
+		t.Fatal("empty aiPolicy should be disabled")
+	}
+	if !s.serverMCPEnabled(&define.Machine{Name: "on", AIPolicy: PolicyTrusted}) {
+		t.Fatal("explicit trusted should be visible")
 	}
 	if s.serverMCPEnabled(&define.Machine{Name: "off", AIPolicy: PolicyDisabled}) {
 		t.Fatal("disabled should be hidden")

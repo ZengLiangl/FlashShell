@@ -1133,7 +1133,7 @@ export default {
             machineForm.group = machine.group || ''
             machineForm.tags = normalizeMachineTags(machine.tags)
             machineForm.notes = machine.notes || ''
-            machineForm.aiPolicy = machine.aiPolicy || 'trusted'
+            machineForm.aiPolicy = machine.aiPolicy || 'disabled'
             machineForm.aiAllowSudo = !!machine.aiAllowSudo
             machineForm.aiAllowlistText = Array.isArray(machine.aiAllowlist) ? machine.aiAllowlist.join('\n') : ''
             machineForm.icon = machine.icon || ''
