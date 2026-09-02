@@ -1875,6 +1875,22 @@ func (a *App) SetHomeMinimizedZone(zone string) error {
 	return nil
 }
 
+// GetLastTaskProject 任务模式上次进入的项目名
+func (a *App) GetLastTaskProject() string {
+	if a.configManager == nil {
+		return ""
+	}
+	return a.configManager.GetLastTaskProject()
+}
+
+// SetLastTaskProject 记住任务模式最后一次进入的项目
+func (a *App) SetLastTaskProject(name string) error {
+	if a.configManager == nil {
+		return fmt.Errorf("配置管理器未初始化")
+	}
+	return a.configManager.UpdateLastTaskProject(name)
+}
+
 func (a *App) applyWindowTheme(mode string) {
 	if a.ctx == nil {
 		return

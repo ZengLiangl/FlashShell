@@ -136,6 +136,8 @@ export function GetKeyMapSettings():Promise<data.KeyMapSettings>;
 
 export function GetKnownHosts():Promise<Array<data.KnownHostRecord>>;
 
+export function GetLastTaskProject():Promise<string>;
+
 export function GetLocalHomeDir():Promise<string>;
 
 export function GetMCPApprovalContext(arg1:string):Promise<Array<mcp.AuditEntry>>;
@@ -429,6 +431,8 @@ export function SendShellInput(arg1:string,arg2:string):Promise<void>;
 export function SendShellInterrupt(arg1:string):Promise<void>;
 
 export function SetHomeMinimizedZone(arg1:string):Promise<void>;
+
+export function SetLastTaskProject(arg1:string):Promise<void>;
 
 export function SetMachinePinned(arg1:string,arg2:boolean):Promise<void>;
 

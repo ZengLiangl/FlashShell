@@ -442,6 +442,7 @@ export namespace data {
 	    windowsName: string;
 	    configFile: string[];
 	    lastOpenedFile: string;
+	    lastTaskProject?: string;
 	    workPaths: Record<string, string>;
 	    machines?: define.Machine[];
 	    machineGroups?: string[];
@@ -486,6 +487,7 @@ export namespace data {
 	        this.windowsName = source["windowsName"];
 	        this.configFile = source["configFile"];
 	        this.lastOpenedFile = source["lastOpenedFile"];
+	        this.lastTaskProject = source["lastTaskProject"];
 	        this.workPaths = source["workPaths"];
 	        this.machines = this.convertValues(source["machines"], define.Machine);
 	        this.machineGroups = source["machineGroups"];

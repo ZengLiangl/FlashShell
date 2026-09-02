@@ -656,6 +656,7 @@ export default {
         selectedProject.value = full;
         selectedSubProject.value = null;
         activeView.value = 'task';
+        App.SetLastTaskProject?.(full.name).catch(() => {});
 
         if (full?.subprojects) {
           subProjects.value = full.subprojects.map(subproject => ({
@@ -726,6 +727,22 @@ export default {
       }
     };
 
+    const resolveTaskProject = async () => {
+      const list = projects.value || [];
+      if (!list.length) return null;
+      let last = '';
+      try {
+        last = String((await App.GetLastTaskProject?.()) || '').trim();
+      } catch {
+        last = '';
+      }
+      if (last) {
+        const hit = list.find((p) => p.name === last);
+        if (hit) return hit;
+      }
+      return list[0];
+    };
+
     const leaveShellMode = async () => {
       notifyLeaveShellMode();
       activeView.value = 'home';
@@ -763,8 +780,9 @@ export default {
       }
       if (view === 'task') {
         if (!selectedProject.value) {
-          if (projects.value.length) {
-            await selectProject(projects.value[0]);
+          const target = await resolveTaskProject();
+          if (target) {
+            await selectProject(target);
             return;
           }
           ElMessage.info('请先在首页选择项目，或悬停「任务」从列表打开');

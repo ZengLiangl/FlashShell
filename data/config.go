@@ -415,6 +415,25 @@ func (cm *ConfigManager) GetGlobalConfigPath() string {
 	return cm.globalConfigManager.GetConfigPath()
 }
 
+// GetLastTaskProject 任务模式上次进入的项目名
+func (cm *ConfigManager) GetLastTaskProject() string {
+	if cm.globalConfigManager == nil {
+		return ""
+	}
+	if _, err := cm.globalConfigManager.LoadGlobalConfig(); err != nil {
+		return ""
+	}
+	return cm.globalConfigManager.GetLastTaskProject()
+}
+
+// UpdateLastTaskProject 记住任务模式最后一次进入的项目
+func (cm *ConfigManager) UpdateLastTaskProject(name string) error {
+	if cm.globalConfigManager == nil {
+		return fmt.Errorf("全局配置管理器未初始化")
+	}
+	return cm.globalConfigManager.UpdateLastTaskProject(name)
+}
+
 // GetGlobalConfigForRefresh 获取全局配置（用于刷新，从文件重新读取）
 func (cm *ConfigManager) GetGlobalConfigForRefresh() (*GlobalConfig, error) {
 	if cm.globalConfigManager == nil {

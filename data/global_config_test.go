@@ -50,6 +50,48 @@ machines:
 	}
 }
 
+func TestUpdateLastTaskProject_SkipsSaveWhenUnchanged(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "global_config.yaml")
+
+	original := `appId: com.runner
+windowsName: FlashDock
+configFile:
+  - config.yaml
+lastOpenedFile: config.yaml
+lastTaskProject: XYJ
+workPaths:
+  HOME: ~
+`
+	if err := os.WriteFile(configPath, []byte(original), 0644); err != nil {
+		t.Fatalf("写入测试配置失败: %v", err)
+	}
+
+	gcm := NewGlobalConfigManager(configPath)
+	if _, err := gcm.LoadGlobalConfig(); err != nil {
+		t.Fatalf("加载全局配置失败: %v", err)
+	}
+
+	if err := gcm.UpdateLastTaskProject("XYJ"); err != nil {
+		t.Fatalf("UpdateLastTaskProject 失败: %v", err)
+	}
+
+	afterUpdate, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("读取配置文件失败: %v", err)
+	}
+	if string(afterUpdate) != original {
+		t.Fatalf("lastTaskProject 未变化时不应写回配置文件")
+	}
+
+	if err := gcm.UpdateLastTaskProject("Looda"); err != nil {
+		t.Fatalf("UpdateLastTaskProject 写入失败: %v", err)
+	}
+	if got := gcm.GetLastTaskProject(); got != "Looda" {
+		t.Fatalf("GetLastTaskProject = %q", got)
+	}
+}
+
 func TestUpdateLastOpenedFile_SkipsSaveWhenUnchanged(t *testing.T) {
 	tempDir := t.TempDir()
 	configPath := filepath.Join(tempDir, "global_config.yaml")

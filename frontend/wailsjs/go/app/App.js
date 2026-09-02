@@ -258,6 +258,10 @@ export function GetKnownHosts() {
   return window['go']['app']['App']['GetKnownHosts']();
 }
 
+export function GetLastTaskProject() {
+  return window['go']['app']['App']['GetLastTaskProject']();
+}
+
 export function GetLocalHomeDir() {
   return window['go']['app']['App']['GetLocalHomeDir']();
 }
@@ -844,6 +848,10 @@ export function SendShellInterrupt(arg1) {
 
 export function SetHomeMinimizedZone(arg1) {
   return window['go']['app']['App']['SetHomeMinimizedZone'](arg1);
+}
+
+export function SetLastTaskProject(arg1) {
+  return window['go']['app']['App']['SetLastTaskProject'](arg1);
 }
 
 export function SetMachinePinned(arg1, arg2) {

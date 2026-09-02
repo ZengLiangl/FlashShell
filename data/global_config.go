@@ -225,6 +225,7 @@ type GlobalConfig struct {
 	WindowsName              string                 `yaml:"windowsName" json:"windowsName"`
 	ConfigFiles              []string               `yaml:"configFile" json:"configFile"`
 	LastOpenedFile           string                 `yaml:"lastOpenedFile" json:"lastOpenedFile"`
+	LastTaskProject          string                 `yaml:"lastTaskProject,omitempty" json:"lastTaskProject,omitempty"`
 	WorkPaths                map[string]string      `yaml:"workPaths" json:"workPaths"`
 	Machines                 []define.Machine       `yaml:"machines,omitempty" json:"machines,omitempty"`
 	MachineGroups            []string               `yaml:"machineGroups,omitempty" json:"machineGroups,omitempty"`
@@ -504,6 +505,29 @@ func (gcm *GlobalConfigManager) GetLastOpenedFile() string {
 		return ""
 	}
 	return gcm.config.LastOpenedFile
+}
+
+// UpdateLastTaskProject 记住任务模式最后一次进入的项目（仅变更时写盘）
+func (gcm *GlobalConfigManager) UpdateLastTaskProject(name string) error {
+	name = strings.TrimSpace(name)
+	if gcm.config == nil {
+		if _, err := gcm.LoadGlobalConfig(); err != nil {
+			return err
+		}
+	}
+	if strings.TrimSpace(gcm.config.LastTaskProject) == name {
+		return nil
+	}
+	gcm.config.LastTaskProject = name
+	return gcm.SaveGlobalConfig(gcm.config)
+}
+
+// GetLastTaskProject 任务模式上次进入的项目名
+func (gcm *GlobalConfigManager) GetLastTaskProject() string {
+	if gcm.config == nil {
+		return ""
+	}
+	return strings.TrimSpace(gcm.config.LastTaskProject)
 }
 
 // AddConfigFile 添加配置文件路径
