@@ -3,7 +3,7 @@
 package app
 
 /*
-#cgo CFLAGS: -x objective-c -fobjc-arc -fblocks
+#cgo CFLAGS: -x objective-c -fblocks
 #cgo LDFLAGS: -framework Cocoa
 #import <Cocoa/Cocoa.h>
 #import <dispatch/dispatch.h>
@@ -122,6 +122,9 @@ void flashdockSetTrayEnabled(int on) {
 		[menu addItem:[NSMenuItem separatorItem]];
 		[menu addItem:quitItem];
 		[flashdockStatusItem setMenu:menu];
+		[showItem release];
+		[quitItem release];
+		[menu release];
 	});
 }
 
@@ -129,8 +132,9 @@ void flashdockSetTrayIconPNG(const unsigned char *data, int len) {
 	if (data == NULL || len <= 0) {
 		return;
 	}
-	NSData *payload = [NSData dataWithBytes:data length:(NSUInteger)len];
+	NSData *payload = [[NSData alloc] initWithBytes:data length:(NSUInteger)len];
 	NSImage *image = [[NSImage alloc] initWithData:payload];
+	[payload release];
 	if (image == nil) {
 		return;
 	}
@@ -141,6 +145,7 @@ void flashdockSetTrayIconPNG(const unsigned char *data, int len) {
 			[[flashdockStatusItem button] setImage:image];
 			[[flashdockStatusItem button] setTitle:@""];
 		}
+		[image release];
 	});
 }
 
