@@ -114,7 +114,7 @@ export function ExportMachineTemplateToFile():Promise<string>;
 
 export function ExportMachinesCSVPick():Promise<string>;
 
-export function GenerateMCPToken(arg1:string,arg2:string):Promise<mcp.Token>;
+export function GenerateMCPToken(arg1:string,arg2:string):Promise<mcp.IssuedToken>;
 
 export function GetAppVersion():Promise<string>;
 
@@ -155,6 +155,8 @@ export function GetMCPSettings():Promise<mcp.Settings>;
 export function GetMCPSnippets():Promise<mcp.ClientSnippet>;
 
 export function GetMCPStatus():Promise<mcp.Status>;
+
+export function GetMCPToken(arg1:string):Promise<mcp.Token>;
 
 export function GetMachineGroupDefaults():Promise<Array<data.MachineGroupDefaults>>;
 
@@ -250,13 +252,13 @@ export function ImportXshellPick(arg1:string,arg2:string):Promise<data.MachineIm
 
 export function InstallCursorMCP():Promise<void>;
 
-export function InstallMCPClient(arg1:string):Promise<mcp.Token>;
+export function InstallMCPClient(arg1:string):Promise<mcp.IssuedToken>;
 
-export function InstallMCPClientWith(arg1:string,arg2:mcp.InstallOpts):Promise<mcp.Token>;
+export function InstallMCPClientWith(arg1:string,arg2:mcp.InstallOpts):Promise<mcp.IssuedToken>;
 
 export function InstallUpdateAndRestart():Promise<app.UpdateInstallResult>;
 
-export function IssueMCPToken(arg1:mcp.IssueOpts):Promise<mcp.Token>;
+export function IssueMCPToken(arg1:mcp.IssueOpts):Promise<mcp.IssuedToken>;
 
 export function ListAppIconPresets():Promise<Array<app.AppIconPresetInfo>>;
 
@@ -360,7 +362,7 @@ export function RefreshConfigMenuWithEvent():Promise<void>;
 
 export function RefreshCursorMCP():Promise<void>;
 
-export function RefreshMCPClient(arg1:string):Promise<mcp.Token>;
+export function RefreshMCPClient(arg1:string):Promise<mcp.IssuedToken>;
 
 export function RemoveKnownHost(arg1:string,arg2:number):Promise<void>;
 
@@ -509,6 +511,8 @@ export function UninstallMCPClient(arg1:string):Promise<void>;
 export function UnlockVault(arg1:string):Promise<void>;
 
 export function UpdateApplicationMenu():Promise<void>;
+
+export function UpdateMCPToken(arg1:mcp.UpdateTokenOpts):Promise<mcp.Token>;
 
 export function UpdateMachine(arg1:string,arg2:define.Machine):Promise<void>;
 

@@ -61,7 +61,7 @@ func mcpServersMap(root map[string]any) map[string]any {
 	return m
 }
 
-func (s *Service) installCursor(tok Token) error {
+func (s *Service) installCursor(plain string) error {
 	path, err := cursorMCPPath()
 	if err != nil {
 		return err
@@ -71,7 +71,7 @@ func (s *Service) installCursor(tok Token) error {
 		return err
 	}
 	servers := mcpServersMap(root)
-	servers[cursorServerKey] = s.httpEntry(tok)
+	servers[cursorServerKey] = s.httpEntry(plain)
 	return writeJSONFile(path, root)
 }
 

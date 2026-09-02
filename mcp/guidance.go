@@ -98,11 +98,39 @@ func guidanceStatus(clientID string) GuidanceStatus {
 
 func (s *Service) GuidancePreview(clientID string) string {
 	aliases := s.allAliases()
-	// Cursor 走复制粘贴，不需要 BEGIN/END 标记区
+	if clientID == "cursor" {
+		for _, t := range s.tokens.List() {
+			if strings.EqualFold(t.Client, "cursor") {
+				aliases = s.aliasesForToken(t)
+				break
+			}
+		}
+	}
 	if clientID == "cursor" {
 		return guidanceMarkdown(aliases)
 	}
 	return guidanceBody(aliases)
+}
+
+func (s *Service) aliasesForToken(t Token) []string {
+	all := s.allAliases()
+	if len(t.Servers) == 0 {
+		return all
+	}
+	allow := make(map[string]struct{}, len(t.Servers))
+	for _, a := range t.Servers {
+		a = strings.TrimSpace(a)
+		if a != "" {
+			allow[strings.ToLower(a)] = struct{}{}
+		}
+	}
+	out := make([]string, 0, len(allow))
+	for _, a := range all {
+		if _, ok := allow[strings.ToLower(a)]; ok {
+			out = append(out, a)
+		}
+	}
+	return out
 }
 
 func (s *Service) allAliases() []string {

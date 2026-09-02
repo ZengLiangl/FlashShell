@@ -30,11 +30,11 @@ type InstallOpts struct {
 	CIDRs     []string `json:"cidrs"`
 }
 
-func (s *Service) stdioEntry(tok Token) map[string]any {
+func (s *Service) stdioEntry(plain string) map[string]any {
 	exe, _ := os.Executable()
 	env := map[string]any{}
-	if tok.Plain != "" {
-		env["FLASHSHELL_TOKEN"] = tok.Plain
+	if strings.TrimSpace(plain) != "" {
+		env["FLASHSHELL_TOKEN"] = plain
 	}
 	if s.settings.HTTPPort > 0 {
 		env["FLASHSHELL_RPC_PORT"] = fmt.Sprintf("%d", s.settings.HTTPPort)
@@ -49,10 +49,10 @@ func (s *Service) stdioEntry(tok Token) map[string]any {
 	return entry
 }
 
-func (s *Service) httpEntry(tok Token) map[string]any {
+func (s *Service) httpEntry(plain string) map[string]any {
 	headers := map[string]any{}
-	if tok.Plain != "" {
-		headers["Authorization"] = "Bearer " + tok.Plain
+	if strings.TrimSpace(plain) != "" {
+		headers["Authorization"] = "Bearer " + plain
 	}
 	return map[string]any{
 		"url":     s.httpURL(),
@@ -149,11 +149,11 @@ func (s *Service) clientLinkOf(id string) ClientLink {
 	return c
 }
 
-func (s *Service) InstallClient(id string) (Token, error) {
+func (s *Service) InstallClient(id string) (IssuedToken, error) {
 	return s.InstallClientWith(id, InstallOpts{})
 }
 
-func (s *Service) InstallClientWith(id string, opts InstallOpts) (Token, error) {
+func (s *Service) InstallClientWith(id string, opts InstallOpts) (IssuedToken, error) {
 	name := strings.TrimSpace(opts.TokenName)
 	if name == "" {
 		name = s.clientLinkOf(id).Name + " on " + time.Now().Format("Jan 2")
@@ -165,35 +165,35 @@ func (s *Service) InstallClientWith(id string, opts InstallOpts) (Token, error) 
 	case "codex", "cursor", "opencode":
 		clientID = id
 	default:
-		return Token{}, fmt.Errorf("未知客户端: %s", id)
+		return IssuedToken{}, fmt.Errorf("未知客户端: %s", id)
 	}
-	tok, err := s.tokens.IssueForClient(IssueOpts{
+	issued, err := s.tokens.IssueForClient(IssueOpts{
 		Name: name, Client: clientID, Servers: opts.Servers, CIDRs: opts.CIDRs,
 	})
 	if err != nil {
-		return Token{}, err
+		return IssuedToken{}, err
 	}
 	var ierr error
 	switch id {
 	case "claude-code":
-		ierr = s.installClaude(tok)
+		ierr = s.installClaude(issued.Plaintext)
 	case "codex":
-		ierr = s.installCodex(tok)
+		ierr = s.installCodex(issued.Plaintext)
 	case "cursor":
-		ierr = s.installCursor(tok)
+		ierr = s.installCursor(issued.Plaintext)
 	case "opencode":
-		ierr = s.installOpenCode(tok)
+		ierr = s.installOpenCode(issued.Plaintext)
 	}
 	if ierr != nil {
-		_, _ = s.tokens.Revoke(tok.ID)
-		return Token{}, ierr
+		_, _ = s.tokens.Revoke(issued.ID)
+		return IssuedToken{}, ierr
 	}
 	s.audit.Append(AuditEntry{
 		Source: "FlashShell UI", Caller: "human", Tool: "token_issue", Module: "token",
 		Params: mustJSON(map[string]any{"client": clientID, "name": name, "servers": opts.Servers, "cidrs": opts.CIDRs}),
 		Result: "ok", Decision: "auto", Reason: "一键接入签发 scoped token",
 	})
-	return tok, nil
+	return issued, nil
 }
 
 func (s *Service) UninstallClient(id string) error {
@@ -211,9 +211,20 @@ func (s *Service) UninstallClient(id string) error {
 	}
 }
 
-func (s *Service) RefreshClient(id string) (Token, error) {
-	// 刷新 = 重新签发并写配置（旧明文不可恢复）
-	return s.InstallClientWith(id, InstallOpts{TokenName: s.clientLinkOf(id).Name + " refresh"})
+func (s *Service) RefreshClient(id string) (IssuedToken, error) {
+	// 刷新 = 重新签发并写配置；尽量保留原 token 的可见服务器 / CIDR
+	opts := InstallOpts{TokenName: s.clientLinkOf(id).Name + " refresh"}
+	for _, t := range s.tokens.List() {
+		if strings.EqualFold(t.Client, id) {
+			opts.Servers = append([]string{}, t.Servers...)
+			opts.CIDRs = append([]string{}, t.CIDRs...)
+			if strings.TrimSpace(t.Name) != "" {
+				opts.TokenName = t.Name
+			}
+			break
+		}
+	}
+	return s.InstallClientWith(id, opts)
 }
 
 func cursorLinkedOK() bool {
@@ -238,7 +249,7 @@ func claudeLinked() bool {
 	return ok
 }
 
-func (s *Service) installClaude(tok Token) error {
+func (s *Service) installClaude(plain string) error {
 	path, err := claudeJSONPath()
 	if err != nil {
 		return err
@@ -252,7 +263,7 @@ func (s *Service) installClaude(tok Token) error {
 		servers = map[string]any{}
 		root["mcpServers"] = servers
 	}
-	servers[serverKey] = s.stdioEntry(tok)
+	servers[serverKey] = s.stdioEntry(plain)
 	return writeJSONFile(path, root)
 }
 
@@ -296,7 +307,7 @@ func openCodeLinked() bool {
 	return ok
 }
 
-func (s *Service) installOpenCode(tok Token) error {
+func (s *Service) installOpenCode(plain string) error {
 	path, err := openCodeJSONPath()
 	if err != nil {
 		return err
@@ -310,7 +321,7 @@ func (s *Service) installOpenCode(tok Token) error {
 		mcp = map[string]any{}
 		root["mcp"] = mcp
 	}
-	entry := s.stdioEntry(tok)
+	entry := s.stdioEntry(plain)
 	entry["type"] = "local"
 	mcp[serverKey] = entry
 	return writeJSONFile(path, root)
@@ -348,7 +359,7 @@ func codexLinked() bool {
 		strings.Contains(string(b), "[mcp_servers.\""+serverKey+"\"]")
 }
 
-func (s *Service) installCodex(tok Token) error {
+func (s *Service) installCodex(plain string) error {
 	path, err := codexTOMLPath()
 	if err != nil {
 		return err
@@ -357,9 +368,9 @@ func (s *Service) installCodex(tok Token) error {
 	exe = strings.ReplaceAll(exe, `\`, `\\`)
 	var bld strings.Builder
 	fmt.Fprintf(&bld, "\n[mcp_servers.%s]\ncommand = %q\nargs = [\"--mcp-stdio\"]\n", serverKey, exe)
-	if tok.Plain != "" {
+	if strings.TrimSpace(plain) != "" {
 		fmt.Fprintf(&bld, "env = { FLASHSHELL_TOKEN = %q, FLASHSHELL_RPC_PORT = %q }\n",
-			tok.Plain, fmt.Sprintf("%d", s.settings.HTTPPort))
+			plain, fmt.Sprintf("%d", s.settings.HTTPPort))
 	}
 	b, err := os.ReadFile(path)
 	if err != nil && !os.IsNotExist(err) {

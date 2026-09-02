@@ -11,7 +11,7 @@ import (
 
 func (s *Service) listServers(ctx context.Context) (any, error) {
 	out := make([]map[string]any, 0)
-	tok, hasTok := tokenFromCtx(ctx)
+	tok, hasTok := s.activeToken(ctx)
 	if s.cfg != nil {
 		for _, m := range s.cfg.GetAllMachinesFromGlobal() {
 			if !s.serverMCPEnabled(&m) {

@@ -112,6 +112,7 @@ func newService(cfg *data.ConfigManager) *Service {
 		Instructions: serverInstructions,
 	})
 	s.registerTools()
+	s.mcp.AddReceivingMiddleware(s.tokenScopeMiddleware())
 	return s
 }
 
@@ -239,6 +240,46 @@ func tokenFromCtx(ctx context.Context) (Token, bool) {
 	return t, ok
 }
 
+// activeToken 每次工具调用前从磁盘对齐后的 TokenStore 取最新作用域（避免 ctx 快照过期）。
+func (s *Service) activeToken(ctx context.Context) (Token, bool) {
+	tok, ok := tokenFromCtx(ctx)
+	if !ok {
+		return Token{}, false
+	}
+	if strings.TrimSpace(tok.ID) == "" {
+		return tok, ok
+	}
+	if fresh, found := s.tokens.Get(tok.ID); found {
+		return fresh, true
+	}
+	return tok, ok
+}
+
+func (s *Service) tokenScopeMiddleware() mcpsdk.Middleware {
+	return func(next mcpsdk.MethodHandler) mcpsdk.MethodHandler {
+		return func(ctx context.Context, method string, req mcpsdk.Request) (mcpsdk.Result, error) {
+			if tok, ok := tokenFromCtx(ctx); ok && strings.TrimSpace(tok.ID) != "" {
+				if fresh, found := s.tokens.Get(tok.ID); found {
+					ctx = context.WithValue(ctx, ctxKeyToken{}, fresh)
+				}
+				return next(ctx, method, req)
+			}
+			plain := strings.TrimSpace(os.Getenv("FLASHSHELL_TOKEN"))
+			if plain != "" {
+				if tok, ok := s.tokens.ValidFrom(plain, "127.0.0.1"); ok {
+					ctx = context.WithValue(ctx, ctxKeyToken{}, tok)
+					src := tok.Name
+					if src == "" {
+						src = "stdio"
+					}
+					ctx = context.WithValue(ctx, ctxKeySource{}, src)
+				}
+			}
+			return next(ctx, method, req)
+		}
+	}
+}
+
 func (s *Service) Stop() {
 	s.closeOwnedSSH()
 	s.mu.Lock()
@@ -262,7 +303,6 @@ func mustHome() string {
 
 type runtimeInfo struct {
 	Port      int    `json:"port"`
-	Token     string `json:"token"`
 	PID       int    `json:"pid"`
 	StartedAt string `json:"startedAt"`
 	HTTPURL   string `json:"httpUrl"`
@@ -456,7 +496,7 @@ func (s *Service) gate(ctx context.Context, tool, server, preview string, params
 	var allow []string
 	var allowSudo bool
 	if server != "" {
-		if tok, ok := tokenFromCtx(ctx); ok && !tok.SeesServer(server) {
+		if tok, ok := s.activeToken(ctx); ok && !tok.SeesServer(server) {
 			why := "该 Token 不可见服务器 " + server
 			return false, why, wrapErr("[denied]", why)
 		}

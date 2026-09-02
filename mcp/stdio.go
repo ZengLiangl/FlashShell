@@ -35,21 +35,34 @@ func HasStdioFlag(args []string) bool {
 
 func (s *Service) ListTokens() []Token { return s.tokens.List() }
 
-func (s *Service) IssueToken(opts IssueOpts) (Token, error) {
-	tok, err := s.tokens.Issue(opts)
+func (s *Service) IssueToken(opts IssueOpts) (IssuedToken, error) {
+	issued, err := s.tokens.Issue(opts)
 	if err != nil {
-		return Token{}, err
+		return IssuedToken{}, err
 	}
 	s.audit.Append(AuditEntry{
 		Source: "FlashShell UI", Caller: "human", Tool: "token_issue", Module: "token",
 		Params: mustJSON(map[string]any{"name": opts.Name, "client": opts.Client, "servers": opts.Servers, "cidrs": opts.CIDRs}),
 		Result: "ok", Decision: "auto", Reason: "手动签发 scoped token",
 	})
-	return tok, nil
+	return issued, nil
 }
 
-func (s *Service) GenerateToken(name, client string) (Token, error) {
+func (s *Service) GenerateToken(name, client string) (IssuedToken, error) {
 	return s.IssueToken(IssueOpts{Name: name, Client: client})
+}
+
+func (s *Service) UpdateToken(opts UpdateTokenOpts) (Token, error) {
+	tok, err := s.tokens.Update(opts)
+	if err != nil {
+		return Token{}, err
+	}
+	s.audit.Append(AuditEntry{
+		Source: "FlashShell UI", Caller: "human", Tool: "token_update", Module: "token",
+		Params: mustJSON(map[string]any{"id": opts.ID, "name": tok.Name, "servers": tok.Servers, "cidrs": tok.CIDRs}),
+		Result: "ok", Decision: "auto", Reason: "更新 scoped token 作用域",
+	})
+	return tok, nil
 }
 
 func (s *Service) RevokeToken(id string) error {
@@ -79,6 +92,8 @@ func (s *Service) ClearTokens() error {
 }
 
 func (s *Service) ListServerAliases() []string { return s.allAliases() }
+
+func (s *Service) GetToken(id string) (Token, bool) { return s.tokens.Get(id) }
 
 func (s *Service) QueryAudit(f AuditFilter) []AuditEntry { return s.audit.Query(f) }
 

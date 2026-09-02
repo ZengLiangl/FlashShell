@@ -298,6 +298,10 @@ export function GetMCPStatus() {
   return window['go']['app']['App']['GetMCPStatus']();
 }
 
+export function GetMCPToken(arg1) {
+  return window['go']['app']['App']['GetMCPToken'](arg1);
+}
+
 export function GetMachineGroupDefaults() {
   return window['go']['app']['App']['GetMachineGroupDefaults']();
 }
@@ -1004,6 +1008,10 @@ export function UnlockVault(arg1) {
 
 export function UpdateApplicationMenu() {
   return window['go']['app']['App']['UpdateApplicationMenu']();
+}
+
+export function UpdateMCPToken(arg1) {
+  return window['go']['app']['App']['UpdateMCPToken'](arg1);
 }
 
 export function UpdateMachine(arg1, arg2) {

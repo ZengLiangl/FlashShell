@@ -193,8 +193,9 @@
         <el-table-column label="最后使用" :width="embedded ? 128 : 160">
           <template #default="{ row }">{{ fmtTime(row.lastUsedAt) || '—' }}</template>
         </el-table-column>
-        <el-table-column label="操作" :width="embedded ? 72 : 90" fixed="right">
+        <el-table-column label="操作" :width="embedded ? 120 : 140" fixed="right">
           <template #default="{ row }">
+            <el-button text size="small" type="primary" @click="openEditToken(row)">编辑</el-button>
             <el-button text size="small" type="danger" @click="revokeToken(row.id)">删除</el-button>
           </template>
         </el-table-column>
@@ -272,6 +273,42 @@
       </template>
     </el-dialog>
 
+    <!-- 编辑 Token 作用域 -->
+    <el-dialog v-model="editOpen" title="编辑 Token 作用域" width="520px" append-to-body destroy-on-close>
+      <el-form label-position="top" size="small">
+        <el-form-item label="Token 名">
+          <el-input v-model="editForm.name" placeholder="例如 Cursor" />
+        </el-form-item>
+        <el-form-item label="可见服务器（空=全部）">
+          <el-select
+            v-model="editForm.servers"
+            multiple
+            filterable
+            collapse-tags
+            collapse-tags-tooltip
+            clearable
+            placeholder="空=全部可见"
+            style="width: 100%"
+          >
+            <el-option v-for="a in editServerOptions" :key="a" :label="a" :value="a" />
+          </el-select>
+          <div class="form-tip">不轮换 Token 明文；改完立即对后续 MCP 调用生效（Cursor 需 Reload MCP）。</div>
+        </el-form-item>
+        <el-form-item label="IP 白名单 (CIDR)">
+          <el-select v-model="editForm.cidrs" multiple filterable allow-create default-first-option placeholder="127.0.0.1/32" style="width: 100%">
+            <el-option label="127.0.0.1/32" value="127.0.0.1/32" />
+            <el-option label="::1/128" value="::1/128" />
+            <el-option label="192.168.0.0/16" value="192.168.0.0/16" />
+            <el-option label="10.0.0.0/8" value="10.0.0.0/8" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="editOpen = false">取消</el-button>
+        <el-button type="primary" :loading="busy === 'edit-token'" @click="saveEditToken">保存</el-button>
+      </template>
+    </el-dialog>
+
     <!-- 一次性 Token -->
     <el-dialog v-model="plainOpen" title="Token 已签发（仅此一次）" width="560px" append-to-body :close-on-click-modal="false">
       <el-alert type="warning" :closable="false" show-icon title="关闭后无法再查看明文。请立即复制并妥善保存。" />
@@ -329,12 +366,14 @@ import {
   SaveMCPSettings,
   GetMCPSnippets,
   ListMCPTokens,
+  GetMCPToken,
   ListMCPClients,
   ListMCPServerAliases,
   InstallMCPClientWith,
   UninstallMCPClient,
   RefreshMCPClient,
   IssueMCPToken,
+  UpdateMCPToken,
   RevokeMCPToken,
   ClearMCPTokens,
   OpenMCPPath,
@@ -359,6 +398,7 @@ export default {
     const aliases = ref([])
     const bindDialog = ref(false)
     const wizardOpen = ref(false)
+    const editOpen = ref(false)
     const issueOnly = ref(false)
     const plainOpen = ref(false)
     const plainToken = ref('')
@@ -373,6 +413,17 @@ export default {
       tokenName: '',
       servers: [],
       cidrs: ['127.0.0.1/32'],
+    })
+    const editForm = reactive({
+      id: '',
+      name: '',
+      servers: [],
+      cidrs: ['127.0.0.1/32'],
+    })
+
+    const editServerOptions = computed(() => {
+      const set = new Set([...(aliases.value || []), ...(editForm.servers || [])])
+      return [...set].filter(Boolean).sort()
     })
 
     const wizardTitle = computed(() => {
@@ -460,6 +511,41 @@ export default {
       wizard.servers = [...aliases.value]
       wizard.cidrs = ['127.0.0.1/32']
       wizardOpen.value = true
+    }
+
+    const openEditToken = async (row) => {
+      if (!row?.id) return
+      try {
+        const fresh = await GetMCPToken(String(row.id))
+        editForm.id = fresh.id || row.id
+        editForm.name = fresh.name || row.name || ''
+        editForm.servers = Array.isArray(fresh.servers) ? [...fresh.servers] : []
+        editForm.cidrs = Array.isArray(fresh.cidrs) && fresh.cidrs.length ? [...fresh.cidrs] : ['127.0.0.1/32']
+        editOpen.value = true
+      } catch (e) {
+        ElMessage.error(`无法加载 Token: ${e}`)
+      }
+    }
+
+    const saveEditToken = async () => {
+      if (!editForm.id) return
+      busy.value = 'edit-token'
+      try {
+        const updated = await UpdateMCPToken({
+          id: String(editForm.id),
+          name: String(editForm.name || ''),
+          servers: [...(editForm.servers || [])],
+          cidrs: [...(editForm.cidrs?.length ? editForm.cidrs : ['127.0.0.1/32'])],
+        })
+        editOpen.value = false
+        const n = (updated?.servers || []).length
+        ElMessage.success(n ? `已更新可见服务器（${n} 台）` : '已更新：可见服务器=全部')
+        await reload()
+      } catch (e) {
+        ElMessage.error(`更新失败: ${e}`)
+      } finally {
+        busy.value = ''
+      }
     }
 
     const runWizard = async () => {
@@ -657,8 +743,11 @@ export default {
       aliases,
       bindDialog,
       wizardOpen,
+      editOpen,
+      editForm,
       wizard,
       wizardTitle,
+      editServerOptions,
       plainOpen,
       plainToken,
       cursorRuleOpen,
@@ -670,6 +759,8 @@ export default {
       reload,
       openWizard,
       openIssue,
+      openEditToken,
+      saveEditToken,
       runWizard,
       refreshClient,
       uninstallClient,

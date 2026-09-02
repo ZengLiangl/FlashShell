@@ -114,24 +114,40 @@ func (a *App) ListMCPTokens() []mcp.Token {
 	return a.mcpSvc.ListTokens()
 }
 
-// GenerateMCPToken 手动签发 scoped token（明文仅返回一次）
-func (a *App) GenerateMCPToken(name, client string) (mcp.Token, error) {
+// GetMCPToken 按 ID 读取最新 token 作用域（编辑弹窗用）
+func (a *App) GetMCPToken(id string) (mcp.Token, error) {
+	if a.mcpSvc == nil {
+		return mcp.Token{}, fmt.Errorf("MCP 服务未初始化")
+	}
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return mcp.Token{}, fmt.Errorf("token id 为空")
+	}
+	tok, ok := a.mcpSvc.GetToken(id)
+	if !ok {
+		return mcp.Token{}, fmt.Errorf("token 不存在")
+	}
+	return tok, nil
+}
+
+// GenerateMCPToken 手动签发 scoped token（明文仅返回一次，之后不可恢复）
+func (a *App) GenerateMCPToken(name, client string) (mcp.IssuedToken, error) {
 	if err := a.requireUnlocked(); err != nil {
-		return mcp.Token{}, err
+		return mcp.IssuedToken{}, err
 	}
 	if a.mcpSvc == nil {
-		return mcp.Token{}, nil
+		return mcp.IssuedToken{}, nil
 	}
 	return a.mcpSvc.GenerateToken(name, client)
 }
 
-// IssueMCPToken 签发带可见服务器与 CIDR 的 scoped token（明文仅返回一次）
-func (a *App) IssueMCPToken(opts mcp.IssueOpts) (mcp.Token, error) {
+// IssueMCPToken 签发带可见服务器与 CIDR 的 scoped token（明文仅返回一次，之后不可恢复）
+func (a *App) IssueMCPToken(opts mcp.IssueOpts) (mcp.IssuedToken, error) {
 	if err := a.requireUnlocked(); err != nil {
-		return mcp.Token{}, err
+		return mcp.IssuedToken{}, err
 	}
 	if a.mcpSvc == nil {
-		return mcp.Token{}, nil
+		return mcp.IssuedToken{}, nil
 	}
 	return a.mcpSvc.IssueToken(opts)
 }
@@ -158,6 +174,20 @@ func (a *App) GetMCPGuidancePreview(clientID string) string {
 		return ""
 	}
 	return a.mcpSvc.GuidancePreview(clientID)
+}
+
+// UpdateMCPToken 更新 token 名称 / 可见服务器 / CIDR（不轮换明文）
+func (a *App) UpdateMCPToken(opts mcp.UpdateTokenOpts) (mcp.Token, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return mcp.Token{}, err
+	}
+	if a.mcpSvc == nil {
+		return mcp.Token{}, fmt.Errorf("MCP 服务未初始化")
+	}
+	if strings.TrimSpace(opts.ID) == "" {
+		return mcp.Token{}, fmt.Errorf("token id 为空")
+	}
+	return a.mcpSvc.UpdateToken(opts)
 }
 
 // RevokeMCPToken 撤销 token
@@ -242,24 +272,24 @@ func (a *App) ListMCPClients() []mcp.ClientLink {
 	return a.mcpSvc.ListClientLinks()
 }
 
-// InstallMCPClient 一键接入（默认全服务器 + 127.0.0.1/32）；返回明文 Token 一次
-func (a *App) InstallMCPClient(id string) (mcp.Token, error) {
+// InstallMCPClient 一键接入（默认全服务器 + 127.0.0.1/32）；返回明文 Token 一次（之后不可恢复）
+func (a *App) InstallMCPClient(id string) (mcp.IssuedToken, error) {
 	if err := a.requireUnlocked(); err != nil {
-		return mcp.Token{}, err
+		return mcp.IssuedToken{}, err
 	}
 	if a.mcpSvc == nil {
-		return mcp.Token{}, nil
+		return mcp.IssuedToken{}, nil
 	}
 	return a.mcpSvc.InstallClient(id)
 }
 
 // InstallMCPClientWith 接入向导：Token 名 / 可见服务器 / CIDR
-func (a *App) InstallMCPClientWith(id string, opts mcp.InstallOpts) (mcp.Token, error) {
+func (a *App) InstallMCPClientWith(id string, opts mcp.InstallOpts) (mcp.IssuedToken, error) {
 	if err := a.requireUnlocked(); err != nil {
-		return mcp.Token{}, err
+		return mcp.IssuedToken{}, err
 	}
 	if a.mcpSvc == nil {
-		return mcp.Token{}, nil
+		return mcp.IssuedToken{}, nil
 	}
 	return a.mcpSvc.InstallClientWith(id, opts)
 }
@@ -272,10 +302,10 @@ func (a *App) UninstallMCPClient(id string) error {
 	return a.mcpSvc.UninstallClient(id)
 }
 
-// RefreshMCPClient 重新签发并写入配置（旧明文不可恢复）
-func (a *App) RefreshMCPClient(id string) (mcp.Token, error) {
+// RefreshMCPClient 重新签发并写入配置（旧 Token 立即失效，旧明文不可恢复）
+func (a *App) RefreshMCPClient(id string) (mcp.IssuedToken, error) {
 	if a.mcpSvc == nil {
-		return mcp.Token{}, nil
+		return mcp.IssuedToken{}, nil
 	}
 	return a.mcpSvc.RefreshClient(id)
 }
