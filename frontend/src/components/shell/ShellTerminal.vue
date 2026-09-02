@@ -827,10 +827,36 @@ export default {
       suppressRoUntil = Date.now() + ms
     }
 
-    const proposeFitDims = () => {
+    // 与 viewport 滚动条槽对齐；overlay 时 scrollBarWidth 常为 0，FitAddon 会多算出列把字画进槽里
+    const SHELL_SCROLLBAR_GUTTER = 14
+
+    const readCellSize = (terminal) => {
+      const cell = terminal?._core?._renderService?.dimensions?.css?.cell
+      return {
+        width: Number(cell?.width) || 0,
+        height: Number(cell?.height) || 0
+      }
+    }
+
+    const geometryFromHost = (terminal) => {
+      const host = terminalRef.value
+      const { width: cellW, height: cellH } = readCellSize(terminal)
+      if (!host || cellW < 1 || cellH < 1) return null
+      const style = window.getComputedStyle(host)
+      const padX = (parseFloat(style.paddingLeft) || 0) + (parseFloat(style.paddingRight) || 0)
+      const padY = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0)
+      const cols = Math.floor((host.clientWidth - padX - SHELL_SCROLLBAR_GUTTER) / cellW)
+      const rows = Math.floor((host.clientHeight - padY) / cellH)
+      if (!cols || !rows || cols < 20 || rows < 5) return null
+      return { cols, rows }
+    }
+
+    const proposeFitDims = (terminal = term.value, fit = fitAddon.value) => {
+      const fromHost = geometryFromHost(terminal)
+      if (fromHost) return fromHost
       let dims
       try {
-        dims = fitAddon.value.proposeDimensions?.()
+        dims = fit?.proposeDimensions?.()
       } catch {
         return null
       }
@@ -868,16 +894,9 @@ export default {
      * 否则默认 80×24 先露一帧，满屏日志会缩在左上角再撑开。
      */
     const syncLocalFitFromAddon = (terminal, fit) => {
-      let dims
-      try {
-        dims = fit?.proposeDimensions?.()
-      } catch {
-        return false
-      }
+      const dims = proposeFitDims(terminal, fit)
       if (!dims) return false
-      const cols = Math.floor(Number(dims.cols) || 0)
-      const rows = Math.floor(Number(dims.rows) || 0)
-      if (!cols || !rows || cols < 20 || rows < 5) return false
+      const { cols, rows } = dims
       if (terminal.cols !== cols || terminal.rows !== rows) {
         terminal.resize(cols, rows)
       }
@@ -1745,12 +1764,10 @@ export default {
 
 /*
  * xterm-screen / canvas 叠在 viewport 之上时会挡住右侧滚动条。
- * screen 整层不接指针；仅 canvas 接选取/点击；并限制宽度不侵入滚动条槽。
+ * screen 整层不接指针；仅 canvas 接选取/点击。列宽由 fit 预留滚动条槽，勿用 max-width 裁字。
  */
 .terminal-host :deep(.xterm-screen) {
   pointer-events: none !important;
-  max-width: calc(100% - 14px) !important;
-  overflow: hidden;
   z-index: 2;
 }
 
