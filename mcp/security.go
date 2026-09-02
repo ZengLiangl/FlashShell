@@ -75,8 +75,8 @@ func lethalBlocked(cmd string) (bool, string) {
 			return true, r.why
 		}
 	}
-	if matchCustomDanger(s, true) {
-		return true, "命中自定义危险黑名单"
+	if why := matchCustomDangerDetail(s); why != "" {
+		return true, why
 	}
 	return false, ""
 }

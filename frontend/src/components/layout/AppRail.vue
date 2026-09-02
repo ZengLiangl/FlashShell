@@ -40,18 +40,6 @@
     </button>
 
     <button
-      type="button"
-      class="nav-item"
-      title="MCP 接入"
-      aria-label="MCP 接入"
-      @click="$emit('open-settings', 'mcp')"
-    >
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-        <path d="M10 13a5 5 0 0 0 7.54.54l1.42-1.42a5 5 0 0 0-7.07-7.07L10.5 6.4" />
-        <path d="M14 11a5 5 0 0 0-7.54-.54L5.04 11.88a5 5 0 0 0 7.07 7.07L13.5 17.6" />
-      </svg>
-    </button>
-    <button
       v-if="showAudit"
       type="button"
       class="nav-item"

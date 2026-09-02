@@ -1,15 +1,19 @@
 package mcp
 
-import "testing"
+import (
+	"testing"
+
+	"FlashDock/define"
+)
 
 func TestCommandBlocked(t *testing.T) {
-	if !commandBlocked("rm -rf /") {
-		t.Fatal("rm -rf / should be blocked")
+	if hit, why := commandBlocked("rm -rf /"); !hit || why == "" {
+		t.Fatalf("rm -rf / should be blocked, got hit=%v why=%q", hit, why)
 	}
-	if !commandBlocked("mkfs.ext4 /dev/sda") {
-		t.Fatal("mkfs should be blocked")
+	if hit, why := commandBlocked("mkfs.ext4 /dev/sda"); !hit || why == "" {
+		t.Fatalf("mkfs should be blocked, got hit=%v why=%q", hit, why)
 	}
-	if commandBlocked("ls -la /var/log") {
+	if hit, _ := commandBlocked("ls -la /var/log"); hit {
 		t.Fatal("ls should be allowed")
 	}
 }
@@ -48,5 +52,22 @@ func TestBuiltinSkillCount(t *testing.T) {
 		if !got[n] {
 			t.Fatalf("missing skill %s", n)
 		}
+	}
+}
+
+func TestPolicyDisabledDeniesMutating(t *testing.T) {
+	got := policyDecide(PolicyDisabled, kindMutating, "ls", nil)
+	if got.Allow || got.Decision != "denied" {
+		t.Fatalf("disabled should deny, got %+v", got)
+	}
+}
+
+func TestServerMCPEnabled(t *testing.T) {
+	s := &Service{settings: Settings{DefaultPolicy: PolicyTrusted}}
+	if !s.serverMCPEnabled(&define.Machine{Name: "web"}) {
+		t.Fatal("trusted default should be visible")
+	}
+	if s.serverMCPEnabled(&define.Machine{Name: "off", AIPolicy: PolicyDisabled}) {
+		t.Fatal("disabled should be hidden")
 	}
 }

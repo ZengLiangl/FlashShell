@@ -422,6 +422,10 @@ func (s *Service) policyOf(m *define.Machine) string {
 	return normalizePolicy(s.settings.DefaultPolicy)
 }
 
+func (s *Service) serverMCPEnabled(m *define.Machine) bool {
+	return normalizePolicy(s.policyOf(m)) != PolicyDisabled
+}
+
 func (s *Service) gate(ctx context.Context, tool, server, preview string, params any) (viaApproval bool, reason string, err error) {
 	kind := toolKinds[tool]
 	if kind == "" {
@@ -456,6 +460,10 @@ func (s *Service) gate(ctx context.Context, tool, server, preview string, params
 		if err != nil {
 			return false, err.Error(), err
 		}
+		if !s.serverMCPEnabled(m) {
+			why := "该服务器当前 AI 策略为 disabled"
+			return false, why, wrapErr("[denied]", why)
+		}
 		policy = s.policyOf(m)
 		allow = m.AIAllowlist
 		allowSudo = m.AIAllowSudo
@@ -476,12 +484,11 @@ func (s *Service) gate(ctx context.Context, tool, server, preview string, params
 	if hit, why := lethalBlocked(preview); hit {
 		return false, why, wrapErr("[blocked]", why)
 	}
-	if commandBlocked(preview) {
-		why := "命中危险命令黑名单，任何策略档位都拦截"
+	if hit, why := commandBlocked(preview); hit {
 		return false, why, wrapErr("[blocked]", why)
 	}
 	if pathBlocked(preview) {
-		why := "命中敏感路径黑名单，任何策略档位都拦截"
+		why := fmt.Sprintf("命中敏感路径黑名单: %s", strings.TrimSpace(preview))
 		return false, why, wrapErr("[blocked]", why)
 	}
 
@@ -546,7 +553,7 @@ func (s *Service) gate(ctx context.Context, tool, server, preview string, params
 		if hit, _ := severeNeedsApproval(preview); hit {
 			isDanger = true
 		}
-		ok, _, aerr := s.approvals.Request(ctx, tool, server, preview, mustJSON(params), sourceFromCtx(ctx), approveWhy, outboundBad, isDanger)
+		ok, rejectReason, aerr := s.approvals.Request(ctx, tool, server, preview, mustJSON(params), sourceFromCtx(ctx), approveWhy, outboundBad, isDanger)
 		if aerr != nil {
 			msg := aerr.Error()
 			if strings.Contains(msg, "超时") {
@@ -558,7 +565,11 @@ func (s *Service) gate(ctx context.Context, tool, server, preview string, params
 			return false, approveWhy, aerr
 		}
 		if !ok {
-			return false, "用户拒绝了该操作", wrapErr("[denied]", "用户拒绝了该操作")
+			why := "用户拒绝了该操作"
+			if rejectReason != "" {
+				why = why + ": " + rejectReason
+			}
+			return false, why, wrapErr("[denied]", why)
 		}
 		return true, approveWhy + " → 人工已批准", nil
 	}

@@ -1850,6 +1850,7 @@ export namespace mcp {
 	export class ApprovalItem {
 	    id: string;
 	    tool: string;
+	    toolDesc?: string;
 	    server: string;
 	    preview: string;
 	    summary: string;
@@ -1870,6 +1871,7 @@ export namespace mcp {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
 	        this.tool = source["tool"];
+	        this.toolDesc = source["toolDesc"];
 	        this.server = source["server"];
 	        this.preview = source["preview"];
 	        this.summary = source["summary"];

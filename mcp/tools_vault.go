@@ -66,8 +66,8 @@ func isSecretField(k string, listed []string) bool {
 }
 
 func (s *Service) handleInstallWithSecret(ctx context.Context, a InstallWithSecretArgs) (any, error) {
-	if commandBlocked(a.InstallScript) {
-		return nil, wrapErr("[blocked]", "installScript 命中危险命令黑名单")
+	if hit, why := commandBlocked(a.InstallScript); hit {
+		return nil, wrapErr("[blocked]", why)
 	}
 	values := map[string]string{}
 	for k, v := range a.Public {

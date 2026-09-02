@@ -45,6 +45,9 @@
         <el-table-column type="selection" width="40" />
         <el-table-column prop="createdAt" label="触发时间" width="160" />
         <el-table-column prop="tool" label="工具" width="130" />
+        <el-table-column label="说明" min-width="160" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.toolDesc || '—' }}</template>
+        </el-table-column>
         <el-table-column prop="server" label="服务器" width="110" show-overflow-tooltip />
         <el-table-column prop="source" label="来源" width="120" show-overflow-tooltip />
         <el-table-column label="摘要" min-width="180" show-overflow-tooltip>
@@ -344,6 +347,20 @@ export default {
       selectedIds.value = (rows || []).map((r) => r.id)
     }
 
+    const promptRejectReason = async () => {
+      const { value } = await ElMessageBox.prompt(
+        '可选：填写拒绝原因，将通过 MCP 返回给调用方',
+        '拒绝审批',
+        {
+          confirmButtonText: '确认拒绝',
+          cancelButtonText: '取消',
+          inputPlaceholder: '例如：该命令可能影响生产服务',
+          inputType: 'textarea',
+        },
+      )
+      return String(value || '').trim()
+    }
+
     const singleDecide = async (id, allow, addOutbound = false) => {
       try {
         if (addOutbound) {
@@ -356,7 +373,11 @@ export default {
             )
           }
         }
-        await DecideMCPApproval(id, allow, !!addOutbound)
+        let rejectReason = ''
+        if (!allow) {
+          rejectReason = await promptRejectReason()
+        }
+        await DecideMCPApproval(id, allow, !!addOutbound, rejectReason)
         ElMessage.success(allow ? (addOutbound ? '已放行并加白名单' : '已放行') : '已拒绝')
         await loadPending()
         await reload()
@@ -369,7 +390,11 @@ export default {
     const batchDecide = async (allow) => {
       if (!selectedIds.value.length) return
       try {
-        await DecideMCPApprovalBatch(selectedIds.value, allow)
+        let rejectReason = ''
+        if (!allow) {
+          rejectReason = await promptRejectReason()
+        }
+        await DecideMCPApprovalBatch(selectedIds.value, allow, rejectReason)
         ElMessage.success(allow ? '批量放行完成' : '批量拒绝完成')
         selectedIds.value = []
         await loadPending()
@@ -383,7 +408,11 @@ export default {
       const ids = pending.value.map((p) => p.id)
       if (!ids.length) return
       try {
-        await DecideMCPApprovalBatch(ids, allow)
+        let rejectReason = ''
+        if (!allow) {
+          rejectReason = await promptRejectReason()
+        }
+        await DecideMCPApprovalBatch(ids, allow, rejectReason)
         ElMessage.success(allow ? '已全部放行' : '已全部拒绝')
         await loadPending()
         await reload()

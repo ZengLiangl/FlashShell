@@ -122,12 +122,12 @@ export function CreateMachine(arg1, arg2) {
   return window['go']['app']['App']['CreateMachine'](arg1, arg2);
 }
 
-export function DecideMCPApproval(arg1, arg2, arg3) {
-  return window['go']['app']['App']['DecideMCPApproval'](arg1, arg2, arg3);
+export function DecideMCPApproval(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['DecideMCPApproval'](arg1, arg2, arg3, arg4);
 }
 
-export function DecideMCPApprovalBatch(arg1, arg2) {
-  return window['go']['app']['App']['DecideMCPApprovalBatch'](arg1, arg2);
+export function DecideMCPApprovalBatch(arg1, arg2, arg3) {
+  return window['go']['app']['App']['DecideMCPApprovalBatch'](arg1, arg2, arg3);
 }
 
 export function DeleteMCPAudit(arg1) {

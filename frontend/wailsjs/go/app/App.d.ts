@@ -68,9 +68,9 @@ export function CreateApplicationMenu():Promise<menu.Menu>;
 
 export function CreateMachine(arg1:define.Machine,arg2:define.SensitiveData):Promise<string>;
 
-export function DecideMCPApproval(arg1:string,arg2:boolean,arg3:boolean):Promise<void>;
+export function DecideMCPApproval(arg1:string,arg2:boolean,arg3:boolean,arg4:string):Promise<void>;
 
-export function DecideMCPApprovalBatch(arg1:Array<string>,arg2:boolean):Promise<void>;
+export function DecideMCPApprovalBatch(arg1:Array<string>,arg2:boolean,arg3:string):Promise<void>;
 
 export function DeleteMCPAudit(arg1:Array<string>):Promise<void>;
 

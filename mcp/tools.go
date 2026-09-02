@@ -7,7 +7,14 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+var toolDescriptions = map[string]string{}
+
+func toolDescription(name string) string {
+	return toolDescriptions[name]
+}
+
 func addTool[In any](s *Service, name, desc string, serverOf func(In) string, previewOf func(In) string, h func(context.Context, In) (any, error)) {
+	toolDescriptions[name] = desc
 	mcpsdk.AddTool(s.mcp, &mcpsdk.Tool{Name: name, Description: desc},
 		func(ctx context.Context, _ *mcpsdk.CallToolRequest, in In) (*mcpsdk.CallToolResult, any, error) {
 			start := time.Now()

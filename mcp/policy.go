@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"fmt"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -72,41 +73,47 @@ func normalizePolicy(p string) string {
 	}
 }
 
-var dangerCommand = []*regexp.Regexp{
-	regexp.MustCompile(`(?i)rm\s+(-[a-zA-Z]*f[a-zA-Z]*|--force).*/\s*$`),
-	regexp.MustCompile(`(?i)rm\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\s+(/|/\*|/\s+\*)`),
-	regexp.MustCompile(`(?i)rm\s+-[a-zA-Z]*f[a-zA-Z]*r[a-zA-Z]*\s+(/|/\*)`),
-	regexp.MustCompile(`(?i)mkfs(\.\w+)?\s`),
-	regexp.MustCompile(`(?i)dd\s+.*\bof=/dev/`),
-	regexp.MustCompile(`:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;`),
-	regexp.MustCompile(`(?i)\b(shutdown|poweroff|halt|init\s+0)\b`),
-	regexp.MustCompile(`(?i)\bmkfs\b`),
-	regexp.MustCompile(`(?i)>\s*/dev/sd[a-z]`),
-	regexp.MustCompile(`(?i)chmod\s+(-R\s+)?777\s+/`),
-	regexp.MustCompile(`(?i)chown\s+-R\s+[^\s]+\s+/(\s|$)`),
-	regexp.MustCompile(`(?i)\b(wipefs|sgdisk|parted)\b.*\s/dev/`),
-	regexp.MustCompile(`(?i)curl\s+[^\n]*\|\s*(ba)?sh`),
-	regexp.MustCompile(`(?i)wget\s+[^\n]*\|\s*(ba)?sh`),
-	regexp.MustCompile(`(?i)\bDROP\s+(DATABASE|SCHEMA)\b`),
-	regexp.MustCompile(`(?i)\bTRUNCATE\s+(TABLE\s+)?`),
-	regexp.MustCompile(`(?i)\bFLUSHALL\b`),
-	regexp.MustCompile(`(?i)\bFLUSHDB\b`),
+var dangerCommandRules = []struct {
+	re  *regexp.Regexp
+	why string
+}{
+	{regexp.MustCompile(`(?i)rm\s+(-[a-zA-Z]*f[a-zA-Z]*|--force).*/\s*$`), "命中危险黑名单: rm -rf /"},
+	{regexp.MustCompile(`(?i)rm\s+-[a-zA-Z]*r[a-zA-Z]*f[a-zA-Z]*\s+(/|/\*|/\s+\*)`), "命中危险黑名单: rm -rf /"},
+	{regexp.MustCompile(`(?i)rm\s+-[a-zA-Z]*f[a-zA-Z]*r[a-zA-Z]*\s+(/|/\*)`), "命中危险黑名单: rm -rf /"},
+	{regexp.MustCompile(`(?i)mkfs(\.\w+)?\s`), "命中危险黑名单: mkfs"},
+	{regexp.MustCompile(`(?i)dd\s+.*\bof=/dev/`), "命中危险黑名单: dd of=/dev"},
+	{regexp.MustCompile(`:\(\)\s*\{\s*:\s*\|\s*:\s*&\s*\}\s*;`), "命中危险黑名单: fork bomb"},
+	{regexp.MustCompile(`(?i)\b(shutdown|poweroff|halt|init\s+0)\b`), "命中危险黑名单: 关机/断电"},
+	{regexp.MustCompile(`(?i)\bmkfs\b`), "命中危险黑名单: mkfs"},
+	{regexp.MustCompile(`(?i)>\s*/dev/sd[a-z]`), "命中危险黑名单: 覆写块设备"},
+	{regexp.MustCompile(`(?i)chmod\s+(-R\s+)?777\s+/`), "命中危险黑名单: chmod 777 /"},
+	{regexp.MustCompile(`(?i)chown\s+-R\s+[^\s]+\s+/(\s|$)`), "命中危险黑名单: chown -R … /"},
+	{regexp.MustCompile(`(?i)\b(wipefs|sgdisk|parted)\b.*\s/dev/`), "命中危险黑名单: 分区/擦除磁盘"},
+	{regexp.MustCompile(`(?i)curl\s+[^\n]*\|\s*(ba)?sh`), "命中危险黑名单: curl|sh 管道执行"},
+	{regexp.MustCompile(`(?i)wget\s+[^\n]*\|\s*(ba)?sh`), "命中危险黑名单: wget|sh 管道执行"},
+	{regexp.MustCompile(`(?i)\bDROP\s+(DATABASE|SCHEMA)\b`), "命中危险黑名单: DROP DATABASE/SCHEMA"},
+	{regexp.MustCompile(`(?i)\bTRUNCATE\s+(TABLE\s+)?`), "命中危险黑名单: TRUNCATE"},
+	{regexp.MustCompile(`(?i)\bFLUSHALL\b`), "命中危险黑名单: FLUSHALL"},
+	{regexp.MustCompile(`(?i)\bFLUSHDB\b`), "命中危险黑名单: FLUSHDB"},
 }
 
-func commandBlocked(cmd string) bool {
+func commandBlocked(cmd string) (bool, string) {
 	s := strings.TrimSpace(cmd)
 	if s == "" {
-		return false
+		return false, ""
 	}
-	for _, re := range dangerCommand {
-		if re.MatchString(s) {
-			return true
+	for _, rule := range dangerCommandRules {
+		if rule.re.MatchString(s) {
+			return true, rule.why
 		}
 	}
-	return matchCustomDanger(s, true)
+	if why := matchCustomDangerDetail(s); why != "" {
+		return true, why
+	}
+	return false, ""
 }
 
-func matchCustomDanger(cmd string, lethal bool) bool {
+func matchCustomDangerDetail(cmd string) string {
 	st := loadSettings()
 	for _, p := range st.CustomDangerPatterns {
 		re, err := regexp.Compile(p)
@@ -114,11 +121,10 @@ func matchCustomDanger(cmd string, lethal bool) bool {
 			continue
 		}
 		if re.MatchString(cmd) {
-			return true
+			return fmt.Sprintf("命中自定义危险黑名单: %s", p)
 		}
 	}
-	_ = lethal
-	return false
+	return ""
 }
 
 func containsSudo(cmd string) bool {

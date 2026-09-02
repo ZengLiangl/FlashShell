@@ -20,7 +20,7 @@ func (s *Service) ApprovalContext(server string, limit int) []AuditEntry {
 	return rows
 }
 
-func (s *Service) DecideApproval(id string, allow bool, addOutboundHosts bool) error {
+func (s *Service) DecideApproval(id string, allow bool, addOutboundHosts bool, rejectReason string) error {
 	if allow && addOutboundHosts {
 		peek, err := s.approvals.Peek(id)
 		if err != nil {
@@ -34,7 +34,7 @@ func (s *Service) DecideApproval(id string, allow bool, addOutboundHosts bool) e
 			}
 		}
 	}
-	item, err := s.approvals.Decide(id, allow)
+	item, err := s.approvals.Decide(id, allow, rejectReason)
 	if err != nil {
 		return err
 	}
@@ -50,7 +50,15 @@ func (s *Service) DecideApproval(id string, allow bool, addOutboundHosts bool) e
 	if !allow {
 		decision = "denied"
 		result = "人工拒绝"
-		if item.Reason != "" {
+		rejectReason = strings.TrimSpace(rejectReason)
+		if rejectReason != "" {
+			if item.Reason != "" {
+				reason = item.Reason + " → 人工拒绝: " + rejectReason
+			} else {
+				reason = "审批队列人工拒绝: " + rejectReason
+			}
+			result = "人工拒绝: " + rejectReason
+		} else if item.Reason != "" {
 			reason = item.Reason + " → 人工拒绝"
 		} else {
 			reason = "审批队列人工拒绝"
@@ -74,9 +82,9 @@ func (s *Service) DecideApproval(id string, allow bool, addOutboundHosts bool) e
 	return nil
 }
 
-func (s *Service) DecideApprovalBatch(ids []string, allow bool) error {
+func (s *Service) DecideApprovalBatch(ids []string, allow bool, rejectReason string) error {
 	approver := localApprover()
-	items, err := s.approvals.DecideBatch(ids, allow)
+	items, err := s.approvals.DecideBatch(ids, allow, rejectReason)
 	if err != nil {
 		return err
 	}
@@ -87,6 +95,11 @@ func (s *Service) DecideApprovalBatch(ids []string, allow bool) error {
 		decision = "denied"
 		result = "批量人工拒绝"
 		reasonBase = "审批队列批量拒绝"
+		rejectReason = strings.TrimSpace(rejectReason)
+		if rejectReason != "" {
+			reasonBase = reasonBase + ": " + rejectReason
+			result = result + ": " + rejectReason
+		}
 	}
 	for _, item := range items {
 		reason := reasonBase

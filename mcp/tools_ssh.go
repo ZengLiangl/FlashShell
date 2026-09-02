@@ -14,6 +14,9 @@ func (s *Service) listServers(ctx context.Context) (any, error) {
 	tok, hasTok := tokenFromCtx(ctx)
 	if s.cfg != nil {
 		for _, m := range s.cfg.GetAllMachinesFromGlobal() {
+			if !s.serverMCPEnabled(&m) {
+				continue
+			}
 			if hasTok && !tok.SeesServer(m.Name) && !tok.SeesServer(m.ID) {
 				continue
 			}

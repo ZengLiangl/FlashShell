@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os/user"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,6 +18,7 @@ const approvalTimeout = 5 * time.Minute
 type ApprovalItem struct {
 	ID            string   `json:"id"`
 	Tool          string   `json:"tool"`
+	ToolDesc      string   `json:"toolDesc,omitempty"`
 	Server        string   `json:"server"`
 	Preview       string   `json:"preview"`
 	Summary       string   `json:"summary"`
@@ -30,10 +32,15 @@ type ApprovalItem struct {
 	IsDanger      bool     `json:"isDanger"`
 }
 
+type approvalDecision struct {
+	allow        bool
+	rejectReason string
+}
+
 type pendingApproval struct {
 	item      ApprovalItem
 	expiresAt time.Time
-	ch        chan bool
+	ch        chan approvalDecision
 }
 
 type ApprovalHub struct {
@@ -74,13 +81,14 @@ func approvalPayload(item ApprovalItem) map[string]any {
 	b, err := json.Marshal(item)
 	if err != nil {
 		return map[string]any{
-			"id":      item.ID,
-			"tool":    item.Tool,
-			"server":  item.Server,
-			"preview": item.Preview,
-			"summary": item.Summary,
-			"source":  item.Source,
-			"reason":  item.Reason,
+			"id":       item.ID,
+			"tool":     item.Tool,
+			"toolDesc": item.ToolDesc,
+			"server":   item.Server,
+			"preview":  item.Preview,
+			"summary":  item.Summary,
+			"source":   item.Source,
+			"reason":   item.Reason,
 		}
 	}
 	var m map[string]any
@@ -118,6 +126,7 @@ func (h *ApprovalHub) Request(ctx context.Context, tool, server, preview, params
 	item := ApprovalItem{
 		ID:            id,
 		Tool:          tool,
+		ToolDesc:      toolDescription(tool),
 		Server:        server,
 		Preview:       clip(preview, 4000),
 		Summary:       clip(preview, 200),
@@ -129,7 +138,7 @@ func (h *ApprovalHub) Request(ctx context.Context, tool, server, preview, params
 		IsDanger:      isDanger,
 	}
 	item = enrichItem(item, exp)
-	p := &pendingApproval{item: item, expiresAt: exp, ch: make(chan bool, 1)}
+	p := &pendingApproval{item: item, expiresAt: exp, ch: make(chan approvalDecision, 1)}
 	h.mu.Lock()
 	h.pending[id] = p
 	h.mu.Unlock()
@@ -138,8 +147,8 @@ func (h *ApprovalHub) Request(ctx context.Context, tool, server, preview, params
 	timer := time.NewTimer(approvalTimeout)
 	defer timer.Stop()
 	select {
-	case ok := <-p.ch:
-		return ok, id, nil
+	case res := <-p.ch:
+		return res.allow, res.rejectReason, nil
 	case <-timer.C:
 		h.mu.Lock()
 		delete(h.pending, id)
@@ -149,13 +158,13 @@ func (h *ApprovalHub) Request(ctx context.Context, tool, server, preview, params
 			onTimeout(item)
 		}
 		h.emitResolved(id, "denied_by_timeout")
-		return false, id, wrapErr("[approval]", "审批超时（5 分钟），已自动拒绝")
+		return false, "", wrapErr("[approval]", "审批超时（5 分钟），已自动拒绝")
 	case <-ctx.Done():
 		h.mu.Lock()
 		delete(h.pending, id)
 		h.mu.Unlock()
 		h.emitResolved(id, "cancelled")
-		return false, id, wrapErr("[approval]", "审批已取消")
+		return false, "", wrapErr("[approval]", "审批已取消")
 	}
 }
 
@@ -169,7 +178,7 @@ func (h *ApprovalHub) Peek(id string) (ApprovalItem, error) {
 	return enrichItem(p.item, p.expiresAt), nil
 }
 
-func (h *ApprovalHub) Decide(id string, allow bool) (ApprovalItem, error) {
+func (h *ApprovalHub) Decide(id string, allow bool, rejectReason string) (ApprovalItem, error) {
 	h.mu.Lock()
 	p, ok := h.pending[id]
 	if ok {
@@ -180,7 +189,7 @@ func (h *ApprovalHub) Decide(id string, allow bool) (ApprovalItem, error) {
 		return ApprovalItem{}, wrapErr("[notfound]", "没有这条待审批记录")
 	}
 	select {
-	case p.ch <- allow:
+	case p.ch <- approvalDecision{allow: allow, rejectReason: strings.TrimSpace(rejectReason)}:
 	default:
 	}
 	decision := "approved"
@@ -191,10 +200,10 @@ func (h *ApprovalHub) Decide(id string, allow bool) (ApprovalItem, error) {
 	return p.item, nil
 }
 
-func (h *ApprovalHub) DecideBatch(ids []string, allow bool) ([]ApprovalItem, error) {
+func (h *ApprovalHub) DecideBatch(ids []string, allow bool, rejectReason string) ([]ApprovalItem, error) {
 	var items []ApprovalItem
 	for _, id := range ids {
-		item, err := h.Decide(id, allow)
+		item, err := h.Decide(id, allow, rejectReason)
 		if err != nil {
 			return items, err
 		}

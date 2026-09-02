@@ -111,6 +111,9 @@ func (s *Service) allAliases() []string {
 		return out
 	}
 	for _, m := range s.cfg.GetAllMachinesFromGlobal() {
+		if !s.serverMCPEnabled(&m) {
+			continue
+		}
 		if n := strings.TrimSpace(m.Name); n != "" {
 			out = append(out, n)
 		}

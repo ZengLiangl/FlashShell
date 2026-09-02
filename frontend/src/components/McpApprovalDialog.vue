@@ -20,6 +20,11 @@
         <div><span class="mk">来源</span>{{ item.source }}</div>
       </div>
 
+      <div v-if="item.toolDesc" class="block">
+        <div class="block-title">工具说明</div>
+        <p class="tool-desc">{{ item.toolDesc }}</p>
+      </div>
+
       <div v-if="item.reason" class="block">
         <div class="block-title">触发原因</div>
         <p class="reason">{{ item.reason }}</p>
@@ -243,6 +248,20 @@ export default {
       showNext()
     }
 
+    const promptRejectReason = async () => {
+      const { value } = await ElMessageBox.prompt(
+        '可选：填写拒绝原因，将通过 MCP 返回给调用方',
+        '拒绝审批',
+        {
+          confirmButtonText: '确认拒绝',
+          cancelButtonText: '取消',
+          inputPlaceholder: '例如：该命令可能影响生产服务',
+          inputType: 'textarea',
+        },
+      )
+      return String(value || '').trim()
+    }
+
     const decide = async (allow, addOutbound = false) => {
       try {
         if (addOutbound && item.value?.outboundHosts?.length) {
@@ -252,7 +271,11 @@ export default {
             { type: 'warning', confirmButtonText: '确认加入', cancelButtonText: '取消' },
           )
         }
-        if (item.value?.id) await DecideMCPApproval(item.value.id, allow, !!addOutbound)
+        let rejectReason = ''
+        if (!allow) {
+          rejectReason = await promptRejectReason()
+        }
+        if (item.value?.id) await DecideMCPApproval(item.value.id, allow, !!addOutbound, rejectReason)
         ElMessage.success(allow ? (addOutbound ? '已放行并加白名单' : '已放行') : '已拒绝')
       } catch (e) {
         if (e === 'cancel' || e === 'close') return
@@ -344,6 +367,7 @@ export default {
 .block { margin-bottom: 12px; }
 .block-title { font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--app-text-muted); }
 .reason { margin: 0; color: var(--el-color-warning); line-height: 1.45; }
+.tool-desc { margin: 0; color: var(--app-text); line-height: 1.5; font-size: 12px; }
 .hosts { margin: 0; padding-left: 18px; color: var(--el-color-danger); font-family: ui-monospace, monospace; font-size: 12px; }
 .cmd, .json {
   margin: 0;

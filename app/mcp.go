@@ -415,19 +415,19 @@ func (a *App) ListMCPApprovals() []mcp.ApprovalItem {
 }
 
 // DecideMCPApproval 审批放行或拒绝；addOutboundHosts 为 true 时把违规出站 host 永久加入白名单（失败则不放行）
-func (a *App) DecideMCPApproval(id string, allow bool, addOutboundHosts bool) error {
+func (a *App) DecideMCPApproval(id string, allow bool, addOutboundHosts bool, rejectReason string) error {
 	if a.mcpSvc == nil {
 		return nil
 	}
-	return a.mcpSvc.DecideApproval(id, allow, addOutboundHosts)
+	return a.mcpSvc.DecideApproval(id, allow, addOutboundHosts, rejectReason)
 }
 
 // DecideMCPApprovalBatch 批量审批
-func (a *App) DecideMCPApprovalBatch(ids []string, allow bool) error {
+func (a *App) DecideMCPApprovalBatch(ids []string, allow bool, rejectReason string) error {
 	if a.mcpSvc == nil {
 		return nil
 	}
-	return a.mcpSvc.DecideApprovalBatch(ids, allow)
+	return a.mcpSvc.DecideApprovalBatch(ids, allow, rejectReason)
 }
 
 // GetMCPApprovalContext 审批弹窗上下文：该服务器最近审计
