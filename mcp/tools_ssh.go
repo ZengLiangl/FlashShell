@@ -45,11 +45,17 @@ func (s *Service) listServers(ctx context.Context) (any, error) {
 }
 
 func (s *Service) handleSSHExec(ctx context.Context, a SshExecArgs) (any, error) {
-	to := clampTimeout(a.TimeoutSecs, 30, 1, 600)
-	res, err := s.execSSH(ctx, a.Server, a.Command, to)
+	cmd, used, err := s.SubstituteVaultPlaceholders(a.Command)
 	if err != nil {
 		return nil, err
 	}
+	to := clampTimeout(a.TimeoutSecs, 30, 1, 600)
+	res, err := s.execSSH(ctx, a.Server, cmd, to)
+	if err != nil {
+		return nil, err
+	}
+	res.Stdout = forceRedactPlains(res.Stdout, used)
+	res.Stderr = forceRedactPlains(res.Stderr, used)
 	return res, nil
 }
 
@@ -118,7 +124,11 @@ func (s *Service) handleSSHExecScript(ctx context.Context, a SshExecScriptArgs) 
 	default:
 		return nil, wrapErr("[denied]", "interpreter 仅支持 bash/sh/python3/python")
 	}
-	b64 := base64.StdEncoding.EncodeToString([]byte(a.Script))
+	script, used, err := s.SubstituteVaultPlaceholders(a.Script)
+	if err != nil {
+		return nil, err
+	}
+	b64 := base64.StdEncoding.EncodeToString([]byte(script))
 	var cmd string
 	if interp == "python" || interp == "python3" {
 		cmd = fmt.Sprintf("%s -c \"import base64,os; exec(base64.b64decode('%s'))\"", interp, b64)
@@ -129,6 +139,8 @@ func (s *Service) handleSSHExecScript(ctx context.Context, a SshExecScriptArgs) 
 	if err != nil {
 		return nil, err
 	}
+	res.Stdout = forceRedactPlains(res.Stdout, used)
+	res.Stderr = forceRedactPlains(res.Stderr, used)
 	return res, nil
 }
 

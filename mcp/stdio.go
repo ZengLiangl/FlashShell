@@ -141,6 +141,28 @@ func (s *Service) ListSensitiveMeta() []map[string]any {
 	return s.sensitive.ListMeta()
 }
 
+// ListInstalledMeta 服务凭据台账（无明文）
+func (s *Service) ListInstalledMeta(server string) []map[string]any {
+	if s.vault == nil {
+		return []map[string]any{}
+	}
+	return s.vault.ListMeta(server)
+}
+
+func (s *Service) DeleteInstalled(id string) error {
+	if s.vault == nil {
+		return fmt.Errorf("凭据库未初始化")
+	}
+	return s.vault.Delete(id)
+}
+
+func (s *Service) UpdateInstalledNotes(id, notes string) error {
+	if s.vault == nil {
+		return fmt.Errorf("凭据库未初始化")
+	}
+	return s.vault.UpdateNotes(id, notes)
+}
+
 func (s *Service) ExpireSensitiveVault() (int, error) {
 	if s.sensitive == nil {
 		return 0, nil
@@ -183,13 +205,13 @@ func (s *Service) PromoteSensitive(opts PromoteSensitiveOpts) (map[string]any, e
 	meta, _ := s.sensitive.FindMeta(id)
 	server := strings.TrimSpace(opts.Server)
 	if server == "" && meta != nil {
-		server = fmt.Sprint(meta["server"])
+		server = strings.TrimSpace(fmt.Sprint(meta["server"]))
 	}
-	if server == "" {
-		return nil, fmt.Errorf("请指定服务器别名")
-	}
-	if _, err := s.machineByAlias(server); err != nil {
-		return nil, err
+	// 允许空 = 共用凭据
+	if server != "" {
+		if _, err := s.machineByAlias(server); err != nil {
+			return nil, err
+		}
 	}
 	kind := strings.TrimSpace(opts.Kind)
 	if kind == "" && meta != nil {

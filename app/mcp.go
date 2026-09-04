@@ -366,6 +366,58 @@ func (a *App) ListMCPSensitive() []map[string]any {
 	return a.mcpSvc.ListSensitiveMeta()
 }
 
+// ListMCPInstalledServices 服务凭据台账（无明文；对齐 list_installed_services）
+func (a *App) ListMCPInstalledServices(server string) []map[string]any {
+	if a.mcpSvc == nil {
+		return nil
+	}
+	return a.mcpSvc.ListInstalledMeta(server)
+}
+
+// DeleteMCPInstalledService 删除一条服务凭据登记（仅本地台账）
+func (a *App) DeleteMCPInstalledService(id string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
+	if a.mcpSvc == nil {
+		return nil
+	}
+	return a.mcpSvc.DeleteInstalled(id)
+}
+
+// UpdateMCPInstalledNotes 更新服务凭据备注（不动敏感字段）
+func (a *App) UpdateMCPInstalledNotes(id, notes string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
+	if a.mcpSvc == nil {
+		return fmt.Errorf("MCP 未启动")
+	}
+	return a.mcpSvc.UpdateInstalledNotes(id, notes)
+}
+
+// SaveMCPInstalledService 手动登记一条服务凭据（UI）
+func (a *App) SaveMCPInstalledService(opts mcp.SaveInstalledOpts) (map[string]any, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return nil, err
+	}
+	if a.mcpSvc == nil {
+		return nil, fmt.Errorf("MCP 未启动")
+	}
+	return a.mcpSvc.SaveInstalledManual(opts)
+}
+
+// WriteMCPFromVault 把服务凭据字段写到远端文件（UI / 与 write_from_vault 同逻辑）
+func (a *App) WriteMCPFromVault(server, path, vaultID, field string) (map[string]any, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return nil, err
+	}
+	if a.mcpSvc == nil {
+		return nil, fmt.Errorf("MCP 未启动")
+	}
+	return a.mcpSvc.WriteInstalledToRemote(server, path, vaultID, field)
+}
+
 // PurgeMCPSensitive 按 TTL 清空过期敏感库明文（保留 hash 与条目）
 func (a *App) PurgeMCPSensitive() (int, error) {
 	if a.mcpSvc == nil {

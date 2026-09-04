@@ -69,6 +69,7 @@ type Settings struct {
 	AutoStart     bool   `yaml:"autoStart" json:"autoStart"` // 应用启动时自动开启 MCP 服务
 	HTTPPort      int    `yaml:"httpPort" json:"httpPort"`
 	BindLAN       bool   `yaml:"bindLan" json:"bindLan"`
+	// DefaultPolicy 仅保留 YAML 兼容；策略以单机 aiPolicy 为准（空=disabled），无绑定服务器的调用固定 trusted。
 	DefaultPolicy string `yaml:"defaultPolicy" json:"defaultPolicy"`
 
 	// 全局 AI 总开关

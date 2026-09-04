@@ -127,9 +127,15 @@ func (s *Service) registerTools() {
 		func(a SftpReadArgs) string { return a.Path }, s.handleSftpRead)
 
 	addTool(s, "sftp_write",
-		"写（覆盖创建）远端文件（SFTP）—— 仅用于现写的小文本。已存在于本地磁盘的文件请改用 sftp_upload。敏感路径黑名单任何档位都拦。content/content_base64 二选一，单次 ≤ 16 MiB。",
+		"写（覆盖创建）远端文件（SFTP）—— 仅用于现写的小文本。content 可含 {{vault:id}} / {{vault:id.field}}，由本机解密替换后写入，AI 不见明文。已存在于本地磁盘的文件请改用 sftp_upload。敏感路径黑名单任何档位都拦。",
 		func(a SftpWriteArgs) string { return a.Server },
 		func(a SftpWriteArgs) string { return a.Path }, s.handleSftpWrite)
+
+	addTool(s, "write_from_vault",
+		"把服务凭据（vaultId）的某一字段明文写入远端文件。AI 只传 vaultId/field/path，全程不见明文。等价于 sftp_write(content=\"{{vault:id.field}}\")。需凭据库已解锁；敏感路径黑名单仍生效。",
+		func(a WriteFromVaultArgs) string { return a.Server },
+		func(a WriteFromVaultArgs) string { return a.Path + " ← " + a.VaultID },
+		s.handleWriteFromVault)
 
 	addTool(s, "sftp_upload",
 		"把本机一个文件分块上传到远端。流式分块、无大小上限。改动型：按该服务器档位走策略 + 敏感路径黑名单。",
@@ -184,19 +190,13 @@ func (s *Service) registerTools() {
 		nil, func(a NameOnly) string { return a.Name }, s.handleRunRunbook)
 
 	addTool(s, "list_installed_services",
-		"列出已装服务凭据（id + serverAlias + kind + label + installPath；只返元数据不含字段值）。",
+		"列出已装服务凭据（id + serverAlias + kind + label + installPath；只返元数据不含字段值）。必须传 server / id / label / kind 之一；无 server 时一般传 id 或 label。另按 token 可见服务器过滤。",
 		func(a ListInstalledArgs) string {
 			if a.Server != nil {
 				return *a.Server
 			}
 			return ""
-		}, nil, func(ctx context.Context, a ListInstalledArgs) (any, error) {
-			sv := ""
-			if a.Server != nil {
-				sv = *a.Server
-			}
-			return map[string]any{"items": s.vault.ListMeta(sv)}, nil
-		})
+		}, nil, s.handleListInstalledServices)
 
 	addTool(s, "save_credential",
 		"把已经装好的服务的真实凭据手动入「服务凭据」库。敏感字段写 fieldsFromVault，AI 全程不见明文。",

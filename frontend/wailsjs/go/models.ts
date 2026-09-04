@@ -2211,6 +2211,30 @@ export namespace mcp {
 	        this.snippet = source["snippet"];
 	    }
 	}
+	export class SaveInstalledOpts {
+	    server: string;
+	    kind: string;
+	    label: string;
+	    field: string;
+	    value: string;
+	    notes?: string;
+	    public?: Record<string, string>;
+	
+	    static createFrom(source: any = {}) {
+	        return new SaveInstalledOpts(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.server = source["server"];
+	        this.kind = source["kind"];
+	        this.label = source["label"];
+	        this.field = source["field"];
+	        this.value = source["value"];
+	        this.notes = source["notes"];
+	        this.public = source["public"];
+	    }
+	}
 	export class Settings {
 	    enabled: boolean;
 	    autoStart: boolean;
@@ -2266,7 +2290,6 @@ export namespace mcp {
 	    toolCount: number;
 	    serverCount: number;
 	    pendingCount: number;
-	    defaultPolicy: string;
 	    startedAt: string;
 	    clients: ClientLink[];
 	    instructions: string[];
@@ -2293,7 +2316,6 @@ export namespace mcp {
 	        this.toolCount = source["toolCount"];
 	        this.serverCount = source["serverCount"];
 	        this.pendingCount = source["pendingCount"];
-	        this.defaultPolicy = source["defaultPolicy"];
 	        this.startedAt = source["startedAt"];
 	        this.clients = this.convertValues(source["clients"], ClientLink);
 	        this.instructions = source["instructions"];

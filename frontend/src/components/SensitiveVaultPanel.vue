@@ -133,7 +133,18 @@
     <el-dialog v-model="promoteOpen" title="转为服务凭据" width="420px" append-to-body>
       <div class="promote-form">
         <div class="row"><span>敏感 ID</span><el-input v-model="promote.id" disabled size="small" /></div>
-        <div class="row"><span>服务器别名</span><el-input v-model="promote.server" size="small" placeholder="list_servers 的 alias" /></div>
+        <div class="row"><span>服务器</span>
+          <el-select
+            v-model="promote.server"
+            clearable
+            filterable
+            size="small"
+            style="width: 100%"
+            placeholder="不选 = 共用凭据"
+          >
+            <el-option v-for="a in serverAliases" :key="a" :label="a" :value="a" />
+          </el-select>
+        </div>
         <div class="row"><span>kind</span><el-input v-model="promote.kind" size="small" placeholder="credential / mysql_conn …" /></div>
         <div class="row"><span>label</span><el-input v-model="promote.label" size="small" /></div>
         <div class="row"><span>字段名</span><el-input v-model="promote.field" size="small" placeholder="password / token" /></div>
@@ -162,6 +173,7 @@ import {
   ListMCPFalsePositives,
   GetMCPSettings,
   SaveMCPSettings,
+  ListMCPServerAliases,
 } from '../../wailsjs/go/app/App'
 
 export default {
@@ -169,7 +181,7 @@ export default {
   props: {
     highlightId: { type: String, default: '' },
   },
-  emits: ['jump-audit', 'meta'],
+  emits: ['jump-audit', 'meta', 'promoted'],
   setup(props, { emit }) {
     const loading = ref(false)
     const busy = ref(false)
@@ -184,6 +196,7 @@ export default {
     const rulesOpen = ref(false)
     const rulesLoading = ref(false)
     const promoteOpen = ref(false)
+    const serverAliases = ref([])
     const ruleEditOpen = ref(false)
     const testerText = ref('')
     const testerHits = ref([])
@@ -445,7 +458,12 @@ export default {
       }
     }
 
-    const onPromote = (row) => {
+    const onPromote = async (row) => {
+      try {
+        serverAliases.value = (await ListMCPServerAliases().catch(() => [])) || []
+      } catch {
+        serverAliases.value = []
+      }
       promote.id = row.id
       promote.server = row.server || ''
       promote.kind = row.kind || 'credential'
@@ -460,6 +478,7 @@ export default {
         const saved = await PromoteMCPSensitive({ ...promote })
         ElMessage.success(`已转入服务凭据 ${saved?.id || ''}`)
         promoteOpen.value = false
+        emit('promoted', saved?.id || '')
       } catch (e) {
         ElMessage.error(`转凭据失败: ${e}`)
       } finally {
@@ -480,7 +499,7 @@ export default {
 
     return {
       loading, busy, settingsLoading, rulesLoading, rows, rules, customRules, ruleRows, falsePositives, filtered, tableRef,
-      testerOpen, settingsOpen, rulesOpen, promoteOpen, ruleEditOpen, testerText, testerHits, ttlDays, promote, ruleEdit,
+      testerOpen, settingsOpen, rulesOpen, promoteOpen, ruleEditOpen, testerText, testerHits, ttlDays, promote, ruleEdit, serverAliases,
       statusLabel, rowClass, reload, reloadRules, openTester, openSettings, openRules, runTester,
       saveSettings, saveRules, purgeExpired, addCustomRule, editCustomRule, removeCustomRule, confirmRuleEdit,
       onReveal, onDiscard, onPromote, doPromote,

@@ -90,7 +90,7 @@ func toolModule(tool string) string {
 		strings.Contains(tool, "runbook"):
 		return "skills"
 	case strings.HasPrefix(tool, "install_") || strings.Contains(tool, "installed") ||
-		tool == "save_credential" || tool == "delete_installed_service":
+		tool == "save_credential" || tool == "delete_installed_service" || tool == "write_from_vault":
 		return "apps"
 	case tool == "system_info" || tool == "disk_usage" || tool == "port_check" ||
 		tool == "service_status" || tool == "tail_log":

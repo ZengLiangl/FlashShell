@@ -38,6 +38,8 @@ const FALLBACK_GUARDED = [
   'GenerateMCPToken', 'IssueMCPToken', 'InstallMCPClient', 'InstallMCPClientWith',
   'InstallCursorMCP', 'SaveMCPCustomDangerPatterns', 'AddMCPOutboundHost',
   'RevealMCPSensitive', 'DiscardMCPSensitive', 'PromoteMCPSensitive', 'SaveMCPRedactRules',
+  'DeleteMCPInstalledService', 'SaveMCPInstalledService',
+  'UpdateMCPInstalledNotes', 'WriteMCPFromVault',
   'SetVaultMasterPassword', 'ChangeVaultMasterPassword', 'DisableVaultMasterPassword',
   'SetVaultIdleLockMinutes', 'ResetVaultReencrypt', 'ResetVaultWipeSecrets',
 ]

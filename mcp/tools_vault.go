@@ -11,6 +11,48 @@ import (
 	"github.com/google/uuid"
 )
 
+func (s *Service) handleListInstalledServices(ctx context.Context, a ListInstalledArgs) (any, error) {
+	sv := ""
+	if a.Server != nil {
+		sv = strings.TrimSpace(*a.Server)
+	}
+	id := ""
+	if a.ID != nil {
+		id = strings.TrimSpace(*a.ID)
+	}
+	label := ""
+	if a.Label != nil {
+		label = strings.ToLower(strings.TrimSpace(*a.Label))
+	}
+	kind := ""
+	if a.Kind != nil {
+		kind = strings.TrimSpace(*a.Kind)
+	}
+	if sv == "" && id == "" && label == "" && kind == "" {
+		return nil, wrapErr("[denied]", "请传 server / id / label / kind 之一缩小范围；无 server 时一般传 id 或 label，勿无筛选扫全库")
+	}
+	items := s.vault.ListMeta(sv)
+	tok, hasTok := s.activeToken(ctx)
+	out := make([]map[string]any, 0, len(items))
+	for _, it := range items {
+		alias := strings.TrimSpace(fmt.Sprint(it["serverAlias"]))
+		if hasTok && alias != "" && !tok.SeesServer(alias) {
+			continue
+		}
+		if id != "" && !strings.EqualFold(fmt.Sprint(it["id"]), id) {
+			continue
+		}
+		if label != "" && !strings.Contains(strings.ToLower(fmt.Sprint(it["label"])), label) {
+			continue
+		}
+		if kind != "" && !strings.EqualFold(fmt.Sprint(it["kind"]), kind) {
+			continue
+		}
+		out = append(out, it)
+	}
+	return map[string]any{"items": out}, nil
+}
+
 func (s *Service) handleSaveCredential(_ context.Context, a SaveCredentialArgs) (any, error) {
 	if _, err := s.machineByAlias(a.Server); err != nil {
 		return nil, err

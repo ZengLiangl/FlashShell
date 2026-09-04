@@ -76,6 +76,8 @@ export function DecideMCPApprovalBatch(arg1:Array<string>,arg2:boolean,arg3:stri
 
 export function DeleteMCPAudit(arg1:Array<string>):Promise<void>;
 
+export function DeleteMCPInstalledService(arg1:string):Promise<void>;
+
 export function DeleteMachine(arg1:string):Promise<void>;
 
 export function DeleteMachineGroup(arg1:string):Promise<void>;
@@ -278,6 +280,8 @@ export function ListMCPCustomDangerPatterns():Promise<Array<string>>;
 
 export function ListMCPFalsePositives():Promise<Array<mcp.FalsePositiveSample>>;
 
+export function ListMCPInstalledServices(arg1:string):Promise<Array<Record<string, any>>>;
+
 export function ListMCPRedactRules():Promise<Array<Record<string, any>>>;
 
 export function ListMCPSensitive():Promise<Array<Record<string, any>>>;
@@ -422,6 +426,8 @@ export function SaveKeyMapSettings(arg1:data.KeyMapSettings):Promise<void>;
 
 export function SaveMCPCustomDangerPatterns(arg1:Array<string>):Promise<void>;
 
+export function SaveMCPInstalledService(arg1:mcp.SaveInstalledOpts):Promise<Record<string, any>>;
+
 export function SaveMCPRedactRules(arg1:Array<mcp.UserRedactRule>):Promise<void>;
 
 export function SaveMCPSettings(arg1:mcp.Settings):Promise<void>;
@@ -532,6 +538,8 @@ export function UnlockVault(arg1:string):Promise<void>;
 
 export function UpdateApplicationMenu():Promise<void>;
 
+export function UpdateMCPInstalledNotes(arg1:string,arg2:string):Promise<void>;
+
 export function UpdateMCPToken(arg1:mcp.UpdateTokenOpts):Promise<mcp.Token>;
 
 export function UpdateMachine(arg1:string,arg2:define.Machine):Promise<void>;
@@ -549,5 +557,7 @@ export function UpsertSftpFileAssociation(arg1:string,arg2:data.SftpFileAssociat
 export function VaultTouchActivity():Promise<void>;
 
 export function WindowIsChromeMaximised():Promise<boolean>;
+
+export function WriteMCPFromVault(arg1:string,arg2:string,arg3:string,arg4:string):Promise<Record<string, any>>;
 
 export function WriteMCPGuidance(arg1:string):Promise<mcp.GuidanceStatus>;

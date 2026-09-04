@@ -99,7 +99,12 @@ func (s *Service) handleSftpWrite(_ context.Context, a SftpWriteArgs) (any, erro
 	var data []byte
 	switch {
 	case a.Content != nil && *a.Content != "":
-		data = []byte(*a.Content)
+		content := *a.Content
+		resolved, _, err := s.SubstituteVaultPlaceholders(content)
+		if err != nil {
+			return nil, err
+		}
+		data = []byte(resolved)
 	case a.ContentBase64 != nil && *a.ContentBase64 != "":
 		b, err := base64.StdEncoding.DecodeString(*a.ContentBase64)
 		if err != nil {

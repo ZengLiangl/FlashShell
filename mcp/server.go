@@ -37,7 +37,6 @@ type Status struct {
 	ToolCount      int          `json:"toolCount"`
 	ServerCount    int          `json:"serverCount"`
 	PendingCount   int          `json:"pendingCount"`
-	DefaultPolicy  string       `json:"defaultPolicy"`
 	StartedAt      string       `json:"startedAt"`
 	Clients        []ClientLink `json:"clients"`
 	Instructions   []string     `json:"instructions"`
@@ -267,7 +266,7 @@ func (s *Service) activeToken(ctx context.Context) (Token, bool) {
 	if !ok {
 		return Token{}, false
 	}
-	if strings.TrimSpace(tok.ID) == "" {
+	if strings.TrimSpace(tok.ID) == "" || s.tokens == nil {
 		return tok, ok
 	}
 	if fresh, found := s.tokens.Get(tok.ID); found {
@@ -410,7 +409,6 @@ func (s *Service) GetStatus() Status {
 		ToolCount:      35,
 		ServerCount:    serverCount,
 		PendingCount:   len(s.approvals.List()),
-		DefaultPolicy:  s.settings.DefaultPolicy,
 		StartedAt:      s.startedAt.Format("2006-01-02 15:04:05"),
 		Clients:        s.ListClientLinks(),
 	}
@@ -484,11 +482,8 @@ func (s *Service) policyOf(m *define.Machine) string {
 	if m != nil && strings.TrimSpace(m.AIPolicy) != "" {
 		return normalizePolicy(m.AIPolicy)
 	}
-	if m != nil {
-		// 历史机器未写 aiPolicy 时默认 disabled，避免默认可操作
-		return PolicyDisabled
-	}
-	return normalizePolicy(s.settings.DefaultPolicy)
+	// 未写 aiPolicy / 历史空值 = disabled（加机器时表单也有默认档，不走全局默认）
+	return PolicyDisabled
 }
 
 func (s *Service) serverMCPEnabled(m *define.Machine) bool {
@@ -537,7 +532,8 @@ func (s *Service) gate(ctx context.Context, tool, server, preview string, params
 		allow = m.AIAllowlist
 		allowSudo = m.AIAllowSudo
 	} else {
-		policy = normalizePolicy(s.settings.DefaultPolicy)
+		// 无绑定服务器：不经单机档位；固定 trusted（仍受黑名单/sudo/出站等约束）
+		policy = PolicyTrusted
 	}
 
 	armedBypass := false

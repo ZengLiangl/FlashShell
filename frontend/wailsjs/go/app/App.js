@@ -138,6 +138,10 @@ export function DeleteMCPAudit(arg1) {
   return window['go']['app']['App']['DeleteMCPAudit'](arg1);
 }
 
+export function DeleteMCPInstalledService(arg1) {
+  return window['go']['app']['App']['DeleteMCPInstalledService'](arg1);
+}
+
 export function DeleteMachine(arg1) {
   return window['go']['app']['App']['DeleteMachine'](arg1);
 }
@@ -542,6 +546,10 @@ export function ListMCPFalsePositives() {
   return window['go']['app']['App']['ListMCPFalsePositives']();
 }
 
+export function ListMCPInstalledServices(arg1) {
+  return window['go']['app']['App']['ListMCPInstalledServices'](arg1);
+}
+
 export function ListMCPRedactRules() {
   return window['go']['app']['App']['ListMCPRedactRules']();
 }
@@ -830,6 +838,10 @@ export function SaveMCPCustomDangerPatterns(arg1) {
   return window['go']['app']['App']['SaveMCPCustomDangerPatterns'](arg1);
 }
 
+export function SaveMCPInstalledService(arg1) {
+  return window['go']['app']['App']['SaveMCPInstalledService'](arg1);
+}
+
 export function SaveMCPRedactRules(arg1) {
   return window['go']['app']['App']['SaveMCPRedactRules'](arg1);
 }
@@ -1050,6 +1062,10 @@ export function UpdateApplicationMenu() {
   return window['go']['app']['App']['UpdateApplicationMenu']();
 }
 
+export function UpdateMCPInstalledNotes(arg1, arg2) {
+  return window['go']['app']['App']['UpdateMCPInstalledNotes'](arg1, arg2);
+}
+
 export function UpdateMCPToken(arg1) {
   return window['go']['app']['App']['UpdateMCPToken'](arg1);
 }
@@ -1084,6 +1100,10 @@ export function VaultTouchActivity() {
 
 export function WindowIsChromeMaximised() {
   return window['go']['app']['App']['WindowIsChromeMaximised']();
+}
+
+export function WriteMCPFromVault(arg1, arg2, arg3, arg4) {
+  return window['go']['app']['App']['WriteMCPFromVault'](arg1, arg2, arg3, arg4);
 }
 
 export function WriteMCPGuidance(arg1) {

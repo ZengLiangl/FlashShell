@@ -2,9 +2,9 @@
   <div class="audit-page" v-loading="loading && mainTab === 'audit'">
     <header class="audit-head">
       <div class="head-left">
-        <h1>审计与敏感库</h1>
+        <h1>审计与凭据</h1>
         <p class="sub">
-          AI 工具调用审计、审批与出口脱敏捕获。审计记录决策链路；敏感库存脱敏明文（可明文 / 转凭据）。
+          AI 工具调用审计、出口脱敏敏感库与服务凭据台账。
         </p>
       </div>
       <div v-if="mainTab === 'audit'" class="head-actions">
@@ -17,11 +17,11 @@
           <el-icon><Setting /></el-icon>
           安全设置
         </el-button>
+        <el-button size="small" @click="openOutboundDialog">出站白名单</el-button>
         <el-button size="small" @click="openDangerDialog">危险黑名单</el-button>
         <el-button size="small" @click="onExport('csv')">导出 CSV</el-button>
-        <el-button size="small" type="danger" plain @click="clearAll">清空</el-button>
       </div>
-      <div v-else class="head-actions">
+      <div v-else-if="mainTab === 'sensitive'" class="head-actions">
         <el-button size="small" :loading="svLoading" @click="svReload">
           <el-icon><Refresh /></el-icon>
           全刷
@@ -34,6 +34,14 @@
         <el-button size="small" @click="svOpenRules">脱敏规则</el-button>
         <el-button size="small" @click="svOpenTester">规则测试器</el-button>
         <el-button size="small" @click="svReloadRules">重载规则</el-button>
+      </div>
+      <div v-else class="head-actions">
+        <el-button size="small" :loading="scLoading" @click="scReload">
+          <el-icon><Refresh /></el-icon>
+          全刷
+        </el-button>
+        <span class="count-pill">{{ scCount }} 条</span>
+        <el-button size="small" type="primary" @click="scOpenAdd">手动添加</el-button>
       </div>
     </header>
 
@@ -209,6 +217,16 @@
           :highlight-id="highlightSensitiveId"
           @jump-audit="jumpAudit"
           @meta="onSvMeta"
+          @promoted="onSensitivePromoted"
+        />
+      </el-tab-pane>
+
+      <el-tab-pane label="服务凭据" name="credentials" lazy>
+        <ServiceCredentialsPanel
+          ref="scPanel"
+          :highlight-id="highlightCredentialId"
+          @jump-sensitive="jumpSensitive"
+          @meta="onScMeta"
         />
       </el-tab-pane>
     </el-tabs>
@@ -216,43 +234,46 @@
     <el-dialog v-model="settingsOpen" title="AI 安全设置" width="560px" append-to-body>
       <div class="settings-body" v-loading="settingsLoading">
         <h4>全局 AI 总开关</h4>
-        <el-radio-group v-model="sec.aiMode" size="small">
-          <el-radio-button value="normal">按服务器档位</el-radio-button>
-          <el-radio-button value="armed">限时放行</el-radio-button>
-          <el-radio-button value="emergency">紧急停止</el-radio-button>
+        <p class="tip">三选一，立即生效于全部服务器（元工具除外）。</p>
+        <el-radio-group v-model="sec.aiMode" class="ai-mode-radios" @change="onAiModeChange">
+          <el-radio value="normal">按服务器档位</el-radio>
+          <el-radio value="armed">限时放行（仍受黑名单 / sudo 约束）</el-radio>
+          <el-radio value="emergency">紧急停止（拒绝所有非元工具调用）</el-radio>
         </el-radio-group>
         <div class="row" v-if="sec.aiMode === 'armed'">
           <span>到期时间（RFC3339）</span>
           <el-input v-model="sec.armedUntil" size="small" placeholder="2026-08-28T18:00:00+08:00" />
         </div>
-        <el-checkbox v-model="sec.emergencyStop">紧急停止（与 emergency 模式叠加）</el-checkbox>
-
-        <h4>出站白名单</h4>
-        <p class="tip">默认启用。命令中的公网地址不在白名单 → 升级审批（不直接拒绝）。裸 IP 永不命中。</p>
-        <el-checkbox v-model="sec.outboundAllowlistDisabled">关闭出站白名单检查</el-checkbox>
-        <el-input v-model="sec.outboundHostsText" type="textarea" :rows="3" placeholder="每行一个 host，如 mirrors.aliyun.com" />
 
         <h4>审计保留</h4>
         <div class="row">
           <span>审计保留（天，0=永久）</span>
           <el-input-number v-model="sec.auditRetentionDays" :min="0" :max="999" size="small" />
         </div>
-        <div class="row">
-          <span>默认服务器策略</span>
-          <el-select v-model="sec.defaultPolicy" size="small" style="width: 160px">
-            <el-option label="disabled" value="disabled" />
-            <el-option label="readonly" value="readonly" />
-            <el-option label="approval" value="approval" />
-            <el-option label="allowlist" value="allowlist" />
-            <el-option label="trusted" value="trusted" />
-          </el-select>
-        </div>
-        <p class="tip">敏感库 TTL 请到「敏感库」页签 → 敏感库设置；危险规则见右上角「危险黑名单」。</p>
+        <p class="tip">出站白名单 / 危险黑名单见右上角独立入口；敏感库 TTL 请到「敏感库」页签。单机 AI 策略在机器编辑里配置（未设=disabled）。</p>
       </div>
       <template #footer>
         <el-button size="small" @click="purgeNow">立即清理过期审计</el-button>
         <el-button size="small" @click="settingsOpen = false">取消</el-button>
         <el-button size="small" type="primary" @click="saveSettings">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="outboundOpen" title="出站白名单" width="560px" append-to-body>
+      <div class="settings-body" v-loading="outboundLoading">
+        <p class="tip">默认启用。命令中的公网地址不在白名单 → 升级审批（不直接拒绝）。裸 IP 永不命中。</p>
+        <el-checkbox v-model="sec.outboundAllowlistDisabled">关闭出站白名单检查</el-checkbox>
+        <el-input
+          v-model="sec.outboundHostsText"
+          type="textarea"
+          :rows="8"
+          placeholder="每行一个 host，如 mirrors.aliyun.com"
+          style="margin-top: 10px"
+        />
+      </div>
+      <template #footer>
+        <el-button size="small" @click="outboundOpen = false">取消</el-button>
+        <el-button size="small" type="primary" :loading="outboundSaving" @click="saveOutbound">保存</el-button>
       </template>
     </el-dialog>
 
@@ -295,12 +316,12 @@ import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Setting } from '@element-plus/icons-vue'
 import SensitiveVaultPanel from './SensitiveVaultPanel.vue'
+import ServiceCredentialsPanel from './ServiceCredentialsPanel.vue'
 import {
   GetMCPAuditStats,
   GetMCPAuditMeta,
   QueryMCPAudit,
   ExportMCPAudit,
-  ClearMCPAudit,
   GetMCPSettings,
   SaveMCPSettings,
   PurgeMCPAudit,
@@ -330,15 +351,19 @@ const MODULES = [
 
 export default {
   name: 'AuditLogView',
-  components: { Refresh, Setting, SensitiveVaultPanel },
+  components: { Refresh, Setting, SensitiveVaultPanel, ServiceCredentialsPanel },
   setup() {
     const loading = ref(false)
     const settingsLoading = ref(false)
     const mainTab = ref('audit')
     const highlightSensitiveId = ref('')
+    const highlightCredentialId = ref('')
     const svPanel = ref(null)
     const svCount = ref(0)
     const svLoading = ref(false)
+    const scPanel = ref(null)
+    const scCount = ref(0)
+    const scLoading = ref(false)
     const stats = ref({})
     const rows = ref([])
     const meta = ref({ tools: [], modules: [], servers: [], sources: [] })
@@ -353,6 +378,9 @@ export default {
     const onlyBlocked = ref(false)
     const activeCard = ref('total')
     const settingsOpen = ref(false)
+    const outboundOpen = ref(false)
+    const outboundLoading = ref(false)
+    const outboundSaving = ref(false)
     const dangerOpen = ref(false)
     const dangerLoading = ref(false)
     const dangerSaving = ref(false)
@@ -366,7 +394,6 @@ export default {
       outboundHostsText: '',
       auditRetentionDays: 90,
       redactionTTLDays: 30,
-      defaultPolicy: 'trusted',
       enabled: false,
       autoStart: false,
       httpPort: 18765,
@@ -459,7 +486,7 @@ export default {
           const row = pending.value.find((p) => p.id === id)
           if (row?.outboundHosts?.length) {
             await ElMessageBox.confirm(
-              `批准的同时将永久加入出站白名单：\n${row.outboundHosts.join('\n')}\n\n可随时在审计 → 安全设置中移除。`,
+              `批准的同时将永久加入出站白名单：\n${row.outboundHosts.join('\n')}\n\n可随时在审计 → 出站白名单中移除。`,
               '批准并加白名单',
               { type: 'warning', confirmButtonText: '确认加入', cancelButtonText: '取消' },
             )
@@ -539,17 +566,41 @@ export default {
         sec.aiMode = s.aiMode || 'normal'
         sec.armedUntil = s.armedUntil || ''
         sec.emergencyStop = !!s.emergencyStop
-        sec.outboundAllowlistDisabled = !!s.outboundAllowlistDisabled
-        sec.outboundHostsText = (s.outboundHosts || []).join('\n')
+        // 历史「紧急停止开关」与模式合并展示，避免双入口
+        if (sec.emergencyStop && sec.aiMode !== 'emergency') {
+          sec.aiMode = 'emergency'
+        }
         sec.auditRetentionDays = s.auditRetentionDays ?? 90
         sec.redactionTTLDays = s.redactionTTLDays || 30
-        sec.defaultPolicy = s.defaultPolicy || 'trusted'
         sec.enabled = !!s.enabled
         sec.autoStart = !!s.autoStart
         sec.httpPort = s.httpPort || 18765
         sec.bindLan = !!s.bindLan
+        // 保留出站字段供 saveSettings 合并，避免覆盖
+        sec.outboundAllowlistDisabled = !!s.outboundAllowlistDisabled
+        sec.outboundHostsText = (s.outboundHosts || []).join('\n')
       } finally {
         settingsLoading.value = false
+      }
+    }
+
+    const loadOutbound = async () => {
+      outboundLoading.value = true
+      try {
+        const s = (await GetMCPSettings().catch(() => ({}))) || {}
+        sec.outboundAllowlistDisabled = !!s.outboundAllowlistDisabled
+        sec.outboundHostsText = (s.outboundHosts || []).join('\n')
+        sec.enabled = !!s.enabled
+        sec.autoStart = !!s.autoStart
+        sec.httpPort = s.httpPort || 18765
+        sec.bindLan = !!s.bindLan
+        sec.aiMode = s.aiMode || 'normal'
+        sec.armedUntil = s.armedUntil || ''
+        sec.emergencyStop = !!s.emergencyStop
+        sec.auditRetentionDays = s.auditRetentionDays ?? 90
+        sec.redactionTTLDays = s.redactionTTLDays || 30
+      } finally {
+        outboundLoading.value = false
       }
     }
 
@@ -565,28 +616,38 @@ export default {
     }
 
     watch(settingsOpen, (v) => { if (v) loadSettings() })
+    watch(outboundOpen, (v) => { if (v) loadOutbound() })
     watch(dangerOpen, (v) => { if (v) loadDangerRules() })
+
+    const openOutboundDialog = () => {
+      outboundOpen.value = true
+    }
 
     const openDangerDialog = () => {
       dangerOpen.value = true
     }
 
+    const onAiModeChange = (mode) => {
+      sec.emergencyStop = mode === 'emergency'
+    }
+
     const saveSettings = async () => {
       try {
-        const hosts = String(sec.outboundHostsText || '').split(/\n+/).map((x) => x.trim()).filter(Boolean)
         const cur = (await GetMCPSettings().catch(() => ({}))) || {}
+        const emergency = sec.aiMode === 'emergency'
+        sec.emergencyStop = emergency
         await SaveMCPSettings({
           enabled: sec.enabled,
           autoStart: sec.autoStart,
           httpPort: sec.httpPort,
           bindLan: sec.bindLan,
-          defaultPolicy: sec.defaultPolicy,
+          defaultPolicy: cur.defaultPolicy || 'trusted',
           aiMode: sec.aiMode,
           armedUntil: sec.armedUntil,
-          emergencyStop: sec.emergencyStop,
+          emergencyStop: emergency,
           auditRetentionDays: sec.auditRetentionDays,
-          outboundAllowlistDisabled: sec.outboundAllowlistDisabled,
-          outboundHosts: hosts,
+          outboundAllowlistDisabled: cur.outboundAllowlistDisabled ?? sec.outboundAllowlistDisabled,
+          outboundHosts: cur.outboundHosts || String(sec.outboundHostsText || '').split(/\n+/).map((x) => x.trim()).filter(Boolean),
           redactionTTLDays: cur.redactionTTLDays || sec.redactionTTLDays || 30,
           customDangerPatterns: cur.customDangerPatterns || [],
         })
@@ -594,6 +655,35 @@ export default {
         settingsOpen.value = false
       } catch (e) {
         ElMessage.error(`保存失败: ${e}`)
+      }
+    }
+
+    const saveOutbound = async () => {
+      outboundSaving.value = true
+      try {
+        const hosts = String(sec.outboundHostsText || '').split(/\n+/).map((x) => x.trim()).filter(Boolean)
+        const cur = (await GetMCPSettings().catch(() => ({}))) || {}
+        await SaveMCPSettings({
+          enabled: cur.enabled ?? sec.enabled,
+          autoStart: cur.autoStart ?? sec.autoStart,
+          httpPort: cur.httpPort || sec.httpPort || 18765,
+          bindLan: cur.bindLan ?? sec.bindLan,
+          defaultPolicy: cur.defaultPolicy || 'trusted',
+          aiMode: cur.aiMode || sec.aiMode || 'normal',
+          armedUntil: cur.armedUntil || sec.armedUntil || '',
+          emergencyStop: cur.emergencyStop ?? sec.emergencyStop,
+          auditRetentionDays: cur.auditRetentionDays ?? sec.auditRetentionDays ?? 90,
+          outboundAllowlistDisabled: sec.outboundAllowlistDisabled,
+          outboundHosts: hosts,
+          redactionTTLDays: cur.redactionTTLDays || sec.redactionTTLDays || 30,
+          customDangerPatterns: cur.customDangerPatterns || [],
+        })
+        ElMessage.success('已保存出站白名单')
+        outboundOpen.value = false
+      } catch (e) {
+        ElMessage.error(`保存失败: ${e}`)
+      } finally {
+        outboundSaving.value = false
       }
     }
 
@@ -688,9 +778,20 @@ export default {
       reload()
     }
 
+    const onSensitivePromoted = (credId) => {
+      highlightCredentialId.value = credId || ''
+      mainTab.value = 'credentials'
+      setTimeout(() => scReload(), 50)
+    }
+
     const onSvMeta = (meta) => {
       svCount.value = meta?.count ?? 0
       svLoading.value = !!meta?.loading
+    }
+
+    const onScMeta = (meta) => {
+      scCount.value = meta?.count ?? 0
+      scLoading.value = !!meta?.loading
     }
 
     const svCall = (fn) => {
@@ -702,6 +803,15 @@ export default {
     const svOpenRules = () => svCall('openRules')
     const svOpenTester = () => svCall('openTester')
     const svReloadRules = () => svCall('reloadRules')
+
+    const scReload = () => {
+      const p = scPanel.value
+      if (p && typeof p.reload === 'function') p.reload()
+    }
+    const scOpenAdd = () => {
+      const p = scPanel.value
+      if (p && typeof p.openAdd === 'function') p.openAdd()
+    }
 
     const purgeNow = async () => {
       try {
@@ -764,16 +874,6 @@ export default {
       reload()
     }
 
-    const clearAll = async () => {
-      try {
-        await ElMessageBox.confirm('清空全部审计？不可恢复。', '清空', { type: 'warning' })
-        await ClearMCPAudit()
-        ElMessage.success('已清空')
-        await reload()
-      } catch (e) {
-        if (e !== 'cancel') ElMessage.error(`失败: ${e}`)
-      }
-    }
     const onExport = async (fmt) => {
       try {
         const path = await ExportMCPAudit(fmt, buildFilter())
@@ -829,16 +929,17 @@ export default {
     })
 
     return {
-      loading, settingsLoading, mainTab, highlightSensitiveId, svPanel, svCount, svLoading,
+      loading, settingsLoading, mainTab, highlightSensitiveId, highlightCredentialId,
+      svPanel, svCount, svLoading, scPanel, scCount, scLoading,
       stats, filter, dateStart, dateEnd, rangePreset, onlyBlocked,
-      activeCard, settingsOpen, dangerOpen, dangerLoading, dangerSaving, page, pageSize, cards, sec, builtinDanger, dangerRows, pending, selectedIds,
+      activeCard, settingsOpen, outboundOpen, outboundLoading, outboundSaving, dangerOpen, dangerLoading, dangerSaving, page, pageSize, cards, sec, builtinDanger, dangerRows, pending, selectedIds,
       toolOptions, serverOptions, moduleOptions, total, pageRows, pageFrom, pageTo,
       reload, loadPending, fmtRemain, onSelChange, singleDecide, batchDecide, batchDecideAll,
       onCardClick, onDecisionSelect, onOnlyBlocked, onRangePreset, onDateParts,
-      clearAll, onExport, copyCmd, saveSettings, saveDangerRules, openDangerDialog, purgeNow,
-      jumpSensitive, jumpAudit, onSvMeta,
+      onExport, copyCmd, saveSettings, saveOutbound, saveDangerRules, openOutboundDialog, openDangerDialog, onAiModeChange, purgeNow,
+      jumpSensitive, jumpAudit, onSensitivePromoted, onSvMeta, onScMeta,
       addCustomDanger, editCustomDanger, removeCustomDanger,
-      svReload, svOpenSettings, svOpenRules, svOpenTester, svReloadRules,
+      svReload, svOpenSettings, svOpenRules, svOpenTester, svReloadRules, scReload, scOpenAdd,
       norm, decisionLabel, resultPreview, pretty,
     }
   },
@@ -963,6 +1064,18 @@ h1 { margin: 0; font-size: 18px; font-weight: 650; }
 .settings-body h4 { margin: 14px 0 8px; font-size: 13px; }
 .settings-body .tip { font-size: 12px; color: var(--app-text-muted); margin: 0 0 8px; }
 .settings-body .row { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 12px; }
+.ai-mode-radios {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 4px 0 8px;
+}
+.ai-mode-radios :deep(.el-radio) {
+  margin-right: 0;
+  height: auto;
+  white-space: normal;
+}
 .builtin-danger-table { margin-bottom: 4px; }
 .mono-cell { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; }
 .muted { color: var(--app-text-muted); font-size: 12px; }

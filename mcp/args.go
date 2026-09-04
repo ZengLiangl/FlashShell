@@ -83,7 +83,10 @@ type RecallExperienceArgs struct {
 }
 
 type ListInstalledArgs struct {
-	Server *string `json:"server,omitempty" jsonschema:"可选：只列某台服务器（按别名）。空则列所有可见服务器的已装服务。"`
+	Server *string `json:"server,omitempty" jsonschema:"可选：只列某台服务器（按别名）。与 id/label/kind 至少传一个；无 server 时通常传 id 或 label。"`
+	ID     *string `json:"id,omitempty" jsonschema:"可选：按凭据 id 精确匹配（如 vs_8416c771）。无 server 时常用。"`
+	Label  *string `json:"label,omitempty" jsonschema:"可选：按 label 筛选（不区分大小写，子串匹配）。无 server 时常用。"`
+	Kind   *string `json:"kind,omitempty" jsonschema:"可选：按凭据类型精确筛选（如 token / mysql_conn / credential）。"`
 }
 
 type DeleteInstalledArgs struct {

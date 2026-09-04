@@ -3,6 +3,7 @@ package mcp
 import (
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -70,15 +71,36 @@ func (v *Vault) ListMeta(server string) []map[string]any {
 		if isRedactionCapture(it) {
 			continue
 		}
-		if server != "" && !strings.EqualFold(it.ServerAlias, server) {
+		if server != "" && it.ServerAlias != "" && !strings.EqualFold(it.ServerAlias, server) {
 			continue
 		}
+		secretFields := make([]string, 0, len(it.Secrets))
+		for k := range it.Secrets {
+			secretFields = append(secretFields, k)
+		}
+		sort.Strings(secretFields)
+		pub := map[string]string{}
+		for k, val := range it.Public {
+			if strings.HasPrefix(k, "__") {
+				continue
+			}
+			pub[k] = val
+		}
+		created := ""
+		if !it.CreatedAt.IsZero() {
+			created = it.CreatedAt.Format("2006-01-02 15:04:05")
+		}
 		out = append(out, map[string]any{
-			"id":          it.ID,
-			"serverAlias": it.ServerAlias,
-			"kind":        it.Kind,
-			"label":       it.Label,
-			"installPath": it.InstallPath,
+			"id":           it.ID,
+			"serverAlias":  it.ServerAlias,
+			"kind":         it.Kind,
+			"label":        it.Label,
+			"installPath":  it.InstallPath,
+			"notes":        it.Notes,
+			"createdAt":    created,
+			"public":       pub,
+			"secretFields": secretFields,
+			"fromSensitive": it.Public["fromSensitive"],
 		})
 	}
 	if out == nil {
@@ -155,6 +177,24 @@ func (v *Vault) Delete(id string) error {
 	return v.save()
 }
 
+// UpdateNotes 仅更新备注，不动敏感字段。
+func (v *Vault) UpdateNotes(id, notes string) error {
+	v.mu.Lock()
+	defer v.mu.Unlock()
+	id = strings.TrimSpace(id)
+	for i, it := range v.items {
+		if it.ID != id {
+			continue
+		}
+		if isRedactionCapture(it) {
+			return fmt.Errorf("[notfound] 未找到凭据 %s", id)
+		}
+		v.items[i].Notes = notes
+		return v.save()
+	}
+	return fmt.Errorf("[notfound] 未找到凭据 %s", id)
+}
+
 func (v *Vault) Find(idOrLabel string) (VaultItem, map[string]string, bool) {
 	v.mu.Lock()
 	defer v.mu.Unlock()
@@ -183,4 +223,29 @@ func (v *Vault) SecretValue(id string) (string, bool) {
 		return val, true
 	}
 	return "", false
+}
+
+// RevealField 解密指定敏感字段；field 空则取 value 或任意第一个。
+func (v *Vault) RevealField(id, field string) (string, error) {
+	_, sec, ok := v.Find(id)
+	if !ok {
+		return "", fmt.Errorf("[notfound] 未找到凭据 %s", id)
+	}
+	field = strings.TrimSpace(field)
+	if field != "" {
+		val, has := sec[field]
+		if !has || val == "" {
+			return "", fmt.Errorf("[notfound] 字段 %s 不存在或为空", field)
+		}
+		return val, nil
+	}
+	if val, has := sec["value"]; has && val != "" {
+		return val, nil
+	}
+	for _, val := range sec {
+		if val != "" {
+			return val, nil
+		}
+	}
+	return "", fmt.Errorf("[notfound] 凭据无明文")
 }

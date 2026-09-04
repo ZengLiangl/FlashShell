@@ -51,6 +51,7 @@ var toolKinds = map[string]string{
 	"ssh_exec_multi":           kindMutating,
 	"sftp_write":               kindMutating,
 	"sftp_upload":              kindMutating,
+	"write_from_vault":         kindMutating,
 	"install_app":              kindMutating,
 	"install_with_secret":      kindMutating,
 	"save_credential":          kindMutating,

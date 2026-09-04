@@ -92,6 +92,10 @@ var vaultGuardedMethods = []string{
 	"DiscardMCPSensitive",
 	"PromoteMCPSensitive",
 	"SaveMCPRedactRules",
+	"DeleteMCPInstalledService",
+	"SaveMCPInstalledService",
+	"UpdateMCPInstalledNotes",
+	"WriteMCPFromVault",
 	// 主密码 / 凭据库变更（忘记主密码重置除外）
 	"SetVaultMasterPassword",
 	"ChangeVaultMasterPassword",

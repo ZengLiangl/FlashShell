@@ -44,8 +44,8 @@
       type="button"
       class="nav-item"
       :class="{ active: activeView === 'audit' }"
-      title="审计 / 敏感库"
-      aria-label="审计 / 敏感库"
+      title="审计 / 凭据"
+      aria-label="审计 / 凭据"
       @click="$emit('change-view', 'audit')"
     >
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
