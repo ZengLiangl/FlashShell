@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"FlashDock/crypto"
 	"FlashDock/data"
 	"FlashDock/define"
 	"FlashDock/utils"
@@ -15,6 +16,15 @@ import (
 
 func loadJZMachine(t *testing.T) *define.Machine {
 	t.Helper()
+	// 基础模式也需从钥匙串拉 DEK 才能解密 encrypted_data；App 启动会 InitVault，单测需自行补上。
+	if err := crypto.InitVault(); err != nil {
+		t.Fatalf("InitVault: %v", err)
+	}
+	if crypto.IsLocked() {
+		if err := crypto.Unlock(""); err != nil {
+			t.Fatalf("解锁凭据失败（基础模式应从钥匙串恢复 DEK）: %v", err)
+		}
+	}
 	gcm := data.NewGlobalConfigManager("")
 	cfg, err := gcm.LoadGlobalConfig()
 	if err != nil {

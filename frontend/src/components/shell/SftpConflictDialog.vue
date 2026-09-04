@@ -34,6 +34,13 @@
         <el-button @click="resolve('duplicate', applyToAll)">保留两者</el-button>
         <el-button v-if="canMerge" type="primary" plain @click="resolve('merge', applyToAll)">合并</el-button>
         <el-button v-if="canReplace" type="primary" @click="resolve('replace', applyToAll)">覆盖</el-button>
+        <el-button
+          v-if="canReplace && applyToAllCount > 1"
+          type="danger"
+          @click="resolve('replace', true)"
+        >
+          全部覆盖
+        </el-button>
       </div>
     </template>
   </el-dialog>

@@ -172,12 +172,7 @@ func downloadPartPath(localPath string) string {
 }
 
 func uploadPartPath(remotePath string) string {
-	dir := path.Dir(remotePath)
-	base := path.Base(remotePath)
-	if dir == "" || dir == "." {
-		return "." + base + downloadPartSuffix
-	}
-	return path.Join(dir, "."+base+downloadPartSuffix)
+	return utils.RemoteUploadPartPath(remotePath)
 }
 
 // DownloadFile 下载远端文件到本地路径（写入 .flashdock.part，成功后原子改名；支持暂停后续传）
@@ -323,8 +318,8 @@ func (a *ShellAuxManager) uploadFile(ctx context.Context, localPath, remotePath 
 		useAtomic := total > 0
 		partRemote := uploadPartPath(remotePath)
 		if forceOverwrite {
+			// 只清暂存；目标文件等写完后再替换，避免上传过程中截断/删除正在运行的 jar
 			_ = sftpClient.Remove(partRemote)
-			_ = sftpClient.Remove(remotePath)
 		}
 		// 优先续传远端隐藏 .part；兼容旧版直接写目标文件
 		if !forceOverwrite {
@@ -355,6 +350,10 @@ func (a *ShellAuxManager) uploadFile(ctx context.Context, localPath, remotePath 
 					useAtomic = false
 				}
 			}
+		} else {
+			// 强制覆盖时始终走完整 atomic 写入，不续传半成品目标
+			useAtomic = total > 0
+			offset = 0
 		}
 		stagingPath := remotePath
 		if useAtomic {
@@ -467,26 +466,9 @@ func (a *ShellAuxManager) UploadDirectoryZip(ctx context.Context, localDir, remo
 	return nil
 }
 
-// extractRemoteZip 尝试多种方式在远端解压 zip（unzip / busybox / python3 / python）
+// extractRemoteZip 尝试多种方式在远端解压 zip（staging + mv，避免原地截断）
 func (a *ShellAuxManager) extractRemoteZip(remoteZip, targetDir string) error {
-	tq := shellSingleQuote(targetDir)
-	zq := shellSingleQuote(remoteZip)
-	candidates := []string{
-		fmt.Sprintf("mkdir -p %s && unzip -o %s -d %s && rm -f %s", tq, zq, tq, zq),
-		fmt.Sprintf("mkdir -p %s && busybox unzip -o %s -d %s && rm -f %s", tq, zq, tq, zq),
-		fmt.Sprintf(
-			"mkdir -p %s && python3 -c %s && rm -f %s",
-			tq,
-			shellSingleQuote(fmt.Sprintf("import zipfile; zipfile.ZipFile(%q).extractall(%q)", remoteZip, targetDir)),
-			zq,
-		),
-		fmt.Sprintf(
-			"mkdir -p %s && python -c %s && rm -f %s",
-			tq,
-			shellSingleQuote(fmt.Sprintf("import zipfile; zipfile.ZipFile(%q).extractall(%q)", remoteZip, targetDir)),
-			zq,
-		),
-	}
+	candidates := utils.RemoteAtomicUnzipCandidates(remoteZip, targetDir)
 	var lastOut string
 	var lastErr error
 	for _, cmd := range candidates {
@@ -619,20 +601,25 @@ func (a *ShellAuxManager) uploadFileWithChunk(ctx context.Context, c *sftp.Clien
 	if remoteDir != "" && remoteDir != "." && remoteDir != "/" {
 		_ = c.MkdirAll(remoteDir)
 	}
-	dst, err := c.Create(remotePath)
+	partRemote := uploadPartPath(remotePath)
+	_ = c.Remove(partRemote)
+	dst, err := c.Create(partRemote)
 	if err != nil {
 		return err
 	}
-	defer dst.Close()
 
 	buf := make([]byte, utils.TransferBufferSize)
 	for {
 		if err := ctxErr(ctx); err != nil {
+			_ = dst.Close()
+			_ = c.Remove(partRemote)
 			return err
 		}
 		n, readErr := src.Read(buf)
 		if n > 0 {
 			if _, werr := dst.Write(buf[:n]); werr != nil {
+				_ = dst.Close()
+				_ = c.Remove(partRemote)
 				return werr
 			}
 			if onChunk != nil {
@@ -643,8 +630,18 @@ func (a *ShellAuxManager) uploadFileWithChunk(ctx context.Context, c *sftp.Clien
 			break
 		}
 		if readErr != nil {
+			_ = dst.Close()
+			_ = c.Remove(partRemote)
 			return readErr
 		}
+	}
+	if err := dst.Close(); err != nil {
+		_ = c.Remove(partRemote)
+		return err
+	}
+	_ = c.Remove(remotePath)
+	if err := c.Rename(partRemote, remotePath); err != nil {
+		return fmt.Errorf("原子替换失败: %w", err)
 	}
 	return nil
 }

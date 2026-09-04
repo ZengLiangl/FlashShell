@@ -19,7 +19,6 @@ func RegUploadCmd() {
 }
 
 func doUpload(rm *define.RemoteMachine, c []string, outputChan chan<- string) error {
-	println("doUpload")
 	if len(c) != 3 {
 		return errors.New("参数错误: upload <本地路径> <远程路径>")
 	}
@@ -42,7 +41,7 @@ func doUpload(rm *define.RemoteMachine, c []string, outputChan chan<- string) er
 	}
 }
 
-// uploadFile 上传单个文件
+// uploadFile 上传单个文件（先写隐藏 .part，完成后再替换目标，避免原地截断正在运行的 jar）
 func uploadFile(rm *define.RemoteMachine, localPath, remotePath, targetFileName string, outputChan chan<- string) error {
 	// 打开本地文件
 	srcFile, err := os.Open(localPath)
@@ -69,16 +68,27 @@ func uploadFile(rm *define.RemoteMachine, localPath, remotePath, targetFileName 
 		Total: fileInfo.Size(), StartedAt: time.Now().Unix(),
 	})
 
-	// 创建远程文件
-	dstFile, err := rm.SFTPClient.Create(remotePath)
-	if err != nil {
+	fail := func(err error) error {
 		reportTransfer(&define.SftpTransferRecord{
 			ID: transferID, Direction: "upload", Name: targetFileName, Status: "error",
 			Error: err.Error(), FinishedAt: time.Now().Unix(),
 		})
-		return fmt.Errorf("创建远程文件失败: %w", err)
+		return err
 	}
-	defer dstFile.Close()
+
+	remoteDir := path.Dir(remotePath)
+	if remoteDir != "" && remoteDir != "." && remoteDir != "/" {
+		_ = rm.SFTPClient.MkdirAll(remoteDir)
+	}
+
+	partRemote := utils.RemoteUploadPartPath(remotePath)
+	_ = rm.SFTPClient.Remove(partRemote)
+
+	// 写入暂存文件，禁止对目标路径 Create/O_TRUNC
+	dstFile, err := rm.SFTPClient.Create(partRemote)
+	if err != nil {
+		return fail(fmt.Errorf("创建远程暂存文件失败: %w", err))
+	}
 
 	totalSize := fileInfo.Size()
 	startTime := time.Now()
@@ -102,13 +112,15 @@ func uploadFile(rm *define.RemoteMachine, localPath, remotePath, targetFileName 
 	})
 
 	_, err = utils.CopySFTPUpload(dstFile, reader)
+	_ = dstFile.Close()
 	close(stopProgress)
 	if err != nil {
-		reportTransfer(&define.SftpTransferRecord{
-			ID: transferID, Direction: "upload", Name: targetFileName, Status: "error",
-			Error: err.Error(), FinishedAt: time.Now().Unix(),
-		})
-		return fmt.Errorf("文件传输失败: %w", err)
+		_ = rm.SFTPClient.Remove(partRemote)
+		return fail(fmt.Errorf("文件传输失败: %w", err))
+	}
+	_ = rm.SFTPClient.Remove(remotePath)
+	if err := rm.SFTPClient.Rename(partRemote, remotePath); err != nil {
+		return fail(fmt.Errorf("原子替换失败: %w", err))
 	}
 	reportTransfer(&define.SftpTransferRecord{
 		ID: transferID, Direction: "upload", Name: targetFileName,
@@ -169,26 +181,9 @@ func uploadDirectoryZip(rm *define.RemoteMachine, localPath, remotePath, targetF
 	return nil
 }
 
-// extractZipOnRemote 尝试 unzip / busybox / python 在远端解压
+// extractZipOnRemote 尝试 unzip / busybox / python 在远端解压（staging + mv，避免原地截断）
 func extractZipOnRemote(rm *define.RemoteMachine, remoteZipPath, targetPath string, outputChan chan<- string) error {
-	tq := shellSingleQuote(targetPath)
-	zq := shellSingleQuote(remoteZipPath)
-	candidates := []string{
-		fmt.Sprintf("mkdir -p %s && unzip -o %s -d %s && rm -f %s", tq, zq, tq, zq),
-		fmt.Sprintf("mkdir -p %s && busybox unzip -o %s -d %s && rm -f %s", tq, zq, tq, zq),
-		fmt.Sprintf(
-			"mkdir -p %s && python3 -c %s && rm -f %s",
-			tq,
-			shellSingleQuote(fmt.Sprintf("import zipfile; zipfile.ZipFile(%q).extractall(%q)", remoteZipPath, targetPath)),
-			zq,
-		),
-		fmt.Sprintf(
-			"mkdir -p %s && python -c %s && rm -f %s",
-			tq,
-			shellSingleQuote(fmt.Sprintf("import zipfile; zipfile.ZipFile(%q).extractall(%q)", remoteZipPath, targetPath)),
-			zq,
-		),
-	}
+	candidates := utils.RemoteAtomicUnzipCandidates(remoteZipPath, targetPath)
 	var lastErr error
 	for _, cmd := range candidates {
 		if err := runRemoteCommand(rm, cmd, outputChan); err != nil {
