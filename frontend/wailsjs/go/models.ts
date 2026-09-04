@@ -1905,6 +1905,7 @@ export namespace mcp {
 	    reason: string;
 	    approver?: string;
 	    durationMs: number;
+	    sensitiveIds?: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new AuditEntry(source);
@@ -1925,6 +1926,7 @@ export namespace mcp {
 	        this.reason = source["reason"];
 	        this.approver = source["approver"];
 	        this.durationMs = source["durationMs"];
+	        this.sensitiveIds = source["sensitiveIds"];
 	    }
 	}
 	export class AuditFilter {
@@ -2065,6 +2067,28 @@ export namespace mcp {
 	        this.kind = source["kind"];
 	    }
 	}
+	export class FalsePositiveSample {
+	    id: string;
+	    rule: string;
+	    kind: string;
+	    hash?: string;
+	    server?: string;
+	    createdAt: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new FalsePositiveSample(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.rule = source["rule"];
+	        this.kind = source["kind"];
+	        this.hash = source["hash"];
+	        this.server = source["server"];
+	        this.createdAt = source["createdAt"];
+	    }
+	}
 	export class GuidanceStatus {
 	    ok: boolean;
 	    stale: boolean;
@@ -2141,6 +2165,50 @@ export namespace mcp {
 	        this.createdAt = source["createdAt"];
 	        this.lastUsedAt = source["lastUsedAt"];
 	        this.token = source["token"];
+	    }
+	}
+	export class PromoteSensitiveOpts {
+	    id: string;
+	    server: string;
+	    kind: string;
+	    label: string;
+	    field: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new PromoteSensitiveOpts(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.server = source["server"];
+	        this.kind = source["kind"];
+	        this.label = source["label"];
+	        this.field = source["field"];
+	    }
+	}
+	export class RedactHit {
+	    rule: string;
+	    kind: string;
+	    start: number;
+	    end: number;
+	    match: string;
+	    secret: string;
+	    snippet: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new RedactHit(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.rule = source["rule"];
+	        this.kind = source["kind"];
+	        this.start = source["start"];
+	        this.end = source["end"];
+	        this.match = source["match"];
+	        this.secret = source["secret"];
+	        this.snippet = source["snippet"];
 	    }
 	}
 	export class Settings {
@@ -2289,6 +2357,22 @@ export namespace mcp {
 	        this.name = source["name"];
 	        this.servers = source["servers"];
 	        this.cidrs = source["cidrs"];
+	    }
+	}
+	export class UserRedactRule {
+	    name: string;
+	    pattern: string;
+	    kind: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UserRedactRule(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.name = source["name"];
+	        this.pattern = source["pattern"];
+	        this.kind = source["kind"];
 	    }
 	}
 

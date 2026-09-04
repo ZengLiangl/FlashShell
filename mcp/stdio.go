@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	"FlashDock/data"
 
@@ -128,11 +129,126 @@ func (s *Service) PurgeAuditByRetention() (int, error) {
 	if days <= 0 {
 		days = 90
 	}
-	return s.audit.PurgeOlderThan(days)
+	n, err := s.audit.PurgeOlderThan(days)
+	_, _ = s.ExpireSensitiveVault()
+	return n, err
 }
 
 func (s *Service) ListSensitiveMeta() []map[string]any {
-	return s.vault.ListMeta("")
+	if s.sensitive == nil {
+		return []map[string]any{}
+	}
+	return s.sensitive.ListMeta()
+}
+
+func (s *Service) ExpireSensitiveVault() (int, error) {
+	if s.sensitive == nil {
+		return 0, nil
+	}
+	return s.sensitive.ExpireDue(time.Now())
+}
+
+func (s *Service) RevealSensitive(id string) (string, error) {
+	if s.sensitive == nil {
+		return "", fmt.Errorf("敏感库未初始化")
+	}
+	return s.sensitive.Reveal(id)
+}
+
+func (s *Service) DiscardSensitive(id string) error {
+	if s.sensitive == nil {
+		return fmt.Errorf("敏感库未初始化")
+	}
+	return s.sensitive.Discard(id)
+}
+
+// PromoteSensitiveOpts 敏感库转服务凭据
+type PromoteSensitiveOpts struct {
+	ID     string `json:"id"`
+	Server string `json:"server"`
+	Kind   string `json:"kind"`
+	Label  string `json:"label"`
+	Field  string `json:"field"` // 写入 secrets 的字段名，默认 password/value
+}
+
+func (s *Service) PromoteSensitive(opts PromoteSensitiveOpts) (map[string]any, error) {
+	if s.sensitive == nil || s.vault == nil {
+		return nil, fmt.Errorf("敏感库/凭据库未初始化")
+	}
+	id := strings.TrimSpace(opts.ID)
+	plain, err := s.sensitive.Reveal(id)
+	if err != nil {
+		return nil, err
+	}
+	meta, _ := s.sensitive.FindMeta(id)
+	server := strings.TrimSpace(opts.Server)
+	if server == "" && meta != nil {
+		server = fmt.Sprint(meta["server"])
+	}
+	if server == "" {
+		return nil, fmt.Errorf("请指定服务器别名")
+	}
+	if _, err := s.machineByAlias(server); err != nil {
+		return nil, err
+	}
+	kind := strings.TrimSpace(opts.Kind)
+	if kind == "" && meta != nil {
+		kind = fmt.Sprint(meta["kind"])
+	}
+	if kind == "" {
+		kind = "credential"
+	}
+	label := strings.TrimSpace(opts.Label)
+	if label == "" && meta != nil {
+		label = fmt.Sprint(meta["label"])
+	}
+	if label == "" {
+		label = id
+	}
+	field := strings.TrimSpace(opts.Field)
+	if field == "" {
+		if strings.Contains(strings.ToLower(kind), "token") {
+			field = "token"
+		} else {
+			field = "password"
+		}
+	}
+	saved, err := s.vault.Save(VaultItem{
+		ServerAlias: server,
+		Kind:        kind,
+		Label:       label,
+		Public:      map[string]string{"__tunnel_server_id": server, "fromSensitive": id},
+		Secrets:     map[string]string{field: plain},
+	})
+	if err != nil {
+		return nil, err
+	}
+	return map[string]any{
+		"id":          saved.ID,
+		"label":       saved.Label,
+		"kind":        saved.Kind,
+		"serverAlias": saved.ServerAlias,
+	}, nil
+}
+
+func (s *Service) ListRedactRules() []map[string]any {
+	return ListRedactRulesMeta()
+}
+
+func (s *Service) SaveRedactRules(rules []UserRedactRule) error {
+	return SaveUserRedactRules(rules)
+}
+
+func (s *Service) TestRedact(text string) []RedactHit {
+	return TestRedactRules(text)
+}
+
+func (s *Service) ReloadRedact() {
+	ReloadRedactRules()
+}
+
+func (s *Service) ListFalsePositiveSamples() []FalsePositiveSample {
+	return ListFalsePositives()
 }
 
 func (s *Service) AddOutboundHost(host string) error {

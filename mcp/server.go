@@ -60,12 +60,14 @@ type Service struct {
 	tokens    *TokenStore
 	audit     *AuditLog
 	vault     *Vault
+	sensitive *SensitiveVault
 	knowledge *Knowledge
 	ledger    *Ledger
 	approvals *ApprovalHub
 	prov      *provenanceBuf
 	httpSrv   *http.Server
 	listener  net.Listener
+	sweepStop chan struct{}
 	mcp       *mcpsdk.Server
 	online    bool
 	startedAt time.Time
@@ -84,6 +86,7 @@ func newService(cfg *data.ConfigManager) *Service {
 		tokens:    loadTokens(),
 		audit:     newAuditLog(),
 		vault:     loadVault(),
+		sensitive: loadSensitiveVault(),
 		knowledge: newKnowledge(),
 		ledger:    loadLedger(),
 		approvals: newApprovalHub(),
@@ -113,6 +116,7 @@ func newService(cfg *data.ConfigManager) *Service {
 	})
 	s.registerTools()
 	s.mcp.AddReceivingMiddleware(s.tokenScopeMiddleware())
+	migrateRedactionCaptures(s.vault, s.sensitive)
 	return s
 }
 
@@ -173,11 +177,28 @@ func (s *Service) StartHTTP() error {
 	go func() {
 		_, _ = s.PurgeAuditByRetention()
 	}()
+	if s.sweepStop == nil {
+		s.sweepStop = make(chan struct{})
+		go s.runSensitiveSweeper(s.sweepStop)
+	}
 	go func() {
 		_ = s.httpSrv.Serve(ln)
 	}()
 	_ = s.writeRuntime()
 	return nil
+}
+
+func (s *Service) runSensitiveSweeper(stop <-chan struct{}) {
+	t := time.NewTicker(time.Hour)
+	defer t.Stop()
+	for {
+		select {
+		case <-stop:
+			return
+		case <-t.C:
+			_, _ = s.ExpireSensitiveVault()
+		}
+	}
 }
 
 func (s *Service) authMiddleware(next http.Handler) http.Handler {
@@ -284,6 +305,10 @@ func (s *Service) Stop() {
 	s.closeOwnedSSH()
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if s.sweepStop != nil {
+		close(s.sweepStop)
+		s.sweepStop = nil
+	}
 	if s.httpSrv != nil {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 		_ = s.httpSrv.Shutdown(ctx)
@@ -634,23 +659,29 @@ func (s *Service) record(ctx context.Context, tool, server string, params any, r
 	if decision == "pending" || decision == "approval" {
 		decision = "cancelled"
 	}
+	redacted := s.redactText(ctx, result, server)
+	sensIDs := sensIDsFromCtx(ctx)
 	// 只读类工具喂溯源缓冲（脱敏后）
 	switch tool {
 	case "sftp_read", "tail_log", "ssh_exec", "ssh_exec_script":
-		s.prov.Append(redactText(result))
+		s.prov.Append(redacted)
 	}
-	s.audit.Append(AuditEntry{
-		Source:     sourceFromCtx(ctx),
-		Caller:     sourceFromCtx(ctx),
-		Tool:       tool,
-		Module:     toolModule(tool),
-		Server:     server,
-		Params:     clip(mustJSON(params), 4000),
-		Result:     clip(redactText(result), 8000),
-		Decision:   decision,
-		Reason:     clip(reason, 500),
-		DurationMs: time.Since(started).Milliseconds(),
+	entry := s.audit.Append(AuditEntry{
+		Source:       sourceFromCtx(ctx),
+		Caller:       sourceFromCtx(ctx),
+		Tool:         tool,
+		Module:       toolModule(tool),
+		Server:       server,
+		Params:       clip(mustJSON(params), 4000),
+		Result:       clip(redacted, 8000),
+		Decision:     decision,
+		Reason:       clip(reason, 500),
+		DurationMs:   time.Since(started).Milliseconds(),
+		SensitiveIDs: sensIDs,
 	})
+	if s.sensitive != nil && len(sensIDs) > 0 {
+		s.sensitive.LinkAudit(sensIDs, entry.ID, server)
+	}
 }
 
 func classifyDecision(msg string) string {

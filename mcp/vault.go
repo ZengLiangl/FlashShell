@@ -67,6 +67,9 @@ func (v *Vault) ListMeta(server string) []map[string]any {
 	defer v.mu.Unlock()
 	var out []map[string]any
 	for _, it := range v.items {
+		if isRedactionCapture(it) {
+			continue
+		}
 		if server != "" && !strings.EqualFold(it.ServerAlias, server) {
 			continue
 		}
@@ -85,6 +88,7 @@ func (v *Vault) ListMeta(server string) []map[string]any {
 }
 
 func (v *Vault) PutSecret(id, kind string, secrets, public map[string]string) error {
+	// 仅用于服务凭据；出口脱敏请走 SensitiveVault.Capture。
 	enc, err := encryptMap(secrets)
 	if err != nil {
 		return err
@@ -156,6 +160,9 @@ func (v *Vault) Find(idOrLabel string) (VaultItem, map[string]string, bool) {
 	defer v.mu.Unlock()
 	key := strings.TrimSpace(idOrLabel)
 	for _, it := range v.items {
+		if isRedactionCapture(it) {
+			continue
+		}
 		if it.ID == key || strings.EqualFold(it.Label, key) || strings.Contains(strings.ToLower(it.Label), strings.ToLower(key)) {
 			sec := decryptMap(it.Secrets)
 			return it, sec, true

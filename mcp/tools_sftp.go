@@ -59,7 +59,7 @@ func (s *Service) handleSftpList(_ context.Context, a SftpListArgs) (any, error)
 	return map[string]any{"entries": entries}, nil
 }
 
-func (s *Service) handleSftpRead(_ context.Context, a SftpReadArgs) (any, error) {
+func (s *Service) handleSftpRead(ctx context.Context, a SftpReadArgs) (any, error) {
 	if pathBlocked(a.Path) {
 		return nil, wrapErr("[blocked]", "敏感路径禁止读取: "+a.Path)
 	}
@@ -78,7 +78,7 @@ func (s *Service) handleSftpRead(_ context.Context, a SftpReadArgs) (any, error)
 			return err
 		}
 		if isMostlyUTF8(b) {
-			content = redactText(string(b))
+			content = s.redactText(ctx, string(b), a.Server)
 			enc = "utf-8"
 		} else {
 			content = base64.StdEncoding.EncodeToString(b)

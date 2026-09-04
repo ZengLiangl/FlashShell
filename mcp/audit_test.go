@@ -2,11 +2,22 @@ package mcp
 
 import "testing"
 
-func TestToolModule(t *testing.T) {
-	if toolModule("ssh_exec") != "ssh" {
-		t.Fatal("ssh")
+func TestMatchAuditByID(t *testing.T) {
+	e := AuditEntry{ID: "aud_abcdef123456", Tool: "ssh_exec", Decision: "auto"}
+	if !matchAudit(e, AuditFilter{Keyword: "aud_abcdef123456"}) {
+		t.Fatal("exact audit id should match")
+	}
+	if !matchAudit(e, AuditFilter{Keyword: "AUD_ABCDEF123456"}) {
+		t.Fatal("audit id match should be case-insensitive")
+	}
+	if matchAudit(e, AuditFilter{Keyword: "aud_other", Decision: "auto"}) {
+		t.Fatal("unrelated keyword should not match")
+	}
+	if !matchAudit(e, AuditFilter{Keyword: "ssh_exec"}) {
+		t.Fatal("tool name in keyword should match")
 	}
 }
+
 
 func TestNormalizeDecision(t *testing.T) {
 	cases := map[string]string{

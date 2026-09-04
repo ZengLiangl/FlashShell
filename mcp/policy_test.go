@@ -75,7 +75,6 @@ func TestServerMCPEnabled(t *testing.T) {
 	}
 }
 
-
 func TestListBuiltinDangerRules(t *testing.T) {
 	rules := ListBuiltinDangerRules()
 	if len(rules) < 10 {

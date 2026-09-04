@@ -170,6 +170,10 @@ export function DisableVaultMasterPassword(arg1) {
   return window['go']['app']['App']['DisableVaultMasterPassword'](arg1);
 }
 
+export function DiscardMCPSensitive(arg1) {
+  return window['go']['app']['App']['DiscardMCPSensitive'](arg1);
+}
+
 export function DisconnectShell(arg1) {
   return window['go']['app']['App']['DisconnectShell'](arg1);
 }
@@ -534,6 +538,14 @@ export function ListMCPCustomDangerPatterns() {
   return window['go']['app']['App']['ListMCPCustomDangerPatterns']();
 }
 
+export function ListMCPFalsePositives() {
+  return window['go']['app']['App']['ListMCPFalsePositives']();
+}
+
+export function ListMCPRedactRules() {
+  return window['go']['app']['App']['ListMCPRedactRules']();
+}
+
 export function ListMCPSensitive() {
   return window['go']['app']['App']['ListMCPSensitive']();
 }
@@ -682,8 +694,16 @@ export function PrioritizeShellTransfer(arg1) {
   return window['go']['app']['App']['PrioritizeShellTransfer'](arg1);
 }
 
+export function PromoteMCPSensitive(arg1) {
+  return window['go']['app']['App']['PromoteMCPSensitive'](arg1);
+}
+
 export function PurgeMCPAudit() {
   return window['go']['app']['App']['PurgeMCPAudit']();
+}
+
+export function PurgeMCPSensitive() {
+  return window['go']['app']['App']['PurgeMCPSensitive']();
 }
 
 export function QueryMCPAudit(arg1) {
@@ -716,6 +736,10 @@ export function RefreshCursorMCP() {
 
 export function RefreshMCPClient(arg1) {
   return window['go']['app']['App']['RefreshMCPClient'](arg1);
+}
+
+export function ReloadMCPRedactRules() {
+  return window['go']['app']['App']['ReloadMCPRedactRules']();
 }
 
 export function RemoveKnownHost(arg1, arg2) {
@@ -770,6 +794,10 @@ export function ResumeShellTransfer(arg1) {
   return window['go']['app']['App']['ResumeShellTransfer'](arg1);
 }
 
+export function RevealMCPSensitive(arg1) {
+  return window['go']['app']['App']['RevealMCPSensitive'](arg1);
+}
+
 export function RevokeMCPToken(arg1) {
   return window['go']['app']['App']['RevokeMCPToken'](arg1);
 }
@@ -800,6 +828,10 @@ export function SaveKeyMapSettings(arg1) {
 
 export function SaveMCPCustomDangerPatterns(arg1) {
   return window['go']['app']['App']['SaveMCPCustomDangerPatterns'](arg1);
+}
+
+export function SaveMCPRedactRules(arg1) {
+  return window['go']['app']['App']['SaveMCPRedactRules'](arg1);
 }
 
 export function SaveMCPSettings(arg1) {
@@ -968,6 +1000,10 @@ export function SwitchConfigFileWithEvent(arg1) {
 
 export function SyncShellCwd(arg1, arg2) {
   return window['go']['app']['App']['SyncShellCwd'](arg1, arg2);
+}
+
+export function TestMCPRedactRules(arg1) {
+  return window['go']['app']['App']['TestMCPRedactRules'](arg1);
 }
 
 export function TestMachineConnection(arg1) {

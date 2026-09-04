@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -20,35 +21,35 @@ type SecurityLayer struct {
 
 // IronRuleCheck 五条铁律自检
 type IronRuleCheck struct {
-	Rule    string `json:"rule"`
-	Pass    bool   `json:"pass"`
-	Detail  string `json:"detail"`
+	Rule   string `json:"rule"`
+	Pass   bool   `json:"pass"`
+	Detail string `json:"detail"`
 }
 
 // SecurityOverview 安全总览（对齐 Reeve 安全模型文档）
 type SecurityOverview struct {
-	Layers          []SecurityLayer `json:"layers"`
-	IronRules       []IronRuleCheck `json:"ironRules"`
-	AIMode          string          `json:"aiMode"`
-	EmergencyStop   bool            `json:"emergencyStop"`
-	ArmedUntil      string          `json:"armedUntil,omitempty"`
-	MCPOnline       bool            `json:"mcpOnline"`
-	MCPBindHost     string          `json:"mcpBindHost"`
-	BindLAN         bool            `json:"bindLan"`
-	TokenCount      int             `json:"tokenCount"`
-	AuditTotal      int             `json:"auditTotal"`
-	AuditToday      int             `json:"auditToday"`
-	SensitiveCount  int             `json:"sensitiveCount"`
-	PendingApprovals int            `json:"pendingApprovals"`
-	RedactRuleCount int             `json:"redactRuleCount"`
-	RedactToolCount int             `json:"redactToolCount"`
-	PolicyBreakdown map[string]int  `json:"policyBreakdown"`
-	CustomDangerN   int             `json:"customDangerCount"`
-	BuiltinDangerN  int             `json:"builtinDangerCount"`
-	CredentialAlgo  string          `json:"credentialAlgo"`
-	CredentialMode  string          `json:"credentialMode"`
-	MachineCount    int             `json:"machineCount"`
-	UpdatedAt       string          `json:"updatedAt"`
+	Layers           []SecurityLayer `json:"layers"`
+	IronRules        []IronRuleCheck `json:"ironRules"`
+	AIMode           string          `json:"aiMode"`
+	EmergencyStop    bool            `json:"emergencyStop"`
+	ArmedUntil       string          `json:"armedUntil,omitempty"`
+	MCPOnline        bool            `json:"mcpOnline"`
+	MCPBindHost      string          `json:"mcpBindHost"`
+	BindLAN          bool            `json:"bindLan"`
+	TokenCount       int             `json:"tokenCount"`
+	AuditTotal       int             `json:"auditTotal"`
+	AuditToday       int             `json:"auditToday"`
+	SensitiveCount   int             `json:"sensitiveCount"`
+	PendingApprovals int             `json:"pendingApprovals"`
+	RedactRuleCount  int             `json:"redactRuleCount"`
+	RedactToolCount  int             `json:"redactToolCount"`
+	PolicyBreakdown  map[string]int  `json:"policyBreakdown"`
+	CustomDangerN    int             `json:"customDangerCount"`
+	BuiltinDangerN   int             `json:"builtinDangerCount"`
+	CredentialAlgo   string          `json:"credentialAlgo"`
+	CredentialMode   string          `json:"credentialMode"`
+	MachineCount     int             `json:"machineCount"`
+	UpdatedAt        string          `json:"updatedAt"`
 }
 
 var redactToolNames = []string{
@@ -60,7 +61,10 @@ func (s *Service) SecurityOverview() SecurityOverview {
 	st := s.GetSettings()
 	stats := s.audit.Stats()
 	tokens := s.tokens.List()
-	sensitive := s.vault.ListMeta("")
+	sensitive := []map[string]any{}
+	if s.sensitive != nil {
+		sensitive = s.sensitive.ListMeta()
+	}
 	pending := len(s.approvals.List())
 
 	policyBreak := map[string]int{}
@@ -103,7 +107,7 @@ func (s *Service) SecurityOverview() SecurityOverview {
 		Layers: []SecurityLayer{
 			{Index: 1, Name: "凭据存储", Mechan: "AES-256-GCM + 加密落盘", Status: layer1Status, Detail: layer1Detail},
 			{Index: 2, Name: "AI 访问策略", Mechan: "五档 + 黑名单 + sudo 审批", Status: aiLayerStatus(st), Detail: layer2Detail},
-			{Index: 3, Name: "出口脱敏", Mechan: "8 个 MCP 工具实时脱敏 + 敏感库", Status: "ok", Detail: "命中规则 → [REDACTED:…] + vault 指针"},
+			{Index: 3, Name: "出口脱敏", Mechan: "MCP 出口实时脱敏 + 独立敏感库", Status: "ok", Detail: fmt.Sprintf("内置 %d+ 规则 → [REDACTED:…]；明文入 sensitive_vault，可 Reveal/转凭据", len(builtinRedactRules))},
 			{Index: 4, Name: "审计追溯", Mechan: "每次工具调用 + 决策写审计", Status: auditLayerStatus(stats.Total), Detail: "含 auto / denied / blocked / approved"},
 		},
 		IronRules:        s.ironRuleChecks(st, bindHost),

@@ -92,6 +92,8 @@ export function DeleteWorkPathWithEvent(arg1:string):Promise<void>;
 
 export function DisableVaultMasterPassword(arg1:string):Promise<void>;
 
+export function DiscardMCPSensitive(arg1:string):Promise<void>;
+
 export function DisconnectShell(arg1:string):Promise<void>;
 
 export function DownloadUpdate(arg1:string):Promise<app.UpdateDownloadResult>;
@@ -274,6 +276,10 @@ export function ListMCPClients():Promise<Array<mcp.ClientLink>>;
 
 export function ListMCPCustomDangerPatterns():Promise<Array<string>>;
 
+export function ListMCPFalsePositives():Promise<Array<mcp.FalsePositiveSample>>;
+
+export function ListMCPRedactRules():Promise<Array<Record<string, any>>>;
+
 export function ListMCPSensitive():Promise<Array<Record<string, any>>>;
 
 export function ListMCPServerAliases():Promise<Array<string>>;
@@ -348,7 +354,11 @@ export function PickShellUploadPaths():Promise<Array<string>>;
 
 export function PrioritizeShellTransfer(arg1:string):Promise<void>;
 
+export function PromoteMCPSensitive(arg1:mcp.PromoteSensitiveOpts):Promise<Record<string, any>>;
+
 export function PurgeMCPAudit():Promise<number>;
+
+export function PurgeMCPSensitive():Promise<number>;
 
 export function QueryMCPAudit(arg1:mcp.AuditFilter):Promise<Array<mcp.AuditEntry>>;
 
@@ -365,6 +375,8 @@ export function RefreshConfigMenuWithEvent():Promise<void>;
 export function RefreshCursorMCP():Promise<void>;
 
 export function RefreshMCPClient(arg1:string):Promise<mcp.IssuedToken>;
+
+export function ReloadMCPRedactRules():Promise<void>;
 
 export function RemoveKnownHost(arg1:string,arg2:number):Promise<void>;
 
@@ -392,6 +404,8 @@ export function ResumeAllShellTransfers():Promise<number>;
 
 export function ResumeShellTransfer(arg1:string):Promise<void>;
 
+export function RevealMCPSensitive(arg1:string):Promise<string>;
+
 export function RevokeMCPToken(arg1:string):Promise<void>;
 
 export function SaveClipboardImageForUpload(arg1:string):Promise<string>;
@@ -407,6 +421,8 @@ export function SaveGlobalConfig(arg1:data.GlobalConfig):Promise<void>;
 export function SaveKeyMapSettings(arg1:data.KeyMapSettings):Promise<void>;
 
 export function SaveMCPCustomDangerPatterns(arg1:Array<string>):Promise<void>;
+
+export function SaveMCPRedactRules(arg1:Array<mcp.UserRedactRule>):Promise<void>;
 
 export function SaveMCPSettings(arg1:mcp.Settings):Promise<void>;
 
@@ -491,6 +507,8 @@ export function StopSubProject(arg1:string,arg2:string):Promise<void>;
 export function SwitchConfigFileWithEvent(arg1:string):Promise<void>;
 
 export function SyncShellCwd(arg1:string,arg2:string):Promise<string>;
+
+export function TestMCPRedactRules(arg1:string):Promise<Array<mcp.RedactHit>>;
 
 export function TestMachineConnection(arg1:string):Promise<void>;
 

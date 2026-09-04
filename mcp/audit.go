@@ -16,19 +16,20 @@ import (
 
 // AuditEntry 一条 MCP 调用审计（对齐 Reeve 字段）
 type AuditEntry struct {
-	ID         string `json:"id" yaml:"id"`
-	Time       string `json:"time" yaml:"time"`
-	Source     string `json:"source" yaml:"source"`
-	Caller     string `json:"caller" yaml:"caller"`
-	Tool       string `json:"tool" yaml:"tool"`
-	Module     string `json:"module" yaml:"module"`
-	Server     string `json:"server" yaml:"server"`
-	Params     string `json:"params" yaml:"params"`
-	Result     string `json:"result" yaml:"result"`
-	Decision   string `json:"decision" yaml:"decision"` // auto | approved | denied | blocked | cancelled
-	Reason     string `json:"reason" yaml:"reason"`
-	Approver   string `json:"approver,omitempty" yaml:"approver,omitempty"`
-	DurationMs int64  `json:"durationMs" yaml:"durationMs"`
+	ID           string   `json:"id" yaml:"id"`
+	Time         string   `json:"time" yaml:"time"`
+	Source       string   `json:"source" yaml:"source"`
+	Caller       string   `json:"caller" yaml:"caller"`
+	Tool         string   `json:"tool" yaml:"tool"`
+	Module       string   `json:"module" yaml:"module"`
+	Server       string   `json:"server" yaml:"server"`
+	Params       string   `json:"params" yaml:"params"`
+	Result       string   `json:"result" yaml:"result"`
+	Decision     string   `json:"decision" yaml:"decision"` // auto | approved | denied | blocked | cancelled
+	Reason       string   `json:"reason" yaml:"reason"`
+	Approver     string   `json:"approver,omitempty" yaml:"approver,omitempty"`
+	DurationMs   int64    `json:"durationMs" yaml:"durationMs"`
+	SensitiveIDs []string `json:"sensitiveIds,omitempty" yaml:"sensitiveIds,omitempty"`
 }
 
 // AuditFilter 审计查询过滤
@@ -325,12 +326,12 @@ func (a *AuditLog) ExportCSV(path string, filter AuditFilter) error {
 	}
 	defer f.Close()
 	w := csv.NewWriter(f)
-	_ = w.Write([]string{"id", "time", "source", "caller", "tool", "module", "server", "decision", "reason", "approver", "durationMs", "params", "result"})
+	_ = w.Write([]string{"id", "time", "source", "caller", "tool", "module", "server", "decision", "reason", "approver", "durationMs", "sensitiveIds", "params", "result"})
 	for i := len(items) - 1; i >= 0; i-- {
 		e := items[i]
 		_ = w.Write([]string{
 			e.ID, e.Time, e.Source, e.Caller, e.Tool, e.Module, e.Server, e.Decision, e.Reason, e.Approver,
-			fmt.Sprintf("%d", e.DurationMs), e.Params, e.Result,
+			fmt.Sprintf("%d", e.DurationMs), strings.Join(e.SensitiveIDs, " "), e.Params, e.Result,
 		})
 	}
 	w.Flush()
@@ -417,7 +418,14 @@ func matchAudit(e AuditEntry, f AuditFilter) bool {
 		return false
 	}
 	if kw := strings.ToLower(strings.TrimSpace(f.Keyword)); kw != "" {
-		blob := strings.ToLower(e.Tool + " " + e.Params + " " + e.Result + " " + e.Server + " " + e.Source + " " + e.Reason)
+		// 精确匹配审计 ID（敏感库跳转场景）
+		if strings.EqualFold(e.ID, strings.TrimSpace(f.Keyword)) {
+			return true
+		}
+		blob := strings.ToLower(strings.Join([]string{
+			e.ID, e.Tool, e.Params, e.Result, e.Server, e.Source, e.Reason, e.Module, e.Caller,
+			strings.Join(e.SensitiveIDs, " "),
+		}, " "))
 		if !strings.Contains(blob, kw) {
 			return false
 		}

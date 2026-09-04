@@ -54,12 +54,12 @@ func defaultSettings() Settings {
 		Enabled:                   false,
 		AutoStart:                 false,
 		HTTPPort:                  18765,
-		BindLAN:                  false,
-		DefaultPolicy:            PolicyTrusted,
-		AIMode:                   AIModeNormal,
-		AuditRetentionDays:       90,
+		BindLAN:                   false,
+		DefaultPolicy:             PolicyTrusted,
+		AIMode:                    AIModeNormal,
+		AuditRetentionDays:        90,
 		OutboundAllowlistDisabled: false,
-		RedactionTTLDays:         30,
+		RedactionTTLDays:          30,
 	}
 }
 
@@ -72,9 +72,9 @@ type Settings struct {
 	DefaultPolicy string `yaml:"defaultPolicy" json:"defaultPolicy"`
 
 	// 全局 AI 总开关
-	AIMode         string `yaml:"aiMode" json:"aiMode"`                   // normal | armed | emergency
-	ArmedUntil     string `yaml:"armedUntil,omitempty" json:"armedUntil"` // RFC3339
-	EmergencyStop  bool   `yaml:"emergencyStop" json:"emergencyStop"`
+	AIMode        string `yaml:"aiMode" json:"aiMode"`                   // normal | armed | emergency
+	ArmedUntil    string `yaml:"armedUntil,omitempty" json:"armedUntil"` // RFC3339
+	EmergencyStop bool   `yaml:"emergencyStop" json:"emergencyStop"`
 
 	// 审计保留（天；0=永久）
 	AuditRetentionDays int `yaml:"auditRetentionDays" json:"auditRetentionDays"`

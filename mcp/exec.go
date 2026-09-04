@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -203,7 +204,10 @@ func (s *Service) acquireSSHLocked(name string, prep *define.Machine, vars map[s
 	return cli, false, nil
 }
 
-func (s *Service) execSSH(alias, command string, timeout time.Duration) (ExecResult, error) {
+func (s *Service) execSSH(ctx context.Context, alias, command string, timeout time.Duration) (ExecResult, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	var res ExecResult
 	err := s.withSSH(alias, false, func(cli *machine.SSHClient, _ *define.Machine) error {
 		rm := cli.SharedRemoteMachine()
@@ -242,8 +246,8 @@ func (s *Service) execSSH(alias, command string, timeout time.Duration) (ExecRes
 			return wrapErr("[timeout]", "命令超时（多数是交互式命令在等 stdin）")
 		}
 	})
-	res.Stdout = redactText(res.Stdout)
-	res.Stderr = redactText(res.Stderr)
+	res.Stdout = s.redactText(ctx, res.Stdout, alias)
+	res.Stderr = s.redactText(ctx, res.Stderr, alias)
 	return res, err
 }
 

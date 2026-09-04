@@ -46,7 +46,7 @@ func (s *Service) listServers(ctx context.Context) (any, error) {
 
 func (s *Service) handleSSHExec(ctx context.Context, a SshExecArgs) (any, error) {
 	to := clampTimeout(a.TimeoutSecs, 30, 1, 600)
-	res, err := s.execSSH(a.Server, a.Command, to)
+	res, err := s.execSSH(ctx, a.Server, a.Command, to)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (s *Service) handleSSHExecMulti(ctx context.Context, a SshExecMultiArgs) (a
 				out[i] = item
 				return
 			}
-			res, err := s.execSSH(sv, a.Command, clampTimeout(a.TimeoutSecs, 30, 1, 600))
+			res, err := s.execSSH(ctx, sv, a.Command, clampTimeout(a.TimeoutSecs, 30, 1, 600))
 			if err != nil {
 				item.Error = err.Error()
 				mu.Lock()
@@ -125,22 +125,22 @@ func (s *Service) handleSSHExecScript(ctx context.Context, a SshExecScriptArgs) 
 	} else {
 		cmd = fmt.Sprintf("%s -lc 'echo %s | base64 -d | %s'", interp, b64, interp)
 	}
-	res, err := s.execSSH(a.Server, cmd, clampTimeout(a.TimeoutSecs, 60, 1, 600))
+	res, err := s.execSSH(ctx, a.Server, cmd, clampTimeout(a.TimeoutSecs, 60, 1, 600))
 	if err != nil {
 		return nil, err
 	}
 	return res, nil
 }
 
-func (s *Service) handleSystemInfo(_ context.Context, a ServerOnly) (any, error) {
-	res, err := s.execSSH(a.Server, "uname -a; hostnamectl; uptime", 30*time.Second)
+func (s *Service) handleSystemInfo(ctx context.Context, a ServerOnly) (any, error) {
+	res, err := s.execSSH(ctx, a.Server, "uname -a; hostnamectl; uptime", 30*time.Second)
 	if err != nil {
 		return nil, err
 	}
 	return res, nil
 }
 
-func (s *Service) handleDiskUsage(_ context.Context, a DiskUsageArgs) (any, error) {
+func (s *Service) handleDiskUsage(ctx context.Context, a DiskUsageArgs) (any, error) {
 	cmd := "df -hT"
 	if a.Path != nil && strings.TrimSpace(*a.Path) != "" {
 		p := strings.TrimSpace(*a.Path)
@@ -149,26 +149,26 @@ func (s *Service) handleDiskUsage(_ context.Context, a DiskUsageArgs) (any, erro
 		}
 		cmd = "df -hT -- " + shellQuote(p)
 	}
-	return s.execSSH(a.Server, cmd, 30*time.Second)
+	return s.execSSH(ctx, a.Server, cmd, 30*time.Second)
 }
 
-func (s *Service) handlePortCheck(_ context.Context, a PortCheckArgs) (any, error) {
+func (s *Service) handlePortCheck(ctx context.Context, a PortCheckArgs) (any, error) {
 	if a.Port < 1 || a.Port > 65535 {
 		return nil, wrapErr("[denied]", "端口须为 1..=65535")
 	}
 	cmd := fmt.Sprintf("ss -tlnH sport = :%d || netstat -tln 2>/dev/null | grep ':%d '", a.Port, a.Port)
-	return s.execSSH(a.Server, cmd, 20*time.Second)
+	return s.execSSH(ctx, a.Server, cmd, 20*time.Second)
 }
 
-func (s *Service) handleServiceStatus(_ context.Context, a ServiceStatusArgs) (any, error) {
+func (s *Service) handleServiceStatus(ctx context.Context, a ServiceStatusArgs) (any, error) {
 	if !safeServiceName(a.Service) {
 		return nil, wrapErr("[denied]", "service 名非法")
 	}
 	cmd := fmt.Sprintf("systemctl status %s --no-pager --lines=20", a.Service)
-	return s.execSSH(a.Server, cmd, 20*time.Second)
+	return s.execSSH(ctx, a.Server, cmd, 20*time.Second)
 }
 
-func (s *Service) handleTailLog(_ context.Context, a TailLogArgs) (any, error) {
+func (s *Service) handleTailLog(ctx context.Context, a TailLogArgs) (any, error) {
 	if !safePathChars(a.Path) {
 		return nil, wrapErr("[denied]", "path 含非法字符")
 	}
@@ -180,12 +180,12 @@ func (s *Service) handleTailLog(_ context.Context, a TailLogArgs) (any, error) {
 		n = 5000
 	}
 	cmd := fmt.Sprintf("tail -n %d -- %s", n, shellQuote(a.Path))
-	return s.execSSH(a.Server, cmd, 30*time.Second)
+	return s.execSSH(ctx, a.Server, cmd, 30*time.Second)
 }
 
-func (s *Service) handleCertList(_ context.Context, a ServerOnly) (any, error) {
+func (s *Service) handleCertList(ctx context.Context, a ServerOnly) (any, error) {
 	cmd := `sh -c 'for d in /etc/letsencrypt/live /etc/ssl/certs /opt/flashshell/openresty/certs; do [ -d "$d" ] && echo "== $d" && ls -1 "$d" 2>/dev/null; done; (command -v openssl >/dev/null && echo PEM:; find /etc/letsencrypt/live -name cert.pem 2>/dev/null | while read f; do echo "$f"; openssl x509 -in "$f" -noout -subject -issuer -enddate 2>/dev/null; done)'`
-	return s.execSSH(a.Server, cmd, 40*time.Second)
+	return s.execSSH(ctx, a.Server, cmd, 40*time.Second)
 }
 
 func (s *Service) handleRunRunbook(ctx context.Context, a NameOnly) (any, error) {
@@ -199,7 +199,7 @@ func (s *Service) handleRunRunbook(ctx context.Context, a NameOnly) (any, error)
 		if _, _, err := s.gate(ctx, "ssh_exec", st.Server, st.Script, st); err != nil {
 			return nil, fmt.Errorf("步骤 %d: %w", i+1, err)
 		}
-		res, err := s.execSSH(st.Server, st.Script, 60*time.Second)
+		res, err := s.execSSH(ctx, st.Server, st.Script, 60*time.Second)
 		if err != nil {
 			return nil, fmt.Errorf("步骤 %d: %w", i+1, err)
 		}

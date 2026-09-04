@@ -80,6 +80,7 @@ declare module 'vue' {
     ProjectList: typeof import('./components/ProjectList.vue')['default']
     ProxySettingsPanel: typeof import('./components/ProxySettingsPanel.vue')['default']
     SectionTitle: typeof import('./components/ui/SectionTitle.vue')['default']
+    SensitiveVaultPanel: typeof import('./components/SensitiveVaultPanel.vue')['default']
     SettingsHubDialog: typeof import('./components/SettingsHubDialog.vue')['default']
     SftpConflictDialog: typeof import('./components/shell/SftpConflictDialog.vue')['default']
     SftpFileOpenerDialog: typeof import('./components/shell/SftpFileOpenerDialog.vue')['default']

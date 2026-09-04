@@ -358,12 +358,97 @@ func (a *App) PurgeMCPAudit() (int, error) {
 	return a.mcpSvc.PurgeAuditByRetention()
 }
 
-// ListMCPSensitive 敏感库元数据（脱敏捕获，无明文）
+// ListMCPSensitive 敏感库元数据（脱敏捕获，无明文；与服务凭据库分离）
 func (a *App) ListMCPSensitive() []map[string]any {
 	if a.mcpSvc == nil {
 		return nil
 	}
 	return a.mcpSvc.ListSensitiveMeta()
+}
+
+// PurgeMCPSensitive 按 TTL 清空过期敏感库明文（保留 hash 与条目）
+func (a *App) PurgeMCPSensitive() (int, error) {
+	if a.mcpSvc == nil {
+		return 0, nil
+	}
+	return a.mcpSvc.ExpireSensitiveVault()
+}
+
+// RevealMCPSensitive 解密敏感库明文（需凭据库解锁）；前端应复制后约 10s 清空剪贴板
+func (a *App) RevealMCPSensitive(id string) (string, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return "", err
+	}
+	if a.mcpSvc == nil {
+		return "", fmt.Errorf("MCP 未启动")
+	}
+	return a.mcpSvc.RevealSensitive(id)
+}
+
+// DiscardMCPSensitive 标假阳性：清空明文、状态 discarded，并记入误报样本
+func (a *App) DiscardMCPSensitive(id string) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
+	if a.mcpSvc == nil {
+		return nil
+	}
+	return a.mcpSvc.DiscardSensitive(id)
+}
+
+// PromoteMCPSensitive 把敏感库条目转为服务凭据（installed_services）
+func (a *App) PromoteMCPSensitive(opts mcp.PromoteSensitiveOpts) (map[string]any, error) {
+	if err := a.requireUnlocked(); err != nil {
+		return nil, err
+	}
+	if a.mcpSvc == nil {
+		return nil, fmt.Errorf("MCP 未启动")
+	}
+	return a.mcpSvc.PromoteSensitive(opts)
+}
+
+// ListMCPRedactRules 脱敏规则清单（内置 + 用户 YAML；内置在前）
+func (a *App) ListMCPRedactRules() []map[string]any {
+	if a.mcpSvc == nil {
+		return mcp.ListRedactRulesMeta()
+	}
+	return a.mcpSvc.ListRedactRules()
+}
+
+// SaveMCPRedactRules 保存自定义脱敏规则（仅用户规则；内置不可改）
+func (a *App) SaveMCPRedactRules(rules []mcp.UserRedactRule) error {
+	if err := a.requireUnlocked(); err != nil {
+		return err
+	}
+	if a.mcpSvc != nil {
+		return a.mcpSvc.SaveRedactRules(rules)
+	}
+	return mcp.SaveUserRedactRules(rules)
+}
+
+// TestMCPRedactRules 规则测试器（不入库）
+func (a *App) TestMCPRedactRules(text string) []mcp.RedactHit {
+	if a.mcpSvc == nil {
+		return mcp.TestRedactRules(text)
+	}
+	return a.mcpSvc.TestRedact(text)
+}
+
+// ReloadMCPRedactRules 重载 ~/.flashshell/mcp/redaction.yaml
+func (a *App) ReloadMCPRedactRules() {
+	if a.mcpSvc != nil {
+		a.mcpSvc.ReloadRedact()
+		return
+	}
+	mcp.ReloadRedactRules()
+}
+
+// ListMCPFalsePositives 敏感库误报样本（无明文）
+func (a *App) ListMCPFalsePositives() []mcp.FalsePositiveSample {
+	if a.mcpSvc == nil {
+		return mcp.ListFalsePositives()
+	}
+	return a.mcpSvc.ListFalsePositiveSamples()
 }
 
 // AddMCPOutboundHost 将 host 加入出站白名单

@@ -31,7 +31,7 @@ func (s *Service) handleSaveCredential(_ context.Context, a SaveCredentialArgs) 
 		}
 		sec[k] = val
 	}
-		item := VaultItem{
+	item := VaultItem{
 		ServerAlias: a.Server,
 		Kind:        a.Kind,
 		Label:       a.Label,
@@ -84,13 +84,13 @@ func (s *Service) handleInstallWithSecret(ctx context.Context, a InstallWithSecr
 	}
 	script := replacePlaceholders(a.InstallScript, values)
 	to := clampTimeout(a.TimeoutSecs, 600, 1, 1800)
-	res, err := s.execSSH(a.Server, script, to)
+	res, err := s.execSSH(context.Background(), a.Server, script, to)
 	if err != nil {
 		return nil, err
 	}
 	if a.VerifyScript != nil && strings.TrimSpace(*a.VerifyScript) != "" {
 		vs := replacePlaceholders(*a.VerifyScript, values)
-		vr, err := s.execSSH(a.Server, vs, to)
+		vr, err := s.execSSH(context.Background(), a.Server, vs, to)
 		if err != nil {
 			return nil, err
 		}
@@ -218,7 +218,7 @@ func (s *Service) handleInstallApp(ctx context.Context, a InstallAppArgs) (any, 
 		return nil, err
 	}
 	script = strings.ReplaceAll(script, "__PASSWORD__", pass)
-	res, err := s.execSSH(a.Server, script, clampTimeout(nil, 600, 1, 1800))
+	res, err := s.execSSH(context.Background(), a.Server, script, clampTimeout(nil, 600, 1, 1800))
 	if err != nil {
 		return nil, err
 	}
@@ -230,10 +230,10 @@ func (s *Service) handleInstallApp(ctx context.Context, a InstallAppArgs) (any, 
 		Kind:        kind,
 		Label:       label,
 		Public: map[string]string{
-			"host":                 "127.0.0.1",
-			"port":                 fmt.Sprintf("%d", defPort),
-			"user":                 defaultDBUser(app),
-			"__tunnel_server_id":   a.Server,
+			"host":               "127.0.0.1",
+			"port":               fmt.Sprintf("%d", defPort),
+			"user":               defaultDBUser(app),
+			"__tunnel_server_id": a.Server,
 		},
 		Secrets: map[string]string{"password": pass},
 	}

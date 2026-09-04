@@ -9,7 +9,7 @@ import (
 
 func (s *Service) handleWebStatus(_ context.Context, a ServerOnly) (any, error) {
 	cmd := `sh -c 'if docker ps --format "{{.Names}}" 2>/dev/null | grep -Eq "^(flashshell-openresty|reeve-openresty)$"; then echo "mode=docker running=yes"; docker ps --filter name=openresty --format "{{.Status}}"; elif command -v openresty >/dev/null; then echo "mode=native"; openresty -v 2>&1; elif command -v nginx >/dev/null; then echo "mode=nginx"; nginx -v 2>&1; else echo "mode=none running=no"; fi'`
-	return s.execSSH(a.Server, cmd, 20*time.Second)
+	return s.execSSH(context.Background(), a.Server, cmd, 20*time.Second)
 }
 
 func (s *Service) handleWebInstall(_ context.Context, a ServerOnly) (any, error) {
@@ -24,7 +24,7 @@ docker run -d --name flashshell-openresty --restart unless-stopped --network hos
   openresty/openresty:alpine
 docker ps --filter name=flashshell-openresty --format '{{.Names}} {{.Status}}'
 `
-	return s.execSSH(a.Server, script, 180*time.Second)
+	return s.execSSH(context.Background(), a.Server, script, 180*time.Second)
 }
 
 func (s *Service) handleWebProxy(_ context.Context, a WebCreateProxyArgs) (any, error) {
@@ -46,7 +46,7 @@ func (s *Service) handleWebProxy(_ context.Context, a WebCreateProxyArgs) (any, 
 		return nil, err
 	}
 	reload := `docker exec flashshell-openresty openresty -t && docker exec flashshell-openresty openresty -s reload || nginx -t && nginx -s reload`
-	res, err := s.execSSH(a.Server, reload, 30*time.Second)
+	res, err := s.execSSH(context.Background(), a.Server, reload, 30*time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -69,14 +69,14 @@ func (s *Service) handleWebStatic(_ context.Context, a WebCreateStaticArgs) (any
 `, a.Domain, root)
 	remote := "/opt/flashshell/openresty/conf/" + sanitizeDomain(a.Domain) + ".conf"
 	mkdir := "mkdir -p " + shellQuote(root)
-	if _, err := s.execSSH(a.Server, mkdir, 15*time.Second); err != nil {
+	if _, err := s.execSSH(context.Background(), a.Server, mkdir, 15*time.Second); err != nil {
 		return nil, err
 	}
 	if err := s.writeRemoteText(a.Server, remote, conf); err != nil {
 		return nil, err
 	}
 	reload := `docker exec flashshell-openresty openresty -t && docker exec flashshell-openresty openresty -s reload || true`
-	res, err := s.execSSH(a.Server, reload, 30*time.Second)
+	res, err := s.execSSH(context.Background(), a.Server, reload, 30*time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -99,7 +99,7 @@ fi
 certbot certonly --webroot -w /opt/flashshell/openresty/html/%s -d %s --email %s --agree-tos --non-interactive
 echo auto_renew=%s
 `, sanitizeDomain(a.Domain), a.Domain, a.Email, renew)
-	res, err := s.execSSH(a.Server, script, 180*time.Second)
+	res, err := s.execSSH(context.Background(), a.Server, script, 180*time.Second)
 	if err != nil {
 		return nil, err
 	}

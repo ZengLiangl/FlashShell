@@ -37,6 +37,7 @@ const FALLBACK_GUARDED = [
   'ImportPuttyPick', 'ImportMobaXtermPick', 'ImportSecureCRTPick', 'SaveMCPSettings',
   'GenerateMCPToken', 'IssueMCPToken', 'InstallMCPClient', 'InstallMCPClientWith',
   'InstallCursorMCP', 'SaveMCPCustomDangerPatterns', 'AddMCPOutboundHost',
+  'RevealMCPSensitive', 'DiscardMCPSensitive', 'PromoteMCPSensitive', 'SaveMCPRedactRules',
   'SetVaultMasterPassword', 'ChangeVaultMasterPassword', 'DisableVaultMasterPassword',
   'SetVaultIdleLockMinutes', 'ResetVaultReencrypt', 'ResetVaultWipeSecrets',
 ]

@@ -105,7 +105,7 @@ func (s *Service) handleDeployRun(ctx context.Context, a DeployRunArgs) (any, er
 			logs = append(logs, map[string]any{"server": sv, "error": err.Error()})
 			continue
 		}
-		if _, err := s.execSSH(sv, "mkdir -p "+shellQuote(root), 20*time.Second); err != nil {
+		if _, err := s.execSSH(context.Background(), sv, "mkdir -p "+shellQuote(root), 20*time.Second); err != nil {
 			okAll = false
 			logs = append(logs, map[string]any{"server": sv, "error": err.Error()})
 			continue
@@ -142,7 +142,7 @@ func (s *Service) handleDeployRun(ctx context.Context, a DeployRunArgs) (any, er
 				continue
 			}
 			cmd := "cd " + shellQuote(filepath.Dir(remote)) + " && docker compose up -d"
-			res, err := s.execSSH(sv, cmd, 10*time.Minute)
+			res, err := s.execSSH(context.Background(), sv, cmd, 10*time.Minute)
 			if err != nil {
 				okAll = false
 				logs = append(logs, map[string]any{"server": sv, "error": err.Error()})
@@ -181,7 +181,7 @@ func (s *Service) ensureAppDB(ctx context.Context, server string, t DeployTarget
 	port := pubGet(it, "port")
 	rootPass := firstNonEmpty(sec["password"], sec["PASSWORD"])
 	cmd := fmt.Sprintf("mysql -h %s -P %s -uroot -p%s -e %s", host, nz(port, "3306"), shellQuote(rootPass), shellQuote(sqls))
-	if _, err := s.execSSH(server, cmd, 30*time.Second); err != nil {
+	if _, err := s.execSSH(context.Background(), server, cmd, 30*time.Second); err != nil {
 		return err
 	}
 	_, err := s.vault.Save(VaultItem{

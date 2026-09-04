@@ -88,6 +88,10 @@ var vaultGuardedMethods = []string{
 	"InstallCursorMCP",
 	"SaveMCPCustomDangerPatterns",
 	"AddMCPOutboundHost",
+	"RevealMCPSensitive",
+	"DiscardMCPSensitive",
+	"PromoteMCPSensitive",
+	"SaveMCPRedactRules",
 	// 主密码 / 凭据库变更（忘记主密码重置除外）
 	"SetVaultMasterPassword",
 	"ChangeVaultMasterPassword",

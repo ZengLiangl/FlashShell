@@ -26,6 +26,7 @@ func addTool[In any](s *Service, name, desc string, serverOf func(In) string, pr
 			if previewOf != nil {
 				preview = previewOf(in)
 			}
+			ctx, _ = withSensCollect(ctx)
 			viaApproval, reason, err := s.gate(ctx, name, server, preview, in)
 			if err != nil {
 				s.record(ctx, name, server, in, err.Error(), classifyDecision(err.Error()), reason, start, err)

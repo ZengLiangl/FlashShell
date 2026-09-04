@@ -1,13 +1,13 @@
 <template>
-  <div class="audit-page" v-loading="loading">
+  <div class="audit-page" v-loading="loading && mainTab === 'audit'">
     <header class="audit-head">
       <div class="head-left">
-        <h1>审计日志</h1>
+        <h1>审计与敏感库</h1>
         <p class="sub">
-          每一次 AI 工具调用、审批裁决、危险命令拦截都写入审计。决策类型对齐 Reeve：auto / approved / denied / blocked / cancelled。params 已脱敏。
+          AI 工具调用审计、审批与出口脱敏捕获。审计记录决策链路；敏感库存脱敏明文（可明文 / 转凭据）。
         </p>
       </div>
-      <div class="head-actions">
+      <div v-if="mainTab === 'audit'" class="head-actions">
         <el-button size="small" :loading="loading" @click="reload">
           <el-icon><Refresh /></el-icon>
           全刷
@@ -17,11 +17,28 @@
           <el-icon><Setting /></el-icon>
           安全设置
         </el-button>
+        <el-button size="small" @click="openDangerDialog">危险黑名单</el-button>
         <el-button size="small" @click="onExport('csv')">导出 CSV</el-button>
         <el-button size="small" type="danger" plain @click="clearAll">清空</el-button>
       </div>
+      <div v-else class="head-actions">
+        <el-button size="small" :loading="svLoading" @click="svReload">
+          <el-icon><Refresh /></el-icon>
+          全刷
+        </el-button>
+        <span class="count-pill">{{ svCount }} 条</span>
+        <el-button size="small" @click="svOpenSettings">
+          <el-icon><Setting /></el-icon>
+          敏感库设置
+        </el-button>
+        <el-button size="small" @click="svOpenRules">脱敏规则</el-button>
+        <el-button size="small" @click="svOpenTester">规则测试器</el-button>
+        <el-button size="small" @click="svReloadRules">重载规则</el-button>
+      </div>
     </header>
 
+    <el-tabs v-model="mainTab" class="page-tabs">
+      <el-tab-pane label="审计日志" name="audit">
     <section v-if="pending.length" class="approval-panel">
       <div class="approval-head">
         <h2>待审批 <span class="count-chip">{{ pending.length }}</span></h2>
@@ -114,14 +131,14 @@
       <el-date-picker v-model="dateStart" type="date" size="small" placeholder="开始" value-format="YYYY-MM-DD" style="width: 124px" @change="onDateParts" />
       <span class="date-sep">—</span>
       <el-date-picker v-model="dateEnd" type="date" size="small" placeholder="结束" value-format="YYYY-MM-DD" style="width: 124px" @change="onDateParts" />
-      <el-input v-model="filter.keyword" clearable size="small" style="width: 220px" placeholder="搜索 tool / params / result / reason..." @keyup.enter="reload" @clear="reload" />
+      <el-input v-model="filter.keyword" clearable size="small" style="width: 220px" placeholder="搜索 ID / tool / params / result…" @keyup.enter="reload" @clear="reload" />
       <el-button size="small" @click="reload">查询</el-button>
       <div class="filters-right">
         <el-checkbox v-model="onlyBlocked" @change="onOnlyBlocked">仅看 blocked/denied</el-checkbox>
       </div>
     </section>
 
-    <p class="hint">过滤与导出不影响策略本身。决策原因见「原因」列；敏感明文在敏感库，审计行仅存 [REDACTED:…] 占位。</p>
+    <p class="hint">过滤与导出不影响策略本身。决策原因见「原因」列；敏感明文在「敏感库」页签，审计行仅存 [REDACTED:…] 占位。</p>
 
     <div class="table-wrap">
       <el-table :data="pageRows" size="small" class="audit-table" empty-text="暂无审计记录" row-key="id">
@@ -135,6 +152,17 @@
                 <div><span class="mk">审批者</span>{{ row.approver || '—' }}</div>
                 <div><span class="mk">模块</span>{{ row.module || '—' }}</div>
                 <div><span class="mk">ID</span>{{ row.id }}</div>
+                <div v-if="row.sensitiveIds?.length" class="sens-jump">
+                  <span class="mk">敏感库</span>
+                  <el-button
+                    v-for="sid in row.sensitiveIds"
+                    :key="sid"
+                    text
+                    size="small"
+                    type="primary"
+                    @click="jumpSensitive(sid)"
+                  >{{ sid }}</el-button>
+                </div>
               </div>
             </div>
           </template>
@@ -154,9 +182,16 @@
           </template>
         </el-table-column>
         <el-table-column prop="reason" label="原因" min-width="160" show-overflow-tooltip />
-        <el-table-column label="操作" width="100" fixed="right">
+        <el-table-column label="操作" width="140" fixed="right">
           <template #default="{ row }">
             <el-button text size="small" @click="copyCmd(row)">复制</el-button>
+            <el-button
+              v-if="row.sensitiveIds?.length"
+              text
+              size="small"
+              type="primary"
+              @click="jumpSensitive(row.sensitiveIds[0])"
+            >敏感库</el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -166,6 +201,17 @@
       <span class="pager-info">{{ total }} 条 {{ pageFrom }}-{{ pageTo }} / 共 {{ total }}</span>
       <el-pagination v-model:current-page="page" :page-size="pageSize" :total="total" layout="prev, pager, next" background small />
     </div>
+      </el-tab-pane>
+
+      <el-tab-pane label="敏感库" name="sensitive" lazy>
+        <SensitiveVaultPanel
+          ref="svPanel"
+          :highlight-id="highlightSensitiveId"
+          @jump-audit="jumpAudit"
+          @meta="onSvMeta"
+        />
+      </el-tab-pane>
+    </el-tabs>
 
     <el-dialog v-model="settingsOpen" title="AI 安全设置" width="560px" append-to-body>
       <div class="settings-body" v-loading="settingsLoading">
@@ -186,14 +232,10 @@
         <el-checkbox v-model="sec.outboundAllowlistDisabled">关闭出站白名单检查</el-checkbox>
         <el-input v-model="sec.outboundHostsText" type="textarea" :rows="3" placeholder="每行一个 host，如 mirrors.aliyun.com" />
 
-        <h4>审计保留 / 敏感库 TTL</h4>
+        <h4>审计保留</h4>
         <div class="row">
           <span>审计保留（天，0=永久）</span>
           <el-input-number v-model="sec.auditRetentionDays" :min="0" :max="999" size="small" />
-        </div>
-        <div class="row">
-          <span>敏感库 TTL（天）</span>
-          <el-input-number v-model="sec.redactionTTLDays" :min="1" :max="365" size="small" />
         </div>
         <div class="row">
           <span>默认服务器策略</span>
@@ -205,34 +247,44 @@
             <el-option label="trusted" value="trusted" />
           </el-select>
         </div>
-
-        <h4>危险黑名单（内置，只读）</h4>
-        <p class="tip">内置规则任何档位（含 trusted）都拦截，不可关闭或修改。命令正则与敏感路径一并列出。</p>
-        <el-table :data="builtinDanger" size="small" max-height="220" empty-text="加载中…" class="builtin-danger-table">
-          <el-table-column prop="label" label="规则" :min-width="140" show-overflow-tooltip />
-          <el-table-column prop="kind" label="类型" width="72">
-            <template #default="{ row }">{{ row.kind === 'path' ? '路径' : '命令' }}</template>
-          </el-table-column>
-          <el-table-column prop="pattern" label="匹配" :min-width="180" show-overflow-tooltip>
-            <template #default="{ row }"><code class="mono-cell">{{ row.pattern }}</code></template>
-          </el-table-column>
-        </el-table>
-
-        <h4>危险黑名单（自定义）</h4>
-        <p class="tip">每行一条正则；命中后与内置同级 → blocked。仅可增删自定义项，不影响上方内置规则。</p>
-        <el-input v-model="sec.customDangerText" type="textarea" :rows="4" placeholder="^rm\s+-rf\s+/data/" />
-
-        <h4>敏感库（元数据）</h4>
-        <el-table :data="sensitive" size="small" max-height="180" empty-text="暂无脱敏捕获">
-          <el-table-column prop="id" label="ID" width="120" />
-          <el-table-column prop="kind" label="规则/类型" />
-          <el-table-column prop="label" label="标签" />
-        </el-table>
+        <p class="tip">敏感库 TTL 请到「敏感库」页签 → 敏感库设置；危险规则见右上角「危险黑名单」。</p>
       </div>
       <template #footer>
         <el-button size="small" @click="purgeNow">立即清理过期审计</el-button>
         <el-button size="small" @click="settingsOpen = false">取消</el-button>
         <el-button size="small" type="primary" @click="saveSettings">保存</el-button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="dangerOpen" title="危险黑名单" width="720px" append-to-body>
+      <div class="settings-body" v-loading="dangerLoading">
+        <p class="tip">内置规则任何档位（含 trusted）都拦截，不可修改；自定义规则排在表末，可增删改，命中后与内置同级 → blocked。</p>
+        <el-table :data="dangerRows" size="small" max-height="420" empty-text="加载中…" class="builtin-danger-table">
+          <el-table-column prop="label" label="规则" :min-width="120" show-overflow-tooltip />
+          <el-table-column prop="kind" label="类型" width="72">
+            <template #default="{ row }">{{ row.kind === 'path' ? '路径' : '命令' }}</template>
+          </el-table-column>
+          <el-table-column label="来源" width="72">
+            <template #default="{ row }">{{ row.builtin ? '内置' : '自定义' }}</template>
+          </el-table-column>
+          <el-table-column prop="pattern" label="匹配" :min-width="160" show-overflow-tooltip>
+            <template #default="{ row }"><code class="mono-cell">{{ row.pattern }}</code></template>
+          </el-table-column>
+          <el-table-column label="操作" width="100" fixed="right">
+            <template #default="{ row }">
+              <template v-if="!row.builtin">
+                <el-button text size="small" @click="editCustomDanger(row)">改</el-button>
+                <el-button text size="small" type="danger" @click="removeCustomDanger(row)">删</el-button>
+              </template>
+              <span v-else class="muted">—</span>
+            </template>
+          </el-table-column>
+        </el-table>
+        <el-button size="small" style="margin-top: 8px" @click="addCustomDanger">添加自定义规则</el-button>
+      </div>
+      <template #footer>
+        <el-button size="small" @click="dangerOpen = false">取消</el-button>
+        <el-button size="small" type="primary" :loading="dangerSaving" @click="saveDangerRules">保存</el-button>
       </template>
     </el-dialog>
   </div>
@@ -242,6 +294,7 @@
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Refresh, Setting } from '@element-plus/icons-vue'
+import SensitiveVaultPanel from './SensitiveVaultPanel.vue'
 import {
   GetMCPAuditStats,
   GetMCPAuditMeta,
@@ -251,7 +304,6 @@ import {
   GetMCPSettings,
   SaveMCPSettings,
   PurgeMCPAudit,
-  ListMCPSensitive,
   ListMCPCustomDangerPatterns,
   ListMCPBuiltinDangerPatterns,
   SaveMCPCustomDangerPatterns,
@@ -278,14 +330,18 @@ const MODULES = [
 
 export default {
   name: 'AuditLogView',
-  components: { Refresh, Setting },
+  components: { Refresh, Setting, SensitiveVaultPanel },
   setup() {
     const loading = ref(false)
     const settingsLoading = ref(false)
+    const mainTab = ref('audit')
+    const highlightSensitiveId = ref('')
+    const svPanel = ref(null)
+    const svCount = ref(0)
+    const svLoading = ref(false)
     const stats = ref({})
     const rows = ref([])
     const meta = ref({ tools: [], modules: [], servers: [], sources: [] })
-    const sensitive = ref([])
     const builtinDanger = ref([])
     const pending = ref([])
     const selectedIds = ref([])
@@ -297,6 +353,9 @@ export default {
     const onlyBlocked = ref(false)
     const activeCard = ref('total')
     const settingsOpen = ref(false)
+    const dangerOpen = ref(false)
+    const dangerLoading = ref(false)
+    const dangerSaving = ref(false)
     const page = ref(1)
     const pageSize = 50
     const sec = reactive({
@@ -312,7 +371,7 @@ export default {
       autoStart: false,
       httpPort: 18765,
       bindLan: false,
-      customDangerText: '',
+      customDangerPatterns: [],
     })
 
     const cards = [
@@ -323,6 +382,25 @@ export default {
       { key: 'blocked', label: '已拦截', tone: 'bad', decision: 'blocked' },
       { key: 'cancelled', label: '已取消', tone: 'pink', decision: 'cancelled' },
     ]
+
+    const dangerRows = computed(() => {
+      const builtin = (builtinDanger.value || []).map((r) => ({
+        key: `b:${r.kind}:${r.pattern}`,
+        label: r.label || r.pattern,
+        kind: r.kind || 'command',
+        pattern: r.pattern,
+        builtin: true,
+      }))
+      const custom = (sec.customDangerPatterns || []).map((p, i) => ({
+        key: `c:${i}:${p}`,
+        label: p,
+        kind: 'command',
+        pattern: p,
+        builtin: false,
+        index: i,
+      }))
+      return [...builtin, ...custom]
+    })
 
     const toolOptions = computed(() => (meta.value.tools?.length ? meta.value.tools : FALLBACK_TOOLS))
     const serverOptions = computed(() => meta.value.servers || [])
@@ -470,22 +548,33 @@ export default {
         sec.autoStart = !!s.autoStart
         sec.httpPort = s.httpPort || 18765
         sec.bindLan = !!s.bindLan
-        sensitive.value = (await ListMCPSensitive().catch(() => [])) || []
-        builtinDanger.value = (await ListMCPBuiltinDangerPatterns().catch(() => [])) || []
-        const danger = (await ListMCPCustomDangerPatterns().catch(() => [])) || []
-        sec.customDangerText = danger.join('\n')
       } finally {
         settingsLoading.value = false
       }
     }
 
+    const loadDangerRules = async () => {
+      dangerLoading.value = true
+      try {
+        builtinDanger.value = (await ListMCPBuiltinDangerPatterns().catch(() => [])) || []
+        const danger = (await ListMCPCustomDangerPatterns().catch(() => [])) || []
+        sec.customDangerPatterns = [...danger]
+      } finally {
+        dangerLoading.value = false
+      }
+    }
+
     watch(settingsOpen, (v) => { if (v) loadSettings() })
+    watch(dangerOpen, (v) => { if (v) loadDangerRules() })
+
+    const openDangerDialog = () => {
+      dangerOpen.value = true
+    }
 
     const saveSettings = async () => {
       try {
         const hosts = String(sec.outboundHostsText || '').split(/\n+/).map((x) => x.trim()).filter(Boolean)
-        const danger = String(sec.customDangerText || '').split(/\n+/).map((x) => x.trim()).filter(Boolean)
-        await SaveMCPCustomDangerPatterns(danger)
+        const cur = (await GetMCPSettings().catch(() => ({}))) || {}
         await SaveMCPSettings({
           enabled: sec.enabled,
           autoStart: sec.autoStart,
@@ -498,7 +587,8 @@ export default {
           auditRetentionDays: sec.auditRetentionDays,
           outboundAllowlistDisabled: sec.outboundAllowlistDisabled,
           outboundHosts: hosts,
-          redactionTTLDays: sec.redactionTTLDays,
+          redactionTTLDays: cur.redactionTTLDays || sec.redactionTTLDays || 30,
+          customDangerPatterns: cur.customDangerPatterns || [],
         })
         ElMessage.success('已保存安全设置')
         settingsOpen.value = false
@@ -507,10 +597,117 @@ export default {
       }
     }
 
+    const saveDangerRules = async () => {
+      dangerSaving.value = true
+      try {
+        await SaveMCPCustomDangerPatterns(sec.customDangerPatterns || [])
+        ElMessage.success('已保存危险黑名单')
+        dangerOpen.value = false
+      } catch (e) {
+        ElMessage.error(`保存失败: ${e}`)
+      } finally {
+        dangerSaving.value = false
+      }
+    }
+
+    const addCustomDanger = async () => {
+      try {
+        const { value } = await ElMessageBox.prompt('输入危险命令正则（与内置同级拦截）', '添加自定义规则', {
+          confirmButtonText: '添加',
+          cancelButtonText: '取消',
+          inputPlaceholder: '^rm\\s+-rf\\s+/data/',
+          inputValidator: (v) => {
+            const s = String(v || '').trim()
+            if (!s) return '正则不能为空'
+            try { new RegExp(s) } catch { return '无效正则' }
+            return true
+          },
+        })
+        const pat = String(value || '').trim()
+        if (!pat) return
+        if (sec.customDangerPatterns.includes(pat)) {
+          ElMessage.warning('该规则已存在')
+          return
+        }
+        sec.customDangerPatterns = [...sec.customDangerPatterns, pat]
+      } catch {
+        /* cancel */
+      }
+    }
+
+    const editCustomDanger = async (row) => {
+      try {
+        const { value } = await ElMessageBox.prompt('修改自定义危险正则', '编辑规则', {
+          confirmButtonText: '保存',
+          cancelButtonText: '取消',
+          inputValue: row.pattern,
+          inputValidator: (v) => {
+            const s = String(v || '').trim()
+            if (!s) return '正则不能为空'
+            try { new RegExp(s) } catch { return '无效正则' }
+            return true
+          },
+        })
+        const pat = String(value || '').trim()
+        const i = row.index
+        if (i == null || i < 0) return
+        const next = [...sec.customDangerPatterns]
+        next[i] = pat
+        sec.customDangerPatterns = next
+      } catch {
+        /* cancel */
+      }
+    }
+
+    const removeCustomDanger = (row) => {
+      const i = row.index
+      if (i == null || i < 0) return
+      sec.customDangerPatterns = sec.customDangerPatterns.filter((_, idx) => idx !== i)
+    }
+
+    const jumpSensitive = (id) => {
+      highlightSensitiveId.value = id || ''
+      mainTab.value = 'sensitive'
+    }
+
+    const jumpAudit = (auditId) => {
+      mainTab.value = 'audit'
+      if (!auditId) return
+      filter.tool = ''
+      filter.module = ''
+      filter.server = ''
+      filter.decision = ''
+      filter.startTime = ''
+      filter.endTime = ''
+      dateStart.value = ''
+      dateEnd.value = ''
+      rangePreset.value = 'all'
+      onlyBlocked.value = false
+      activeCard.value = 'total'
+      filter.keyword = auditId
+      reload()
+    }
+
+    const onSvMeta = (meta) => {
+      svCount.value = meta?.count ?? 0
+      svLoading.value = !!meta?.loading
+    }
+
+    const svCall = (fn) => {
+      const p = svPanel.value
+      if (p && typeof p[fn] === 'function') p[fn]()
+    }
+    const svReload = () => svCall('reload')
+    const svOpenSettings = () => svCall('openSettings')
+    const svOpenRules = () => svCall('openRules')
+    const svOpenTester = () => svCall('openTester')
+    const svReloadRules = () => svCall('reloadRules')
+
     const purgeNow = async () => {
       try {
         const n = await PurgeMCPAudit()
         ElMessage.success(`已清理 ${n || 0} 条过期审计`)
+        await loadSettings()
         await reload()
       } catch (e) {
         ElMessage.error(`清理失败: ${e}`)
@@ -632,12 +829,17 @@ export default {
     })
 
     return {
-      loading, settingsLoading, stats, filter, dateStart, dateEnd, rangePreset, onlyBlocked,
-      activeCard, settingsOpen, page, pageSize, cards, sec, sensitive, builtinDanger, pending, selectedIds,
+      loading, settingsLoading, mainTab, highlightSensitiveId, svPanel, svCount, svLoading,
+      stats, filter, dateStart, dateEnd, rangePreset, onlyBlocked,
+      activeCard, settingsOpen, dangerOpen, dangerLoading, dangerSaving, page, pageSize, cards, sec, builtinDanger, dangerRows, pending, selectedIds,
       toolOptions, serverOptions, moduleOptions, total, pageRows, pageFrom, pageTo,
       reload, loadPending, fmtRemain, onSelChange, singleDecide, batchDecide, batchDecideAll,
       onCardClick, onDecisionSelect, onOnlyBlocked, onRangePreset, onDateParts,
-      clearAll, onExport, copyCmd, saveSettings, purgeNow, norm, decisionLabel, resultPreview, pretty,
+      clearAll, onExport, copyCmd, saveSettings, saveDangerRules, openDangerDialog, purgeNow,
+      jumpSensitive, jumpAudit, onSvMeta,
+      addCustomDanger, editCustomDanger, removeCustomDanger,
+      svReload, svOpenSettings, svOpenRules, svOpenTester, svReloadRules,
+      norm, decisionLabel, resultPreview, pretty,
     }
   },
 }
@@ -658,11 +860,49 @@ export default {
   background: var(--app-bg);
   color: var(--app-text);
 }
-.audit-head { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 16px; flex-shrink: 0; }
+.audit-head { display: flex; justify-content: space-between; gap: 16px; margin-bottom: 8px; flex-shrink: 0; }
 .head-left { min-width: 0; flex: 1; }
 h1 { margin: 0; font-size: 18px; font-weight: 650; }
 .sub { margin: 6px 0 0; font-size: 12px; line-height: 1.5; color: var(--app-text-muted); max-width: 760px; }
 .head-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; flex-wrap: wrap; }
+.page-tabs {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.page-tabs :deep(.el-tabs__header) {
+  margin: 0 0 14px;
+  flex-shrink: 0;
+}
+.page-tabs :deep(.el-tabs__nav-wrap::after) {
+  height: 1px;
+  background-color: var(--app-border);
+}
+.page-tabs :deep(.el-tabs__item) {
+  font-size: 14px;
+  font-weight: 600;
+  height: 40px;
+  line-height: 40px;
+  padding: 0 18px;
+  color: var(--app-text-muted);
+}
+.page-tabs :deep(.el-tabs__item.is-active) {
+  color: var(--app-text);
+}
+.page-tabs :deep(.el-tabs__active-bar) {
+  height: 3px;
+  border-radius: 2px 2px 0 0;
+  background-color: var(--app-accent-color, #22c55e);
+}
+.page-tabs :deep(.el-tabs__content),
+.page-tabs :deep(.el-tab-pane) {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sens-jump { display: flex; flex-wrap: wrap; align-items: center; gap: 2px; }
 .count-pill {
   display: inline-flex; align-items: center; height: 28px; padding: 0 10px; border-radius: 999px;
   border: 1px solid var(--app-border); background: var(--app-card-bg); font-size: 12px; color: var(--app-text-muted);
@@ -725,6 +965,7 @@ h1 { margin: 0; font-size: 18px; font-weight: 650; }
 .settings-body .row { display: flex; align-items: center; gap: 10px; margin: 8px 0; font-size: 12px; }
 .builtin-danger-table { margin-bottom: 4px; }
 .mono-cell { font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; }
+.muted { color: var(--app-text-muted); font-size: 12px; }
 @media (max-width: 1100px) {
   .status-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .expand { grid-template-columns: 1fr; }

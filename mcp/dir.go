@@ -8,18 +8,20 @@ import (
 )
 
 const (
-	dirName       = "mcp"
-	settingsFile  = "settings.yaml"
-	tokensFile    = "tokens.yaml"
-	auditFile     = "audit.jsonl"
-	vaultFile     = "vault.yaml"
-	sitesFile     = "sites.yaml"
-	deploysFile   = "deploys.yaml"
-	historyFile   = "deploy_history.yaml"
-	runtimeFile   = "runtime.json"
-	userSkillsDir = "skills-user"
-	experienceDir = "experience"
-	runbooksDir   = "runbooks"
+	dirName            = "mcp"
+	settingsFile       = "settings.yaml"
+	tokensFile         = "tokens.yaml"
+	auditFile          = "audit.jsonl"
+	vaultFile          = "vault.yaml"           // 服务凭据 installed_services
+	sensitiveVaultFile = "sensitive_vault.yaml" // 出口脱敏被动捕获
+	falsePositivesFile = "false_positives.yaml" // 敏感库误报样本
+	sitesFile          = "sites.yaml"
+	deploysFile        = "deploys.yaml"
+	historyFile        = "deploy_history.yaml"
+	runtimeFile        = "runtime.json"
+	userSkillsDir      = "skills-user"
+	experienceDir      = "experience"
+	runbooksDir        = "runbooks"
 )
 
 func homeDir() (string, error) {
