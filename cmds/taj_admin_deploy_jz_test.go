@@ -216,6 +216,16 @@ func requireTajAdminArtifacts(t *testing.T) {
 	if _, err := os.Stat(tajAdminLocalIncremental); err != nil {
 		t.Fatalf("缺少 target/jar，请先执行打包【taj-admin】: %v", err)
 	}
+	if msg, err := CheckJar(checkJarSpec{
+		JarPath:    tajAdminLocalMainJar,
+		Classes:    []string{"com.taj.DromaraApplication"},
+		MinBytes:   6_000_000,
+		MinClasses: 800,
+	}); err != nil {
+		t.Fatalf("主 jar 校验失败（坏包勿发）: %v", err)
+	} else {
+		t.Log(msg)
+	}
 }
 
 func remoteBaseline(rm *define.RemoteMachine, paths ...string) map[string]int64 {
@@ -311,7 +321,16 @@ func TestTajAdminIncrementalReleaseJZ(t *testing.T) {
 	}
 	t.Logf("增量 lib 合并通过: 远端 %d → %d files", beforeLibCount, afterLibCount)
 
-	t.Log("步骤2: upload " + tajAdminRemoteMainJar)
+	t.Log("步骤2: check-jar + upload " + tajAdminRemoteMainJar)
+	if err := doCheckJar(rm, []string{
+		"check-jar", tajAdminLocalMainJar,
+		"--class", "com.taj.DromaraApplication",
+		"--min-bytes", "6000000",
+		"--min-classes", "800",
+	}, out); err != nil {
+		close(stopWatch)
+		t.Fatalf("check-jar: %v", err)
+	}
 	if err := doUpload(rm, []string{"upload", tajAdminLocalMainJar, tajAdminRemoteMainJar}, out); err != nil {
 		close(stopWatch)
 		t.Fatalf("upload main jar: %v", err)

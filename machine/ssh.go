@@ -131,6 +131,10 @@ func getSpecialCmd(command string) (func(*define.RemoteMachine, []string, chan<-
 	return specialCmd, allString
 }
 
+func isLocalSpecialCmd(name string) bool {
+	return strings.EqualFold(strings.TrimSpace(name), "check-jar")
+}
+
 // readOutput 读取命令输出，保留 ANSI 转义序列
 func (sc *SSHClient) readOutput(reader io.Reader, output chan<- string, prefix string) {
 	buf := make([]byte, 1024)

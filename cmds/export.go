@@ -12,4 +12,5 @@ func init() {
 	RegUploadCmd()
 	RegChdir()
 	RegTarCmd()
+	RegCheckJarCmd()
 }

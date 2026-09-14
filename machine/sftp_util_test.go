@@ -20,6 +20,13 @@ func TestCommandNeedsSFTP(t *testing.T) {
 			want: false,
 		},
 		{
+			name: "check-jar only",
+			cmd: define.Command{
+				Steps: define.StepList{{Command: "check-jar D:\\app.jar --class com.taj.DromaraApplication"}},
+			},
+			want: false,
+		},
+		{
 			name: "upload step",
 			cmd: define.Command{
 				Steps: define.StepList{{Command: "upload /tmp/app.jar /root/app/app.jar"}},

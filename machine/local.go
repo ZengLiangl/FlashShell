@@ -38,6 +38,9 @@ func (lr *LocalRunner) Execute(cmd define.Command, output chan<- string, onStepS
 	}
 
 	return executeSteps(cmd.Steps, lr.workVars, output, onStepStart, onStepComplete, shouldStop, func(command string, out chan<- string) error {
+		if fn, args := getSpecialCmd(command); fn != nil && isLocalSpecialCmd(args[0]) {
+			return fn(nil, args, out)
+		}
 		return lr.executeStep(command, workDir, out)
 	})
 }
