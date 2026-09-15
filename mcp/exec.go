@@ -114,6 +114,61 @@ func (s *Service) rememberOwned(name string, cli *machine.SSHClient) {
 	s.ownedSSH[name] = cli
 }
 
+func (s *Service) dropOwned(name string) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return
+	}
+	s.sshMu.Lock()
+	defer s.sshMu.Unlock()
+	if c := s.ownedSSH[name]; c != nil {
+		_ = c.Close()
+		delete(s.ownedSSH, name)
+	}
+}
+
+// sshConnectionError 连接失败/连接错误：丢弃缓存并强制重连一次。
+func sshConnectionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := err.Error()
+	for _, n := range []string{
+		"连接失败",
+		"连接错误",
+		"SSH 未连接",
+		"SSH客户端未连接",
+	} {
+		if strings.Contains(msg, n) {
+			return true
+		}
+	}
+	low := strings.ToLower(msg)
+	for _, n := range []string{
+		"connection reset",
+		"connection refused",
+		"connection timed out",
+		"connection failed",
+		"connection error",
+		"connect: ",
+		"dial tcp",
+		"dial udp",
+		"broken pipe",
+		"use of closed network connection",
+		"network is unreachable",
+		"no route to host",
+		"i/o timeout",
+		"ssh: handshake",
+		"ssh: disconnect",
+		"ssh: connection lost",
+	} {
+		if strings.Contains(low, n) {
+			return true
+		}
+	}
+	return false
+}
+
 func (s *Service) closeOwnedSSH() {
 	s.sshMu.Lock()
 	defer s.sshMu.Unlock()
@@ -170,21 +225,36 @@ func (s *Service) withSSH(alias string, withSFTP bool, fn func(*machine.SSHClien
 		name = strings.TrimSpace(alias)
 	}
 
-	lk := s.hostLock(name)
-	lk.Lock()
-	cli, borrowed, err := s.acquireSSHLocked(name, prep, vars, withSFTP)
-	lk.Unlock()
-	if err != nil {
-		return err
+	run := func(forceFresh bool) error {
+		lk := s.hostLock(name)
+		lk.Lock()
+		cli, borrowed, aerr := s.acquireSSHLocked(name, prep, vars, withSFTP, forceFresh)
+		lk.Unlock()
+		if aerr != nil {
+			return aerr
+		}
+		if borrowed {
+			defer cli.Close()
+		}
+		return fn(cli, raw)
 	}
-	if borrowed {
-		defer cli.Close()
+
+	err = run(false)
+	if err != nil && sshConnectionError(err) {
+		// 连接失败/连接错误：丢弃缓存，强制新建连接再试一次
+		s.dropOwned(name)
+		err = run(true)
 	}
-	return fn(cli, raw)
+	return err
 }
 
-func (s *Service) acquireSSHLocked(name string, prep *define.Machine, vars map[string]string, withSFTP bool) (*machine.SSHClient, bool, error) {
-	if shared := s.liveShare(name); shared != nil {
+func (s *Service) acquireSSHLocked(name string, prep *define.Machine, vars map[string]string, withSFTP bool, forceFresh bool) (*machine.SSHClient, bool, error) {
+	if forceFresh {
+		if old := s.ownedSSH[name]; old != nil {
+			_ = old.Close()
+			delete(s.ownedSSH, name)
+		}
+	} else if shared := s.liveShare(name); shared != nil {
 		cli := machine.NewSSHClient(prep, vars)
 		cli.AttachRemote(shared.SharedRemoteMachine(), prep, vars)
 		if err := ensureSFTP(cli, withSFTP); err != nil {
