@@ -77,9 +77,6 @@ func lethalBlocked(cmd string) (bool, string) {
 			return true, r.why
 		}
 	}
-	if why := matchCustomDangerDetail(s); why != "" {
-		return true, why
-	}
 	return false, ""
 }
 
@@ -99,6 +96,9 @@ func severeNeedsApproval(cmd string) (bool, string) {
 		if r.re.MatchString(s) {
 			return true, r.why
 		}
+	}
+	if why := matchCustomDangerDetail(s); why != "" {
+		return true, why
 	}
 	return false, ""
 }

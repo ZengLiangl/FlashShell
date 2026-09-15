@@ -2,6 +2,7 @@ package machine
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"FlashDock/define"
@@ -135,6 +136,28 @@ func (p *ShellSessionPool) Disconnect(sessionID string, handler ShellOutputHandl
 		return nil
 	}
 	return sm.Disconnect(handler)
+}
+
+// DisconnectConfig 断开该机器配置下所有 Shell 会话（共享 SSH 已死后由 MCP 调用）
+func (p *ShellSessionPool) DisconnectConfig(configName string) {
+	if p == nil || strings.TrimSpace(configName) == "" {
+		return
+	}
+	p.mu.RLock()
+	var ids []string
+	for id, sm := range p.sessions {
+		if sm == nil {
+			continue
+		}
+		st := sm.GetStatus()
+		if st != nil && st.ConfigName == configName {
+			ids = append(ids, id)
+		}
+	}
+	p.mu.RUnlock()
+	for _, id := range ids {
+		_ = p.Disconnect(id, ShellOutputHandler{})
+	}
 }
 
 // DisconnectAll 断开所有会话

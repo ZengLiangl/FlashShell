@@ -54,8 +54,11 @@ func (s *Service) handleListInstalledServices(ctx context.Context, a ListInstall
 }
 
 func (s *Service) handleSaveCredential(_ context.Context, a SaveCredentialArgs) (any, error) {
-	if _, err := s.machineByAlias(a.Server); err != nil {
-		return nil, err
+	server := strings.TrimSpace(a.Server)
+	if server != "" {
+		if _, err := s.machineByAlias(server); err != nil {
+			return nil, err
+		}
 	}
 	pub := map[string]string{}
 	sec := map[string]string{}
@@ -74,7 +77,7 @@ func (s *Service) handleSaveCredential(_ context.Context, a SaveCredentialArgs) 
 		sec[k] = val
 	}
 	item := VaultItem{
-		ServerAlias: a.Server,
+		ServerAlias: server,
 		Kind:        a.Kind,
 		Label:       a.Label,
 		Public:      pub,
@@ -83,7 +86,9 @@ func (s *Service) handleSaveCredential(_ context.Context, a SaveCredentialArgs) 
 	if item.Public == nil {
 		item.Public = map[string]string{}
 	}
-	item.Public["__tunnel_server_id"] = a.Server
+	if server != "" {
+		item.Public["__tunnel_server_id"] = server
+	}
 	if a.Notes != nil {
 		item.Notes = *a.Notes
 	}

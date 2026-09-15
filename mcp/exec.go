@@ -79,6 +79,10 @@ func (s *Service) SetSSHShare(fn func(configName string) *machine.SSHClient) {
 	s.shareSSH = fn
 }
 
+func (s *Service) SetDropShare(fn func(configName string)) {
+	s.dropShare = fn
+}
+
 // OwnedClient 返回 MCP 自己持有的空闲 SSH（供任务模式复用）。
 func (s *Service) OwnedClient(configName string) *machine.SSHClient {
 	configName = strings.TrimSpace(configName)
@@ -241,8 +245,10 @@ func (s *Service) withSSH(alias string, withSFTP bool, fn func(*machine.SSHClien
 
 	err = run(false)
 	if err != nil && sshConnectionError(err) {
-		// 连接失败/连接错误：丢弃缓存，强制新建连接再试一次
 		s.dropOwned(name)
+		if s.dropShare != nil {
+			s.dropShare(name)
+		}
 		err = run(true)
 	}
 	return err
@@ -250,10 +256,7 @@ func (s *Service) withSSH(alias string, withSFTP bool, fn func(*machine.SSHClien
 
 func (s *Service) acquireSSHLocked(name string, prep *define.Machine, vars map[string]string, withSFTP bool, forceFresh bool) (*machine.SSHClient, bool, error) {
 	if forceFresh {
-		if old := s.ownedSSH[name]; old != nil {
-			_ = old.Close()
-			delete(s.ownedSSH, name)
-		}
+		s.dropOwned(name)
 	} else if shared := s.liveShare(name); shared != nil {
 		cli := machine.NewSSHClient(prep, vars)
 		cli.AttachRemote(shared.SharedRemoteMachine(), prep, vars)
@@ -261,6 +264,7 @@ func (s *Service) acquireSSHLocked(name string, prep *define.Machine, vars map[s
 			cli.Close()
 			return nil, false, err
 		}
+		s.rememberOS(name, detectRemoteOS(cli.SharedRemoteMachine()))
 		return cli, true, nil
 	}
 
@@ -272,6 +276,7 @@ func (s *Service) acquireSSHLocked(name string, prep *define.Machine, vars map[s
 	if err := ensureSFTP(cli, withSFTP); err != nil {
 		return nil, false, err
 	}
+	s.rememberOS(name, detectRemoteOS(cli.SharedRemoteMachine()))
 	return cli, false, nil
 }
 
@@ -282,7 +287,7 @@ func (s *Service) execSSH(ctx context.Context, alias, command string, timeout ti
 	var res ExecResult
 	err := s.withSSH(alias, false, func(cli *machine.SSHClient, _ *define.Machine) error {
 		rm := cli.SharedRemoteMachine()
-		if rm == nil || rm.SSHClient == nil {
+		if rm == nil || !rm.IsConnected() {
 			return fmt.Errorf("SSH 未连接")
 		}
 		session, err := rm.NewSession()
@@ -404,7 +409,7 @@ func readSFTPFile(cli *sftp.Client, path string, max int64) ([]byte, error) {
 func (s *Service) withLocalForward(alias, remoteHost string, remotePort int, fn func(localHost string, localPort int) error) error {
 	return s.withSSH(alias, false, func(cli *machine.SSHClient, _ *define.Machine) error {
 		rm := cli.SharedRemoteMachine()
-		if rm == nil || rm.SSHClient == nil {
+		if rm == nil || !rm.IsConnected() {
 			return fmt.Errorf("SSH 未连接")
 		}
 		l, err := net.Listen("tcp", "127.0.0.1:0")

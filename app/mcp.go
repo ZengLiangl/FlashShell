@@ -26,6 +26,11 @@ func (a *App) startMCP() {
 		}
 		return a.shellPool.SharedClientForConfig(configName)
 	})
+	a.mcpSvc.SetDropShare(func(configName string) {
+		if a.shellPool != nil {
+			a.shellPool.DisconnectConfig(configName)
+		}
+	})
 	if a.subProjectRunner != nil {
 		a.subProjectRunner.SetShellClientProvider(a.sshShareProvider())
 	}

@@ -250,6 +250,10 @@
           <span>审计保留（天，0=永久）</span>
           <el-input-number v-model="sec.auditRetentionDays" :min="0" :max="999" size="small" />
         </div>
+        <div class="row">
+          <span>审批超时（秒）</span>
+          <el-input-number v-model="sec.approvalTimeoutSecs" :min="30" :max="3600" :step="30" size="small" />
+        </div>
         <p class="tip">出站白名单 / 危险黑名单见右上角独立入口；敏感库 TTL 请到「敏感库」页签。单机 AI 策略在机器编辑里配置（未设=disabled）。</p>
       </div>
       <template #footer>
@@ -279,7 +283,7 @@
 
     <el-dialog v-model="dangerOpen" title="危险黑名单" width="720px" append-to-body>
       <div class="settings-body" v-loading="dangerLoading">
-        <p class="tip">内置规则任何档位（含 trusted）都拦截，不可修改；自定义规则排在表末，可增删改，命中后与内置同级 → blocked。</p>
+        <p class="tip">内置致命/危险规则任何档位（含 trusted）都拦截，不可修改；自定义规则排在表末，可增删改，命中后升级人工审批（不是永久 blocked）。</p>
         <el-table :data="dangerRows" size="small" max-height="420" empty-text="加载中…" class="builtin-danger-table">
           <el-table-column prop="label" label="规则" :min-width="120" show-overflow-tooltip />
           <el-table-column prop="kind" label="类型" width="72">
@@ -393,6 +397,7 @@ export default {
       outboundAllowlistDisabled: false,
       outboundHostsText: '',
       auditRetentionDays: 90,
+      approvalTimeoutSecs: 300,
       redactionTTLDays: 30,
       enabled: false,
       autoStart: false,
@@ -571,6 +576,7 @@ export default {
           sec.aiMode = 'emergency'
         }
         sec.auditRetentionDays = s.auditRetentionDays ?? 90
+        sec.approvalTimeoutSecs = s.approvalTimeoutSecs || 300
         sec.redactionTTLDays = s.redactionTTLDays || 30
         sec.enabled = !!s.enabled
         sec.autoStart = !!s.autoStart
@@ -598,6 +604,7 @@ export default {
         sec.armedUntil = s.armedUntil || ''
         sec.emergencyStop = !!s.emergencyStop
         sec.auditRetentionDays = s.auditRetentionDays ?? 90
+        sec.approvalTimeoutSecs = s.approvalTimeoutSecs || 300
         sec.redactionTTLDays = s.redactionTTLDays || 30
       } finally {
         outboundLoading.value = false
@@ -641,11 +648,11 @@ export default {
           autoStart: sec.autoStart,
           httpPort: sec.httpPort,
           bindLan: sec.bindLan,
-          defaultPolicy: cur.defaultPolicy || 'trusted',
           aiMode: sec.aiMode,
           armedUntil: sec.armedUntil,
           emergencyStop: emergency,
           auditRetentionDays: sec.auditRetentionDays,
+          approvalTimeoutSecs: sec.approvalTimeoutSecs || 300,
           outboundAllowlistDisabled: cur.outboundAllowlistDisabled ?? sec.outboundAllowlistDisabled,
           outboundHosts: cur.outboundHosts || String(sec.outboundHostsText || '').split(/\n+/).map((x) => x.trim()).filter(Boolean),
           redactionTTLDays: cur.redactionTTLDays || sec.redactionTTLDays || 30,
@@ -668,11 +675,11 @@ export default {
           autoStart: cur.autoStart ?? sec.autoStart,
           httpPort: cur.httpPort || sec.httpPort || 18765,
           bindLan: cur.bindLan ?? sec.bindLan,
-          defaultPolicy: cur.defaultPolicy || 'trusted',
           aiMode: cur.aiMode || sec.aiMode || 'normal',
           armedUntil: cur.armedUntil || sec.armedUntil || '',
           emergencyStop: cur.emergencyStop ?? sec.emergencyStop,
           auditRetentionDays: cur.auditRetentionDays ?? sec.auditRetentionDays ?? 90,
+          approvalTimeoutSecs: cur.approvalTimeoutSecs || sec.approvalTimeoutSecs || 300,
           outboundAllowlistDisabled: sec.outboundAllowlistDisabled,
           outboundHosts: hosts,
           redactionTTLDays: cur.redactionTTLDays || sec.redactionTTLDays || 30,
@@ -702,7 +709,7 @@ export default {
 
     const addCustomDanger = async () => {
       try {
-        const { value } = await ElMessageBox.prompt('输入危险命令正则（与内置同级拦截）', '添加自定义规则', {
+        const { value } = await ElMessageBox.prompt('输入危险命令正则（命中后升级人工审批，不是永久拦截）', '添加自定义规则', {
           confirmButtonText: '添加',
           cancelButtonText: '取消',
           inputPlaceholder: '^rm\\s+-rf\\s+/data/',

@@ -164,9 +164,6 @@ func commandBlocked(cmd string) (bool, string) {
 			return true, rule.why
 		}
 	}
-	if why := matchCustomDangerDetail(s); why != "" {
-		return true, why
-	}
 	return false, ""
 }
 
@@ -178,7 +175,7 @@ func matchCustomDangerDetail(cmd string) string {
 			continue
 		}
 		if re.MatchString(cmd) {
-			return fmt.Sprintf("命中自定义危险黑名单: %s", p)
+			return fmt.Sprintf("命中自定义危险规则（需审批）: %s", p)
 		}
 	}
 	return ""

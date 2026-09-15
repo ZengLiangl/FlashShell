@@ -91,15 +91,15 @@ func (v *Vault) ListMeta(server string) []map[string]any {
 			created = it.CreatedAt.Format("2006-01-02 15:04:05")
 		}
 		out = append(out, map[string]any{
-			"id":           it.ID,
-			"serverAlias":  it.ServerAlias,
-			"kind":         it.Kind,
-			"label":        it.Label,
-			"installPath":  it.InstallPath,
-			"notes":        it.Notes,
-			"createdAt":    created,
-			"public":       pub,
-			"secretFields": secretFields,
+			"id":            it.ID,
+			"serverAlias":   it.ServerAlias,
+			"kind":          it.Kind,
+			"label":         it.Label,
+			"installPath":   it.InstallPath,
+			"notes":         it.Notes,
+			"createdAt":     created,
+			"public":        pub,
+			"secretFields":  secretFields,
 			"fromSensitive": it.Public["fromSensitive"],
 		})
 	}

@@ -34,6 +34,7 @@ func (s *Service) listServers(ctx context.Context) (any, error) {
 				"host":      d.Host,
 				"port":      port,
 				"username":  d.User,
+				"os":        s.resolvedOS(&m),
 				"tags":      tags,
 				"aiPolicy":  s.policyOf(&m),
 				"allowSudo": m.AIAllowSudo,
@@ -63,6 +64,10 @@ func (s *Service) handleSSHExecMulti(ctx context.Context, a SshExecMultiArgs) (a
 	if len(a.Servers) == 0 || len(a.Servers) > 50 {
 		return nil, wrapErr("[denied]", "servers 数量须为 1..=50")
 	}
+	cmd, used, err := s.SubstituteVaultPlaceholders(a.Command)
+	if err != nil {
+		return nil, err
+	}
 	type one struct {
 		Server string `json:"server"`
 		ExecResult
@@ -80,24 +85,24 @@ func (s *Service) handleSSHExecMulti(ctx context.Context, a SshExecMultiArgs) (a
 			sem <- struct{}{}
 			defer func() { <-sem }()
 			item := one{Server: sv}
-			if _, _, err := s.gate(ctx, "ssh_exec", sv, a.Command, a); err != nil {
+			if _, _, err := s.gate(ctx, "ssh_exec", sv, cmd, a); err != nil {
 				item.Error = err.Error()
+				dec := classifyDecision(err.Error())
 				mu.Lock()
-				sum[classifyDecision(err.Error())]++
-				if _, ok := sum[classifyDecision(err.Error())]; !ok {
-					sum["error"]++
-				}
+				sum[dec]++
 				mu.Unlock()
 				out[i] = item
 				return
 			}
-			res, err := s.execSSH(ctx, sv, a.Command, clampTimeout(a.TimeoutSecs, 30, 1, 600))
+			res, err := s.execSSH(ctx, sv, cmd, clampTimeout(a.TimeoutSecs, 30, 1, 600))
 			if err != nil {
 				item.Error = err.Error()
 				mu.Lock()
 				sum[classifyDecision(err.Error())]++
 				mu.Unlock()
 			} else {
+				res.Stdout = forceRedactPlains(res.Stdout, used)
+				res.Stderr = forceRedactPlains(res.Stderr, used)
 				item.ExecResult = res
 				mu.Lock()
 				if res.ExitCode == 0 {
@@ -145,7 +150,11 @@ func (s *Service) handleSSHExecScript(ctx context.Context, a SshExecScriptArgs) 
 }
 
 func (s *Service) handleSystemInfo(ctx context.Context, a ServerOnly) (any, error) {
-	res, err := s.execSSH(ctx, a.Server, "uname -a; hostnamectl; uptime", 30*time.Second)
+	cmd := "uname -a; hostnamectl 2>/dev/null; uptime"
+	if s.aliasIsWindows(a.Server) {
+		cmd = windowsSystemInfoCmd()
+	}
+	res, err := s.execSSH(ctx, a.Server, cmd, 30*time.Second)
 	if err != nil {
 		return nil, err
 	}
@@ -153,6 +162,9 @@ func (s *Service) handleSystemInfo(ctx context.Context, a ServerOnly) (any, erro
 }
 
 func (s *Service) handleDiskUsage(ctx context.Context, a DiskUsageArgs) (any, error) {
+	if s.aliasIsWindows(a.Server) {
+		return s.execSSH(ctx, a.Server, windowsDiskUsageCmd(), 30*time.Second)
+	}
 	cmd := "df -hT"
 	if a.Path != nil && strings.TrimSpace(*a.Path) != "" {
 		p := strings.TrimSpace(*a.Path)
@@ -168,6 +180,9 @@ func (s *Service) handlePortCheck(ctx context.Context, a PortCheckArgs) (any, er
 	if a.Port < 1 || a.Port > 65535 {
 		return nil, wrapErr("[denied]", "端口须为 1..=65535")
 	}
+	if s.aliasIsWindows(a.Server) {
+		return s.execSSH(ctx, a.Server, windowsPortCheckCmd(a.Port), 20*time.Second)
+	}
 	cmd := fmt.Sprintf("ss -tlnH sport = :%d || netstat -tln 2>/dev/null | grep ':%d '", a.Port, a.Port)
 	return s.execSSH(ctx, a.Server, cmd, 20*time.Second)
 }
@@ -175,6 +190,9 @@ func (s *Service) handlePortCheck(ctx context.Context, a PortCheckArgs) (any, er
 func (s *Service) handleServiceStatus(ctx context.Context, a ServiceStatusArgs) (any, error) {
 	if !safeServiceName(a.Service) {
 		return nil, wrapErr("[denied]", "service 名非法")
+	}
+	if s.aliasIsWindows(a.Server) {
+		return s.execSSH(ctx, a.Server, windowsServiceStatusCmd(a.Service), 20*time.Second)
 	}
 	cmd := fmt.Sprintf("systemctl status %s --no-pager --lines=20", a.Service)
 	return s.execSSH(ctx, a.Server, cmd, 20*time.Second)
@@ -190,6 +208,9 @@ func (s *Service) handleTailLog(ctx context.Context, a TailLogArgs) (any, error)
 	}
 	if n > 5000 {
 		n = 5000
+	}
+	if s.aliasIsWindows(a.Server) {
+		return s.execSSH(ctx, a.Server, windowsTailLogCmd(a.Path, n), 30*time.Second)
 	}
 	cmd := fmt.Sprintf("tail -n %d -- %s", n, shellQuote(a.Path))
 	return s.execSSH(ctx, a.Server, cmd, 30*time.Second)

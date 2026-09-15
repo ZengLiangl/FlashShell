@@ -68,12 +68,7 @@ func (s *Service) registerTools() {
 
 	addTool(s, "ssh_exec_multi",
 		"在多台服务器上并发执行同一条命令（最多 50 台，内部并发上限 10）。每台独立过策略引擎 + 审计 + 出口脱敏。",
-		func(a SshExecMultiArgs) string {
-			if len(a.Servers) > 0 {
-				return a.Servers[0]
-			}
-			return ""
-		},
+		nil,
 		func(a SshExecMultiArgs) string { return a.Command },
 		s.handleSSHExecMulti)
 

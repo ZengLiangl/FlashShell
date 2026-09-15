@@ -21,7 +21,6 @@ func TestMatchAuditByID(t *testing.T) {
 	}
 }
 
-
 func TestNormalizeDecision(t *testing.T) {
 	cases := map[string]string{
 		"success":   "auto",

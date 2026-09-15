@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -95,6 +97,8 @@ type Machine struct {
 	AIAllowlist []string `yaml:"aiAllowlist,omitempty" json:"aiAllowlist,omitempty"`
 	// AIAllowSudo 是否允许 AI 经审批后执行含 sudo 的命令；false 则 sudo 直接 [denied]
 	AIAllowSudo bool `yaml:"aiAllowSudo,omitempty" json:"aiAllowSudo,omitempty"`
+	// OS 探测到的远端系统（Linux / Darwin / Windows）；供 MCP list_servers 与只读命令选型
+	OS string `yaml:"os,omitempty" json:"os,omitempty"`
 	// Notes 主机备注（纯文本/Markdown）
 	Notes string `yaml:"notes,omitempty" json:"notes,omitempty"`
 	// Icon 主机图标：预设 id 或单个 emoji
@@ -312,6 +316,9 @@ func (m *Machine) OverlaySensitiveFields(user, password, keyPassphrase string) e
 type RemoteMachine struct {
 	SSHClient  *ssh.Client
 	SFTPClient *sftp.Client
+	alive      atomic.Bool
+	kaStop     chan struct{}
+	kaMu       sync.Mutex
 }
 
 // NewRemoteMachine 创建远程机器包装类
@@ -370,13 +377,11 @@ func (rm *RemoteMachine) Connect(machine *Machine, withSFTP bool) error {
 	}
 	_ = conn.SetDeadline(time.Time{})
 	client := ssh.NewClient(c, chans, reqs)
-
-	rm.SSHClient = client
+	rm.BindSSHClient(client)
 
 	if withSFTP {
 		if err := rm.EnsureSFTP(); err != nil {
-			client.Close()
-			rm.SSHClient = nil
+			_ = rm.Close()
 			return err
 		}
 	}
@@ -386,11 +391,14 @@ func (rm *RemoteMachine) Connect(machine *Machine, withSFTP bool) error {
 
 // EnsureSFTP 在已有 SSH 连接上初始化 SFTP（可重复调用）。
 func (rm *RemoteMachine) EnsureSFTP() error {
+	if rm == nil || !rm.IsConnected() {
+		if rm != nil {
+			rm.SFTPClient = nil
+		}
+		return fmt.Errorf("SSH客户端未连接")
+	}
 	if rm.SFTPClient != nil {
 		return nil
-	}
-	if rm.SSHClient == nil {
-		return fmt.Errorf("SSH客户端未连接")
 	}
 	// 默认 maxPacket=32KiB：过大的 MaxPacketUnchecked 在部分服务器上会直接 EOF。
 	// UseConcurrentWrites + ReadFromWithConcurrency（见 utils.CopySFTPUpload）才能叠包跑满高延迟链路。
@@ -412,21 +420,28 @@ func (rm *RemoteMachine) SetSFTPClient(c *sftp.Client) {
 
 // Close 关闭连接
 func (rm *RemoteMachine) Close() error {
+	if rm == nil {
+		return nil
+	}
+	rm.alive.Store(false)
+	rm.stopKeepalive()
 	var err error
 	if rm.SFTPClient != nil {
 		err = rm.SFTPClient.Close()
+		rm.SFTPClient = nil
 	}
 	if rm.SSHClient != nil {
 		if closeErr := rm.SSHClient.Close(); closeErr != nil && err == nil {
 			err = closeErr
 		}
+		rm.SSHClient = nil
 	}
 	return err
 }
 
-// IsConnected 检查 SSH 是否已连接
+// IsConnected 检查 SSH 是否仍存活（对象非空且未 Wait/keepalive 失败）
 func (rm *RemoteMachine) IsConnected() bool {
-	return rm.SSHClient != nil
+	return rm != nil && rm.SSHClient != nil && rm.alive.Load()
 }
 
 // loadPrivateKey 加载私钥
