@@ -72,10 +72,12 @@ type Service struct {
 	startedAt time.Time
 	emit      func(event string, data any)
 
-	shareSSH func(configName string) *machine.SSHClient
-	sshMu    sync.Mutex
-	ownedSSH map[string]*machine.SSHClient
-	sshLocks sync.Map
+	shareSSH  func(configName string) *machine.SSHClient
+	dropShare func(configName string)
+	osGuess   sync.Map // alias -> OS string
+	sshMu     sync.Mutex
+	ownedSSH  map[string]*machine.SSHClient
+	sshLocks  sync.Map
 }
 
 func newService(cfg *data.ConfigManager) *Service {
@@ -127,9 +129,9 @@ const serverInstructions = `你正连接到 FlashShell（本机桌面 Shell 工�
 
 工作流：
 1. 永远先 list_servers，server 参数只用返回的 alias。
-2. 看清 os：Windows 用 PowerShell/cmd，不要发 df/ss/systemctl。
+2. 看清 os：Windows 用 PowerShell/cmd，不要发 df/ss/systemctl。list_servers 含 os 字段；未知时先 system_info。
 3. 只读：system_info / disk_usage / port_check / service_status / tail_log / sftp_list / sftp_read。
-4. 执行：ssh_exec（默认 30s）/ ssh_exec_script / ssh_exec_multi。
+4. 执行：ssh_exec（默认 30s）/ ssh_exec_script / ssh_exec_multi。改动型请填 intent（审批弹窗用）。
 5. 写文件：sftp_write（现写小文本）或 sftp_upload（本地已有文件）。
 6. 不会的命令先 evaluate_skills 再 get_skill。
 7. 装带密码的服务必须 install_with_secret 或 install_app，不要 ssh_exec 生成密码。
@@ -164,10 +166,15 @@ func (s *Service) StartHTTP() error {
 		return s.mcp
 	}, nil)
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+	health := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"ok":true,"name":"flashshell"}`))
 	})
+	if s.settings.BindLAN {
+		mux.Handle("/health", s.authMiddleware(health))
+	} else {
+		mux.Handle("/health", health)
+	}
 	mux.Handle("/mcp", s.authMiddleware(handler))
 	s.httpSrv = &http.Server{Handler: mux}
 	s.listener = ln
@@ -504,12 +511,20 @@ func (s *Service) gate(ctx context.Context, tool, server, preview string, params
 		return false, why, wrapErr("[denied]", why)
 	}
 
-	// 全局紧急停止 / 限时放行过期
 	if ok, dec, why := s.evaluateGlobalAI(); !ok {
 		return false, why, wrapErr("[denied]", why)
 	} else if dec == "auto" && strings.Contains(why, "限时放行") {
-		// armed：跳过档位拒绝，仍走致命/sudo/出站
 		reason = why
+	}
+
+	if tool == "ssh_exec_multi" {
+		if hit, why := lethalBlocked(preview); hit {
+			return false, why, wrapErr("[blocked]", why)
+		}
+		if hit, why := commandBlocked(preview); hit {
+			return false, why, wrapErr("[blocked]", why)
+		}
+		return false, "分机独立过策略", nil
 	}
 
 	var policy string
@@ -532,7 +547,6 @@ func (s *Service) gate(ctx context.Context, tool, server, preview string, params
 		allow = m.AIAllowlist
 		allowSudo = m.AIAllowSudo
 	} else {
-		// 无绑定服务器：不经单机档位；固定 trusted（仍受黑名单/sudo/出站等约束）
 		policy = PolicyTrusted
 	}
 
@@ -560,10 +574,17 @@ func (s *Service) gate(ctx context.Context, tool, server, preview string, params
 	needApprove := false
 	approveWhy := ""
 	var outboundBad []string
+	if intent := intentFromParams(params); intent != "" {
+		approveWhy = "目的：" + intent
+	}
 
 	if hit, why := severeNeedsApproval(preview); hit {
 		needApprove = true
-		approveWhy = why
+		if approveWhy == "" {
+			approveWhy = why
+		} else {
+			approveWhy = approveWhy + "；" + why
+		}
 	}
 	if kind == kindMutating && containsSudo(preview) {
 		if !allowSudo {
@@ -571,8 +592,12 @@ func (s *Service) gate(ctx context.Context, tool, server, preview string, params
 			return false, why, wrapErr("[denied]", why)
 		}
 		needApprove = true
-		if approveWhy == "" {
-			approveWhy = "含 sudo，强制人工审批"
+		if !strings.Contains(approveWhy, "sudo") {
+			if approveWhy == "" {
+				approveWhy = "含 sudo，强制人工审批"
+			} else {
+				approveWhy = approveWhy + "；含 sudo，强制人工审批"
+			}
 		}
 	}
 	if ok, why, bad := s.checkOutbound(preview); !ok {
@@ -581,7 +606,7 @@ func (s *Service) gate(ctx context.Context, tool, server, preview string, params
 		if approveWhy == "" {
 			approveWhy = why
 		} else {
-			approveWhy = approveWhy + "; " + why
+			approveWhy = approveWhy + "；" + why
 		}
 	}
 	if hit, why := s.prov.CheckCommand(preview); hit {
@@ -589,7 +614,7 @@ func (s *Service) gate(ctx context.Context, tool, server, preview string, params
 		if approveWhy == "" {
 			approveWhy = why
 		} else {
-			approveWhy = approveWhy + "; " + why
+			approveWhy = approveWhy + "；" + why
 		}
 	}
 
@@ -602,8 +627,8 @@ func (s *Service) gate(ctx context.Context, tool, server, preview string, params
 			needApprove = true
 			if approveWhy == "" {
 				approveWhy = pd.Reason
-			} else {
-				approveWhy = approveWhy + "; " + pd.Reason
+			} else if !strings.Contains(approveWhy, pd.Reason) {
+				approveWhy = approveWhy + "；" + pd.Reason
 			}
 		}
 		if pd.Allow && !needApprove {
@@ -618,7 +643,7 @@ func (s *Service) gate(ctx context.Context, tool, server, preview string, params
 		if hit, _ := severeNeedsApproval(preview); hit {
 			isDanger = true
 		}
-		ok, rejectReason, aerr := s.approvals.Request(ctx, tool, server, preview, mustJSON(params), sourceFromCtx(ctx), approveWhy, outboundBad, isDanger)
+		ok, rejectReason, aerr := s.approvals.Request(ctx, tool, server, preview, sanitizeAuditParams(params), sourceFromCtx(ctx), approveWhy, outboundBad, isDanger, s.approvalTimeout())
 		if aerr != nil {
 			msg := aerr.Error()
 			if strings.Contains(msg, "超时") {
@@ -639,6 +664,36 @@ func (s *Service) gate(ctx context.Context, tool, server, preview string, params
 		return true, approveWhy + " → 人工已批准", nil
 	}
 	return false, reason, nil
+}
+
+func intentFromParams(params any) string {
+	if params == nil {
+		return ""
+	}
+	b, err := json.Marshal(params)
+	if err != nil {
+		return ""
+	}
+	var m map[string]any
+	if json.Unmarshal(b, &m) != nil {
+		return ""
+	}
+	s, _ := m["intent"].(string)
+	return strings.TrimSpace(s)
+}
+
+func (s *Service) approvalTimeout() time.Duration {
+	n := s.GetSettings().ApprovalTimeoutSecs
+	if n <= 0 {
+		n = 300
+	}
+	if n < 30 {
+		n = 30
+	}
+	if n > 3600 {
+		n = 3600
+	}
+	return time.Duration(n) * time.Second
 }
 
 func (s *Service) record(ctx context.Context, tool, server string, params any, result string, decision, reason string, started time.Time, err error) {
@@ -668,7 +723,7 @@ func (s *Service) record(ctx context.Context, tool, server string, params any, r
 		Tool:         tool,
 		Module:       toolModule(tool),
 		Server:       server,
-		Params:       clip(mustJSON(params), 4000),
+		Params:       clip(sanitizeAuditParams(params), 4000),
 		Result:       clip(redacted, 8000),
 		Decision:     decision,
 		Reason:       clip(reason, 500),

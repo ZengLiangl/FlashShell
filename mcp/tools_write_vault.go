@@ -16,6 +16,7 @@ type WriteFromVaultArgs struct {
 	// 留空则整文件内容即为该字段明文（末尾补换行）。
 	Template *string `json:"template,omitempty" jsonschema:"可选写入模板；空则只写字段明文。"`
 	AppendNL *bool   `json:"appendNewline,omitempty" jsonschema:"可选：无模板时是否在末尾追加换行，默认 true。"`
+	Intent   *string `json:"intent,omitempty" jsonschema:"一句话说明本次要达成什么。只用于审批展示，不参与策略判定。"`
 }
 
 func (s *Service) handleWriteFromVault(ctx context.Context, a WriteFromVaultArgs) (any, error) {

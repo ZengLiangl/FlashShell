@@ -7,15 +7,17 @@ type ServerOnly struct {
 }
 
 type SshExecArgs struct {
-	Server      string `json:"server" jsonschema:"目标服务器别名（在 FlashShell 服务器清单里配的那个名字；不是 IP / 不是凭据）。"`
-	Command     string `json:"command" jsonschema:"要执行的 shell 命令。"`
-	TimeoutSecs *int64 `json:"timeout_secs,omitempty" jsonschema:"可选：超时秒数（默认 30，范围 1～600）。"`
+	Server      string  `json:"server" jsonschema:"目标服务器别名（在 FlashShell 服务器清单里配的那个名字；不是 IP / 不是凭据）。"`
+	Command     string  `json:"command" jsonschema:"要执行的 shell 命令。"`
+	TimeoutSecs *int64  `json:"timeout_secs,omitempty" jsonschema:"可选：超时秒数（默认 30，范围 1～600）。"`
+	Intent      *string `json:"intent,omitempty" jsonschema:"一句话说明本次要达成什么、为什么现在做。只用于审批展示，不参与策略判定。"`
 }
 
 type SshExecMultiArgs struct {
 	Servers     []string `json:"servers" jsonschema:"目标服务器别名数组（必填，1～50；每个都按各自服务器的策略档独立裁决）。"`
 	Command     string   `json:"command" jsonschema:"要并发执行的 shell 命令（每台跑同一条；危险黑名单、sudo 强制审批仍生效）。"`
 	TimeoutSecs *int64   `json:"timeout_secs,omitempty" jsonschema:"可选：单台超时秒数（默认 30，范围 1～600）。"`
+	Intent      *string  `json:"intent,omitempty" jsonschema:"一句话说明这批操作要达成什么。只用于审批展示，不参与策略判定。"`
 }
 
 type SshExecScriptArgs struct {
@@ -23,6 +25,7 @@ type SshExecScriptArgs struct {
 	Script      string  `json:"script" jsonschema:"完整脚本内容（多行 OK）。会经 base64 包装在远端解码后执行，策略引擎按原始脚本明文判定。"`
 	Interpreter *string `json:"interpreter,omitempty" jsonschema:"可选解释器：bash(默认) / sh / python3 / python。"`
 	TimeoutSecs *int64  `json:"timeout_secs,omitempty" jsonschema:"可选超时秒数（默认 60，范围 1～600）。"`
+	Intent      *string `json:"intent,omitempty" jsonschema:"一句话说明本次要达成什么、为什么现在做。只用于审批展示，不参与策略判定。"`
 }
 
 type DiskUsageArgs struct {
@@ -62,12 +65,14 @@ type SftpWriteArgs struct {
 	Path          string  `json:"path" jsonschema:"远端文件绝对路径。"`
 	Content       *string `json:"content,omitempty" jsonschema:"文本内容（utf-8）。与 content_base64 二选一。"`
 	ContentBase64 *string `json:"content_base64,omitempty" jsonschema:"二进制内容（base64）。与 content 二选一。"`
+	Intent        *string `json:"intent,omitempty" jsonschema:"一句话说明本次要达成什么、为什么现在做。只用于审批展示，不参与策略判定。"`
 }
 
 type SftpUploadArgs struct {
-	Server     string `json:"server" jsonschema:"目标服务器别名。"`
-	LocalPath  string `json:"local_path" jsonschema:"本机（运行 FlashShell 主应用那台机器）上的文件绝对路径。"`
-	RemotePath string `json:"remote_path" jsonschema:"远端目标绝对路径。"`
+	Server     string  `json:"server" jsonschema:"目标服务器别名。"`
+	LocalPath  string  `json:"local_path" jsonschema:"本机（运行 FlashShell 主应用那台机器）上的文件绝对路径。"`
+	RemotePath string  `json:"remote_path" jsonschema:"远端目标绝对路径。"`
+	Intent     *string `json:"intent,omitempty" jsonschema:"一句话说明本次要达成什么、为什么现在做。只用于审批展示，不参与策略判定。"`
 }
 
 type EvaluateSkillsArgs struct {
@@ -90,17 +95,19 @@ type ListInstalledArgs struct {
 }
 
 type DeleteInstalledArgs struct {
-	VaultID string `json:"vaultId" jsonschema:"要删的服务凭据 id（list_installed_services 返回的 id 字段）。"`
+	VaultID string  `json:"vaultId" jsonschema:"要删的服务凭据 id（list_installed_services 返回的 id 字段）。"`
+	Intent  *string `json:"intent,omitempty" jsonschema:"一句话说明本次要达成什么。只用于审批展示，不参与策略判定。"`
 }
 
 type SaveCredentialArgs struct {
-	Server          string            `json:"server"`
+	Server          string            `json:"server" jsonschema:"目标服务器别名；空表示各机共用凭据。"`
 	Kind            string            `json:"kind"`
 	Label           string            `json:"label"`
 	Notes           *string           `json:"notes,omitempty"`
 	Fields          map[string]string `json:"fields,omitempty"`
 	FieldsFromVault map[string]string `json:"fieldsFromVault,omitempty"`
 	SecretFields    []string          `json:"secretFields,omitempty"`
+	Intent          *string           `json:"intent,omitempty" jsonschema:"一句话说明本次要达成什么。只用于审批展示，不参与策略判定。"`
 }
 
 type SecretSpec struct {
@@ -124,6 +131,7 @@ type InstallWithSecretArgs struct {
 	AccessUrlTemplate *string               `json:"accessUrlTemplate,omitempty"`
 	TimeoutSecs       *int64                `json:"timeoutSecs,omitempty"`
 	VerifyScript      *string               `json:"verifyScript,omitempty"`
+	Intent            *string               `json:"intent,omitempty" jsonschema:"一句话说明本次要达成什么。只用于审批展示，不参与策略判定。"`
 }
 
 type InstallAppArgs struct {
@@ -131,6 +139,7 @@ type InstallAppArgs struct {
 	App     string  `json:"app" jsonschema:"应用商店目录里的应用 id：mysql / redis / postgres / mongodb / openresty 等。"`
 	Port    *int    `json:"port,omitempty"`
 	Version *string `json:"version,omitempty"`
+	Intent  *string `json:"intent,omitempty" jsonschema:"一句话说明本次要达成什么。只用于审批展示，不参与策略判定。"`
 }
 
 type DeployHistoryArgs struct {
@@ -141,6 +150,7 @@ type DeployRunArgs struct {
 	Target  string  `json:"target"`
 	Note    *string `json:"note,omitempty"`
 	Version *string `json:"version,omitempty"`
+	Intent  *string `json:"intent,omitempty" jsonschema:"一句话说明本次要达成什么。只用于审批展示，不参与策略判定。"`
 }
 
 type DtArtifactArg struct {
@@ -210,22 +220,26 @@ type DeployTargetArg struct {
 
 type DeployUpsertTargetArgs struct {
 	Target DeployTargetArg `json:"target"`
+	Intent *string         `json:"intent,omitempty" jsonschema:"一句话说明本次要达成什么。只用于审批展示，不参与策略判定。"`
 }
 
 type WebCreateProxyArgs struct {
-	Server   string `json:"server"`
-	Domain   string `json:"domain"`
-	Upstream string `json:"upstream"`
+	Server   string  `json:"server"`
+	Domain   string  `json:"domain"`
+	Upstream string  `json:"upstream"`
+	Intent   *string `json:"intent,omitempty" jsonschema:"一句话说明本次要达成什么。只用于审批展示，不参与策略判定。"`
 }
 
 type WebCreateStaticArgs struct {
-	Server string `json:"server"`
-	Domain string `json:"domain"`
+	Server string  `json:"server"`
+	Domain string  `json:"domain"`
+	Intent *string `json:"intent,omitempty" jsonschema:"一句话说明本次要达成什么。只用于审批展示，不参与策略判定。"`
 }
 
 type WebIssueSslArgs struct {
-	Server    string `json:"server"`
-	Domain    string `json:"domain"`
-	Email     string `json:"email"`
-	AutoRenew *bool  `json:"auto_renew,omitempty"`
+	Server    string  `json:"server"`
+	Domain    string  `json:"domain"`
+	Email     string  `json:"email"`
+	AutoRenew *bool   `json:"auto_renew,omitempty"`
+	Intent    *string `json:"intent,omitempty" jsonschema:"一句话说明本次要达成什么。只用于审批展示，不参与策略判定。"`
 }

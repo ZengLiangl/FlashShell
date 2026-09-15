@@ -1063,6 +1063,7 @@ export namespace define {
 	    aiPolicy?: string;
 	    aiAllowlist?: string[];
 	    aiAllowSudo?: boolean;
+	    os?: string;
 	    notes?: string;
 	    icon?: string;
 	    identityId?: string;
@@ -1103,6 +1104,7 @@ export namespace define {
 	        this.aiPolicy = source["aiPolicy"];
 	        this.aiAllowlist = source["aiAllowlist"];
 	        this.aiAllowSudo = source["aiAllowSudo"];
+	        this.os = source["os"];
 	        this.notes = source["notes"];
 	        this.icon = source["icon"];
 	        this.identityId = source["identityId"];
@@ -2240,11 +2242,12 @@ export namespace mcp {
 	    autoStart: boolean;
 	    httpPort: number;
 	    bindLan: boolean;
-	    defaultPolicy: string;
+	    defaultPolicy?: string;
 	    aiMode: string;
 	    armedUntil: string;
 	    emergencyStop: boolean;
 	    auditRetentionDays: number;
+	    approvalTimeoutSecs?: number;
 	    outboundAllowlistDisabled: boolean;
 	    outboundAllowlistEnabled: boolean;
 	    outboundHosts: string[];
@@ -2266,6 +2269,7 @@ export namespace mcp {
 	        this.armedUntil = source["armedUntil"];
 	        this.emergencyStop = source["emergencyStop"];
 	        this.auditRetentionDays = source["auditRetentionDays"];
+	        this.approvalTimeoutSecs = source["approvalTimeoutSecs"];
 	        this.outboundAllowlistDisabled = source["outboundAllowlistDisabled"];
 	        this.outboundAllowlistEnabled = source["outboundAllowlistEnabled"];
 	        this.outboundHosts = source["outboundHosts"];

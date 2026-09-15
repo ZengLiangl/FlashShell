@@ -3,6 +3,7 @@ package mcp
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os/user"
 	"sort"
 	"strings"
@@ -119,10 +120,13 @@ func enrichItem(item ApprovalItem, expiresAt time.Time) ApprovalItem {
 	return item
 }
 
-func (h *ApprovalHub) Request(ctx context.Context, tool, server, preview, paramsJSON, source, reason string, outbound []string, isDanger bool) (bool, string, error) {
+func (h *ApprovalHub) Request(ctx context.Context, tool, server, preview, paramsJSON, source, reason string, outbound []string, isDanger bool, timeout time.Duration) (bool, string, error) {
+	if timeout <= 0 {
+		timeout = 5 * time.Minute
+	}
 	id := "ap_" + uuid.NewString()[:10]
 	now := time.Now()
-	exp := now.Add(approvalTimeout)
+	exp := now.Add(timeout)
 	item := ApprovalItem{
 		ID:            id,
 		Tool:          tool,
@@ -137,6 +141,9 @@ func (h *ApprovalHub) Request(ctx context.Context, tool, server, preview, params
 		CreatedAt:     now.Format("2006-01-02 15:04:05"),
 		IsDanger:      isDanger,
 	}
+	if intent := intentFromParams(json.RawMessage(paramsJSON)); intent != "" && !strings.Contains(item.Summary, intent) {
+		item.Summary = clip("目的："+intent+"；"+item.Summary, 200)
+	}
 	item = enrichItem(item, exp)
 	p := &pendingApproval{item: item, expiresAt: exp, ch: make(chan approvalDecision, 1)}
 	h.mu.Lock()
@@ -144,7 +151,7 @@ func (h *ApprovalHub) Request(ctx context.Context, tool, server, preview, params
 	h.mu.Unlock()
 	h.emitQueued(item)
 
-	timer := time.NewTimer(approvalTimeout)
+	timer := time.NewTimer(timeout)
 	defer timer.Stop()
 	select {
 	case res := <-p.ch:
@@ -158,7 +165,11 @@ func (h *ApprovalHub) Request(ctx context.Context, tool, server, preview, params
 			onTimeout(item)
 		}
 		h.emitResolved(id, "denied_by_timeout")
-		return false, "", wrapErr("[approval]", "审批超时（5 分钟），已自动拒绝")
+		mins := int(timeout.Minutes())
+		if mins < 1 {
+			mins = 1
+		}
+		return false, "", wrapErr("[approval]", fmt.Sprintf("审批超时（%d 分钟），已自动拒绝", mins))
 	case <-ctx.Done():
 		h.mu.Lock()
 		delete(h.pending, id)

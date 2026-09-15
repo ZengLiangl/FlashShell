@@ -77,9 +77,6 @@ func lethalBlocked(cmd string) (bool, string) {
 			return true, r.why
 		}
 	}
-	if why := matchCustomDangerDetail(s); why != "" {
-		return true, why
-	}
 	return false, ""
 }
 
@@ -99,6 +96,9 @@ func severeNeedsApproval(cmd string) (bool, string) {
 		if r.re.MatchString(s) {
 			return true, r.why
 		}
+	}
+	if why := matchCustomDangerDetail(s); why != "" {
+		return true, why
 	}
 	return false, ""
 }
@@ -150,10 +150,26 @@ func policyDecide(policy, kind, command string, allowlist []string) GateResult {
 
 // ---------- 出站白名单 ----------
 
-var urlInCmd = regexp.MustCompile(`(?i)https?://[^\s'"\\|;<>]+|` +
+var urlInCmd = regexp.MustCompile(`(?i)(https?://[^\s'"\\|;<>]+)|` +
 	`(?:curl|wget|fetch)\s+[^\n]*?\b((?:[a-z0-9-]+\.)+[a-z]{2,}(?::\d+)?(?:/[^\s]*)?)`)
 
 var hostLike = regexp.MustCompile(`(?i)\b((?:\d{1,3}\.){3}\d{1,3}|(?:[a-z0-9-]+\.)+[a-z]{2,})(?::\d{2,5})?\b`)
+
+// codeLikeLastLabel 常见代码/文件后缀，不应被当成域名 TLD（避免 json.load / sys.stdin / i.get）
+var codeLikeLastLabel = map[string]struct{}{
+	"get": {}, "set": {}, "load": {}, "dumps": {}, "loads": {},
+	"stdin": {}, "stdout": {}, "stderr": {},
+	"path": {}, "name": {}, "value": {}, "type": {}, "data": {}, "info": {},
+	"keys": {}, "items": {}, "values": {}, "update": {}, "append": {},
+	"read": {}, "write": {}, "close": {}, "open": {}, "seek": {},
+	"json": {}, "yaml": {}, "yml": {}, "toml": {}, "xml": {}, "csv": {},
+	"py": {}, "pyc": {}, "go": {}, "js": {}, "ts": {}, "vue": {}, "rs": {},
+	"conf": {}, "cfg": {}, "ini": {}, "log": {}, "txt": {}, "md": {},
+	"lock": {}, "sum": {}, "mod": {}, "bak": {}, "tmp": {}, "temp": {},
+	"exe": {}, "dll": {}, "so": {}, "dylib": {}, "jar": {}, "war": {},
+	"class": {}, "obj": {}, "o": {}, "a": {}, "lib": {},
+	"sh": {}, "bash": {}, "zsh": {}, "fish": {}, "ps1": {}, "bat": {}, "cmd": {},
+}
 
 func builtinOutboundHosts() []string {
 	return []string{
@@ -166,6 +182,65 @@ func builtinOutboundHosts() []string {
 	}
 }
 
+// looksLikeOutboundHost 过滤代码点号、残缺 URL、命令碎片，只保留像公网主机的候选。
+func looksLikeOutboundHost(h string) bool {
+	h = strings.ToLower(strings.TrimSpace(h))
+	h = strings.TrimPrefix(h, "http://")
+	h = strings.TrimPrefix(h, "https://")
+	if i := strings.IndexAny(h, "/?#"); i >= 0 {
+		h = h[:i]
+	}
+	h = strings.Trim(h, `"'`+"`")
+	if h == "" || h == "http" || h == "https" {
+		return false
+	}
+	host := h
+	if strings.Contains(h, ":") {
+		if hh, _, err := net.SplitHostPort(h); err == nil {
+			host = hh
+		} else if i := strings.LastIndex(h, ":"); i > 0 && net.ParseIP(h[:i]) == nil {
+			// host:port（非 IPv6）
+			host = h[:i]
+		}
+	}
+	if host == "" {
+		return false
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		return true
+	}
+	if !strings.Contains(host, ".") || strings.Contains(host, " ") {
+		return false
+	}
+	labels := strings.Split(host, ".")
+	if len(labels) < 2 {
+		return false
+	}
+	for _, lab := range labels {
+		if lab == "" || strings.Contains(lab, "_") {
+			return false
+		}
+		for _, r := range lab {
+			if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
+				return false
+			}
+		}
+	}
+	tld := labels[len(labels)-1]
+	if len(tld) < 2 || len(tld) > 24 {
+		return false
+	}
+	for _, r := range tld {
+		if r < 'a' || r > 'z' {
+			return false
+		}
+	}
+	if _, bad := codeLikeLastLabel[tld]; bad {
+		return false
+	}
+	return true
+}
+
 func extractOutboundEndpoints(cmd string) []string {
 	seen := map[string]struct{}{}
 	var out []string
@@ -176,7 +251,8 @@ func extractOutboundEndpoints(cmd string) []string {
 		if i := strings.IndexAny(h, "/?#"); i >= 0 {
 			h = h[:i]
 		}
-		if h == "" {
+		h = strings.Trim(h, `"'`+"`")
+		if !looksLikeOutboundHost(h) {
 			return
 		}
 		if _, ok := seen[h]; ok {
@@ -185,12 +261,20 @@ func extractOutboundEndpoints(cmd string) []string {
 		seen[h] = struct{}{}
 		out = append(out, h)
 	}
-	for _, m := range urlInCmd.FindAllString(cmd, -1) {
-		if u, err := url.Parse(m); err == nil && u.Host != "" {
-			add(u.Host)
+	for _, m := range urlInCmd.FindAllStringSubmatch(cmd, -1) {
+		if len(m) < 1 {
 			continue
 		}
-		add(m)
+		// 组1：完整 URL；组2：curl/wget/fetch 捕获的 host
+		if len(m) > 1 && m[1] != "" {
+			if u, err := url.Parse(m[1]); err == nil && u.Host != "" {
+				add(u.Host)
+				continue
+			}
+		}
+		if len(m) > 2 && m[2] != "" {
+			add(m[2])
+		}
 	}
 	// curl/wget 裸 host
 	if regexp.MustCompile(`(?i)\b(curl|wget)\b`).MatchString(cmd) {
@@ -269,7 +353,11 @@ func (s *Service) checkOutbound(cmd string) (ok bool, reason string, bad []strin
 	if len(badList) == 0 {
 		return true, "", nil
 	}
-	return false, fmt.Sprintf("出站地址不在白名单，升级审批: %s", strings.Join(badList, ", ")), badList
+	parts := make([]string, 0, len(badList))
+	for _, h := range badList {
+		parts = append(parts, "「"+h+"」")
+	}
+	return false, fmt.Sprintf("命令疑似访问外网，以下地址不在出站白名单，已升级人工审批：%s", strings.Join(parts, "、")), badList
 }
 
 // ---------- 溯源检测 ----------

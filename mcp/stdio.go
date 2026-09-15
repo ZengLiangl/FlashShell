@@ -2,7 +2,11 @@ package mcp
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,10 +22,42 @@ func New(cfg *data.ConfigManager) *Service {
 
 // RunStdio 以 stdio 运行 MCP（给 Claude Code / Codex / OpenCode；Cursor 走 HTTP）
 func RunStdio() error {
+	if warnDesktopHTTP() {
+		_, _ = fmt.Fprintln(os.Stderr, "检测到桌面 FlashShell MCP HTTP 已在运行。stdio 是独立进程，审批弹窗/SSH 连接池在桌面应用里；Cursor 请走 HTTP 接入。其它客户端若需审批 UI，请保持桌面应用开启。")
+	}
 	cm := data.NewConfigManager("", nil)
 	_, _ = cm.LoadConfig()
 	s := newService(cm)
 	return s.mcp.Run(context.Background(), &mcpsdk.StdioTransport{})
+}
+
+func warnDesktopHTTP() bool {
+	root, err := homeDir()
+	if err != nil {
+		return false
+	}
+	b, err := os.ReadFile(filepath.Join(root, runtimeFile))
+	if err != nil {
+		return false
+	}
+	var info struct {
+		PID     int    `json:"pid"`
+		HTTPURL string `json:"httpUrl"`
+		Port    int    `json:"port"`
+	}
+	if json.Unmarshal(b, &info) != nil || info.Port <= 0 {
+		return false
+	}
+	if info.PID > 0 && info.PID == os.Getpid() {
+		return false
+	}
+	c := http.Client{Timeout: 400 * time.Millisecond}
+	resp, err := c.Get(fmt.Sprintf("http://127.0.0.1:%d/health", info.Port))
+	if err != nil {
+		return false
+	}
+	_ = resp.Body.Close()
+	return resp.StatusCode == 200 || resp.StatusCode == 401
 }
 
 // HasStdioFlag 是否以 MCP stdio 模式启动

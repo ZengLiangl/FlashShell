@@ -41,11 +41,10 @@ func ConnectRemote(rm *define.RemoteMachine, machine *define.Machine, withSFTP b
 		return err
 	}
 
-	rm.SSHClient = client
+	rm.BindSSHClient(client)
 	if withSFTP {
 		if err := rm.EnsureSFTP(); err != nil {
 			_ = rm.Close()
-			rm.SSHClient = nil
 			return err
 		}
 	}
