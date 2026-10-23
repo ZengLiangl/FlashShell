@@ -13,4 +13,7 @@ func init() {
 	RegChdir()
 	RegTarCmd()
 	RegCheckJarCmd()
+	RegPackCmd()
+	RegBackupCmd()
+	RegPurgeCmd()
 }

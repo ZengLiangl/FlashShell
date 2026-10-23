@@ -132,7 +132,12 @@ func getSpecialCmd(command string) (func(*define.RemoteMachine, []string, chan<-
 }
 
 func isLocalSpecialCmd(name string) bool {
-	return strings.EqualFold(strings.TrimSpace(name), "check-jar")
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "check-jar", "pack", "targz":
+		return true
+	default:
+		return false
+	}
 }
 
 // readOutput 读取命令输出，保留 ANSI 转义序列
