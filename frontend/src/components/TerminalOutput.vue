@@ -349,8 +349,8 @@ export default {
 .progress-section {
     flex-shrink: 0;
     padding: 12px 16px;
-    background: var(--app-panel-bg);
-    border-bottom: 1px solid var(--app-border);
+    background: color-mix(in oklch, var(--term-bg) 94%, white);
+    border-bottom: 1px solid var(--term-border);
 }
 
 .progress-info {
@@ -368,23 +368,37 @@ export default {
 
 .project-name {
     font-weight: 600;
-    color: var(--app-text);
+    color: var(--term-fg);
     font-size: 14px;
 }
 
 .current-command {
     font-size: 12px;
-    color: var(--app-text-secondary);
+    color: var(--term-dim);
 }
 
 .progress-stats {
     font-size: 12px;
-    color: var(--app-text-muted);
+    color: var(--term-dim);
     font-weight: 500;
 }
 
 .execution-progress {
     margin: 0;
+}
+
+.execution-progress :deep(.el-progress__text) {
+    color: var(--term-dim);
+    font-family: var(--font-mono);
+    font-size: 12px;
+}
+
+.execution-progress :deep(.el-progress-bar__outer) {
+    background: var(--term-border);
+}
+
+.execution-progress :deep(.el-progress-bar__inner) {
+    background: var(--accent);
 }
 
 .virtual-spacer {

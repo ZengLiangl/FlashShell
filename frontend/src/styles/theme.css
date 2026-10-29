@@ -225,30 +225,41 @@ html.dark .app-container {
 
 .app-container .terminal-header,
 .app-container .status-bar,
-.app-container .projectlist-fullscreen,
-.app-container .progress-section {
+.app-container .projectlist-fullscreen {
   background: var(--app-panel-bg);
   border-color: var(--app-border);
   color: var(--app-text);
+}
+
+.app-container .task-right .progress-section {
+  background: color-mix(in oklch, var(--term-bg) 94%, white);
+  border-color: var(--term-border);
+  color: var(--term-fg);
 }
 
 .app-container .terminal-header h3,
 .app-container .project-name,
 .app-container .subproject-name,
 .app-container .subproject-desc,
-.app-container .command-name,
-.app-container .progress-section .project-name {
+.app-container .command-name {
   color: var(--app-text);
 }
 
 .app-container .project-desc,
-.app-container .step-meta,
-.app-container .progress-section .current-command {
+.app-container .step-meta {
   color: var(--app-text-secondary);
 }
 
-.app-container .progress-section .progress-stats {
-  color: var(--app-text-muted);
+.app-container .task-right .progress-section .project-name {
+  color: var(--term-fg);
+}
+
+.app-container .task-right .progress-section .current-command {
+  color: var(--term-dim);
+}
+
+.app-container .task-right .progress-section .progress-stats {
+  color: var(--term-dim);
 }
 
 .app-container .terminal-output {
