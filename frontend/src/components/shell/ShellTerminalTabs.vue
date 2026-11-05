@@ -962,16 +962,6 @@ export default {
     }
     const getSelection = () => getActiveTerminal()?.getSelection?.() || ''
 
-    const selectTabByIndex = (index) => {
-      const list = orderedSessions.value
-      if (!list.length) return false
-      const i = Math.max(0, Math.min(list.length - 1, index))
-      const id = list[i]?.machineName
-      if (!id) return false
-      activeTab.value = id
-      return true
-    }
-
     const selectNextTab = (delta = 1) => {
       const list = orderedSessions.value
       if (!list.length) return false
@@ -1012,7 +1002,6 @@ export default {
       getSelection,
       pasteClipboard,
       togglePaneZoom,
-      selectTabByIndex,
       selectNextTab,
       closeActiveTab,
       focusSplitNeighbor,

@@ -178,6 +178,17 @@ export function formatShortcut(binding, isMac = isMacPlatform()) {
   return formatShortcutLabel(binding, isMac)
 }
 
+/**
+ * Ctrl/Cmd + 0–9，且没有 Shift/Alt。
+ * 终端页里 Ctrl+0 用来重置字号。
+ */
+export function isPlainModDigitChord(e) {
+  if (!e || e.altKey || e.shiftKey) return false
+  if (!(e.ctrlKey || e.metaKey)) return false
+  const code = String(e.code || '')
+  return /^Digit[0-9]$/.test(code) || /^Numpad[0-9]$/.test(code)
+}
+
 /** 是否为 xterm 内部输入框 */
 export function isXtermInput(el) {
   if (!el || el.nodeType !== 1) return false
@@ -195,6 +206,12 @@ export function isFormFieldTarget(el) {
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
   if (el.isContentEditable || el.contentEditable === 'true') return true
   return false
+}
+
+/** 快捷键设置里的录制按钮。全局快捷键不能在捕获阶段截下这里的按键。 */
+export function isShortcutCaptureTarget(el) {
+  if (!el || el.nodeType !== 1) return false
+  return !!el.closest?.('.bind-capture')
 }
 
 /** 从 KeyboardEvent 生成绑定（用于设置页录制） */

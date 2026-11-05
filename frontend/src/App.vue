@@ -252,7 +252,7 @@ import TerminalHeader from "./components/TerminalHeader.vue";
 import AppMenuBar from "./components/AppMenuBar.vue";
 import AppRail from "./components/layout/AppRail.vue";
 import { useTheme } from "./composables/useTheme";
-import { mergeShortcuts, matchesShortcut, isFormFieldTarget, isXtermInput } from "./utils/shortcuts";
+import { mergeShortcuts, matchesShortcut, isFormFieldTarget, isShortcutCaptureTarget, isXtermInput } from "./utils/shortcuts";
 import {
   clampShellFontSize,
   SHELL_FONT_SIZE_DEFAULT,
@@ -1268,7 +1268,8 @@ export default {
       }
 
       // 普通表单输入中不抢快捷键；xterm 隐藏 textarea 除外
-      if (isFormFieldTarget(e.target)) {
+      // 快捷键录制按钮也要放行，否则捕获阶段会把按键吃掉
+      if (isFormFieldTarget(e.target) || isShortcutCaptureTarget(e.target)) {
         return;
       }
 
@@ -1402,16 +1403,6 @@ export default {
           take();
           shellWorkspaceRef.value?.focusSplitNeighbor?.('right');
           return;
-        }
-        // Ctrl+1..9 跳转到第 N 个标签（Ctrl+0 仍保留字号重置）
-        if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey) {
-          const code = String(e.code || '');
-          const m = /^Digit([1-9])$/.exec(code) || /^Numpad([1-9])$/.exec(code);
-          if (m) {
-            take();
-            shellWorkspaceRef.value?.selectTabByIndex?.(Number(m[1]) - 1);
-            return;
-          }
         }
       }
 

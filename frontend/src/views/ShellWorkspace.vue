@@ -257,6 +257,7 @@ import {
   findMatchingSnippet,
   buildSnippetPayload,
   isFormFieldTarget,
+  isPlainModDigitChord,
 } from '../utils/shortcuts'
 import { runOnConnectSnippets, resetOnConnectSnippets } from '../utils/onConnectSnippets'
 
@@ -1004,10 +1005,16 @@ export default {
       if (!snippetList.value.length) return
       const matched = findMatchingSnippet(e, snippetList.value)
       if (!matched) return
+      // Ctrl/Cmd+0 会在 document 捕获阶段重置字号。
+      // 片段占用 Ctrl/Cmd+数字时，必须在 window 捕获阶段先截下，否则两边都会执行。
+      if (isPlainModDigitChord(e)) {
+        e.preventDefault()
+        e.stopPropagation()
+      }
       const payload = await buildSnippetPayload(matched)
       if (payload == null || payload === '') return
       e.preventDefault()
-      e.stopImmediatePropagation()
+      e.stopPropagation()
       void sendMappedInput(payload)
     }
 
@@ -1036,10 +1043,11 @@ export default {
     )
 
     onMounted(() => {
-      document.addEventListener('keydown', onSnippetHotkey, true)
+      // window 捕获早于 document，才能赶在字号重置等系统处理之前截下
+      window.addEventListener('keydown', onSnippetHotkey, true)
     })
     onUnmounted(() => {
-      document.removeEventListener('keydown', onSnippetHotkey, true)
+      window.removeEventListener('keydown', onSnippetHotkey, true)
     })
 
     const openCommandPalette = () => {
@@ -1055,7 +1063,6 @@ export default {
       tabsRef.value?.togglePaneZoom?.(sessionId || props.activeMachine)
     }
 
-    const selectTabByIndex = (index) => tabsRef.value?.selectTabByIndex?.(index)
     const selectNextTab = (delta) => tabsRef.value?.selectNextTab?.(delta)
     const closeActiveTab = () => tabsRef.value?.closeActiveTab?.()
     const focusSplitNeighbor = (dir) => tabsRef.value?.focusSplitNeighbor?.(dir)
@@ -1145,7 +1152,6 @@ export default {
       openCommandPalette,
       pasteClipboard,
       togglePaneZoom,
-      selectTabByIndex,
       selectNextTab,
       closeActiveTab,
       focusSplitNeighbor,
