@@ -721,9 +721,7 @@ export default {
       term.value.clear()
       resetShellWriterReplay(props.machineName)
       detachWriter()
-      if (props.connected || props.connecting) {
-        attachWriter(term.value, { replay: true })
-      }
+      attachWriter(term.value, { replay: true })
     }
 
     const onSystemSettingsChanged = (payload) => {
@@ -1147,7 +1145,8 @@ export default {
       }) || null
 
       initialized = true
-      if (props.connected || props.connecting) attachWriter(terminal, { replay: true })
+      // 断开后也要接着写「连接失败」等状态行，不能等重新连上才挂 writer
+      attachWriter(terminal, { replay: true })
       setupObservers()
       if (props.connected) fitAndResize()
       else scheduleFit()
@@ -1505,7 +1504,7 @@ export default {
         await nextTick()
         await initTerminal()
       }
-      if (props.connected || props.connecting) ensureWriter()
+      ensureWriter()
       setupObservers()
       if (props.connected) fitAndResize()
       else scheduleFit()
@@ -1518,25 +1517,21 @@ export default {
         if ((val || connecting) && props.active) await initTerminal()
         return
       }
-      if (val || connecting) {
-        ensureWriter()
-        if (val) {
-          lastPtyCols = 0
-          lastPtyRows = 0
-          fitAndResize()
-        } else {
-          scheduleFit()
-        }
-        if (props.active && val) {
+      ensureWriter()
+      if (val) {
+        lastPtyCols = 0
+        lastPtyRows = 0
+        fitAndResize()
+        if (props.active) {
           scheduleCwdSync()
           await nextTick()
           term.value.focus()
         }
       } else {
-        detachWriter()
-        clearCwdSyncTimer()
+        if (!connecting) clearCwdSyncTimer()
         lastPtyCols = 0
         lastPtyRows = 0
+        scheduleFit()
       }
     })
 

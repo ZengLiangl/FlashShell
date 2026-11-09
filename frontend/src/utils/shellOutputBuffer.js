@@ -345,9 +345,14 @@ export function registerShellWriter(machineName, writer, options = {}) {
   clearWriteQueue(machineName)
   writers.set(machineName, writer)
   const unregister = () => {
-    if (writers.get(machineName) === writer) {
-      clearWriteQueue(machineName)
-      writers.delete(machineName)
+    if (writers.get(machineName) !== writer) return
+    // 尚未刷到 xterm 的行不能算已回放，否则「连接失败」会在卸 writer 时丢失
+    const pending = writeQueues.get(machineName)?.items?.length || 0
+    clearWriteQueue(machineName)
+    writers.delete(machineName)
+    if (pending > 0) {
+      const buf = buffers.get(machineName)
+      if (buf) buf.replayedCount = Math.max(0, (buf.replayedCount || 0) - pending)
     }
   }
   const buf = buffers.get(machineName)
