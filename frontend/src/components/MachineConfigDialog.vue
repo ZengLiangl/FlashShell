@@ -3,53 +3,19 @@
         <div class="machine-list">
             <div class="list-header">
                 <h4 v-if="!embedded">机器列表</h4>
-                <div v-else class="list-header-spacer"></div>
                 <div class="header-actions">
-                    <div class="filter-bar">
-                        <el-input
-                            v-model="machineKeyword"
-                            clearable
-                            size="small"
-                            placeholder="搜索名称 / IP"
-                            class="app-toolbar-search compact list-search"
-                        >
-                            <template #prefix>
-                                <el-icon class="filter-icon"><Search /></el-icon>
-                            </template>
-                        </el-input>
-                        <el-select
-                            v-model="importGroup"
-                            clearable
-                            filterable
-                            allow-create
-                            default-first-option
-                            size="small"
-                            placeholder="导入分组"
-                            class="import-group-select"
-                        >
-                            <el-option
-                                v-for="g in groupOptions"
-                                :key="g"
-                                :label="g"
-                                :value="g === DEFAULT_MACHINE_GROUP ? '' : g"
-                            />
-                        </el-select>
-                        <el-select
-                            v-model="importAccountId"
-                            clearable
-                            size="small"
-                            placeholder="导入帐号"
-                            class="import-account-select"
-                        >
-                            <el-option
-                                v-for="account in globalAccounts"
-                                :key="account.id"
-                                :label="account.name"
-                                :value="account.id"
-                            />
-                        </el-select>
-                    </div>
-                <div class="toolbar-ops icon-actions">
+                    <el-input
+                        v-model="machineKeyword"
+                        clearable
+                        size="small"
+                        placeholder="搜索名称 / IP"
+                        class="app-toolbar-search compact list-search"
+                    >
+                        <template #prefix>
+                            <el-icon class="filter-icon"><Search /></el-icon>
+                        </template>
+                    </el-input>
+                    <div class="toolbar-ops icon-actions">
                         <el-radio-group v-model="listViewMode" size="small" class="view-mode-toggle">
                             <el-radio-button label="table">
                                 <el-icon><List /></el-icon>
@@ -94,6 +60,40 @@
                             </template>
                         </el-dropdown>
                     </div>
+                </div>
+                <div class="import-bar">
+                    <span class="import-bar-label">导入到</span>
+                    <el-select
+                        v-model="importGroup"
+                        clearable
+                        filterable
+                        allow-create
+                        default-first-option
+                        size="small"
+                        placeholder="分组"
+                        class="import-group-select"
+                    >
+                        <el-option
+                            v-for="g in groupOptions"
+                            :key="g"
+                            :label="g"
+                            :value="g === DEFAULT_MACHINE_GROUP ? '' : g"
+                        />
+                    </el-select>
+                    <el-select
+                        v-model="importAccountId"
+                        clearable
+                        size="small"
+                        placeholder="帐号"
+                        class="import-account-select"
+                    >
+                        <el-option
+                            v-for="account in globalAccounts"
+                            :key="account.id"
+                            :label="account.name"
+                            :value="account.id"
+                        />
+                    </el-select>
                 </div>
             </div>
 
@@ -214,7 +214,8 @@
         <el-dialog
             v-model="machineEditVisible"
             :title="editingMachine ? '编辑机器' : '添加机器'"
-            width="520px"
+            width="820px"
+            top="6vh"
             class="settings-sub-dialog machine-edit-dialog"
             append-to-body
         >
@@ -226,12 +227,12 @@
                 label-position="top"
                 require-asterisk-position="right"
             >
-                <section class="machine-form-section">
+                <section class="machine-form-section is-span">
                     <header class="machine-form-section-head">
                         <el-icon><Monitor /></el-icon>
-                        <span>通用</span>
+                        <span>连接</span>
                     </header>
-                    <div class="machine-form-section-body">
+                    <div class="machine-form-grid">
                         <el-form-item label="名称" prop="name">
                             <el-input v-model="machineForm.name" placeholder="机器名称" />
                         </el-form-item>
@@ -255,6 +256,49 @@
                             <el-button class="section-link-btn" text type="primary" size="small" @click="applyGroupDefaultsToForm">
                                 应用分组默认
                             </el-button>
+                        </el-form-item>
+                        <div class="machine-form-host span-2">
+                            <el-form-item label="主机地址" prop="host">
+                                <el-input v-model="machineForm.host" placeholder="IP 或主机名" />
+                            </el-form-item>
+                            <el-form-item label="端口" prop="port" class="machine-form-port">
+                                <el-input-number v-model="machineForm.port" :min="1" :max="65535" controls-position="right" />
+                            </el-form-item>
+                        </div>
+                        <el-form-item label="用户名" prop="user">
+                            <el-input v-model="machineForm.user" placeholder="SSH 用户名" />
+                        </el-form-item>
+                        <el-form-item label="密码" prop="password">
+                            <el-input v-model="machineForm.password" type="password" placeholder="可选" show-password />
+                        </el-form-item>
+                        <el-form-item label="全局帐号" class="span-2">
+                            <el-select
+                                v-model="selectedAccountId"
+                                clearable
+                                placeholder="选择后自动填充用户名和密码"
+                                style="width: 100%"
+                                @change="applyGlobalAccount"
+                            >
+                                <el-option
+                                    v-for="account in globalAccounts"
+                                    :key="account.id"
+                                    :label="account.name"
+                                    :value="account.id"
+                                />
+                            </el-select>
+                        </el-form-item>
+                        <el-form-item label="密钥文件" prop="key_file">
+                            <div class="key-file-input">
+                                <el-input v-model="machineForm.key_file" placeholder="私钥路径" readonly />
+                                <el-tooltip content="选择文件" placement="top">
+                                    <el-button type="primary" @click="selectKeyFile">
+                                        <el-icon><Folder /></el-icon>
+                                    </el-button>
+                                </el-tooltip>
+                            </div>
+                        </el-form-item>
+                        <el-form-item label="密钥口令">
+                            <el-input v-model="machineForm.keyPassphrase" type="password" placeholder="加密私钥口令（可选）" show-password clearable />
                         </el-form-item>
                         <el-form-item label="标签">
                             <el-select
@@ -281,67 +325,6 @@
                                 />
                             </el-select>
                         </el-form-item>
-                    </div>
-                </section>
-
-                <section class="machine-form-section">
-                    <header class="machine-form-section-head">
-                        <el-icon><Location /></el-icon>
-                        <span>地址</span>
-                    </header>
-                    <div class="machine-form-section-body">
-                        <el-form-item label="主机地址" prop="host">
-                            <el-input v-model="machineForm.host" placeholder="IP 或主机名" />
-                        </el-form-item>
-                    </div>
-                </section>
-
-                <section class="machine-form-section">
-                    <header class="machine-form-section-head">
-                        <el-icon><Key /></el-icon>
-                        <span>端口与凭据</span>
-                    </header>
-                    <div class="machine-form-section-body">
-                        <div class="machine-form-row-2">
-                            <el-form-item label="用户名" prop="user">
-                                <el-input v-model="machineForm.user" placeholder="SSH 用户名" />
-                            </el-form-item>
-                            <el-form-item label="端口" prop="port">
-                                <el-input-number v-model="machineForm.port" :min="1" :max="65535" controls-position="right" />
-                            </el-form-item>
-                        </div>
-                        <el-form-item label="全局帐号">
-                            <el-select
-                                v-model="selectedAccountId"
-                                clearable
-                                placeholder="选择后自动填充用户名和密码"
-                                style="width: 100%"
-                                @change="applyGlobalAccount"
-                            >
-                                <el-option
-                                    v-for="account in globalAccounts"
-                                    :key="account.id"
-                                    :label="account.name"
-                                    :value="account.id"
-                                />
-                            </el-select>
-                        </el-form-item>
-                        <el-form-item label="密码" prop="password">
-                            <el-input v-model="machineForm.password" type="password" placeholder="可选" show-password />
-                        </el-form-item>
-                        <el-form-item label="密钥文件" prop="key_file">
-                            <div class="key-file-input">
-                                <el-input v-model="machineForm.key_file" placeholder="私钥路径" readonly />
-                                <el-tooltip content="选择文件" placement="top">
-                                    <el-button type="primary" @click="selectKeyFile">
-                                        <el-icon><Folder /></el-icon>
-                                    </el-button>
-                                </el-tooltip>
-                            </div>
-                        </el-form-item>
-                        <el-form-item label="密钥口令">
-                            <el-input v-model="machineForm.keyPassphrase" type="password" placeholder="加密私钥口令（可选）" show-password clearable />
-                        </el-form-item>
                         <el-form-item label="AI 策略">
                             <el-select v-model="machineForm.aiPolicy" placeholder="disabled（默认）" clearable style="width: 100%">
                                 <el-option label="disabled · 禁止任何 MCP" value="disabled" />
@@ -351,7 +334,13 @@
                                 <el-option label="trusted · 自动放行（仍拦致命命令/sudo）" value="trusted" />
                             </el-select>
                         </el-form-item>
-                        <el-form-item v-if="machineForm.aiPolicy === 'allowlist'" label="AI 白名单">
+                        <el-form-item label="允许 AI sudo" class="machine-form-inline-switch">
+                            <div class="machine-form-switch-row">
+                                <span class="machine-form-switch-label">含 sudo 时强制审批</span>
+                                <el-switch v-model="machineForm.aiAllowSudo" />
+                            </div>
+                        </el-form-item>
+                        <el-form-item v-if="machineForm.aiPolicy === 'allowlist'" label="AI 白名单" class="span-2">
                             <el-input
                                 v-model="machineForm.aiAllowlistText"
                                 type="textarea"
@@ -360,15 +349,11 @@
                             />
                             <span class="form-hint">未命中白名单时升级为审批，不会直接拒绝</span>
                         </el-form-item>
-                        <el-form-item label="允许 AI sudo">
-                            <el-switch v-model="machineForm.aiAllowSudo" />
-                            <span class="form-hint" style="margin-left: 8px">含 sudo 无视档位强制审批；关闭则直接拒绝</span>
-                        </el-form-item>
-                        <el-form-item label="备注">
+                        <el-form-item label="备注" class="span-2">
                             <el-input
                                 v-model="machineForm.notes"
                                 type="textarea"
-                                :rows="3"
+                                :rows="2"
                                 placeholder="运维备注（支持检索）"
                                 maxlength="4000"
                                 show-word-limit
@@ -527,7 +512,7 @@
                     </div>
                 </section>
 
-                <section class="machine-form-section">
+                <section class="machine-form-section is-span">
                     <header class="machine-form-section-head">
                         <el-icon><Share /></el-icon>
                         <span>SSH 隧道</span>
@@ -736,7 +721,7 @@ import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
     Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid, Close, Check, Monitor, VideoPlay, Setting,
-    Location, Key, Link, Share,
+    Link, Share,
 } from '@element-plus/icons-vue'
 import {
     GetMachines,
@@ -788,7 +773,7 @@ export default {
     name: 'MachineConfigDialog',
     components: {
         Plus, Search, FolderOpened, Upload, Edit, Delete, Connection, Folder, List, Grid, Close, Check, Monitor, VideoPlay, Setting,
-        Location, Key, Link, Share,
+        Link, Share,
         MachineContextMenu,
         TextOverflowTooltip,
     },
@@ -1840,36 +1825,21 @@ export default {
 
 .list-header {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 12px;
-    margin-bottom: 14px;
+    flex-direction: column;
+    gap: 8px;
+    margin-bottom: 12px;
     flex-shrink: 0;
 }
 
-.list-header-spacer {
-    flex: 0;
+.list-header h4 {
+    margin: 0;
 }
 
 .header-actions {
-    flex: 1;
     display: flex;
     align-items: center;
     gap: 10px;
-    flex-wrap: wrap;
-    justify-content: flex-end;
     min-width: 0;
-}
-
-.filter-bar {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    flex-wrap: wrap;
-    padding: 6px 10px;
-    border-radius: 10px;
-    background: color-mix(in srgb, var(--el-fill-color-light, #f5f7fa) 88%, transparent);
-    border: 1px solid color-mix(in srgb, var(--el-border-color-lighter, #ebeef5) 80%, transparent);
 }
 
 .filter-icon {
@@ -1877,30 +1847,25 @@ export default {
 }
 
 .list-search {
-    width: 160px;
+    flex: 1;
+    min-width: 0;
 }
 
-.import-group-select {
-    width: 128px;
+.import-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
+.import-bar-label {
+    flex-shrink: 0;
+    font-size: 12px;
+    color: var(--app-text-muted, var(--el-text-color-secondary));
+}
+
+.import-group-select,
 .import-account-select {
-    width: 140px;
-}
-
-.filter-bar :deep(.el-input__wrapper),
-.filter-bar :deep(.el-select__wrapper) {
-    box-shadow: none !important;
-    background: transparent;
-    border-radius: 6px;
-}
-
-.filter-bar :deep(.el-input__wrapper:hover),
-.filter-bar :deep(.el-select__wrapper:hover),
-.filter-bar :deep(.el-input__wrapper.is-focus),
-.filter-bar :deep(.el-select__wrapper.is-focused) {
-    background: var(--el-bg-color, #fff);
-    box-shadow: 0 0 0 1px var(--el-border-color, #dcdfe6) inset !important;
+    width: 160px;
 }
 
 .toolbar-ops {
@@ -1944,17 +1909,17 @@ export default {
     flex: 1;
     min-height: 0;
     display: flex;
-    gap: 10px;
-    overflow-x: auto;
-    overflow-y: hidden;
+    flex-direction: column;
+    gap: 12px;
+    overflow-x: hidden;
+    overflow-y: auto;
     padding-bottom: 4px;
 }
 
 .board-column {
-    flex: 1 0 220px;
-    min-width: 220px;
-    max-width: 280px;
-    min-height: 0;
+    flex: none;
+    width: 100%;
+    min-width: 0;
     display: flex;
     flex-direction: column;
     border: 1px solid var(--el-border-color-lighter, var(--app-border));
@@ -1987,13 +1952,11 @@ export default {
 }
 
 .board-column-body {
-    flex: 1;
-    min-height: 120px;
-    overflow-y: auto;
-    padding: 0 8px 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
+    min-height: 48px;
+    padding: 0 10px 10px;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 8px;
 }
 
 .board-card {
@@ -2131,8 +2094,9 @@ export default {
 }
 
 .board-empty {
-    margin: 4px 0;
-    padding: 18px 8px;
+    grid-column: 1 / -1;
+    margin: 0;
+    padding: 14px 8px;
     border: 1px dashed var(--el-border-color, #dcdfe6);
     border-radius: 6px;
     text-align: center;

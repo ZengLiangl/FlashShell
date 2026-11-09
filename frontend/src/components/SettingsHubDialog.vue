@@ -2,7 +2,7 @@
   <el-dialog
     v-model="visibleProxy"
     title="设置"
-    width="1000px"
+    width="1120px"
     top="4vh"
     class="settings-hub-dialog"
     append-to-body
@@ -326,8 +326,8 @@ export default {
 <style scoped>
 .settings-hub {
   display: flex;
-  height: min(72vh, 680px);
-  min-height: 440px;
+  height: min(78vh, 760px);
+  min-height: 480px;
 }
 
 .hub-nav {

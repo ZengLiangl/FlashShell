@@ -1,188 +1,167 @@
 <template>
-  <aside v-if="open" class="machine-aside-panel">
-    <header class="machine-aside-header">
-      <div class="machine-aside-header-main">
-        <el-button v-if="showBack" text circle class="machine-aside-back" @click="$emit('back')">
-          <el-icon><ArrowLeft /></el-icon>
-        </el-button>
-        <div class="machine-aside-titles">
-          <h3 class="machine-aside-title">{{ title }}</h3>
-          <p v-if="subtitle" class="machine-aside-subtitle">{{ subtitle }}</p>
-        </div>
-      </div>
-      <el-button text circle class="machine-aside-close" @click="$emit('close')">
-        <el-icon><Close /></el-icon>
-      </el-button>
-    </header>
-
-    <div class="machine-aside-body">
-      <el-form
-        ref="formRef"
-        class="machine-edit-form"
-        :model="form"
-        :rules="rules"
-        label-position="top"
-        require-asterisk-position="right"
-      >
-        <section class="machine-form-section">
-          <header class="machine-form-section-head">
-            <el-icon><Monitor /></el-icon>
-            <span>通用</span>
-          </header>
-          <div class="machine-form-section-body">
-            <el-form-item label="名称" prop="name">
-              <el-input v-model="form.name" placeholder="机器名称" />
-            </el-form-item>
-            <el-form-item label="分组">
-              <el-select
-                v-model="form.group"
-                clearable
-                filterable
-                allow-create
-                default-first-option
-                placeholder="选择或新建分组"
-                style="width: 100%"
-              >
-                <el-option v-for="g in groupOptions" :key="g" :label="g" :value="g === DEFAULT_MACHINE_GROUP ? '' : g" />
-              </el-select>
-              <el-button class="section-link-btn" text type="primary" @click="applyGroupDefaults">
-                应用分组默认
-              </el-button>
-            </el-form-item>
-            <el-form-item label="标签">
-              <el-select
-                v-model="form.tags"
-                multiple
-                filterable
-                allow-create
-                default-first-option
-                collapse-tags
-                collapse-tags-tooltip
-                placeholder="添加标签…"
-                style="width: 100%"
-              />
-            </el-form-item>
-            <el-form-item label="备注">
-              <el-input v-model="form.notes" type="textarea" :rows="3" maxlength="4000" show-word-limit placeholder="运维备注（可选）" />
-            </el-form-item>
-          </div>
-        </section>
-
-        <section class="machine-form-section">
-          <header class="machine-form-section-head">
-            <el-icon><Location /></el-icon>
-            <span>地址</span>
-          </header>
-          <div class="machine-form-section-body">
+  <el-dialog
+    :model-value="open"
+    :title="title"
+    width="820px"
+    top="6vh"
+    class="settings-sub-dialog machine-edit-dialog"
+    append-to-body
+    @update:model-value="(v) => { if (!v) $emit('close') }"
+  >
+    <p v-if="subtitle" class="machine-dialog-subtitle">{{ subtitle }}</p>
+    <el-form
+      ref="formRef"
+      class="machine-edit-form"
+      :model="form"
+      :rules="rules"
+      label-position="top"
+      require-asterisk-position="right"
+    >
+      <section class="machine-form-section is-span">
+        <header class="machine-form-section-head">
+          <el-icon><Monitor /></el-icon>
+          <span>连接</span>
+        </header>
+        <div class="machine-form-grid">
+          <el-form-item label="名称" prop="name">
+            <el-input v-model="form.name" placeholder="机器名称" />
+          </el-form-item>
+          <el-form-item label="分组">
+            <el-select
+              v-model="form.group"
+              clearable
+              filterable
+              allow-create
+              default-first-option
+              placeholder="选择或新建分组"
+              style="width: 100%"
+            >
+              <el-option v-for="g in groupOptions" :key="g" :label="g" :value="g === DEFAULT_MACHINE_GROUP ? '' : g" />
+            </el-select>
+            <el-button class="section-link-btn" text type="primary" @click="applyGroupDefaults">
+              应用分组默认
+            </el-button>
+          </el-form-item>
+          <div class="machine-form-host span-2">
             <el-form-item label="主机" prop="host">
               <el-input v-model="form.host" placeholder="IP 或主机名" />
             </el-form-item>
+            <el-form-item label="端口" prop="port" class="machine-form-port">
+              <el-input-number v-model="form.port" :min="1" :max="65535" controls-position="right" />
+            </el-form-item>
           </div>
-        </section>
-
-        <section class="machine-form-section">
-          <header class="machine-form-section-head">
-            <el-icon><Key /></el-icon>
-            <span>端口与凭据</span>
-          </header>
-          <div class="machine-form-section-body">
-            <div class="machine-form-row-2">
-              <el-form-item label="用户名" prop="user">
-                <el-input v-model="form.user" placeholder="SSH 用户名" />
-              </el-form-item>
-              <el-form-item label="端口" prop="port">
-                <el-input-number v-model="form.port" :min="1" :max="65535" controls-position="right" />
-              </el-form-item>
+          <el-form-item label="用户名" prop="user">
+            <el-input v-model="form.user" placeholder="SSH 用户名" />
+          </el-form-item>
+          <el-form-item label="密码">
+            <el-input v-model="form.password" type="password" show-password placeholder="可选" />
+          </el-form-item>
+          <el-form-item label="全局帐号" class="span-2">
+            <el-select
+              v-model="selectedAccountId"
+              clearable
+              placeholder="选择身份自动填充"
+              style="width: 100%"
+              @change="applyGlobalAccount"
+            >
+              <el-option v-for="account in globalAccounts" :key="account.id" :label="account.name" :value="account.id" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="密钥文件">
+            <div class="key-file-input">
+              <el-input v-model="form.key_file" placeholder="私钥路径" readonly />
+              <el-button type="primary" @click="selectKeyFile">
+                <el-icon><Folder /></el-icon>
+              </el-button>
             </div>
-            <el-form-item label="全局帐号">
-              <el-select
-                v-model="selectedAccountId"
-                clearable
-                placeholder="选择身份自动填充"
-                style="width: 100%"
-                @change="applyGlobalAccount"
-              >
-                <el-option v-for="account in globalAccounts" :key="account.id" :label="account.name" :value="account.id" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="密码">
-              <el-input v-model="form.password" type="password" show-password placeholder="可选" />
-            </el-form-item>
-            <el-form-item label="密钥文件">
-              <div class="key-file-input">
-                <el-input v-model="form.key_file" placeholder="私钥路径" readonly />
-                <el-button type="primary" @click="selectKeyFile">
-                  <el-icon><Folder /></el-icon>
-                </el-button>
-              </div>
-            </el-form-item>
-            <el-form-item label="密钥口令">
-              <el-input v-model="form.keyPassphrase" type="password" show-password placeholder="加密私钥口令" clearable />
-            </el-form-item>
-          </div>
-        </section>
+          </el-form-item>
+          <el-form-item label="密钥口令">
+            <el-input v-model="form.keyPassphrase" type="password" show-password placeholder="加密私钥口令" clearable />
+          </el-form-item>
+          <el-form-item label="标签">
+            <el-select
+              v-model="form.tags"
+              multiple
+              filterable
+              allow-create
+              default-first-option
+              collapse-tags
+              collapse-tags-tooltip
+              placeholder="添加标签…"
+              style="width: 100%"
+            />
+          </el-form-item>
+          <el-form-item label="备注">
+            <el-input v-model="form.notes" type="textarea" :rows="2" maxlength="4000" show-word-limit placeholder="运维备注（可选）" />
+          </el-form-item>
+        </div>
+      </section>
 
-        <section class="machine-form-section">
-          <header class="machine-form-section-head">
-            <el-icon><Setting /></el-icon>
-            <span>高级选项</span>
-          </header>
-          <div class="machine-form-section-body">
-            <el-form-item label="跳板机">
-              <el-input v-model="form.proxyJump" placeholder="机器名或 host[:port]" clearable />
-            </el-form-item>
-            <el-form-item label="启动命令">
-              <el-input v-model="form.startupCommand" placeholder="连接后执行" clearable />
-            </el-form-item>
-            <el-form-item label="终端配色">
-              <el-select v-model="form.terminalPreset" clearable placeholder="跟随全局主题" style="width: 100%">
-                <el-option label="跟随全局" value="" />
-                <el-option v-for="preset in terminalPresetOptions" :key="preset.id" :label="preset.label" :value="preset.id" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="本地回显">
-              <el-switch v-model="form.localEcho" active-text="高延迟时本机立即显示输入" />
-            </el-form-item>
-          </div>
-        </section>
-      </el-form>
-    </div>
+      <section class="machine-form-section is-span">
+        <header class="machine-form-section-head">
+          <el-icon><Setting /></el-icon>
+          <span>高级选项</span>
+        </header>
+        <div class="machine-form-grid">
+          <el-form-item label="跳板机">
+            <el-input v-model="form.proxyJump" placeholder="机器名或 host[:port]" clearable />
+          </el-form-item>
+          <el-form-item label="启动命令">
+            <el-input v-model="form.startupCommand" placeholder="连接后执行" clearable />
+          </el-form-item>
+          <el-form-item label="终端配色">
+            <el-select v-model="form.terminalPreset" clearable placeholder="跟随全局主题" style="width: 100%">
+              <el-option label="跟随全局" value="" />
+              <el-option v-for="preset in terminalPresetOptions" :key="preset.id" :label="preset.label" :value="preset.id" />
+            </el-select>
+          </el-form-item>
+          <el-form-item label="本地回显" class="machine-form-inline-switch">
+            <div class="machine-form-switch-row">
+              <span class="machine-form-switch-label">高延迟时本机立即显示输入</span>
+              <el-switch v-model="form.localEcho" />
+            </div>
+          </el-form-item>
+        </div>
+      </section>
+    </el-form>
 
-    <footer class="machine-aside-footer">
-      <div class="machine-aside-footer-left">
-        <el-button
-          v-if="!editing"
-          class="machine-aside-footer-btn"
-          :loading="importing"
-          title="从 ~/.ssh/config 导入"
-          @click="importLocalSSHConfig"
-        >
-          导入本地 SSH
-        </el-button>
+    <template #footer>
+      <div class="machine-aside-footer">
+        <div class="machine-aside-footer-left">
+          <el-button
+            v-if="!editing"
+            class="machine-aside-footer-btn"
+            :loading="importing"
+            title="从 ~/.ssh/config 导入"
+            @click="importLocalSSHConfig"
+          >
+            导入本地 SSH
+          </el-button>
+        </div>
+        <div class="machine-aside-footer-right">
+          <el-button class="machine-aside-footer-btn" @click="$emit('close')">取消</el-button>
+          <el-button class="machine-aside-footer-btn" :loading="testing" @click="testDraft">测试连接</el-button>
+          <el-button
+            v-if="editing"
+            class="machine-aside-footer-btn"
+            type="primary"
+            plain
+            :loading="connecting"
+            @click="saveAndConnect"
+          >
+            保存并连接
+          </el-button>
+          <el-button class="machine-aside-footer-btn" type="primary" :loading="saving" @click="save">保存</el-button>
+        </div>
       </div>
-      <div class="machine-aside-footer-right">
-        <el-button class="machine-aside-footer-btn" @click="$emit('close')">取消</el-button>
-        <el-button class="machine-aside-footer-btn" :loading="testing" @click="testDraft">测试连接</el-button>
-        <el-button
-          v-if="editing"
-          class="machine-aside-footer-btn"
-          type="primary"
-          plain
-          :loading="connecting"
-          @click="saveAndConnect"
-        >
-          保存并连接
-        </el-button>
-        <el-button class="machine-aside-footer-btn" type="primary" :loading="saving" @click="save">保存</el-button>
-      </div>
-    </footer>
-  </aside>
+    </template>
+  </el-dialog>
 </template>
 
 <script>
 import { ref, reactive, watch, computed } from 'vue'
 import { ElMessage } from 'element-plus'
-import { ArrowLeft, Close, Folder, Monitor, Location, Key, Setting } from '@element-plus/icons-vue'
+import { Folder, Monitor, Setting } from '@element-plus/icons-vue'
 import {
   GetMachineGroups,
   GetMachineGroupDefaults,
@@ -204,7 +183,7 @@ import { TERMINAL_PRESETS } from '../utils/themePresets'
 
 export default {
   name: 'MachineAsidePanel',
-  components: { ArrowLeft, Close, Folder, Monitor, Location, Key, Setting },
+  components: { Folder, Monitor, Setting },
   props: {
     open: { type: Boolean, default: false },
     machine: { type: Object, default: null },
@@ -517,64 +496,10 @@ export default {
 </script>
 
 <style scoped>
-.machine-aside-panel {
-  position: absolute;
-  top: 40px;
-  right: 0;
-  bottom: 0;
-  width: min(420px, 100%);
-  z-index: 40;
-  display: flex;
-  flex-direction: column;
-  background: var(--app-inset-bg, var(--app-panel-bg));
-  border-left: 1px solid color-mix(in srgb, var(--app-border) 80%, transparent);
-  box-shadow: -12px 0 32px rgba(0, 0, 0, 0.22);
-}
-
-.machine-aside-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 16px 18px 14px;
-  border-bottom: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent);
-  background: color-mix(in srgb, var(--app-panel-bg) 88%, transparent);
-  flex-shrink: 0;
-}
-
-.machine-aside-header-main {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
-}
-
-.machine-aside-titles {
-  min-width: 0;
-}
-
-.machine-aside-title {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 650;
-  letter-spacing: 0.01em;
-  color: var(--app-text);
-}
-
-.machine-aside-subtitle {
-  margin: 2px 0 0;
+.machine-dialog-subtitle {
+  margin: 0 0 12px;
   font-size: 12px;
   color: var(--app-text-muted);
-}
-
-.machine-aside-close {
-  color: var(--app-text-muted);
-}
-
-.machine-aside-body {
-  flex: 1;
-  overflow: auto;
-  padding: 16px;
 }
 
 .machine-aside-footer {
