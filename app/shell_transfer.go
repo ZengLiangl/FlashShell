@@ -398,7 +398,7 @@ func (a *App) startTransferWorker(cp *define.SftpTransferRecord) {
 			a.finishTransfer(cp.ID, a.runCrossHostCopyTransfer(cp))
 			return
 		}
-		aux, err := a.shellAuxPool.Get(cp.MachineName)
+		aux, err := a.getShellAux(cp.MachineName)
 		if err != nil {
 			a.finishTransfer(cp.ID, err)
 			return
@@ -579,7 +579,7 @@ func (a *App) StartShellDownload(machineName, remotePath string) (string, error)
 	if machineName == "" || remotePath == "" || remotePath == "/" {
 		return "", fmt.Errorf("参数无效")
 	}
-	aux, err := a.shellAuxPool.Get(machineName)
+	aux, err := a.getShellAux(machineName)
 	if err != nil {
 		return "", err
 	}
@@ -662,7 +662,7 @@ func (a *App) StartShellUpload(machineName, localPath, remoteDir, conflictAction
 	if err != nil {
 		return "", fmt.Errorf("本地路径不存在: %w", err)
 	}
-	aux, err := a.shellAuxPool.Get(machineName)
+	aux, err := a.getShellAux(machineName)
 	if err != nil {
 		return "", err
 	}

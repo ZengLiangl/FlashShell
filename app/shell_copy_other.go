@@ -193,11 +193,11 @@ func (a *App) runCrossHostCopyTransfer(cp *define.SftpTransferRecord) error {
 	if srcSession == "" || dstSession == "" || srcPath == "" || destPath == "" {
 		return fmt.Errorf("跨机复制参数不完整")
 	}
-	srcAux, err := a.shellAuxPool.Get(srcSession)
+	srcAux, err := a.getShellAux(srcSession)
 	if err != nil {
 		return fmt.Errorf("源会话未就绪: %w", err)
 	}
-	dstAux, err := a.shellAuxPool.Get(dstSession)
+	dstAux, err := a.getShellAux(dstSession)
 	if err != nil {
 		return fmt.Errorf("目标会话未就绪: %w", err)
 	}
