@@ -95,6 +95,7 @@
             @stop-sub="stopSubProject"
             @dry-run-sub="dryRunSubProject"
             @select-project="selectProject"
+            @refresh="refreshConfig"
           />
         </aside>
 
@@ -610,8 +611,9 @@ export default {
 
     const refreshProjectConfig = loadConfigForRefresh;
 
-    // 刷新配置
+    // 刷新配置（任务模式下尽量回到原项目）
     const refreshConfig = async () => {
+      const keepName = selectedProject.value?.name || '';
       try {
         isReloading.value = true;
         console.log("开始刷新配置...");
@@ -622,6 +624,13 @@ export default {
         // 第二步：再刷新项目配置
         await loadConfigForRefresh();
         await loadShellMachines();
+
+        if (keepName) {
+          const next = (projects.value || []).find((p) => p.name === keepName);
+          if (next) {
+            await selectProject(next);
+          }
+        }
 
         console.log("配置刷新完成");
         ElMessage.success("配置已刷新");

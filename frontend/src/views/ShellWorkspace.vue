@@ -1197,6 +1197,8 @@ export default {
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  /* 整条热区不抢终端选中；仅手柄/按钮接鼠标 */
+  pointer-events: none;
 }
 
 .panel-edge-wrap--expand {
@@ -1218,6 +1220,7 @@ export default {
   background: transparent;
   cursor: col-resize;
   z-index: 1;
+  pointer-events: auto;
 }
 
 /* 拖动手柄轻微高亮 */
@@ -1245,9 +1248,11 @@ export default {
   box-shadow: -2px 0 8px color-mix(in srgb, #000 12%, transparent);
   opacity: 0.42;
   transition: opacity 0.14s ease, color 0.14s ease, border-color 0.14s ease, background 0.14s ease;
+  pointer-events: auto;
 }
 
 .panel-edge-btn.is-hovered,
+.panel-edge-btn:hover,
 .panel-edge-wrap:hover .panel-edge-btn {
   opacity: 1;
 }

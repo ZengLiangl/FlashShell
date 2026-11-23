@@ -1,35 +1,34 @@
 <template>
     <div class="panel-section subproject-section task-left-panel">
         <div class="section-header tl-head" @dblclick="onChromeTitleDblActivate" @mousedown="onChromeTitlePointerDown">
-            <div class="header-left">
-                <div class="header-titles tt">
-                    <el-dropdown
-                        v-if="selectedProject && projects.length > 1"
-                        trigger="click"
+            <div class="project-tabs" role="tablist" aria-label="切换项目">
+                <template v-for="(project, index) in projects" :key="project.name">
+                    <span v-if="index > 0" class="project-tab-sep" aria-hidden="true">｜</span>
+                    <button
+                        type="button"
+                        role="tab"
+                        class="project-tab"
+                        :class="{ active: project.name === selectedProject?.name }"
+                        :aria-selected="project.name === selectedProject?.name"
                         :disabled="status.isRunning"
-                        @command="onSelectProject"
+                        :title="project.name"
+                        @click="onSelectProject(project.name)"
                     >
-                        <button type="button" class="project-switch-trigger" :title="status.isRunning ? '任务执行中，请先停止' : '切换项目'">
-                            <b>{{ selectedProject.name }}</b>
-                            <el-icon class="project-switch-chevron"><ArrowDown /></el-icon>
-                        </button>
-                        <template #dropdown>
-                            <el-dropdown-menu>
-                                <el-dropdown-item
-                                    v-for="project in projects"
-                                    :key="project.name"
-                                    :command="project.name"
-                                    :disabled="project.name === selectedProject.name"
-                                >
-                                    {{ project.name }}
-                                </el-dropdown-item>
-                            </el-dropdown-menu>
-                        </template>
-                    </el-dropdown>
-                    <b v-else-if="selectedProject">{{ selectedProject.name }}</b>
-                    <span v-else>可执行项目</span>
-                    <span v-if="selectedProject" class="project-chip">任务流水线</span>
-                </div>
+                        {{ project.name }}
+                    </button>
+                </template>
+            </div>
+            <div class="header-actions icon-actions" @click.stop>
+                <el-tooltip content="刷新配置文件" placement="top">
+                    <el-button
+                        size="small"
+                        circle
+                        :disabled="status.isRunning"
+                        @click="onRefresh"
+                    >
+                        <el-icon><Refresh /></el-icon>
+                    </el-button>
+                </el-tooltip>
             </div>
         </div>
 
@@ -123,7 +122,7 @@
                                         <el-tag v-if="command.parallel" size="small" type="warning" effect="plain">
                                             并行
                                         </el-tag>
-                                        <span class="meta-pill quiet">{{ command.steps?.length || 0 }} 步骤</span>
+                                        <span class="meta-pill tag tag-info">{{ command.steps?.length || 0 }} 步骤</span>
                                     </div>
                                 </div>
                             </button>
@@ -162,12 +161,12 @@
 
 <script>
 import { ElMessage } from 'element-plus'
-import { ArrowDown } from '@element-plus/icons-vue'
+import { Refresh } from '@element-plus/icons-vue'
 import { onChromeTitleDblActivate, onChromeTitlePointerDown } from '../utils/windowChrome'
 
 export default {
     name: 'SubProjectList',
-    components: { ArrowDown },
+    components: { Refresh },
     props: {
         selectedProject: { type: Object, default: null },
         projects: { type: Array, default: () => [] },
@@ -179,7 +178,7 @@ export default {
         getCommandTypeText: { type: Function, required: true },
         isSubProjectRunning: { type: Function, required: true }
     },
-    emits: ['toggle-sub', 'toggle-cmd', 'execute-sub', 'execute-cmd', 'stop-sub', 'dry-run-sub', 'select-project'],
+    emits: ['toggle-sub', 'toggle-cmd', 'execute-sub', 'execute-cmd', 'stop-sub', 'dry-run-sub', 'select-project', 'refresh'],
     created() {
         // 不要放进 data：function ref 会反复赋值，放响应式里会把展开交互打挂
         this.blockRefs = Object.create(null)
@@ -228,6 +227,13 @@ export default {
             const project = (this.projects || []).find((p) => p.name === name)
             if (project) this.$emit('select-project', project)
         },
+        onRefresh() {
+            if (this.status?.isRunning) {
+                ElMessage.warning('任务执行中，请先停止后再刷新配置')
+                return
+            }
+            this.$emit('refresh')
+        },
         stepDisplay(step) {
             if (typeof step === 'string') return step
             return step?.command || step?.cmd || ''
@@ -259,80 +265,66 @@ export default {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 12px 14px 10px;
+    padding: 10px 12px 8px;
     flex-shrink: 0;
 }
 
-.header-left {
+.project-tabs {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 0;
     min-width: 0;
     flex: 1;
+    overflow-x: auto;
+    scrollbar-width: thin;
 }
 
-.tt {
-    min-width: 0;
-    flex: 1;
-}
-
-.tt b {
-    display: block;
-    font-size: 14px;
-    font-weight: 600;
-    color: var(--fg);
+.project-tab {
+    flex: 0 0 auto;
+    max-width: 120px;
+    padding: 4px 2px;
+    border: none;
+    background: none;
+    color: var(--muted);
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 1.3;
+    cursor: pointer;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
 }
 
-.project-switch-trigger {
-    display: inline-flex;
-    align-items: center;
-    gap: 4px;
-    max-width: 100%;
-    padding: 0;
-    border: none;
-    background: none;
-    cursor: pointer;
-    text-align: left;
+.project-tab:hover:not(:disabled) {
+    color: var(--fg);
 }
 
-.project-switch-trigger:disabled {
+.project-tab.active {
+    color: var(--accent);
+    font-weight: 600;
+}
+
+.project-tab:disabled {
     cursor: not-allowed;
     opacity: 0.65;
 }
 
-.project-switch-trigger:hover:not(:disabled) b,
-.project-switch-trigger:hover:not(:disabled) .project-switch-chevron {
-    color: var(--accent);
+.project-tab-sep {
+    flex: 0 0 auto;
+    color: var(--border);
+    font-size: 12px;
+    user-select: none;
+    padding: 0 2px;
 }
 
-.project-switch-chevron {
+.header-actions {
     flex-shrink: 0;
-    font-size: 12px;
-    color: var(--muted);
 }
 
-.tt > span:first-of-type:not(.project-chip) {
-    display: block;
-    font-size: 14px;
-    font-weight: 600;
-}
-
-.tt span.project-chip,
-.project-chip {
-    display: block;
-    font-size: 12px;
-    color: var(--muted);
-    font-family: var(--font-mono);
-    margin-top: 2px;
-    background: none;
-    border: none;
-    padding: 0;
-    max-width: none;
-    height: auto;
-    line-height: 1.3;
+.header-actions :deep(.el-button) {
+    width: 28px !important;
+    height: 28px !important;
+    min-width: 28px !important;
 }
 
 .tree {
