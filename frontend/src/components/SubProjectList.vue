@@ -1,22 +1,64 @@
 <template>
     <div class="panel-section subproject-section task-left-panel">
         <div class="section-header tl-head" @dblclick="onChromeTitleDblActivate" @mousedown="onChromeTitlePointerDown">
-            <div class="project-tabs" role="tablist" aria-label="切换项目">
-                <template v-for="(project, index) in projects" :key="project.name">
-                    <span v-if="index > 0" class="project-tab-sep" aria-hidden="true">｜</span>
-                    <button
-                        type="button"
-                        role="tab"
-                        class="project-tab"
-                        :class="{ active: project.name === selectedProject?.name }"
-                        :aria-selected="project.name === selectedProject?.name"
-                        :disabled="status.isRunning"
-                        :title="project.name"
-                        @click="onSelectProject(project.name)"
-                    >
-                        {{ project.name }}
-                    </button>
-                </template>
+            <div ref="tabsWrapRef" class="project-tabs-wrap">
+                <button
+                    v-if="tabsScrollable"
+                    type="button"
+                    class="tabs-nav tabs-nav-left"
+                    :disabled="!tabsCanScrollLeft"
+                    title="向左滚动项目"
+                    aria-label="向左滚动项目"
+                    @click="scrollTabsBy(-1)"
+                >
+                    <el-icon><ArrowLeft /></el-icon>
+                </button>
+                <div
+                    ref="tabsRef"
+                    class="project-tabs"
+                    :class="{
+                        'is-scrollable': tabsScrollable,
+                        'is-scrolling': tabsScrolling,
+                        'fade-left': tabsCanScrollLeft,
+                        'fade-right': tabsCanScrollRight,
+                    }"
+                    role="tablist"
+                    aria-label="切换项目"
+                    @wheel="onTabsWheel"
+                    @pointerdown="onTabsPointerDown"
+                    @scroll.passive="updateTabsScrollState"
+                    @click.capture="onTabsClickCapture"
+                    @mousedown.stop
+                    @dblclick.stop
+                >
+                    <template v-for="(project, index) in projects" :key="project.name">
+                        <span v-if="index > 0" class="project-tab-sep" aria-hidden="true">｜</span>
+                        <button
+                            type="button"
+                            role="tab"
+                            class="project-tab"
+                            :class="{ active: project.name === selectedProject?.name, 'is-locked': status.isRunning }"
+                            :aria-selected="project.name === selectedProject?.name"
+                            :aria-disabled="status.isRunning ? 'true' : 'false'"
+                            :title="project.name"
+                            @mousedown.prevent
+                            @click="onSelectProject(project.name)"
+                        >
+                            {{ project.name }}
+                        </button>
+                    </template>
+                </div>
+                <button
+                    v-if="tabsScrollable"
+                    type="button"
+                    class="tabs-nav tabs-nav-right"
+                    :disabled="!tabsCanScrollRight"
+                    title="向右滚动项目"
+                    aria-label="向右滚动项目"
+                    @click="scrollTabsBy(1)"
+                >
+                    <el-icon><ArrowRight /></el-icon>
+                </button>
             </div>
             <div class="header-actions icon-actions" @click.stop>
                 <el-tooltip content="刷新配置文件" placement="top">
@@ -179,12 +221,196 @@ export default {
         isSubProjectRunning: { type: Function, required: true }
     },
     emits: ['toggle-sub', 'toggle-cmd', 'execute-sub', 'execute-cmd', 'stop-sub', 'dry-run-sub', 'select-project', 'refresh'],
+    data() {
+        return {
+            // 项目标签横向滚动的状态：只在溢出时才显示边缘渐隐和抓手光标
+            tabsScrollable: false,
+            tabsCanScrollLeft: false,
+            tabsCanScrollRight: false,
+            tabsScrolling: false
+        }
+    },
+    watch: {
+        selectedProject: {
+            handler() {
+                this.$nextTick(() => this.revealActiveTab())
+            }
+        },
+        projects: {
+            handler() {
+                this.$nextTick(() => {
+                    this.updateTabsScrollState()
+                    this.revealActiveTab('auto')
+                })
+            }
+        }
+    },
     created() {
         // 不要放进 data：function ref 会反复赋值，放响应式里会把展开交互打挂
         this.blockRefs = Object.create(null)
         this.cmdRefs = Object.create(null)
+        // 拖拽滚动的临时状态，同样不放进响应式
+        this.tabDrag = null
+        this.tabsSuppressClick = false
+        this.tabsResizeObserver = null
+        this.tabsHasLayout = false
+    },
+    mounted() {
+        this.updateTabsScrollState()
+        this.$nextTick(() => {
+            this.updateTabsScrollState()
+            this.revealActiveTab('auto')
+        })
+        if (this.$refs.tabsRef && typeof ResizeObserver !== 'undefined') {
+            this.tabsResizeObserver = new ResizeObserver(() => this.updateTabsScrollState())
+            this.tabsResizeObserver.observe(this.$refs.tabsRef)
+        }
+        window.addEventListener('resize', this.updateTabsScrollState)
+    },
+    beforeUnmount() {
+        this.tabsResizeObserver?.disconnect()
+        this.tabsResizeObserver = null
+        window.removeEventListener('resize', this.updateTabsScrollState)
+        this.detachTabsPointerTracking()
     },
     methods: {
+        /* ---- 项目标签横向滚动：隐藏原生滚动条，用滚轮/拖拽/自动定位代替 ---- */
+        updateTabsScrollState() {
+            const el = this.$refs.tabsRef
+            const wrap = this.$refs.tabsWrapRef
+            if (!el) return
+            const wasHidden = !this.tabsHasLayout
+            this.tabsHasLayout = el.clientWidth > 0
+            if (wasHidden && this.tabsHasLayout) this.revealActiveTab('auto')
+            // 用容器宽度判断是否需要箭头：箭头本身会占宽度，不能拿标签条自身宽度判断，
+            // 否则面板变宽后箭头会“赖着不走”，明明放得下还要滚。
+            const available = wrap ? wrap.clientWidth : el.clientWidth
+            const scrollable = el.scrollWidth > available + 1
+            const max = Math.max(0, el.scrollWidth - el.clientWidth)
+            this.tabsScrollable = scrollable
+            this.tabsCanScrollLeft = scrollable && el.scrollLeft > 1
+            this.tabsCanScrollRight = scrollable && el.scrollLeft < max - 1
+        },
+        onTabsWheel(event) {
+            const el = this.$refs.tabsRef
+            if (!el || event.ctrlKey) return
+            const max = el.scrollWidth - el.clientWidth
+            if (max <= 1) return
+            // 触控板横向手势交给浏览器原生滚动，保留惯性
+            if (Math.abs(event.deltaX) > Math.abs(event.deltaY)) return
+            const scale = event.deltaMode === 1 ? 16 : event.deltaMode === 2 ? el.clientWidth : 1
+            const next = Math.max(0, Math.min(max, el.scrollLeft + event.deltaY * scale))
+            if (next === el.scrollLeft) return
+            event.preventDefault()
+            el.scrollLeft = next
+        },
+        scrollTabsBy(direction) {
+            const el = this.$refs.tabsRef
+            if (!el) return
+            const max = el.scrollWidth - el.clientWidth
+            if (max <= 1) return
+            const step = Math.max(72, Math.round(el.clientWidth * 0.7))
+            const target = Math.max(0, Math.min(max, el.scrollLeft + direction * step))
+            if (Math.abs(target - el.scrollLeft) < 1) return
+            if (typeof el.scrollTo === 'function') {
+                el.scrollTo({ left: target, behavior: 'smooth' })
+            } else {
+                el.scrollLeft = target
+            }
+        },
+        onTabsPointerDown(event) {
+            if (event.button !== 0 || event.pointerType === 'touch') return
+            const el = this.$refs.tabsRef
+            if (!el || el.scrollWidth - el.clientWidth <= 1) return
+            // 新的一次按下：清掉上一次可能残留的点击抑制
+            this.tabsSuppressClick = false
+            this.tabDrag = {
+                pointerId: event.pointerId,
+                startX: event.clientX,
+                startScroll: el.scrollLeft,
+                moved: false
+            }
+            window.addEventListener('pointermove', this.onTabsPointerMove, true)
+            window.addEventListener('pointerup', this.onTabsPointerUp, true)
+            window.addEventListener('pointercancel', this.onTabsPointerUp, true)
+            window.addEventListener('blur', this.onTabsPointerUp, true)
+        },
+        onTabsPointerMove(event) {
+            const drag = this.tabDrag
+            if (!drag || drag.pointerId !== event.pointerId) return
+            const el = this.$refs.tabsRef
+            if (!el) return
+            const dx = event.clientX - drag.startX
+            if (!drag.moved) {
+                if (Math.abs(dx) < 4) return
+                drag.moved = true
+                this.tabsScrolling = true
+                // 拖动滚动后不要顺手把手指停下的项目选中
+                this.tabsSuppressClick = true
+                event.preventDefault()
+                // 指针移出标签条也继续跟随
+                try {
+                    el.setPointerCapture(event.pointerId)
+                } catch (e) {
+                    /* ignore */
+                }
+            }
+            el.scrollLeft = drag.startScroll - dx
+        },
+        onTabsPointerUp(event) {
+            const drag = this.tabDrag
+            if (!drag) return
+            if (event?.pointerId !== undefined && event.pointerId !== drag.pointerId) return
+            const el = this.$refs.tabsRef
+            if (el && typeof el.hasPointerCapture === 'function' && el.hasPointerCapture(drag.pointerId)) {
+                try {
+                    el.releasePointerCapture(drag.pointerId)
+                } catch (e) {
+                    /* ignore */
+                }
+            }
+            this.tabDrag = null
+            this.detachTabsPointerTracking()
+            this.tabsScrolling = false
+            if (drag.moved) {
+                // click 在 pointerup 之后同轮触发，延后一帧再放开抑制
+                window.setTimeout(() => {
+                    this.tabsSuppressClick = false
+                }, 0)
+            }
+        },
+        detachTabsPointerTracking() {
+            window.removeEventListener('pointermove', this.onTabsPointerMove, true)
+            window.removeEventListener('pointerup', this.onTabsPointerUp, true)
+            window.removeEventListener('pointercancel', this.onTabsPointerUp, true)
+            window.removeEventListener('blur', this.onTabsPointerUp, true)
+        },
+        onTabsClickCapture(event) {
+            if (!this.tabsSuppressClick) return
+            event.preventDefault()
+            event.stopPropagation()
+        },
+        revealActiveTab(behavior = 'smooth') {
+            const el = this.$refs.tabsRef
+            if (!el || el.clientWidth <= 0) return
+            const active = el.querySelector('.project-tab.active')
+            if (!active) return
+            const box = el.getBoundingClientRect()
+            const tab = active.getBoundingClientRect()
+            const pad = 8
+            let target = null
+            if (tab.left < box.left + pad) target = el.scrollLeft + (tab.left - box.left) - pad
+            else if (tab.right > box.right - pad) target = el.scrollLeft + (tab.right - box.right) + pad
+            if (target === null) return
+            target = Math.max(0, Math.min(target, el.scrollWidth - el.clientWidth))
+            if (Math.abs(target - el.scrollLeft) < 1) return
+            if (typeof el.scrollTo === 'function') {
+                el.scrollTo({ left: target, behavior })
+            } else {
+                el.scrollLeft = target
+            }
+        },
+        /* ---- 子项目/命令列表 ---- */
         onChromeTitleDblActivate,
         onChromeTitlePointerDown,
         setBlockRef(name, el) {
@@ -219,11 +445,11 @@ export default {
             })
         },
         onSelectProject(name) {
+            if (!name || name === this.selectedProject?.name) return
             if (this.status?.isRunning) {
                 ElMessage.warning('任务执行中，请先停止后再切换项目')
                 return
             }
-            if (!name || name === this.selectedProject?.name) return
             const project = (this.projects || []).find((p) => p.name === name)
             if (project) this.$emit('select-project', project)
         },
@@ -269,6 +495,56 @@ export default {
     flex-shrink: 0;
 }
 
+.project-tabs-wrap {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    flex: 1;
+    min-width: 0;
+    /* 这条热区要能拖动/滚动标签，全局窗口拖拽会让位给标签条 */
+    --wails-draggable: no-drag;
+}
+
+/* 左右滚动按钮：只有标签溢出时才出现，明确告诉用户还能左右翻 */
+.tabs-nav {
+    flex: 0 0 auto;
+    width: 20px;
+    height: 24px;
+    padding: 0;
+    display: grid;
+    place-items: center;
+    border: none;
+    border-radius: 6px;
+    background: none;
+    color: var(--muted);
+    cursor: pointer;
+    transition: color 0.12s ease, background-color 0.12s ease, opacity 0.12s ease;
+}
+
+.tabs-nav:hover:not(:disabled) {
+    color: var(--fg);
+    background: color-mix(in oklch, var(--fg) 8%, transparent);
+}
+
+.tabs-nav:active:not(:disabled) {
+    background: color-mix(in oklch, var(--fg) 12%, transparent);
+}
+
+.tabs-nav:disabled {
+    opacity: 0.35;
+    cursor: default;
+}
+
+.tabs-nav:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: -1px;
+}
+
+.tabs-nav .el-icon {
+    font-size: 13px;
+}
+
 .project-tabs {
     display: flex;
     align-items: center;
@@ -276,14 +552,65 @@ export default {
     min-width: 0;
     flex: 1;
     overflow-x: auto;
-    scrollbar-width: thin;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    /* 隐藏原生滚动条：它会压在项目名上并抢走点击 */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+
+/* 左右还有未显示的项目时，用渐隐提示边缘被裁切 */
+.project-tabs.fade-left {
+    -webkit-mask-image: linear-gradient(to right, transparent 0, #000 16px);
+    mask-image: linear-gradient(to right, transparent 0, #000 16px);
+}
+
+.project-tabs.fade-right {
+    -webkit-mask-image: linear-gradient(to left, transparent 0, #000 16px);
+    mask-image: linear-gradient(to left, transparent 0, #000 16px);
+}
+
+.project-tabs.fade-left.fade-right {
+    -webkit-mask-image: linear-gradient(
+        to right,
+        transparent 0,
+        #000 16px,
+        #000 calc(100% - 16px),
+        transparent 100%
+    );
+    mask-image: linear-gradient(
+        to right,
+        transparent 0,
+        #000 16px,
+        #000 calc(100% - 16px),
+        transparent 100%
+    );
+}
+
+.project-tabs::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+}
+
+.project-tabs.is-scrollable {
+    cursor: grab;
+}
+
+.project-tabs.is-scrollable.is-scrolling,
+.project-tabs.is-scrolling .project-tab {
+    cursor: grabbing;
 }
 
 .project-tab {
     flex: 0 0 auto;
     max-width: 120px;
-    padding: 4px 2px;
+    min-height: 24px;
+    padding: 4px 6px;
     border: none;
+    border-radius: 6px;
     background: none;
     color: var(--muted);
     font-size: 13px;
@@ -293,10 +620,14 @@ export default {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    transition: color 0.12s ease, background-color 0.12s ease;
+    -webkit-user-select: none;
+    user-select: none;
 }
 
-.project-tab:hover:not(:disabled) {
+.project-tab:hover:not(.is-locked) {
     color: var(--fg);
+    background: color-mix(in oklch, var(--fg) 7%, transparent);
 }
 
 .project-tab.active {
@@ -304,9 +635,27 @@ export default {
     font-weight: 600;
 }
 
-.project-tab:disabled {
+.project-tab.active:hover:not(.is-locked) {
+    background: color-mix(in oklch, var(--accent) 12%, transparent);
+}
+
+.project-tab.is-locked {
     cursor: not-allowed;
     opacity: 0.65;
+}
+
+.project-tab.is-locked:hover {
+    background: none;
+    color: var(--muted);
+}
+
+.project-tab.is-locked.active {
+    color: var(--accent);
+}
+
+.project-tab:focus-visible {
+    outline: 1px solid var(--accent);
+    outline-offset: -1px;
 }
 
 .project-tab-sep {
@@ -314,7 +663,7 @@ export default {
     color: var(--border);
     font-size: 12px;
     user-select: none;
-    padding: 0 2px;
+    padding: 0 1px;
 }
 
 .header-actions {
