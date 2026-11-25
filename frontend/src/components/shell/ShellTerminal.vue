@@ -68,7 +68,7 @@ import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import { WebglAddon } from 'xterm-addon-webgl'
 import { getTerminalSelectionText } from '../../utils/shellSelection'
-import { findInTerminalBuffer, selectTerminalMatch, highlightViewportMatches, clearSearchDecorations, lineToSearchModel, charRangeToCells, indexOfSearchMatch } from '../../utils/shellTerminalSearch'
+import { findInTerminalBuffer, selectTerminalMatch, highlightViewportMatches, clearSearchDecorations, buildLogicalLine, collectLogicalLineMatches, matchEndPosition, indexOfSearchMatch } from '../../utils/shellTerminalSearch'
 import 'xterm/css/xterm.css'
 import * as App from '../../../wailsjs/go/app/App'
 import { EventsOn } from '../../../wailsjs/runtime/runtime'
@@ -281,6 +281,10 @@ export default {
     /** @type {Array<{ dispose?: Function }>} */
     let searchDecorationBucket = []
     let searchHighlightTimer = null
+    let searchRefreshTimer = null
+    let writeParsedListener = null
+    let terminalResizeListener = null
+    let bufferChangeListener = null
     let scrollListener = null
 
     const clearViewportHighlights = () => {
@@ -307,6 +311,79 @@ export default {
         searchHighlightTimer = null
         refreshViewportHighlights()
       }, 50)
+    }
+
+    const cancelSearchRefresh = () => {
+      if (searchRefreshTimer != null) {
+        clearTimeout(searchRefreshTimer)
+        searchRefreshTimer = null
+      }
+    }
+
+    /** 内容/尺寸变化后旧选区和计数都可能失真，先清掉再按当前视口重新定位 */
+    const invalidateSearchResults = () => {
+      cancelAsyncMatchCount()
+      cancelSearchRefresh()
+      clearViewportHighlights()
+      searchMatchList = []
+      searchIndexReady = false
+      lastCountedQuery = ''
+      lastActiveMatch = null
+      term.value?.clearSelection?.()
+    }
+
+    /**
+     * less 翻页、终端 resize、切回主/备用缓冲后重新搜索当前页。
+     * 只重算当前视口并重新计数，避免旧高亮停留在错误位置。
+     */
+    const scheduleSearchRefresh = (delay = 120) => {
+      if (!activeSearchQuery && !props.searchQuery.trim()) return
+      cancelSearchRefresh()
+      searchRefreshTimer = setTimeout(() => {
+        searchRefreshTimer = null
+        const terminal = term.value
+        const query = activeSearchQuery || props.searchQuery.trim()
+        if (!terminal || !query) return
+        invalidateSearchResults()
+        activeSearchQuery = query
+        const buf = terminal.buffer.active
+        const match = findInTerminalBuffer(terminal, query, { start: { row: buf.viewportY, col: 0 } })
+        if (match) selectTerminalMatch(terminal, match)
+        else terminal.clearSelection()
+        lastActiveMatch = match
+        refreshViewportHighlights(query, match)
+        emitSearchResult({
+          found: !!match,
+          resultIndex: -1,
+          resultCount: 0,
+          capped: false,
+        })
+        scheduleAsyncMatchCount(query)
+      }, delay)
+    }
+
+    /** 新查询从视口顶部/底部开始，同一查询的「下一处」从上次匹配之后继续 */
+    const resolveSearchStart = (terminal, query, reverse) => {
+      const buf = terminal.buffer.active
+      if (query === activeSearchQuery && lastActiveMatch) {
+        if (reverse) {
+          return { row: lastActiveMatch.row, col: lastActiveMatch.col }
+        }
+        return matchEndPosition(lastActiveMatch, terminal.cols)
+      }
+      // Ctrl+F 从选区打开搜索时，优先定位到选区那一处，而不是跳到缓冲区开头
+      const sel = terminal.getSelectionPosition?.()
+      const selText = terminal.getSelection?.()
+      if (sel && selText && selText.trim().toLowerCase() === query.toLowerCase()) {
+        return { row: sel.start.y, col: sel.start.x }
+      }
+      if (reverse) {
+        return {
+          row: Math.min(buf.length - 1, buf.viewportY + terminal.rows - 1),
+          col: terminal.cols,
+        }
+      }
+      return { row: buf.viewportY, col: 0 }
     }
 
     const cancelAsyncMatchCount = () => {
@@ -353,9 +430,8 @@ export default {
       const terminal = term.value
       if (!terminal) return
 
-      const needle = query.toLowerCase()
-      const needleLen = needle.length
       const buf = terminal.buffer.active
+      const cols = terminal.cols
       const totalRows = buf.length
       let row = 0
       /** @type {Array<{ row: number, col: number }>} */
@@ -381,21 +457,16 @@ export default {
         if (token !== searchCountToken || !term.value) return
         const deadline = performance.now() + 6
         while (row < totalRows) {
-          const line = buf.getLine(row)
-          const rowIndex = row
-          row += 1
-          if (!line) continue
-          // 与查找高亮同一套单元格映射，避免 trim/宽字符导致计数与选区不一致
-          const model = lineToSearchModel(line)
-          const hay = model.text.toLowerCase()
-          if (!hay) continue
-          let from = 0
-          while (matches.length < SEARCH_COUNT_CAP) {
-            const at = hay.indexOf(needle, from)
-            if (at < 0) break
-            const { col } = charRangeToCells(model, at, needleLen)
-            matches.push({ row: rowIndex, col })
-            from = at + Math.max(1, needleLen)
+          // 按逻辑行扫描：跨行折断的关键字（grep 长行、less 换行）也能计数
+          const logical = buildLogicalLine(buf, row)
+          row = logical.endRow + 1
+          const found = collectLogicalLineMatches(logical, query, {
+            limit: SEARCH_COUNT_CAP - matches.length,
+            cols,
+          })
+          for (const m of found) {
+            matches.push({ row: m.row, col: m.col })
+            if (matches.length >= SEARCH_COUNT_CAP) break
           }
           if (matches.length >= SEARCH_COUNT_CAP) {
             finish(true)
@@ -1144,6 +1215,24 @@ export default {
         if (cursorLineHighlightEnabled) refreshCursorLineHighlight()
       }) || null
 
+      // 输出/翻页/尺寸变化后搜索高亮要跟着内容走：
+      // - 备用缓冲（less）整屏重绘：旧选区和计数作废，按当前页重搜
+      // - 主缓冲流式输出（grep/tail）：只重绘视口内高亮，不动当前选区
+      writeParsedListener?.dispose?.()
+      writeParsedListener = terminal.onWriteParsed?.(() => {
+        if (!activeSearchQuery) return
+        if (terminal.buffer.active.type === 'alternate') scheduleSearchRefresh(150)
+        else scheduleViewportHighlights()
+      }) || null
+      terminalResizeListener?.dispose?.()
+      terminalResizeListener = terminal.onResize?.(() => {
+        if (activeSearchQuery) scheduleSearchRefresh(180)
+      }) || null
+      bufferChangeListener?.dispose?.()
+      bufferChangeListener = terminal.buffer.onBufferChange?.(() => {
+        if (activeSearchQuery) scheduleSearchRefresh(80)
+      }) || null
+
       initialized = true
       // 断开后也要接着写「连接失败」等状态行，不能等重新连上才挂 writer
       attachWriter(terminal, { replay: true })
@@ -1158,6 +1247,13 @@ export default {
       clearFitTimers()
       clearCwdSyncTimer()
       cancelAsyncMatchCount()
+      cancelSearchRefresh()
+      writeParsedListener?.dispose?.()
+      writeParsedListener = null
+      terminalResizeListener?.dispose?.()
+      terminalResizeListener = null
+      bufferChangeListener?.dispose?.()
+      bufferChangeListener = null
       clearViewportHighlights()
       clearCursorLineHighlight()
       activeSearchQuery = ''
@@ -1226,8 +1322,12 @@ export default {
         return toSearchResult(false)
       }
       try {
+        cancelSearchRefresh()
         const sameQuery = query === lastCountedQuery
-        const match = findInTerminalBuffer(terminal, query, { reverse: false })
+        // 查询变了就从视口重新开始；同一查询才从上次匹配之后继续
+        if (!sameQuery) resetSearchMatchIndex()
+        const start = resolveSearchStart(terminal, query, false)
+        const match = findInTerminalBuffer(terminal, query, { start })
         if (match) selectTerminalMatch(terminal, match)
         else terminal.clearSelection()
         activeSearchQuery = query
@@ -1261,8 +1361,11 @@ export default {
         return toSearchResult(false)
       }
       try {
+        cancelSearchRefresh()
         const sameQuery = query === lastCountedQuery
-        const match = findInTerminalBuffer(terminal, query, { reverse: true })
+        if (!sameQuery) resetSearchMatchIndex()
+        const start = resolveSearchStart(terminal, query, true)
+        const match = findInTerminalBuffer(terminal, query, { reverse: true, start })
         if (match) selectTerminalMatch(terminal, match)
         else terminal.clearSelection()
         activeSearchQuery = query
@@ -1284,6 +1387,7 @@ export default {
 
     const clearSearch = () => {
       cancelAsyncMatchCount()
+      cancelSearchRefresh()
       clearViewportHighlights()
       activeSearchQuery = ''
       lastActiveMatch = null
@@ -1579,8 +1683,10 @@ export default {
     watch(() => props.searchQuery, (query) => {
       if (!props.active || !query.trim()) {
         clearSearch()
+        return
       }
-      // 查找与匹配计数由工作区触发（findNext/findPrevious），避免重复前进
+      // 查询变了：取消按旧查询排队的重搜，等工作区触发新的 findNext
+      cancelSearchRefresh()
     })
 
     watch([shellFontSize, shellLineHeight, terminalPreset, shellFontFamily, effectiveTerminalPreset], () => {
