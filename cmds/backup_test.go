@@ -8,45 +8,45 @@ import (
 func TestParseBackupArgs(t *testing.T) {
 	spec, err := parseBackupArgs([]string{
 		"backup",
-		"/root/app/taj-admin/back",
-		"taj-admin",
-		"/root/app/taj-admin/lib",
-		"/root/app/taj-admin/taj-admin.jar",
+		"/opt/example-app/back",
+		"example-app",
+		"/opt/example-app/lib",
+		"/opt/example-app/example-app.jar",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if spec.BackDir != "/root/app/taj-admin/back" || spec.NamePrefix != "taj-admin" || len(spec.Sources) != 2 {
+	if spec.BackDir != "/opt/example-app/back" || spec.NamePrefix != "example-app" || len(spec.Sources) != 2 {
 		t.Fatalf("spec: %+v", spec)
 	}
 }
 
 func TestBuildRemoteBackupShell(t *testing.T) {
 	cmd, dirs := buildRemoteBackupShell(backupSpec{
-		BackDir:    "/root/app/taj-admin/back",
-		NamePrefix: "taj-admin",
-		Sources:    []string{"/root/app/taj-admin/lib", "/root/app/taj-admin/taj-admin.jar"},
+		BackDir:    "/opt/example-app/back",
+		NamePrefix: "example-app",
+		Sources:    []string{"/opt/example-app/lib", "/opt/example-app/example-app.jar"},
 	})
 	if !strings.Contains(cmd, "tar czf") || !strings.Contains(cmd, "date +%Y-%m-%d-%H%M%S") {
 		t.Fatalf("unexpected shell: %s", cmd)
 	}
-	if !strings.Contains(cmd, "-C '/root/app/taj-admin'") {
+	if !strings.Contains(cmd, "-C '/opt/example-app'") {
 		t.Fatalf("expected -C parent dir, got: %s", cmd)
 	}
-	if !strings.Contains(cmd, "'lib'") || !strings.Contains(cmd, "'taj-admin.jar'") {
+	if !strings.Contains(cmd, "'lib'") || !strings.Contains(cmd, "'example-app.jar'") {
 		t.Fatalf("expected relative members, got: %s", cmd)
 	}
-	if strings.Contains(cmd, "'/root/app/taj-admin/lib'") {
+	if strings.Contains(cmd, "'/opt/example-app/lib'") {
 		t.Fatalf("should not pass absolute paths to tar: %s", cmd)
 	}
-	if len(dirs) != 1 || dirs[0] != "/root/app/taj-admin" {
+	if len(dirs) != 1 || dirs[0] != "/opt/example-app" {
 		t.Fatalf("extract dirs: %v", dirs)
 	}
 }
 
 func TestBackupRollbackHint(t *testing.T) {
-	h := backupRollbackHint([]string{"/root/app/taj_plus"})
-	if !strings.Contains(h, "-C '/root/app/taj_plus'") {
+	h := backupRollbackHint([]string{"/opt/example-app"})
+	if !strings.Contains(h, "-C '/opt/example-app'") {
 		t.Fatalf("hint: %s", h)
 	}
 }

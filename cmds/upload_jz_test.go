@@ -19,8 +19,21 @@ import (
 	"FlashDock/utils"
 )
 
+// 集成测试目标机器名：通过环境变量指定，避免在仓库里写死真实主机名。
+// 用法：FLASHDOCK_TEST_MACHINE=your-host go test ./cmds -run TestJZ...
+func testMachineName() string {
+	if name := strings.TrimSpace(os.Getenv("FLASHDOCK_TEST_MACHINE")); name != "" {
+		return name
+	}
+	return "example-host"
+}
+
 func loadJZMachine(t *testing.T) *define.Machine {
 	t.Helper()
+	name := testMachineName()
+	if name == "example-host" {
+		t.Skip("集成测试：请设置 FLASHDOCK_TEST_MACHINE 指定目标机器")
+	}
 	if err := crypto.InitVault(); err != nil {
 		t.Fatalf("InitVault: %v", err)
 	}
@@ -36,11 +49,11 @@ func loadJZMachine(t *testing.T) *define.Machine {
 	}
 	for i := range cfg.Machines {
 		m := &cfg.Machines[i]
-		if m.Name == "jz" {
+		if m.Name == name {
 			return m
 		}
 	}
-	t.Fatal("global_config 中未找到名为 jz 的机器")
+	t.Fatalf("global_config 中未找到名为 %s 的机器", name)
 	return nil
 }
 
@@ -49,7 +62,7 @@ func connectJZ(t *testing.T) *define.RemoteMachine {
 	m := loadJZMachine(t)
 	rm := define.NewRemoteMachine()
 	if err := rm.Connect(m, true); err != nil {
-		t.Fatalf("Connect jz: %v", err)
+		t.Fatalf("Connect %s: %v", testMachineName(), err)
 	}
 	return rm
 }
@@ -169,11 +182,11 @@ func TestJZTaskUploadNoTruncateDuringOverwrite(t *testing.T) {
 	}
 
 	var (
-		mu           sync.Mutex
-		sawPart      bool
-		minTargetSz  = st0.Size()
-		sawBadTrunc  bool
-		uploadDone   = make(chan error, 1)
+		mu          sync.Mutex
+		sawPart     bool
+		minTargetSz = st0.Size()
+		sawBadTrunc bool
+		uploadDone  = make(chan error, 1)
 	)
 	go func() {
 		uploadDone <- doUpload(rm, []string{"upload", nextLocal, remotePath}, out)

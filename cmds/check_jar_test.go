@@ -34,12 +34,12 @@ func writeTestJar(t *testing.T, dir string, files map[string]string) string {
 func TestCheckJarRejectsMissingMainClass(t *testing.T) {
 	dir := t.TempDir()
 	jar := writeTestJar(t, dir, map[string]string{
-		"BOOT-INF/classes/com/taj/web/Foo.class": "class",
-		"BOOT-INF/classes/application.yml":       "spring:\n  profiles:\n    active: dev\n",
+		"BOOT-INF/classes/com/example/web/Foo.class": "class",
+		"BOOT-INF/classes/application.yml":           "spring:\n  profiles:\n    active: dev\n",
 	})
 	_, err := CheckJar(checkJarSpec{
 		JarPath:    jar,
-		Classes:    []string{"com.taj.DromaraApplication"},
+		Classes:    []string{"com.example.Application"},
 		MinClasses: 1,
 	})
 	if err == nil {
@@ -50,20 +50,20 @@ func TestCheckJarRejectsMissingMainClass(t *testing.T) {
 func TestCheckJarRejectsPlaceholderAndSmallJar(t *testing.T) {
 	dir := t.TempDir()
 	jar := writeTestJar(t, dir, map[string]string{
-		"BOOT-INF/classes/com/taj/DromaraApplication.class": "class-bytes",
-		"BOOT-INF/classes/application.yml":                  "spring:\n  profiles:\n    active: @profiles.active@\n",
+		"BOOT-INF/classes/com/example/Application.class": "class-bytes",
+		"BOOT-INF/classes/application.yml":               "spring:\n  profiles:\n    active: @profiles.active@\n",
 	})
 	_, err := CheckJar(checkJarSpec{
 		JarPath: jar,
-		Classes: []string{"com.taj.DromaraApplication"},
+		Classes: []string{"com.example.Application"},
 	})
 	if err == nil {
 		t.Fatal("want placeholder error")
 	}
 	_, err = CheckJar(checkJarSpec{
-		JarPath:    jar,
-		Classes:    []string{"com.taj.DromaraApplication"},
-		MinBytes:   1 << 20,
+		JarPath:          jar,
+		Classes:          []string{"com.example.Application"},
+		MinBytes:         1 << 20,
 		AllowPlaceholder: true,
 	})
 	if err == nil {
@@ -74,16 +74,16 @@ func TestCheckJarRejectsPlaceholderAndSmallJar(t *testing.T) {
 func TestCheckJarOK(t *testing.T) {
 	dir := t.TempDir()
 	files := map[string]string{
-		"BOOT-INF/classes/com/taj/DromaraApplication.class": "class-bytes",
-		"BOOT-INF/classes/application.yml":                  "spring:\n  profiles:\n    active: dev\n",
+		"BOOT-INF/classes/com/example/Application.class": "class-bytes",
+		"BOOT-INF/classes/application.yml":               "spring:\n  profiles:\n    active: dev\n",
 	}
 	for i := 0; i < 8; i++ {
-		files["BOOT-INF/classes/com/taj/C"+string(rune('A'+i))+".class"] = "x"
+		files["BOOT-INF/classes/com/example/C"+string(rune('A'+i))+".class"] = "x"
 	}
 	jar := writeTestJar(t, dir, files)
 	msg, err := CheckJar(checkJarSpec{
 		JarPath:    jar,
-		Classes:    []string{"com.taj.DromaraApplication"},
+		Classes:    []string{"com.example.Application"},
 		MinClasses: 5,
 	})
 	if err != nil {
@@ -96,18 +96,18 @@ func TestCheckJarOK(t *testing.T) {
 
 func TestParseCheckJarArgs(t *testing.T) {
 	spec, err := parseCheckJarArgs([]string{
-		"check-jar", `D:\a\taj-admin.jar`,
-		"--class", "com.taj.DromaraApplication",
+		"check-jar", `D:\build\example-app.jar`,
+		"--class", "com.example.Application",
 		"--min-bytes", "6000000",
 		"--min-classes", "800",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if spec.JarPath != `D:\a\taj-admin.jar` || spec.MinBytes != 6000000 || spec.MinClasses != 800 {
+	if spec.JarPath != `D:\build\example-app.jar` || spec.MinBytes != 6000000 || spec.MinClasses != 800 {
 		t.Fatalf("parsed %+v", spec)
 	}
-	if len(spec.Classes) != 1 || spec.Classes[0] != "com.taj.DromaraApplication" {
+	if len(spec.Classes) != 1 || spec.Classes[0] != "com.example.Application" {
 		t.Fatalf("classes %+v", spec.Classes)
 	}
 }

@@ -13,17 +13,38 @@ import (
 	"FlashDock/utils"
 )
 
-// 与 config.yaml「发布测试【taj-admin】」remote 步骤一致（日常增量：target/jar + 主 jar）。
-const (
-	tajAdminWorkDir          = `D:\IdeaProjects\taj_plus`
-	tajAdminLocalIncremental = tajAdminWorkDir + `\taj-admin\target\jar` // com.taj 模块，Maven copy-jar
-	tajAdminLocalFullLib     = tajAdminWorkDir + `\taj-admin\target\lib` // 首次或依赖变更时全量
-	tajAdminLocalMainJar     = tajAdminWorkDir + `\taj-admin\target\taj-admin.jar`
-	tajAdminRemoteLib        = "/root/app/taj_plus/lib"
-	tajAdminRemoteMainJar    = "/root/app/taj_plus/taj-admin.jar"
-	tajAdminContainer        = "taj-admin"
+// 端到端部署回归：与某项目的 remote 发布步骤同构（target/jar 增量 + 主 jar）。
+//
+// 本机/远端路径与容器名均通过环境变量注入，仓库内不写死真实环境：
+//
+//	FLASHDOCK_E2E_WORKDIR     本机项目根目录（默认 Windows 风格占位路径）
+//	FLASHDOCK_E2E_MODULE      模块目录名（默认 example-module）
+//	FLASHDOCK_E2E_REMOTE_DIR  远端应用目录（默认 /opt/example-app）
+//	FLASHDOCK_E2E_CONTAINER   容器名（默认 example-app）
+var (
+	e2eWorkDir   = envOr("FLASHDOCK_E2E_WORKDIR", `D:\projects\example-project`)
+	e2eModule    = envOr("FLASHDOCK_E2E_MODULE", "example-module")
+	e2eRemoteDir = envOr("FLASHDOCK_E2E_REMOTE_DIR", "/opt/example-app")
+	e2eContainer = envOr("FLASHDOCK_E2E_CONTAINER", "example-app")
+)
+
+var (
+	tajAdminLocalIncremental  = e2eWorkDir + `\` + e2eModule + `\target\jar` // 增量依赖
+	tajAdminLocalFullLib      = e2eWorkDir + `\` + e2eModule + `\target\lib` // 首次或依赖变更时全量
+	tajAdminLocalMainJar      = e2eWorkDir + `\` + e2eModule + `\target\` + e2eModule + `.jar`
+	tajAdminRemoteLib         = e2eRemoteDir + "/lib"
+	tajAdminRemoteMainJar     = e2eRemoteDir + "/" + e2eModule + ".jar"
+	tajAdminContainer         = e2eContainer
 	tajAdminMinRemoteLibFiles = 50 // 远端 lib 基线：须曾全量上传过 target/lib
 )
+
+// envOr 读取环境变量，为空时用默认值
+func envOr(key, fallback string) string {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		return v
+	}
+	return fallback
+}
 
 type deployFileWatch struct {
 	mu         sync.Mutex
@@ -211,10 +232,10 @@ func runDeployWatch(rm *define.RemoteMachine, w *deployFileWatch, stop <-chan st
 func requireTajAdminArtifacts(t *testing.T) {
 	t.Helper()
 	if _, err := os.Stat(tajAdminLocalMainJar); err != nil {
-		t.Fatalf("缺少主 jar，请先执行打包【taj-admin】: %v", err)
+		t.Fatalf("缺少主 jar，请先执行打包【example-app】: %v", err)
 	}
 	if _, err := os.Stat(tajAdminLocalIncremental); err != nil {
-		t.Fatalf("缺少 target/jar，请先执行打包【taj-admin】: %v", err)
+		t.Fatalf("缺少 target/jar，请先执行打包【example-app】: %v", err)
 	}
 	if msg, err := CheckJar(checkJarSpec{
 		JarPath:    tajAdminLocalMainJar,
@@ -255,12 +276,12 @@ func remoteLibFileCount(rm *define.RemoteMachine) (int, error) {
 	return int(n), nil
 }
 
-// 端到端回归：发布测试【taj-admin】日常增量（upload target/jar 合并 → upload 主 jar → restart）。
+// 端到端回归：发布测试【示例模块】日常增量（upload target/jar 合并 → upload 主 jar → restart）。
 // 前提：远端 lib 曾全量上传过 target/lib（框架 jar 基线保留，本次不 prune）。
 // 运行：go test ./cmds -run TestTajAdminIncrementalReleaseJZ -count=1 -v -timeout 15m
 func TestTajAdminIncrementalReleaseJZ(t *testing.T) {
 	if testing.Short() {
-		t.Skip("skip taj-admin release e2e in -short")
+		t.Skip("skip example-app release e2e in -short")
 	}
 	requireTajAdminArtifacts(t)
 
@@ -291,9 +312,9 @@ func TestTajAdminIncrementalReleaseJZ(t *testing.T) {
 
 	baseline := remoteBaseline(rm, tajAdminRemoteMainJar)
 	if len(baseline) == 0 {
-		t.Log("远端尚无 taj-admin.jar，跳过截断监测基线")
+		t.Log("远端尚无 example-module.jar，跳过截断监测基线")
 	} else {
-		t.Logf("远端基线 taj-admin.jar = %d bytes", baseline[tajAdminRemoteMainJar])
+		t.Logf("远端基线 example-module.jar = %d bytes", baseline[tajAdminRemoteMainJar])
 	}
 	watcher := newDeployFileWatch(baseline)
 	stopWatch := make(chan struct{})
@@ -356,7 +377,7 @@ func TestTajAdminIncrementalReleaseJZ(t *testing.T) {
 		out, _ := runRemoteCommandCapture(rm, "docker logs --tail 40 "+tajAdminContainer+" 2>&1")
 		t.Fatalf("容器未稳定运行: %v\n%s", err, out)
 	}
-	t.Log("发布测试【taj-admin】增量回归完成：target/jar 合并 + 主 jar + 容器稳定 Running")
+	t.Log("发布测试【示例模块】增量回归完成：target/jar 合并 + 主 jar + 容器稳定 Running")
 }
 
 // 首次或依赖大版本变更：全量上传 target/lib 建立远端基线。

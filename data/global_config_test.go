@@ -16,11 +16,11 @@ configFile:
   - D:\projects\config.yaml
 lastOpenedFile: D:\projects\config.yaml
 workPaths:
-  ACC-CLOUD: D:\IdeaProjects\acc-cloud
+  DEMO-APP: D:\projects\demo-app
   HOME: ~
 machines:
-  - id: machine-jz
-    name: jz
+  - id: machine-demo
+    name: demo-host
     key_file: ~/.ssh/id_rsa
     encrypted_data: "test-encrypted"
 `
@@ -37,7 +37,7 @@ machines:
 	if config.WindowsName != "我的运行器" {
 		t.Fatalf("windowsName 期望 '我的运行器'，实际 %q", config.WindowsName)
 	}
-	if len(config.Machines) != 1 || config.Machines[0].Name != "jz" {
+	if len(config.Machines) != 1 || config.Machines[0].Name != "demo-host" {
 		t.Fatalf("machines 未正确加载: %+v", config.Machines)
 	}
 
@@ -84,10 +84,10 @@ workPaths:
 		t.Fatalf("lastTaskProject 未变化时不应写回配置文件")
 	}
 
-	if err := gcm.UpdateLastTaskProject("Looda"); err != nil {
+	if err := gcm.UpdateLastTaskProject("demo-project"); err != nil {
 		t.Fatalf("UpdateLastTaskProject 写入失败: %v", err)
 	}
-	if got := gcm.GetLastTaskProject(); got != "Looda" {
+	if got := gcm.GetLastTaskProject(); got != "demo-project" {
 		t.Fatalf("GetLastTaskProject = %q", got)
 	}
 }

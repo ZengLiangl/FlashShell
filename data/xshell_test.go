@@ -8,34 +8,47 @@ import (
 	"FlashDock/define"
 )
 
-func TestParseXshellContent(t *testing.T) {
-	data, err := os.ReadFile(filepath.Join("..", "172.19.100.18.xsh"))
-	if err != nil {
-		t.Fatalf("读取示例文件失败: %v", err)
-	}
+// 虚拟的 .xsh 样例（RFC 5737 文档专用地址，不对应任何真实主机）
+const sampleXshellContent = `[CONNECTION]
+Protocol=SSH
+Host=203.0.113.10
+Port=22
 
-	session, err := ParseXshellContent(data)
+[CONNECTION:AUTHENTICATION]
+UserName=demo
+
+[CONNECTION:AUTHENTICATION:PASSWORD]
+Password=example-only
+`
+
+func TestParseXshellContent(t *testing.T) {
+	session, err := ParseXshellContent([]byte(sampleXshellContent))
 	if err != nil {
 		t.Fatalf("解析失败: %v", err)
 	}
-	if session.Host != "172.19.100.18" {
+	if session.Host != "203.0.113.10" {
 		t.Fatalf("Host 不匹配: %s", session.Host)
 	}
 	if session.Port != 22 {
 		t.Fatalf("Port 不匹配: %d", session.Port)
 	}
-	if session.User != "app" {
+	if session.User != "demo" {
 		t.Fatalf("User 不匹配: %s", session.User)
 	}
 }
 
 func TestParseXshellFile(t *testing.T) {
-	path := filepath.Join("..", "172.19.100.18.xsh")
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sample-host.xsh")
+	if err := os.WriteFile(path, []byte(sampleXshellContent), 0o644); err != nil {
+		t.Fatalf("写入样例失败: %v", err)
+	}
+
 	session, err := ParseXshellFile(path)
 	if err != nil {
 		t.Fatalf("解析失败: %v", err)
 	}
-	if session.Name != "172.19.100.18" {
+	if session.Name != "sample-host" {
 		t.Fatalf("名称应为文件名: %s", session.Name)
 	}
 }
