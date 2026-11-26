@@ -1,9 +1,18 @@
-.PHONY: dev build clean install-deps frontend-deps
+.PHONY: dev dev-manual reload build clean install-deps frontend-deps
 
-# 开发模式
+# 开发模式（自动重载：改 Go 代码会重启应用）
 dev:
 	@echo "启动开发模式..."
 	@./dev.sh
+
+# 开发模式（手动刷新：改代码不会关掉重开应用）
+dev-manual:
+	@echo "启动开发模式（手动刷新）..."
+	@./dev-noreload.sh
+
+# 手动刷新正在运行的 wails dev 应用
+reload:
+	@./dev-reload.sh
 
 # 构建应用
 build:

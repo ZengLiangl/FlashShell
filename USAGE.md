@@ -59,8 +59,10 @@ git clone https://github.com/ZengLiangl/FlashShell.git && cd FlashShell
 cd frontend && npm install && cd ..
 go mod tidy
 
-wails dev      # 开发 · 热重载
-wails build    # 产出在 build/bin/
+wails dev           # 开发 · 热重载（改 Go 代码会重启应用）
+./dev-noreload.sh   # 开发 · 手动刷新（改代码不关窗口）
+./dev-reload.sh     # 手动刷新正在运行的应用
+wails build         # 产出在 build/bin/
 ```
 
 ### 运行模式
@@ -574,6 +576,8 @@ projects:
 ```bash
 # 开发
 wails dev
+./dev-noreload.sh   # 手动刷新模式：改代码不自动重启
+./dev-reload.sh     # 手动刷新界面（窗口原地刷新）
 
 # 构建
 wails build

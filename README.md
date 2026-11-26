@@ -189,8 +189,9 @@ cd FlashShell
 cd frontend && npm install && cd ..
 go mod tidy
 
-# 开发（热重载）/ 发布构建
+# 开发（热重载）/ 手动刷新开发 / 发布构建
 wails dev
+./dev-noreload.sh     # 手动刷新模式，见「常用命令」
 wails build
 ```
 
@@ -259,11 +260,18 @@ FlashShell/
 ## 常用命令
 
 ```bash
-wails dev                          # 开发模式（热重载）
+wails dev                          # 开发模式（热重载：改 Go 代码会重启应用）
+./dev-noreload.sh                  # 开发模式（手动刷新：改代码不关窗口）
+./dev-reload.sh                    # 手动刷新正在运行的应用
 wails build                        # 发布构建
 go test ./...                      # 运行测试
 go fmt ./... && go vet ./...       # 格式化 & 静态检查
 ```
+
+**开发时不想被反复关窗/弹窗？** 用 `./dev-noreload.sh`（等价 `make dev-manual`）启动：
+它给 `wails dev` 加了 `-noreload -nogorebuild`，改后端代码不再自动重编重启；
+前端改动仍由 Vite HMR 即时生效。需要刷新界面时执行 `./dev-reload.sh`（等价 `make reload`），
+窗口原地刷新、不会关掉再弹开。
 
 ### 运行参数
 
