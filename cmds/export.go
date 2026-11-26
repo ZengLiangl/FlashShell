@@ -16,4 +16,5 @@ func init() {
 	RegPackCmd()
 	RegBackupCmd()
 	RegPurgeCmd()
+	RegLogStatsCmd()
 }

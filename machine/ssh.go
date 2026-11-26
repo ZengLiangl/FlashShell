@@ -133,7 +133,7 @@ func getSpecialCmd(command string) (func(*define.RemoteMachine, []string, chan<-
 
 func isLocalSpecialCmd(name string) bool {
 	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "check-jar", "pack", "targz":
+	case "check-jar", "pack", "targz", "log-stats":
 		return true
 	default:
 		return false
