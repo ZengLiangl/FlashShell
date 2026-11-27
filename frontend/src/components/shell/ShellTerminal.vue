@@ -68,6 +68,7 @@ import { Terminal } from 'xterm'
 import { FitAddon } from 'xterm-addon-fit'
 import { WebglAddon } from 'xterm-addon-webgl'
 import { getTerminalSelectionText } from '../../utils/shellSelection'
+import { rewriteClearScreen, createClearScreenState } from '../../utils/shellClearScreen'
 import { findInTerminalBuffer, selectTerminalMatch, highlightViewportMatches, clearSearchDecorations, buildLogicalLine, collectLogicalLineMatches, matchEndPosition, indexOfSearchMatch } from '../../utils/shellTerminalSearch'
 import 'xterm/css/xterm.css'
 import * as App from '../../../wailsjs/go/app/App'
@@ -264,6 +265,8 @@ export default {
     let cursorMoveListener = null
     let osc52Disposable = null
     const textDecoder = new TextDecoder('utf-8')
+    /** clear 清屏序列的跨块拼接状态（见 utils/shellClearScreen.js） */
+    const clearScreenState = createClearScreenState()
     /**
      * 不用 xterm-addon-search：它对超长折行（grep 出的整行 JSON）会拼成巨串同步扫描，必卡死。
      * 改为按物理行查找 + 异步分片计数。
@@ -651,6 +654,9 @@ export default {
       } catch {
         return writeTerminal(terminal, raw)
       }
+      // clear 只发 ESC[2J（terminfo 无 E3），补成 2J+3J 让回滚缓冲一起清掉
+      text = rewriteClearScreen(text, clearScreenState)
+      if (!text) return Promise.resolve()
       tuiModeDepth = updateTuiModeDepth(tuiModeDepth, text)
       notePasswordPromptText(text)
       if (tuiModeDepth > 0 || looksLikePasswordPrompt(passwordDetectTail) || passwordAssistVisible.value) {
