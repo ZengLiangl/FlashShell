@@ -40,7 +40,8 @@ func (m *ShellHistoryManager) save() error {
 	})
 }
 
-// List 按最近连接时间倒序
+// List 按最近连接时间倒序。
+// 同时兜底合并历史里残留的重复项（旧版本按 ID 匹配时，机器重建会留下同名记录）。
 func (m *ShellHistoryManager) List() []define.ShellHistoryRecord {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -49,6 +50,38 @@ func (m *ShellHistoryManager) List() []define.ShellHistoryRecord {
 	sort.Slice(out, func(i, j int) bool {
 		return out[i].LastConnectedAt > out[j].LastConnectedAt
 	})
+	return mergeShellHistoryDuplicates(out)
+}
+
+// mergeShellHistoryDuplicates 按机器名合并重复历史，保留最近一条并累加次数。
+// 入参需已按时间倒序，合并结果保持该顺序。
+func mergeShellHistoryDuplicates(records []define.ShellHistoryRecord) []define.ShellHistoryRecord {
+	if len(records) < 2 {
+		return records
+	}
+	byName := make(map[string]int, len(records))
+	out := make([]define.ShellHistoryRecord, 0, len(records))
+	for _, r := range records {
+		key := r.MachineName
+		if key == "" {
+			key = r.MachineID
+		}
+		if idx, ok := byName[key]; ok && key != "" {
+			out[idx].ConnectCount += r.ConnectCount
+			if r.LastConnectedAt > out[idx].LastConnectedAt {
+				out[idx].LastConnectedAt = r.LastConnectedAt
+				out[idx].MachineID = r.MachineID
+				out[idx].Host = r.Host
+				out[idx].Port = r.Port
+				out[idx].User = r.User
+			}
+			continue
+		}
+		if key != "" {
+			byName[key] = len(out)
+		}
+		out = append(out, r)
+	}
 	return out
 }
 
@@ -61,26 +94,39 @@ func (m *ShellHistoryManager) RecordConnect(machine *define.Machine, host string
 	defer m.mu.Unlock()
 
 	now := time.Now().Unix()
+
+	// 同一台机器只保留一条历史。机器被删掉重建后 ID 会变，
+	// 若只按 ID 匹配就会不断堆积同名记录（最近连接里出现多条一样的主机）。
+	// 因此按「ID 或 名称」任一命中都视为同一台机器，命中多条时合并成一条。
+	matched := -1
 	for i := range m.records {
-		if m.records[i].MachineID != "" && m.records[i].MachineID == machine.ID {
-			m.records[i].MachineName = machine.Name
-			m.records[i].Host = host
-			m.records[i].Port = port
-			m.records[i].User = user
-			m.records[i].LastConnectedAt = now
-			m.records[i].ConnectCount++
-			return m.save()
+		sameID := m.records[i].MachineID != "" && m.records[i].MachineID == machine.ID
+		sameName := m.records[i].MachineName == machine.Name
+		if !sameID && !sameName {
+			continue
 		}
-		if m.records[i].MachineID == "" && m.records[i].MachineName == machine.Name {
-			m.records[i].MachineID = machine.ID
-			m.records[i].MachineName = machine.Name
-			m.records[i].Host = host
-			m.records[i].Port = port
-			m.records[i].User = user
-			m.records[i].LastConnectedAt = now
-			m.records[i].ConnectCount++
-			return m.save()
+		if matched < 0 {
+			matched = i
+			continue
 		}
+		// 已经命中过：合并计数后丢弃这一条
+		m.records[matched].ConnectCount += m.records[i].ConnectCount
+		if m.records[i].LastConnectedAt > m.records[matched].LastConnectedAt {
+			m.records[matched].LastConnectedAt = m.records[i].LastConnectedAt
+		}
+		m.records = append(m.records[:i], m.records[i+1:]...)
+		i--
+	}
+
+	if matched >= 0 {
+		m.records[matched].MachineID = machine.ID
+		m.records[matched].MachineName = machine.Name
+		m.records[matched].Host = host
+		m.records[matched].Port = port
+		m.records[matched].User = user
+		m.records[matched].LastConnectedAt = now
+		m.records[matched].ConnectCount++
+		return m.save()
 	}
 
 	m.records = append(m.records, define.ShellHistoryRecord{

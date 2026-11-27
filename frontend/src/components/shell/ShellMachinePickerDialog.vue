@@ -441,7 +441,9 @@ export default {
         pushHeader('history', '最近连接', historyFiltered.value.length)
         historyFiltered.value.forEach((row) => {
           rows.push({
-            id: `hist-${row.machineName}-${row.connectedAt || ''}`,
+            // 用真实字段 + 下标保证唯一：历史里可能残留同名记录（后端已兜底合并），
+            // 若 key 重复，v-for 会复用同一个 DOM 节点，看起来像「多出几条一样的」
+            id: `hist-${row.machineId || row.machineName}-${row.lastConnectedAt || ''}-${row.machineName}`,
             kind: 'history',
             kindLabel: '最近',
             title: row.machineName,

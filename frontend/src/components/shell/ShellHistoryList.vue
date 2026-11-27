@@ -79,7 +79,9 @@ export default {
   },
   emits: ['connect', 'clear', 'remove'],
   setup(props, { emit }) {
-    const rowKey = (row) => `${row.machineId || ''}:${row.machineName || ''}:${row.host || ''}`
+    // 加入连接时间，避免同一机器残留多条时 key 冲突导致 DOM 复用
+    const rowKey = (row) =>
+      `${row.machineId || ''}:${row.machineName || ''}:${row.host || ''}:${row.lastConnectedAt || ''}`
 
     const formatAddr = (row) => formatMachineAddr(row)
 
